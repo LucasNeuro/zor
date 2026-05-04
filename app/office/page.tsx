@@ -414,7 +414,7 @@ function OfficePageInner() {
 
       </div>
 
-      <Ariane tamanho={90} posicao={{ bottom: 80, right: 20 }} />
+      <Ariane tamanho={80} posicao={{ bottom: 120, left: 270 }} />
 
       {sharedOverlays}
 

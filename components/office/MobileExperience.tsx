@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import Link from 'next/link'
-import Image from 'next/image'
 
 type Lead = {
   id: string
@@ -29,45 +28,45 @@ const IMG_H = 1822
 
 const FASE_SPAWN: Record<string, { x: number; y: number }> = {
   entrada:      { x: 432, y: 1750 },
-  espera:       { x: 690, y: 1310 },
-  qualificacao: { x: 660, y: 520  },
-  apresentacao: { x: 430, y: 960  },
-  negociacao:   { x: 680, y: 960  },
-  fechamento:   { x: 680, y: 960  },
-  ganho:        { x: 175, y: 500  },
-  perdido:      { x: 175, y: 500  },
+  espera:       { x: 660, y: 1340 },
+  qualificacao: { x: 660, y: 510  },
+  apresentacao: { x: 430, y: 970  },
+  negociacao:   { x: 660, y: 970  },
+  fechamento:   { x: 660, y: 970  },
+  ganho:        { x: 175, y: 510  },
+  perdido:      { x: 175, y: 510  },
 }
 
 const AGENTES = [
-  { id: 1,  nome: 'Dir. Marketing', iniciais: 'DM', x: 167, y: 185, cor: '#8b5cf6', area: 'Diretoria', atividades: ['Revisando estratégia...','Aprovando campanha...','Em reunião executiva...'] },
-  { id: 2,  nome: 'CEO',            iniciais: 'CE', x: 432, y: 185, cor: '#f97316', area: 'Diretoria', atividades: ['Analisando KPIs...','Tomando decisão...','Revisando metas...'] },
-  { id: 3,  nome: 'Dir. Comercial', iniciais: 'DC', x: 700, y: 185, cor: '#3b82f6', area: 'Diretoria', atividades: ['Monitorando funil...','Aprovando proposta...','Revisando pipeline...'] },
-  { id: 4,  nome: 'Ger. Marketing', iniciais: 'GM', x: 100, y: 450, cor: '#8b5cf6', area: 'Marketing', atividades: ['Criando briefing...','Revisando copy...','Planejando campanha...'] },
-  { id: 5,  nome: 'Copywriter',     iniciais: 'CW', x: 160, y: 520, cor: '#8b5cf6', area: 'Marketing', atividades: ['Escrevendo copy...','Criando CTA...','Revisando roteiro...'] },
-  { id: 6,  nome: 'Designer',       iniciais: 'DS', x: 220, y: 590, cor: '#8b5cf6', area: 'Marketing', atividades: ['Criando criativo...','Ajustando layout...','Exportando arte...'] },
-  { id: 7,  nome: 'Social Media',   iniciais: 'SM', x: 100, y: 650, cor: '#8b5cf6', area: 'Marketing', atividades: ['Agendando post...','Respondendo DM...','Analisando alcance...'] },
-  { id: 8,  nome: 'Motion IA',      iniciais: 'MI', x: 360, y: 450, cor: '#10b981', area: 'Conteúdo', atividades: ['Gravando reel...','Editando vídeo...','Criando animação...'] },
-  { id: 9,  nome: 'Copy Gamma',     iniciais: 'CG', x: 435, y: 520, cor: '#10b981', area: 'Conteúdo', atividades: ['Criando legenda...','Revisando texto...','Gerando variações...'] },
-  { id: 10, nome: 'Design Beta',    iniciais: 'DB', x: 500, y: 590, cor: '#10b981', area: 'Conteúdo', atividades: ['Desenvolvendo arte...','Criando thumbnail...','Ajustando cores...'] },
-  { id: 11, nome: 'Copy Beta',      iniciais: 'CB', x: 360, y: 650, cor: '#10b981', area: 'Conteúdo', atividades: ['Escrevendo roteiro...','Criando headline...','Testando variação...'] },
-  { id: 12, nome: 'Ger. Vendas',    iniciais: 'GV', x: 620, y: 450, cor: '#3b82f6', area: 'Comercial', atividades: ['Gerenciando pipeline...','Treinando SDR...','Revisando proposta...'] },
-  { id: 13, nome: 'Tráfego B',      iniciais: 'TB', x: 695, y: 520, cor: '#3b82f6', area: 'Comercial', atividades: ['Ajustando lances...','Testando público...','Analisando CPL...'] },
-  { id: 14, nome: 'Analytics',      iniciais: 'AN', x: 760, y: 590, cor: '#3b82f6', area: 'Comercial', atividades: ['Analisando dados...','Gerando relatório...','Identificando padrão...'] },
-  { id: 15, nome: 'Closer',         iniciais: 'CL', x: 620, y: 650, cor: '#3b82f6', area: 'Comercial', atividades: ['Fechando proposta...','Negociando contrato...','Follow-up ativo...'] },
-  { id: 16, nome: 'Social Ga.',     iniciais: 'SG', x: 100, y: 900, cor: '#f59e0b', area: 'Social', atividades: ['Criando stories...','Analisando engajamento...','Respondendo comentários...'] },
-  { id: 17, nome: 'Agenda IA',      iniciais: 'AI', x: 175, y: 980, cor: '#f59e0b', area: 'Social', atividades: ['Organizando calendário...','Agendando conteúdo...','Planejando semana...'] },
-  { id: 18, nome: 'Plano IA',       iniciais: 'PI', x: 100, y: 1060, cor: '#f59e0b', area: 'Social', atividades: ['Criando plano...','Definindo estratégia...','Mapeando conteúdo...'] },
-  { id: 19, nome: 'Brief IA',       iniciais: 'BI', x: 430, y: 950, cor: '#6b7280', area: 'Reunião', atividades: ['Coletando briefing...','Em reunião...','Documentando...'] },
-  { id: 20, nome: 'CRM IA',         iniciais: 'CR', x: 695, y: 900, cor: '#ef4444', area: 'CRM', atividades: ['Monitorando leads...','Atualizando CRM...','Analisando funil...'] },
-  { id: 21, nome: 'CS',             iniciais: 'CS', x: 760, y: 980, cor: '#ef4444', area: 'CRM', atividades: ['Atendendo cliente...','Registrando contato...','Verificando SLA...'] },
-  { id: 22, nome: 'SDR',            iniciais: 'SD', x: 695, y: 1060, cor: '#ef4444', area: 'CRM', atividades: ['Qualificando lead...','Fazendo follow-up...','Agendando reunião...'] },
-  { id: 23, nome: 'Ger. Atend.',    iniciais: 'GA', x: 320, y: 1325, cor: '#10b981', area: 'Atendimento', atividades: ['Monitorando qualidade...','Verificando SLA...','Orientando equipe...'] },
-  { id: 24, nome: 'Atendente',      iniciais: 'AA', x: 430, y: 1325, cor: '#10b981', area: 'Atendimento', atividades: ['Atendendo lead...','Coletando dados...','Encaminhando...'] },
-  { id: 25, nome: 'Atendente B',    iniciais: 'AB', x: 140, y: 1360, cor: '#10b981', area: 'Atendimento', atividades: ['Respondendo WhatsApp...','Qualificando...','Registrando dados...'] },
+  { id: 1,  nome: 'Dir. Marketing', iniciais: 'DM', x: 167, y: 185, cor: '#8b5cf6', atividades: ['Revisando estratégia...','Aprovando campanha...','Em reunião...'] },
+  { id: 2,  nome: 'CEO',            iniciais: 'CE', x: 432, y: 185, cor: '#f97316', atividades: ['Analisando KPIs...','Tomando decisão...','Revisando metas...'] },
+  { id: 3,  nome: 'Dir. Comercial', iniciais: 'DC', x: 700, y: 185, cor: '#3b82f6', atividades: ['Monitorando funil...','Aprovando proposta...','Revisando pipeline...'] },
+  { id: 4,  nome: 'Ger. Marketing', iniciais: 'GM', x: 100, y: 480, cor: '#8b5cf6', atividades: ['Criando briefing...','Revisando copy...','Planejando campanha...'] },
+  { id: 5,  nome: 'Copywriter',     iniciais: 'CW', x: 155, y: 560, cor: '#8b5cf6', atividades: ['Escrevendo copy...','Criando CTA...','Revisando roteiro...'] },
+  { id: 6,  nome: 'Designer',       iniciais: 'DS', x: 200, y: 630, cor: '#8b5cf6', atividades: ['Criando criativo...','Ajustando layout...','Exportando arte...'] },
+  { id: 7,  nome: 'Social Media',   iniciais: 'SM', x: 90,  y: 700, cor: '#8b5cf6', atividades: ['Agendando post...','Respondendo DM...','Analisando alcance...'] },
+  { id: 8,  nome: 'Motion IA',      iniciais: 'MI', x: 310, y: 480, cor: '#10b981', atividades: ['Gravando reel...','Editando vídeo...','Criando animação...'] },
+  { id: 9,  nome: 'Copy Gamma',     iniciais: 'CG', x: 430, y: 560, cor: '#10b981', atividades: ['Criando legenda...','Revisando texto...','Gerando variações...'] },
+  { id: 10, nome: 'Design Beta',    iniciais: 'DB', x: 490, y: 630, cor: '#10b981', atividades: ['Desenvolvendo arte...','Criando thumbnail...','Ajustando cores...'] },
+  { id: 11, nome: 'Copy Beta',      iniciais: 'CB', x: 310, y: 700, cor: '#10b981', atividades: ['Escrevendo roteiro...','Criando headline...','Testando variação...'] },
+  { id: 12, nome: 'Ger. Vendas',    iniciais: 'GV', x: 580, y: 480, cor: '#3b82f6', atividades: ['Gerenciando pipeline...','Revisando proposta...','Treinando SDR...'] },
+  { id: 13, nome: 'Tráfego B',      iniciais: 'TB', x: 650, y: 560, cor: '#3b82f6', atividades: ['Ajustando lances...','Testando público...','Analisando CPL...'] },
+  { id: 14, nome: 'Analytics',      iniciais: 'AN', x: 720, y: 630, cor: '#3b82f6', atividades: ['Analisando dados...','Gerando relatório...','Identificando padrão...'] },
+  { id: 15, nome: 'Closer',         iniciais: 'CL', x: 580, y: 700, cor: '#3b82f6', atividades: ['Fechando proposta...','Negociando...','Follow-up ativo...'] },
+  { id: 16, nome: 'Social Ga.',     iniciais: 'SG', x: 85,  y: 870, cor: '#f59e0b', atividades: ['Criando stories...','Analisando engajamento...','Respondendo comentários...'] },
+  { id: 17, nome: 'Agenda IA',      iniciais: 'AI', x: 160, y: 960, cor: '#f59e0b', atividades: ['Organizando calendário...','Agendando conteúdo...','Planejando semana...'] },
+  { id: 18, nome: 'Plano IA',       iniciais: 'PI', x: 85,  y: 1050, cor: '#f59e0b', atividades: ['Criando plano...','Definindo estratégia...','Mapeando conteúdo...'] },
+  { id: 19, nome: 'Brief IA',       iniciais: 'BI', x: 430, y: 960, cor: '#6b7280', atividades: ['Coletando briefing...','Em reunião...','Documentando...'] },
+  { id: 20, nome: 'CRM IA',         iniciais: 'CR', x: 660, y: 870, cor: '#ef4444', atividades: ['Monitorando leads...','Atualizando CRM...','Analisando funil...'] },
+  { id: 21, nome: 'CS',             iniciais: 'CS', x: 720, y: 960, cor: '#ef4444', atividades: ['Atendendo cliente...','Registrando contato...','Verificando SLA...'] },
+  { id: 22, nome: 'SDR',            iniciais: 'SD', x: 660, y: 1050, cor: '#ef4444', atividades: ['Qualificando lead...','Fazendo follow-up...','Agendando reunião...'] },
+  { id: 23, nome: 'Ger. Atend.',    iniciais: 'GA', x: 300, y: 1310, cor: '#10b981', atividades: ['Monitorando qualidade...','Verificando SLA...','Orientando equipe...'] },
+  { id: 24, nome: 'Atendente',      iniciais: 'AA', x: 430, y: 1310, cor: '#10b981', atividades: ['Atendendo lead...','Coletando dados...','Encaminhando...'] },
+  { id: 25, nome: 'Atendente B',    iniciais: 'AB', x: 140, y: 1350, cor: '#10b981', atividades: ['Respondendo WhatsApp...','Qualificando...','Registrando dados...'] },
 ]
 
 const CAMPANHAS_MOCK = [
-  { nome: 'Meta Ads — Reforma SP', cpl: 89, meta_cpl: 60, budget_usado: 4200, budget_total: 6000, roas: 2.4, status: 'ativo', criativo: 'Video Depoimento #3' },
+  { nome: 'Meta Ads — Reforma SP', cpl: 89, meta_cpl: 60, budget_usado: 4200, budget_total: 6000, roas: 2.4, status: 'atencao', criativo: 'Video Depoimento #3' },
   { nome: 'Google — Imobiliário', cpl: 54, meta_cpl: 60, budget_usado: 2100, budget_total: 3000, roas: 3.1, status: 'ativo', criativo: 'Banner Apartamento' },
   { nome: 'Meta — Produto/Serviço', cpl: 72, meta_cpl: 60, budget_usado: 1800, budget_total: 2000, roas: 1.8, status: 'atencao', criativo: 'Carrossel Serviços' },
 ]
@@ -83,8 +82,7 @@ const COR_STATUS: Record<string, string> = {
   critico: '#ef4444', quente: '#f97316', normal: '#10b981', frio: '#6b7280',
 }
 const COR_TIPO: Record<string, string> = {
-  imobiliario: '#8b5cf6', reforma: '#f97316',
-  produto_servico: '#38bdf8', fornecedor: '#10b981',
+  imobiliario: '#8b5cf6', reforma: '#f97316', produto_servico: '#38bdf8', fornecedor: '#10b981',
 }
 const FASE_LABEL: Record<string, string> = {
   entrada: 'Entrada', espera: 'Espera', qualificacao: 'Qualificação',
@@ -98,19 +96,29 @@ const STATUS_CRIATIVO: Record<string, { label: string; cor: string }> = {
   briefing: { label: 'Briefing', cor: '#6b7280' },
 }
 
+const ARIANE_ESTADOS = ['normal','apresentando','alerta','duvida','andando'] as const
+type ArianeEstado = typeof ARIANE_ESTADOS[number]
+const ARIANE_MENSAGENS: Record<ArianeEstado, string> = {
+  normal: 'Monitorando campanhas...',
+  apresentando: 'CPL Meta em R$89 — acima da meta!',
+  alerta: 'Budget 85% utilizado — atenção!',
+  duvida: 'Analisando performance do conjunto B...',
+  andando: 'Revisando estratégia de tráfego...',
+}
+
 function calcOpacidade(lead: Lead): number {
   if (lead.status_visual === 'critico') return 1
   if (lead.status_visual === 'quente') return 1
-  if (lead.status_visual === 'frio') return 0.4
-  if (!lead.valor_estimado) return 0.6
-  if (lead.score < 30) return 0.5
-  return 0.85
+  if (lead.status_visual === 'frio') return 0.5
+  if (!lead.valor_estimado) return 0.65
+  if (lead.score < 30) return 0.55
+  return 0.9
 }
 
 function calcTamanho(lead: Lead): number {
-  if (lead.score >= 70) return 44
-  if (lead.score >= 40) return 38
-  return 32
+  if (lead.score >= 70) return 46
+  if (lead.score >= 40) return 40
+  return 34
 }
 
 export default function MobileExperience() {
@@ -123,6 +131,8 @@ export default function MobileExperience() {
   const [imgSize, setImgSize] = useState({ w: 430, h: 908 })
   const [bolhaAtiva, setBolhaAtiva] = useState<number | null>(null)
   const [bolhaTexto, setBolhaTexto] = useState('')
+  const [arianeEstado, setArianeEstado] = useState<ArianeEstado>('normal')
+  const [mostrarAriane, setMostrarAriane] = useState(false)
   const [leadAtend, setLeadAtend] = useState<Lead | null>(null)
   const [mensagens, setMensagens] = useState<Mensagem[]>([])
   const [texto, setTexto] = useState('')
@@ -133,7 +143,6 @@ export default function MobileExperience() {
   const touchStartY = useRef(0)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Relógio
   useEffect(() => {
     const tick = () => setHoraAtual(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))
     tick()
@@ -141,7 +150,6 @@ export default function MobileExperience() {
     return () => clearInterval(t)
   }, [])
 
-  // Leads do Supabase
   useEffect(() => {
     async function fetchLeads() {
       const { data } = await supabase
@@ -151,110 +159,71 @@ export default function MobileExperience() {
       setLeads((data as unknown as Lead[]) || [])
     }
     fetchLeads()
-    const channel = supabase
-      .channel('mobile_leads_v4')
+    const channel = supabase.channel('mobile_v5')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'hub_leads' }, fetchLeads)
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  // Alertas do Supabase
   useEffect(() => {
     async function fetchAlertas() {
       const { data: decisoes } = await supabase
-        .from('hub_decisoes')
-        .select('id, titulo, severidade, criado_em')
-        .eq('status', 'pendente')
-        .order('criado_em', { ascending: false })
-        .limit(3)
-
+        .from('hub_decisoes').select('id, titulo, severidade, criado_em')
+        .eq('status', 'pendente').order('criado_em', { ascending: false }).limit(3)
       const { data: slaLeads } = await supabase
-        .from('hub_leads')
-        .select('id, numero_visual, sla_violado, hub_pessoas(nome)')
-        .eq('sla_violado', true)
-        .limit(2)
-
+        .from('hub_leads').select('id, numero_visual, sla_violado, hub_pessoas(nome)')
+        .eq('sla_violado', true).limit(2)
       const lista: {id:string;tipo:string;texto:string;tempo:string;cor:string}[] = []
-
-      if (decisoes) {
-        decisoes.forEach((d: any) => {
-          lista.push({
-            id: d.id,
-            tipo: d.severidade === 'critico' ? 'CRÍTICO' : 'ATENÇÃO',
-            texto: d.titulo,
-            tempo: 'agora',
-            cor: d.severidade === 'critico' ? '#ef4444' : '#f59e0b',
-          })
-        })
-      }
-
-      if (slaLeads) {
-        slaLeads.forEach((l: any) => {
-          lista.push({
-            id: l.id,
-            tipo: 'SLA',
-            texto: `${l.hub_pessoas?.nome} — SLA violado`,
-            tempo: 'urgente',
-            cor: '#ef4444',
-          })
-        })
-      }
-
-      if (lista.length === 0) {
-        lista.push(
-          { id: '1', tipo: 'INFO', texto: 'Budget Meta Ads 85% utilizado', tempo: '12min', cor: '#f59e0b' },
-          { id: '2', tipo: 'INFO', texto: 'Sistema operando normalmente', tempo: '30min', cor: '#10b981' },
-        )
-      }
-
+      if (decisoes) decisoes.forEach((d: any) => lista.push({ id: d.id, tipo: d.severidade === 'critico' ? 'CRÍTICO' : 'ATENÇÃO', texto: d.titulo, tempo: 'agora', cor: d.severidade === 'critico' ? '#ef4444' : '#f59e0b' }))
+      if (slaLeads) slaLeads.forEach((l: any) => lista.push({ id: l.id, tipo: 'SLA', texto: `${l.hub_pessoas?.nome} — SLA violado`, tempo: 'urgente', cor: '#ef4444' }))
+      if (lista.length === 0) lista.push({ id: '1', tipo: 'INFO', texto: 'Sistema operando normalmente', tempo: 'agora', cor: '#10b981' })
       setAlertas(lista)
     }
     fetchAlertas()
   }, [leads])
 
-  // Scroll para o final da imagem ao abrir aba Escritório
-  useEffect(() => {
-    if (aba === 1) {
-      const el = document.getElementById('escritorio-scroll')
-      if (el) {
-        setTimeout(() => {
-          el.scrollTop = el.scrollHeight
-        }, 200)
-      }
-    }
-  }, [aba])
-
-  // Bolhas de atividade dos agentes
   useEffect(() => {
     if (aba !== 1) return
     const interval = setInterval(() => {
       const ag = AGENTES[Math.floor(Math.random() * AGENTES.length)]
-      const texto = ag.atividades[Math.floor(Math.random() * ag.atividades.length)]
       setBolhaAtiva(ag.id)
-      setBolhaTexto(texto)
+      setBolhaTexto(ag.atividades[Math.floor(Math.random() * ag.atividades.length)])
       setTimeout(() => setBolhaAtiva(null), 3000)
-    }, 4000)
+    }, 3500)
     return () => clearInterval(interval)
   }, [aba])
 
-  const onImgLoad = useCallback(() => {
-    if (imgRef.current) {
-      setImgSize({ w: imgRef.current.offsetWidth, h: imgRef.current.offsetHeight })
+  useEffect(() => {
+    if (aba !== 3) { setMostrarAriane(false); return }
+    setMostrarAriane(true)
+    let idx = 0
+    const interval = setInterval(() => {
+      idx = (idx + 1) % ARIANE_ESTADOS.length
+      setArianeEstado(ARIANE_ESTADOS[idx])
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [aba])
+
+  useEffect(() => {
+    if (aba === 1 && escritorioRef.current) {
+      setTimeout(() => {
+        escritorioRef.current!.scrollTo({ top: escritorioRef.current!.scrollHeight, behavior: 'instant' })
+      }, 200)
     }
+  }, [aba])
+
+  const onImgLoad = useCallback(() => {
+    if (imgRef.current) setImgSize({ w: imgRef.current.offsetWidth, h: imgRef.current.offsetHeight })
   }, [])
 
   function toScreen(xOrig: number, yOrig: number) {
-    return {
-      x: (xOrig / IMG_W) * imgSize.w,
-      y: (yOrig / IMG_H) * imgSize.h,
-    }
+    return { x: (xOrig / IMG_W) * imgSize.w, y: (yOrig / IMG_H) * imgSize.h }
   }
 
   function onTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
   }
-
   function onTouchEnd(e: React.TouchEvent) {
     const dx = e.changedTouches[0].clientX - touchStartX.current
     const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current)
@@ -265,13 +234,11 @@ export default function MobileExperience() {
   }
 
   async function selecionarLeadAtend(lead: Lead) {
-    setLeadAtend(lead)
-    setMensagens([])
+    setLeadAtend(lead); setMensagens([]); setConvId(null)
     const { data: convs } = await supabase.from('hub_conversas').select('id').eq('lead_id', lead.id).order('aberta_em', { ascending: false }).limit(1)
     let cId: string | null = null
-    if (convs && convs.length > 0) {
-      cId = convs[0].id
-    } else {
+    if (convs && convs.length > 0) { cId = convs[0].id }
+    else {
       const { data: nova } = await supabase.from('hub_conversas').insert({ lead_id: lead.id, pessoa_id: lead.id, canal: 'interno', status: 'ativa' }).select('id').single()
       cId = nova?.id || null
     }
@@ -309,19 +276,17 @@ export default function MobileExperience() {
     { icone: '⚡', label: 'Feed' },
   ]
 
+  const alertaPrincipal = alertas[0]
+
   return (
-    <div
-      style={{ width: '100%', height: '100dvh', background: '#080810', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-geist-sans, system-ui)' }}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-    >
-      {/* Header */}
-      <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ width: '100%', height: '100dvh', background: '#080810', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-geist-sans, system-ui)' }}
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+
+      {/* HEADER */}
+      <div style={{ padding: '12px 18px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>obra10+</div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
-            {ABAS[aba].label}
-          </div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{ABAS[aba].label}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {criticos > 0 && (
@@ -334,34 +299,26 @@ export default function MobileExperience() {
         </div>
       </div>
 
-      {/* Barra de notificação ao vivo */}
-      {alertas.length > 0 && (
-        <div style={{
-          padding: '8px 18px',
-          background: `${alertas[0].cor}15`,
-          borderBottom: `1px solid ${alertas[0].cor}30`,
-          display: 'flex', alignItems: 'center', gap: 8,
-          flexShrink: 0,
-        }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: alertas[0].cor, boxShadow: `0 0 6px ${alertas[0].cor}`, flexShrink: 0 }} />
-          <div style={{ flex: 1, fontSize: 11, color: '#fff', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-            {alertas[0].texto}
-          </div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>{alertas[0].tempo}</div>
+      {/* BARRA DE ALERTA */}
+      {alertaPrincipal && (
+        <div style={{ padding: '7px 18px', background: `${alertaPrincipal.cor}15`, borderBottom: `1px solid ${alertaPrincipal.cor}30`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: alertaPrincipal.cor, boxShadow: `0 0 6px ${alertaPrincipal.cor}`, flexShrink: 0 }} />
+          <div style={{ flex: 1, fontSize: 11, color: '#fff', fontWeight: 600, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{alertaPrincipal.texto}</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>{alertaPrincipal.tempo}</div>
         </div>
       )}
 
-      {/* Conteúdo */}
+      {/* CONTEÚDO */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
 
-        {/* ABA 0 — PULSO */}
+        {/* ═══ ABA 0 — PULSO ═══ */}
         {aba === 0 && (
           <div style={{ height: '100%', overflowY: 'auto', padding: '14px 16px 100px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               {[
                 { label: 'Leads Ativos', value: leads.length, cor: '#fff', bg: 'rgba(255,255,255,0.05)' },
                 { label: 'Críticos', value: criticos, cor: criticos > 0 ? '#ef4444' : '#10b981', bg: criticos > 0 ? '#ef444415' : '#10b98115' },
-                { label: 'Receita em Jogo', value: `R$${(valorTotal / 1000).toFixed(0)}k`, cor: '#f97316', bg: '#f9731615' },
+                { label: 'Receita em Jogo', value: `R$${(valorTotal/1000).toFixed(0)}k`, cor: '#f97316', bg: '#f9731615' },
                 { label: 'IA Ativa', value: `${iaAtiva}/${leads.length}`, cor: '#3b82f6', bg: '#3b82f615' },
               ].map(kpi => (
                 <div key={kpi.label} style={{ background: kpi.bg, border: `1px solid ${kpi.cor}25`, borderRadius: 14, padding: '16px 14px' }}>
@@ -375,15 +332,15 @@ export default function MobileExperience() {
               <div style={{ background: '#ef444410', border: '1px solid #ef444430', borderRadius: 14, padding: '14px', marginBottom: 14 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>⚠ Atenção Imediata</div>
                 {leads.filter(l => l.status_visual === 'critico').map(lead => (
-                  <div key={lead.id} onClick={() => { setLeadAtend(lead); setAba(2) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}>
+                  <div key={lead.id} onClick={() => { setLeadAtend(lead); setAba(2); selecionarLeadAtend(lead) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}>
                     <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ef444420', border: '2px solid #ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
                       {lead.hub_pessoas?.nome?.[0] || '?'}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{lead.hub_pessoas?.nome}</div>
-                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{FASE_LABEL[lead.fase]} · R${((lead.valor_estimado || 0) / 1000).toFixed(0)}k</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{FASE_LABEL[lead.fase]} · R${((lead.valor_estimado||0)/1000).toFixed(0)}k</div>
                     </div>
-                    <span style={{ fontSize: 16, color: '#ef4444' }}>Atender →</span>
+                    <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 700 }}>Atender →</span>
                   </div>
                 ))}
               </div>
@@ -392,23 +349,27 @@ export default function MobileExperience() {
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '14px', marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Funil ao Vivo</div>
               {['entrada','espera','qualificacao','apresentacao','negociacao','fechamento'].map(fase => {
-                const count = (leadsPorFase[fase] || []).length
-                const valor = (leadsPorFase[fase] || []).reduce((a, l) => a + (l.valor_estimado || 0), 0)
+                const fLeads = leadsPorFase[fase] || []
+                const valor = fLeads.reduce((a, l) => a + (l.valor_estimado||0), 0)
+                const pct = leads.length > 0 ? (fLeads.length / leads.length) * 100 : 0
                 return (
                   <div key={fase} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: count > 0 ? '#f97316' : 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: count > 0 ? '#fff' : 'rgba(255,255,255,0.3)', flex: 1 }}>{FASE_LABEL[fase]}</span>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: count > 0 ? '#fff' : 'rgba(255,255,255,0.2)', width: 20, textAlign: 'right' }}>{count}</span>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>{valor > 0 ? `R$${(valor/1000).toFixed(0)}k` : '—'}</span>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: fLeads.length > 0 ? '#f97316' : 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: fLeads.length > 0 ? '#fff' : 'rgba(255,255,255,0.3)', flex: 1 }}>{FASE_LABEL[fase]}</span>
+                    <div style={{ width: 60, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: '#f97316', borderRadius: 2 }} />
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: fLeads.length > 0 ? '#fff' : 'rgba(255,255,255,0.2)', width: 20, textAlign: 'right' }}>{fLeads.length}</span>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', width: 55, textAlign: 'right' }}>{valor > 0 ? `R$${(valor/1000).toFixed(0)}k` : '—'}</span>
                   </div>
                 )
               })}
             </div>
 
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '14px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alertas</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alertas do Sistema</div>
               {alertas.map((a, i) => (
-                <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, paddingBottom: i < alertas.length - 1 ? 12 : 0, marginBottom: i < alertas.length - 1 ? 12 : 0, borderBottom: i < alertas.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, paddingBottom: i < alertas.length-1 ? 12 : 0, marginBottom: i < alertas.length-1 ? 12 : 0, borderBottom: i < alertas.length-1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: a.cor, marginTop: 5, flexShrink: 0, boxShadow: `0 0 6px ${a.cor}` }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 10, color: a.cor, fontWeight: 700, marginBottom: 2 }}>{a.tipo}</div>
@@ -421,17 +382,11 @@ export default function MobileExperience() {
           </div>
         )}
 
-        {/* ABA 1 — ESCRITÓRIO */}
+        {/* ═══ ABA 1 — ESCRITÓRIO ═══ */}
         {aba === 1 && (
-          <div id="escritorio-scroll" style={{ height: '100%', overflowY: 'auto', position: 'relative' }}>
+          <div ref={escritorioRef} style={{ height: '100%', overflowY: 'auto', position: 'relative' }}>
             <div style={{ position: 'relative', width: '100%' }}>
-              <img
-                ref={imgRef}
-                src="/sprites/office-mobile-bg.png"
-                alt="Escritório Obra10+"
-                onLoad={onImgLoad}
-                style={{ width: '100%', height: 'auto', display: 'block' }}
-              />
+              <img ref={imgRef} src="/sprites/office-mobile-bg.png" alt="Escritório" onLoad={onImgLoad} style={{ width: '100%', height: 'auto', display: 'block' }} />
 
               {/* AGENTES */}
               {imgSize.w > 100 && AGENTES.map(ag => {
@@ -440,23 +395,17 @@ export default function MobileExperience() {
                 return (
                   <div key={ag.id} onClick={() => setAgenteDrawer(ag)} style={{ position: 'absolute', left: pos.x, top: pos.y, transform: 'translate(-50%, -50%)', zIndex: 5, cursor: 'pointer' }}>
                     {temBolha && (
-                      <div style={{
-                        position: 'absolute', bottom: '100%', left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: 'rgba(8,8,16,0.92)', border: `1px solid ${ag.cor}60`,
-                        borderRadius: 6, padding: '3px 7px', whiteSpace: 'nowrap',
-                        fontSize: 8, color: '#fff', marginBottom: 4, zIndex: 30,
-                      }}>
+                      <div style={{ position: 'absolute', bottom: '110%', left: '50%', transform: 'translateX(-50%)', background: 'rgba(8,8,16,0.92)', border: `1px solid ${ag.cor}60`, borderRadius: 6, padding: '3px 7px', whiteSpace: 'nowrap', fontSize: 9, color: '#fff', marginBottom: 4, zIndex: 30 }}>
                         {bolhaTexto}
                       </div>
                     )}
                     <div style={{
-                      width: 18, height: 18, borderRadius: '50%',
-                      background: `${ag.cor}30`,
-                      border: `1.5px solid ${ag.cor}${temBolha ? 'ff' : '80'}`,
+                      width: 26, height: 26, borderRadius: '50%',
+                      background: `${ag.cor}35`,
+                      border: `2px solid ${ag.cor}${temBolha ? 'ff' : '90'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 6, fontWeight: 800, color: '#fff',
-                      boxShadow: temBolha ? `0 0 10px ${ag.cor}` : `0 0 4px ${ag.cor}40`,
+                      fontSize: 8, fontWeight: 800, color: '#fff',
+                      boxShadow: temBolha ? `0 0 12px ${ag.cor}` : `0 0 5px ${ag.cor}50`,
                       transition: 'all 0.3s ease',
                     }}>
                       {ag.iniciais}
@@ -475,66 +424,50 @@ export default function MobileExperience() {
                 const colunas = Math.min(totalNoGrupo, 3)
                 const col = idxNoGrupo % colunas
                 const row = Math.floor(idxNoGrupo / colunas)
-                const offsetX = (col - (colunas - 1) / 2) * 28
-                const offsetY = row * 28
-                const pos = toScreen(spawn.x + offsetX, spawn.y + offsetY)
+                const offsetXPx = (col - (colunas-1)/2) * 32
+                const offsetYPx = row * 32
+                const spawnComOffset = {
+                  x: spawn.x + (offsetXPx / imgSize.w * IMG_W),
+                  y: spawn.y + (offsetYPx / imgSize.h * IMG_H),
+                }
+                const pos = toScreen(spawnComOffset.x, spawnComOffset.y)
                 const cor = COR_STATUS[lead.status_visual] || '#6b7280'
-                const tamanho = lead.numero_visual === 5 ? 44 : calcTamanho(lead)
+                const tamanho = calcTamanho(lead)
                 return (
                   <div key={lead.id} onClick={() => setLeadDrawer(lead)} style={{
                     position: 'absolute', left: pos.x, top: pos.y,
                     transform: 'translate(-50%, -50%)', cursor: 'pointer', zIndex: 20,
                     opacity: calcOpacidade(lead),
-                    filter: lead.status_visual === 'critico' ? 'drop-shadow(0 0 8px #ef4444)' : lead.status_visual === 'frio' ? 'grayscale(60%)' : 'none',
+                    filter: lead.status_visual === 'critico' ? 'drop-shadow(0 0 10px #ef4444)' : lead.status_visual === 'frio' ? 'grayscale(50%)' : 'none',
+                    animation: `floatUp ${2.5 + lead.numero_visual * 0.4}s ease-in-out infinite`,
                   }}>
                     {lead.status_visual === 'critico' && (
-                      <div style={{
-                        position: 'absolute', left: '50%', top: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        width: tamanho + 18, height: tamanho + 18,
-                        border: '2px solid #ef4444', borderRadius: '50%',
-                        animation: 'pulseRing 1.5s ease-out infinite',
-                        zIndex: -1, pointerEvents: 'none',
-                      }} />
+                      <div style={{ position: 'absolute', left: '50%', top: '50%', width: tamanho+16, height: tamanho+16, border: '2px solid #ef4444', borderRadius: '50%', transform: 'translate(-50%,-50%)', animation: 'pulseRing 1.5s ease-out infinite', zIndex: -1, pointerEvents: 'none' }} />
                     )}
                     <div style={{
                       width: tamanho, height: tamanho, borderRadius: '50%',
-                      background: `${COR_TIPO[lead.tipo] || '#6b7280'}40`,
-                      border: `2.5px solid ${cor}`,
+                      background: `${COR_TIPO[lead.tipo]||'#6b7280'}40`,
+                      border: `3px solid ${cor}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: tamanho * 0.38, fontWeight: 800, color: '#fff',
-                      boxShadow: `0 0 12px ${cor}60`, position: 'relative',
-                      animation: `floatUp ${2.5 + lead.numero_visual * 0.4}s ease-in-out infinite`,
+                      boxShadow: `0 0 16px ${cor}70`, position: 'relative',
                     }}>
                       {lead.hub_pessoas?.nome?.[0] || '?'}
-                      <div style={{
-                        position: 'absolute', top: -5, right: -5,
-                        width: 14, height: 14, borderRadius: '50%',
-                        background: cor, border: '1.5px solid #080810',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 7, fontWeight: 800, color: '#fff',
-                      }}>
+                      <div style={{ position: 'absolute', top: -6, right: -6, width: 16, height: 16, borderRadius: '50%', background: cor, border: '2px solid #080810', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>
                         {lead.numero_visual}
                       </div>
+                    </div>
+                    <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 3, background: 'rgba(8,8,16,0.85)', borderRadius: 4, padding: '1px 5px', whiteSpace: 'nowrap', fontSize: 8, color: '#fff', fontWeight: 600 }}>
+                      {lead.hub_pessoas?.nome?.split(' ')[0] || '?'}
                     </div>
                   </div>
                 )
               })}
             </div>
 
-            <div style={{
-              position: 'fixed', bottom: 70, left: 12, right: 12,
-              background: 'rgba(8,8,16,0.9)', backdropFilter: 'blur(10px)',
-              borderRadius: 10, padding: '8px 14px',
-              display: 'flex', gap: 14, justifyContent: 'center',
-              border: '1px solid rgba(255,255,255,0.08)', zIndex: 50,
-            }}>
-              {[
-                { cor: '#ef4444', label: 'Crítico' },
-                { cor: '#f97316', label: 'Quente' },
-                { cor: '#10b981', label: 'Normal' },
-                { cor: '#6b7280', label: 'Frio' },
-              ].map(item => (
+            {/* LEGENDA */}
+            <div style={{ position: 'fixed', bottom: 70, left: 12, right: 12, background: 'rgba(8,8,16,0.92)', backdropFilter: 'blur(10px)', borderRadius: 10, padding: '8px 14px', display: 'flex', gap: 14, justifyContent: 'center', border: '1px solid rgba(255,255,255,0.08)', zIndex: 50 }}>
+              {[{ cor: '#ef4444', label: 'Crítico' },{ cor: '#f97316', label: 'Quente' },{ cor: '#10b981', label: 'Normal' },{ cor: '#6b7280', label: 'Frio' }].map(item => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.cor }} />
                   <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{item.label}</span>
@@ -544,7 +477,7 @@ export default function MobileExperience() {
           </div>
         )}
 
-        {/* ABA 2 — ATENDIMENTO */}
+        {/* ═══ ABA 2 — ATENDIMENTO ═══ */}
         {aba === 2 && (
           <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {leadAtend ? (
@@ -558,9 +491,7 @@ export default function MobileExperience() {
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{leadAtend.hub_pessoas?.nome}</div>
                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{FASE_LABEL[leadAtend.fase]} · score {leadAtend.score}</div>
                   </div>
-                  <Link href={`/crm/lead/${leadAtend.id}`} style={{ fontSize: 11, color: '#f97316', textDecoration: 'none', background: 'rgba(249,115,22,0.1)', padding: '5px 10px', borderRadius: 6 }}>
-                    360 →
-                  </Link>
+                  <Link href={`/crm/lead/${leadAtend.id}`} style={{ fontSize: 11, color: '#f97316', textDecoration: 'none', background: 'rgba(249,115,22,0.1)', padding: '5px 10px', borderRadius: 6 }}>360 →</Link>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {mensagens.length === 0 ? (
@@ -569,11 +500,9 @@ export default function MobileExperience() {
                     const isAgente = msg.remetente === 'agente' || msg.remetente === 'ia'
                     return (
                       <div key={msg.id} style={{ display: 'flex', justifyContent: isAgente ? 'flex-end' : 'flex-start' }}>
-                        <div style={{ maxWidth: '75%', background: isAgente ? 'linear-gradient(135deg, #f97316, #ea580c)' : 'rgba(255,255,255,0.08)', borderRadius: isAgente ? '16px 16px 4px 16px' : '16px 16px 16px 4px', padding: '10px 14px', fontSize: 13, color: '#fff', lineHeight: 1.5 }}>
+                        <div style={{ maxWidth: '75%', background: isAgente ? 'linear-gradient(135deg,#f97316,#ea580c)' : 'rgba(255,255,255,0.08)', borderRadius: isAgente ? '16px 16px 4px 16px' : '16px 16px 16px 4px', padding: '10px 14px', fontSize: 13, color: '#fff', lineHeight: 1.5 }}>
                           {msg.conteudo}
-                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginTop: 4, textAlign: 'right' }}>
-                            {new Date(msg.enviada_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginTop: 4, textAlign: 'right' }}>{new Date(msg.enviada_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>
                         </div>
                       </div>
                     )
@@ -581,31 +510,16 @@ export default function MobileExperience() {
                   <div ref={bottomRef} />
                 </div>
                 <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
-                  <input
-                    value={texto}
-                    onChange={e => setTexto(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && enviarMensagem()}
-                    placeholder="Digite uma mensagem..."
-                    style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#fff', fontSize: 13, outline: 'none' }}
-                  />
-                  <button onClick={enviarMensagem} style={{ background: texto.trim() ? 'linear-gradient(135deg, #f97316, #ea580c)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 10, padding: '10px 16px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                    →
-                  </button>
+                  <input value={texto} onChange={e => setTexto(e.target.value)} onKeyDown={e => e.key === 'Enter' && enviarMensagem()} placeholder="Digite uma mensagem..." style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#fff', fontSize: 13, outline: 'none' }} />
+                  <button onClick={enviarMensagem} style={{ background: texto.trim() ? 'linear-gradient(135deg,#f97316,#ea580c)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 10, padding: '10px 16px', color: '#fff', fontSize: 16, cursor: 'pointer' }}>→</button>
                 </div>
               </>
             ) : (
               <div style={{ height: '100%', overflowY: 'auto', padding: '14px 16px 100px' }}>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 14, textAlign: 'center' }}>
-                  {leads.length} conversas · toque para atender
-                </div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 14, textAlign: 'center' }}>{leads.length} conversas · toque para atender</div>
                 {leads.map(lead => (
-                  <div key={lead.id} onClick={() => selecionarLeadAtend(lead)} style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${COR_STATUS[lead.status_visual]}30`,
-                    borderRadius: 14, padding: '14px', marginBottom: 10, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 12,
-                  }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: `${COR_TIPO[lead.tipo] || '#6b7280'}20`, border: `2px solid ${COR_STATUS[lead.status_visual]}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                  <div key={lead.id} onClick={() => selecionarLeadAtend(lead)} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${COR_STATUS[lead.status_visual]}30`, borderRadius: 14, padding: '14px', marginBottom: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: `${COR_TIPO[lead.tipo]||'#6b7280'}20`, border: `2px solid ${COR_STATUS[lead.status_visual]}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
                       {lead.hub_pessoas?.nome?.[0] || '?'}
                     </div>
                     <div style={{ flex: 1 }}>
@@ -613,10 +527,11 @@ export default function MobileExperience() {
                       <div style={{ display: 'flex', gap: 6 }}>
                         <span style={{ fontSize: 10, color: COR_STATUS[lead.status_visual], background: `${COR_STATUS[lead.status_visual]}18`, padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{lead.status_visual.toUpperCase()}</span>
                         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{FASE_LABEL[lead.fase]}</span>
+                        {!lead.ia_ativa && <span style={{ fontSize: 10, color: '#f59e0b', background: '#f59e0b18', padding: '2px 6px', borderRadius: 4 }}>IA OFF</span>}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: lead.score >= 70 ? '#10b981' : lead.score >= 40 ? '#f59e0b' : '#6b7280' }}>{lead.score}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: lead.score >= 70 ? '#10b981' : lead.score >= 40 ? '#f59e0b' : '#6b7280' }}>{lead.score}</div>
                       {lead.valor_estimado && <div style={{ fontSize: 11, color: '#f97316', fontWeight: 600 }}>R${(lead.valor_estimado/1000).toFixed(0)}k</div>}
                     </div>
                   </div>
@@ -626,42 +541,36 @@ export default function MobileExperience() {
           </div>
         )}
 
-        {/* ABA 3 — MARKETING */}
+        {/* ═══ ABA 3 — MARKETING ═══ */}
         {aba === 3 && (
           <div style={{ height: '100%', overflowY: 'auto', padding: '14px 16px 100px' }}>
 
-            {/* Card Ariane */}
-            <div style={{
-              background: 'rgba(139,92,246,0.08)',
-              border: '1px solid rgba(139,92,246,0.25)',
-              borderRadius: 14,
-              padding: '14px 16px',
-              marginBottom: 16,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-            }}>
-              <div style={{ position: 'relative', width: 56, height: 78, flexShrink: 0 }}>
-                <Image src="/avatars/ariane/apresentando.png" alt="Ariane" fill style={{ objectFit: 'contain' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', marginBottom: 2 }}>Ariane</div>
-                <div style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, marginBottom: 6 }}>Diretora de Marketing</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>
-                  CPL acima da meta. Revisando estratégia de tráfego.
+            {/* ARIANE */}
+            {mostrarAriane && (
+              <div style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 16, padding: '14px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <img
+                  src={`/avatars/ariane/${arianeEstado}.png`}
+                  alt="Ariane"
+                  style={{ width: 60, height: 84, objectFit: 'contain', flexShrink: 0 }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', marginBottom: 1 }}>Ariane</div>
+                  <div style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 700, marginBottom: 6 }}>Diretora de Marketing</div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>{ARIANE_MENSAGENS[arianeEstado]}</div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* KPIs Marketing */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
               {[
-                { label: 'CPL Médio', value: 'R$76', meta: 'meta R$60', cor: '#ef4444', ok: false },
-                { label: 'Leads/Dia', value: '62', meta: '+24% hoje', cor: '#10b981', ok: true },
-                { label: 'Taxa Qualif.', value: '38%', meta: 'meta 45%', cor: '#f59e0b', ok: false },
-                { label: 'ROAS Médio', value: '2.4x', meta: 'meta 3x', cor: '#f59e0b', ok: false },
+                { label: 'CPL Médio', value: 'R$76', meta: 'meta R$60', cor: '#ef4444' },
+                { label: 'Leads/Dia', value: '62', meta: '+24% hoje', cor: '#10b981' },
+                { label: 'Taxa Qualif.', value: '38%', meta: 'meta 45%', cor: '#f59e0b' },
+                { label: 'ROAS Médio', value: '2.4x', meta: 'meta 3x', cor: '#f59e0b' },
               ].map(kpi => (
-                <div key={kpi.label} style={{ background: kpi.ok ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.06)', border: `1px solid ${kpi.cor}25`, borderRadius: 12, padding: '14px' }}>
+                <div key={kpi.label} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${kpi.cor}25`, borderRadius: 12, padding: '14px' }}>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>{kpi.label}</div>
                   <div style={{ fontSize: 24, fontWeight: 800, color: kpi.cor, letterSpacing: '-1px' }}>{kpi.value}</div>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>{kpi.meta}</div>
@@ -673,30 +582,22 @@ export default function MobileExperience() {
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Campanhas Ativas</div>
               {CAMPANHAS_MOCK.map((camp, i) => {
-                const pctBudget = (camp.budget_usado / camp.budget_total) * 100
-                const corBudget = pctBudget > 85 ? '#ef4444' : pctBudget > 70 ? '#f59e0b' : '#10b981'
+                const pct = (camp.budget_usado/camp.budget_total)*100
+                const corBudget = pct > 85 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981'
                 const corCpl = camp.cpl > camp.meta_cpl ? '#ef4444' : '#10b981'
                 return (
                   <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '14px', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', flex: 1, marginRight: 8 }}>{camp.nome}</div>
-                      <span style={{ fontSize: 10, color: camp.status === 'ativo' ? '#10b981' : '#f59e0b', background: camp.status === 'ativo' ? '#10b98118' : '#f59e0b18', padding: '2px 8px', borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>
-                        {camp.status === 'ativo' ? 'ATIVO' : 'ATENÇÃO'}
-                      </span>
+                      <span style={{ fontSize: 10, color: camp.status === 'ativo' ? '#10b981' : '#f59e0b', background: camp.status === 'ativo' ? '#10b98118' : '#f59e0b18', padding: '2px 8px', borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>{camp.status === 'ativo' ? 'ATIVO' : 'ATENÇÃO'}</span>
                     </div>
                     <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>CPL</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: corCpl }}>R${camp.cpl}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>ROAS</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{camp.roas}x</div>
-                      </div>
+                      <div><div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>CPL</div><div style={{ fontSize: 16, fontWeight: 800, color: corCpl }}>R${camp.cpl}</div></div>
+                      <div><div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>ROAS</div><div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{camp.roas}x</div></div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>Budget R${camp.budget_usado.toLocaleString()} / R${camp.budget_total.toLocaleString()}</div>
+                        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>Budget R${camp.budget_usado.toLocaleString()}/R${camp.budget_total.toLocaleString()}</div>
                         <div style={{ height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${pctBudget}%`, background: corBudget, borderRadius: 3 }} />
+                          <div style={{ height: '100%', width: `${pct}%`, background: corBudget, borderRadius: 3 }} />
                         </div>
                       </div>
                     </div>
@@ -706,7 +607,7 @@ export default function MobileExperience() {
               })}
             </div>
 
-            {/* Criativos e Copies */}
+            {/* Criativos */}
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Criativos & Copies</div>
               {CRIATIVOS_MOCK.map((c, i) => {
@@ -719,9 +620,7 @@ export default function MobileExperience() {
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 2 }}>{c.titulo}</div>
                       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{c.responsavel} · {c.prazo}</div>
                     </div>
-                    <span style={{ fontSize: 10, color: statusInfo.cor, background: `${statusInfo.cor}18`, padding: '3px 8px', borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>
-                      {statusInfo.label}
-                    </span>
+                    <span style={{ fontSize: 10, color: statusInfo.cor, background: `${statusInfo.cor}18`, padding: '3px 8px', borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>{statusInfo.label}</span>
                   </div>
                 )
               })}
@@ -729,23 +628,22 @@ export default function MobileExperience() {
           </div>
         )}
 
-        {/* ABA 4 — FEED */}
+        {/* ═══ ABA 4 — FEED ═══ */}
         {aba === 4 && (
           <div style={{ height: '100%', overflowY: 'auto', padding: '14px 16px 100px' }}>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 14, textAlign: 'center' }}>Eventos em tempo real</div>
             {[
-              ...alertas.map(a => ({ ...a, icone: a.tipo === 'CRÍTICO' ? '🚨' : a.tipo === 'AÇÃO' ? '⚡' : a.tipo === 'SLA' ? '⏱️' : 'ℹ️' })),
+              ...alertas.map(a => ({ ...a, icone: a.tipo === 'CRÍTICO' ? '🚨' : a.tipo === 'SLA' ? '⏱️' : a.tipo === 'ATENÇÃO' ? '⚠️' : 'ℹ️' })),
               { id: 'f1', tipo: 'MATCH', texto: 'Lead #2 — match realizado com parceiro', tempo: '1min', cor: '#10b981', icone: '🤝' },
               { id: 'f2', tipo: 'COPY', texto: 'Copy Black Friday aprovada pela equipe', tempo: '5min', cor: '#8b5cf6', icone: '✅' },
               { id: 'f3', tipo: 'CRIATIVO', texto: 'Arte Stories Imobiliário publicada', tempo: '10min', cor: '#3b82f6', icone: '🎨' },
-              { id: 'f4', tipo: 'LEAD', texto: 'Paulo Rodrigues chegou pela entrada', tempo: '18min', cor: '#6b7280', icone: '👤' },
+              { id: 'f4', tipo: 'CAMPANHA', texto: 'Google Imobiliário — ROAS 3.1x acima da meta', tempo: '15min', cor: '#10b981', icone: '📈' },
+              { id: 'f5', tipo: 'LEAD', texto: 'Paulo Rodrigues chegou pela entrada', tempo: '18min', cor: '#6b7280', icone: '👤' },
             ].map((ev, i, arr) => (
-              <div key={ev.id} style={{ display: 'flex', gap: 14, paddingBottom: 20, marginBottom: 20, borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+              <div key={ev.id} style={{ display: 'flex', gap: 14, paddingBottom: 20, marginBottom: 20, borderBottom: i < arr.length-1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: `${ev.cor}20`, border: `2px solid ${ev.cor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-                    {ev.icone}
-                  </div>
-                  {i < arr.length - 1 && <div style={{ flex: 1, width: 1, background: 'rgba(255,255,255,0.06)', marginTop: 8 }} />}
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: `${ev.cor}20`, border: `2px solid ${ev.cor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{ev.icone}</div>
+                  {i < arr.length-1 && <div style={{ flex: 1, width: 1, background: 'rgba(255,255,255,0.06)', marginTop: 8 }} />}
                 </div>
                 <div style={{ paddingTop: 6 }}>
                   <div style={{ fontSize: 10, color: ev.cor, fontWeight: 700, marginBottom: 4 }}>{ev.tipo}</div>
@@ -758,13 +656,13 @@ export default function MobileExperience() {
         )}
       </div>
 
-      {/* Drawer do lead */}
+      {/* DRAWER DO LEAD */}
       {leadDrawer && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'flex-end' }} onClick={() => setLeadDrawer(null)}>
           <div style={{ width: '100%', background: '#0d0d1a', borderRadius: '20px 20px 0 0', padding: '24px 20px 40px', border: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
             <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 2, margin: '0 auto 20px' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-              <div style={{ width: 52, height: 52, borderRadius: '50%', background: `${COR_TIPO[leadDrawer.tipo] || '#6b7280'}25`, border: `2px solid ${COR_STATUS[leadDrawer.status_visual]}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#fff' }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: `${COR_TIPO[leadDrawer.tipo]||'#6b7280'}25`, border: `2px solid ${COR_STATUS[leadDrawer.status_visual]}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#fff' }}>
                 {leadDrawer.hub_pessoas?.nome?.[0] || '?'}
               </div>
               <div>
@@ -772,7 +670,7 @@ export default function MobileExperience() {
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>#{leadDrawer.numero_visual} · {FASE_LABEL[leadDrawer.fase]}</div>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
               {[
                 { label: 'Score', value: `${leadDrawer.score}pts`, cor: leadDrawer.score >= 70 ? '#10b981' : '#f59e0b' },
                 { label: 'Status', value: leadDrawer.status_visual, cor: COR_STATUS[leadDrawer.status_visual] },
@@ -785,42 +683,34 @@ export default function MobileExperience() {
               ))}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => { setLeadAtend(leadDrawer); setLeadDrawer(null); setAba(2); selecionarLeadAtend(leadDrawer) }} style={{ flex: 1, background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', borderRadius: 12, padding: '14px', fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+              <button onClick={() => { selecionarLeadAtend(leadDrawer); setLeadDrawer(null); setAba(2) }} style={{ flex: 1, background: 'linear-gradient(135deg,#f97316,#ea580c)', border: 'none', borderRadius: 12, padding: '14px', fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
                 💬 Atender agora
               </button>
               <Link href={`/crm/lead/${leadDrawer.id}`} style={{ flex: 1, textDecoration: 'none' }}>
-                <div style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '14px', textAlign: 'center', fontSize: 13, fontWeight: 600, color: '#fff' }}>
-                  Lead 360 →
-                </div>
+                <div style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '14px', textAlign: 'center', fontSize: 13, fontWeight: 600, color: '#fff' }}>Lead 360 →</div>
               </Link>
             </div>
           </div>
         </div>
       )}
 
-      {/* Drawer do agente */}
+      {/* DRAWER DO AGENTE */}
       {agenteDrawer && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'flex-end' }} onClick={() => setAgenteDrawer(null)}>
           <div style={{ width: '100%', background: '#0d0d1a', borderRadius: '20px 20px 0 0', padding: '24px 20px 36px', border: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
             <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 2, margin: '0 auto 20px' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <div style={{ width: 52, height: 52, borderRadius: '50%', background: `${agenteDrawer.cor}25`, border: `2px solid ${agenteDrawer.cor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff' }}>
-                {agenteDrawer.iniciais}
-              </div>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: `${agenteDrawer.cor}25`, border: `2px solid ${agenteDrawer.cor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff' }}>{agenteDrawer.iniciais}</div>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>{agenteDrawer.nome}</div>
-                <div style={{ fontSize: 12, color: agenteDrawer.cor, marginTop: 2 }}>{agenteDrawer.area}</div>
+                <div style={{ fontSize: 12, color: agenteDrawer.cor, marginTop: 2, fontWeight: 600 }}>{agenteDrawer.atividades[0]}</div>
               </div>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 4 }}>Atividade atual</div>
-              <div style={{ fontSize: 14, color: '#fff' }}>{agenteDrawer.atividades[0]}</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Nav inferior — 5 abas */}
+      {/* NAV INFERIOR */}
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(8,8,16,0.97)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)', zIndex: 100 }}>
         {ABAS.map((item, i) => (
           <button key={i} onClick={() => { setAba(i); setLeadDrawer(null); setAgenteDrawer(null) }} style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 2px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, position: 'relative' }}>

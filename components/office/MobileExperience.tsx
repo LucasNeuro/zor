@@ -88,7 +88,7 @@ export default function MobileExperience() {
         .from('hub_leads')
         .select('id, numero_visual, fase, status_visual, score, valor_estimado, tipo, ia_ativa, hub_pessoas(nome, telefone)')
         .order('score', { ascending: false })
-      setLeads((data as Lead[]) || [])
+      setLeads((data as unknown as Lead[]) || [])
     }
     fetchLeads()
     const channel = supabase

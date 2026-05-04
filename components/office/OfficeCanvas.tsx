@@ -7,7 +7,7 @@ import {
   Connection,
   STATE_VISUALS,
 } from "@/lib/agent-states";
-import { getScaledRooms, getRoomByPosition, type Room } from "@/lib/office-map";
+import { getScaledRooms, getRoomByPosition, getNavigationPoint, OFFICE_MAP, type Room } from "@/lib/office-map";
 import { type LiveLead } from "@/lib/data/live-leads";
 import LiveLeadDot from "./LiveLeadDot";
 
@@ -64,11 +64,11 @@ interface LeadAnim {
 }
 
 const LEAD_FLOW = [
-  { x: 488, y: 482 }, // main_entrance
-  { x: 424, y: 413 }, // waiting_area
-  { x: 344, y: 413 }, // main_reception
-  { x: 557, y: 413 }, // active_attendance
-] as const;
+  getNavigationPoint("main_entrance",             WORLD_W, WORLD_H) ?? { x: 488, y: 482 },
+  getNavigationPoint("waiting_area",              WORLD_W, WORLD_H) ?? { x: 425, y: 413 },
+  getNavigationPoint("main_reception_desk",       WORLD_W, WORLD_H) ?? { x: 345, y: 413 },
+  getNavigationPoint("active_attendance_stations",WORLD_W, WORLD_H) ?? { x: 557, y: 413 },
+];
 
 const SPEECH_COLORS: Record<string, string> = {
   "Executivo":   "#f59e0b",
@@ -205,6 +205,7 @@ export function OfficeCanvas({
   const avatarImgsRef    = useRef<Map<string, HTMLImageElement>>(new Map());
   const hoveredId        = useRef<string | null>(null);
   const hoveredRoomRef   = useRef<Room | null>(null);
+  const hoverOpacityRef  = useRef<Record<string, number>>({});
   const animRef             = useRef<number>(0);
   const agentsRef           = useRef(agents);
   const selectedRef         = useRef(selectedId);
@@ -630,28 +631,65 @@ export function OfficeCanvas({
           ctx.fillText(sv.icon, ax, ay - rR - 6 * S);
         }
 
-        /* name tag below */
-        const nfs = Math.max(6, Math.min(9, 9 * S));
-        const displayName = agent.nome.length > 10 ? agent.nome.slice(0, 9) + "…" : agent.nome;
-        ctx.font         = `bold ${nfs}px sans-serif`;
-        ctx.textAlign    = "center";
-        ctx.textBaseline = "top";
-        const ntw = ctx.measureText(displayName).width;
-        const npw = ntw + 8 * S;
-        const nph = nfs + 5 * S;
-        const npx = ax - npw / 2;
-        const npy = ay + rR + 4 * S;
+        /* name tag below — skip for Ariane (rendered as full sprite) */
+        if (agent.nome !== 'Ariane' || !arianeImgRef.current) {
+          const nfs = Math.max(6, 7.5 * S);
+          const displayName = agent.nome.length > 10 ? agent.nome.slice(0, 9) + "…" : agent.nome;
+          ctx.font         = `bold ${nfs}px sans-serif`;
+          ctx.textAlign    = "center";
+          ctx.textBaseline = "top";
+          const ntw = ctx.measureText(displayName).width;
+          const npw = ntw + 8 * S;
+          const nph = nfs + 5 * S;
+          const npx = ax - npw / 2;
+          const npy = ay + rR + 4 * S;
 
-        ctx.save();
-        ctx.shadowColor  = "rgba(0,0,0,0.95)";
-        ctx.shadowBlur   = 6 * S;
-        ctx.fillStyle    = "rgba(4,8,18,0.88)";
-        roundRect(ctx, npx, npy, npw, nph, 3 * S);
-        ctx.fill();
-        ctx.shadowBlur   = 3 * S;
-        ctx.fillStyle    = "#f8fafc";
-        ctx.fillText(displayName, ax, npy + 2.5 * S, npw - 4 * S);
-        ctx.restore();
+          ctx.save();
+          ctx.shadowColor = "rgba(0,0,0,0.8)";
+          ctx.shadowBlur  = 4 * S;
+          ctx.fillStyle   = "rgba(8,8,16,0.85)";
+          roundRect(ctx, npx, npy, npw, nph, 3 * S);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.15)";
+          ctx.lineWidth   = 0.5;
+          roundRect(ctx, npx, npy, npw, nph, 3 * S);
+          ctx.stroke();
+          ctx.shadowBlur  = 0;
+          ctx.fillStyle   = "#e2e8f0";
+          ctx.fillText(displayName, ax, npy + 2.5 * S, npw - 4 * S);
+          ctx.restore();
+
+          /* area tooltip — fades in/out on hover */
+          const prevOp = hoverOpacityRef.current[agent.id] ?? 0;
+          const targetOp = hoveredId.current === agent.id ? 1 : 0;
+          const newOp = prevOp + (targetOp - prevOp) * 0.12;
+          hoverOpacityRef.current[agent.id] = newOp;
+
+          if (newOp > 0.01) {
+            const areaLabel = agent.area || '';
+            ctx.font = `${Math.max(5, 6.5 * S)}px sans-serif`;
+            const atw = ctx.measureText(areaLabel).width;
+            const apw = atw + 10 * S;
+            const aph = Math.max(5, 6.5 * S) + 6 * S;
+            const apx = ax - apw / 2;
+            const apy = npy + nph + 3 * S;
+
+            ctx.save();
+            ctx.globalAlpha = newOp;
+            ctx.fillStyle   = "rgba(15,15,30,0.95)";
+            roundRect(ctx, apx, apy, apw, aph, 3 * S);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(139,92,246,0.5)";
+            ctx.lineWidth   = 0.5;
+            roundRect(ctx, apx, apy, apw, aph, 3 * S);
+            ctx.stroke();
+            ctx.fillStyle    = "#c4b5fd";
+            ctx.textAlign    = "center";
+            ctx.textBaseline = "top";
+            ctx.fillText(areaLabel, ax, apy + 3 * S);
+            ctx.restore();
+          }
+        }
       }
 
       /* ── speech bubbles ── */

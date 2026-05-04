@@ -29,7 +29,7 @@ const IMG_H = 1822
 const FASE_SPAWN: Record<string, { x: number; y: number }> = {
   entrada:      { x: 432, y: 1750 },
   espera:       { x: 660, y: 1340 },
-  qualificacao: { x: 660, y: 510  },
+  qualificacao: { x: 660, y: 490  },
   apresentacao: { x: 430, y: 970  },
   negociacao:   { x: 660, y: 970  },
   fechamento:   { x: 660, y: 970  },
@@ -38,31 +38,31 @@ const FASE_SPAWN: Record<string, { x: number; y: number }> = {
 }
 
 const AGENTES = [
-  { id: 1,  nome: 'Ariane', iniciais: 'AR', x: 167, y: 220, cor: '#8b5cf6', atividades: ['Revisando estratégia...','Aprovando campanha...','Analisando CPL...','Definindo metas...','Alinhando com comercial...'] },
-  { id: 2,  nome: 'CEO',            iniciais: 'CE', x: 432, y: 185, cor: '#f97316', atividades: ['Analisando KPIs...','Tomando decisão...','Revisando metas...'] },
-  { id: 3,  nome: 'Dir. Comercial', iniciais: 'DC', x: 700, y: 185, cor: '#3b82f6', atividades: ['Monitorando funil...','Aprovando proposta...','Revisando pipeline...'] },
-  { id: 4,  nome: 'Ger. Marketing', iniciais: 'GM', x: 100, y: 480, cor: '#8b5cf6', atividades: ['Criando briefing...','Revisando copy...','Planejando campanha...'] },
-  { id: 5,  nome: 'Copywriter',     iniciais: 'CW', x: 155, y: 560, cor: '#8b5cf6', atividades: ['Escrevendo copy...','Criando CTA...','Revisando roteiro...'] },
-  { id: 6,  nome: 'Designer',       iniciais: 'DS', x: 200, y: 630, cor: '#8b5cf6', atividades: ['Criando criativo...','Ajustando layout...','Exportando arte...'] },
-  { id: 7,  nome: 'Social Media',   iniciais: 'SM', x: 90,  y: 700, cor: '#8b5cf6', atividades: ['Agendando post...','Respondendo DM...','Analisando alcance...'] },
-  { id: 8,  nome: 'Motion IA',      iniciais: 'MI', x: 310, y: 480, cor: '#10b981', atividades: ['Gravando reel...','Editando vídeo...','Criando animação...'] },
-  { id: 9,  nome: 'Copy Gamma',     iniciais: 'CG', x: 430, y: 560, cor: '#10b981', atividades: ['Criando legenda...','Revisando texto...','Gerando variações...'] },
-  { id: 10, nome: 'Design Beta',    iniciais: 'DB', x: 490, y: 630, cor: '#10b981', atividades: ['Desenvolvendo arte...','Criando thumbnail...','Ajustando cores...'] },
-  { id: 11, nome: 'Copy Beta',      iniciais: 'CB', x: 310, y: 700, cor: '#10b981', atividades: ['Escrevendo roteiro...','Criando headline...','Testando variação...'] },
-  { id: 12, nome: 'Ger. Vendas',    iniciais: 'GV', x: 580, y: 480, cor: '#3b82f6', atividades: ['Gerenciando pipeline...','Revisando proposta...','Treinando SDR...'] },
-  { id: 13, nome: 'Tráfego B',      iniciais: 'TB', x: 650, y: 560, cor: '#3b82f6', atividades: ['Ajustando lances...','Testando público...','Analisando CPL...'] },
-  { id: 14, nome: 'Analytics',      iniciais: 'AN', x: 720, y: 630, cor: '#3b82f6', atividades: ['Analisando dados...','Gerando relatório...','Identificando padrão...'] },
-  { id: 15, nome: 'Closer',         iniciais: 'CL', x: 580, y: 700, cor: '#3b82f6', atividades: ['Fechando proposta...','Negociando...','Follow-up ativo...'] },
-  { id: 16, nome: 'Social Ga.',     iniciais: 'SG', x: 85,  y: 870, cor: '#f59e0b', atividades: ['Criando stories...','Analisando engajamento...','Respondendo comentários...'] },
-  { id: 17, nome: 'Agenda IA',      iniciais: 'AI', x: 160, y: 960, cor: '#f59e0b', atividades: ['Organizando calendário...','Agendando conteúdo...','Planejando semana...'] },
-  { id: 18, nome: 'Plano IA',       iniciais: 'PI', x: 85,  y: 1050, cor: '#f59e0b', atividades: ['Criando plano...','Definindo estratégia...','Mapeando conteúdo...'] },
-  { id: 19, nome: 'Brief IA',       iniciais: 'BI', x: 430, y: 960, cor: '#6b7280', atividades: ['Coletando briefing...','Em reunião...','Documentando...'] },
-  { id: 20, nome: 'CRM IA',         iniciais: 'CR', x: 660, y: 870, cor: '#ef4444', atividades: ['Monitorando leads...','Atualizando CRM...','Analisando funil...'] },
-  { id: 21, nome: 'CS',             iniciais: 'CS', x: 720, y: 960, cor: '#ef4444', atividades: ['Atendendo cliente...','Registrando contato...','Verificando SLA...'] },
-  { id: 22, nome: 'SDR',            iniciais: 'SD', x: 660, y: 1050, cor: '#ef4444', atividades: ['Qualificando lead...','Fazendo follow-up...','Agendando reunião...'] },
-  { id: 23, nome: 'Ger. Atend.',    iniciais: 'GA', x: 300, y: 1310, cor: '#10b981', atividades: ['Monitorando qualidade...','Verificando SLA...','Orientando equipe...'] },
-  { id: 24, nome: 'Atendente',      iniciais: 'AA', x: 430, y: 1310, cor: '#10b981', atividades: ['Atendendo lead...','Coletando dados...','Encaminhando...'] },
-  { id: 25, nome: 'Atendente B',    iniciais: 'AB', x: 140, y: 1350, cor: '#10b981', atividades: ['Respondendo WhatsApp...','Qualificando...','Registrando dados...'] },
+  { id: 1,  nome: 'Ariane',        iniciais: 'AR', x: 167, y: 180,  cor: '#8b5cf6', area: 'Marketing',    atividades: ['Revisando estratégia...','Aprovando campanha...','Analisando CPL...','Definindo metas...','Alinhando com comercial...'] },
+  { id: 2,  nome: 'CEO',           iniciais: 'CE', x: 432, y: 185,  cor: '#f97316', area: 'Executivo',    atividades: ['Analisando KPIs...','Tomando decisão...','Revisando metas...'] },
+  { id: 3,  nome: 'Dir. Comercial',iniciais: 'DC', x: 700, y: 185,  cor: '#3b82f6', area: 'Comercial',    atividades: ['Monitorando funil...','Aprovando proposta...','Revisando pipeline...'] },
+  { id: 4,  nome: 'Ger. Marketing',iniciais: 'GM', x: 100, y: 480,  cor: '#8b5cf6', area: 'Marketing',    atividades: ['Criando briefing...','Revisando copy...','Planejando campanha...'] },
+  { id: 5,  nome: 'Copywriter',    iniciais: 'CW', x: 155, y: 560,  cor: '#8b5cf6', area: 'Conteúdo',     atividades: ['Escrevendo copy...','Criando CTA...','Revisando roteiro...'] },
+  { id: 6,  nome: 'Designer',      iniciais: 'DS', x: 200, y: 630,  cor: '#8b5cf6', area: 'Design',       atividades: ['Criando criativo...','Ajustando layout...','Exportando arte...'] },
+  { id: 7,  nome: 'Social Media',  iniciais: 'SM', x: 90,  y: 700,  cor: '#8b5cf6', area: 'Conteúdo',     atividades: ['Agendando post...','Respondendo DM...','Analisando alcance...'] },
+  { id: 8,  nome: 'Motion IA',     iniciais: 'MI', x: 310, y: 480,  cor: '#10b981', area: 'Design',       atividades: ['Gravando reel...','Editando vídeo...','Criando animação...'] },
+  { id: 9,  nome: 'Copy Gamma',    iniciais: 'CG', x: 430, y: 560,  cor: '#10b981', area: 'Conteúdo',     atividades: ['Criando legenda...','Revisando texto...','Gerando variações...'] },
+  { id: 10, nome: 'Design Beta',   iniciais: 'DB', x: 490, y: 630,  cor: '#10b981', area: 'Design',       atividades: ['Desenvolvendo arte...','Criando thumbnail...','Ajustando cores...'] },
+  { id: 11, nome: 'Copy Beta',     iniciais: 'CB', x: 310, y: 700,  cor: '#10b981', area: 'Conteúdo',     atividades: ['Escrevendo roteiro...','Criando headline...','Testando variação...'] },
+  { id: 12, nome: 'Ger. Vendas',   iniciais: 'GV', x: 580, y: 480,  cor: '#3b82f6', area: 'Comercial',    atividades: ['Gerenciando pipeline...','Revisando proposta...','Treinando SDR...'] },
+  { id: 13, nome: 'Tráfego B',     iniciais: 'TB', x: 650, y: 560,  cor: '#3b82f6', area: 'Performance',  atividades: ['Ajustando lances...','Testando público...','Analisando CPL...'] },
+  { id: 14, nome: 'Analytics',     iniciais: 'AN', x: 720, y: 630,  cor: '#3b82f6', area: 'Performance',  atividades: ['Analisando dados...','Gerando relatório...','Identificando padrão...'] },
+  { id: 15, nome: 'Closer',        iniciais: 'CL', x: 580, y: 700,  cor: '#3b82f6', area: 'Comercial',    atividades: ['Fechando proposta...','Negociando...','Follow-up ativo...'] },
+  { id: 16, nome: 'Social Ga.',    iniciais: 'SG', x: 85,  y: 870,  cor: '#f59e0b', area: 'Conteúdo',     atividades: ['Criando stories...','Analisando engajamento...','Respondendo comentários...'] },
+  { id: 17, nome: 'Agenda IA',     iniciais: 'AI', x: 160, y: 960,  cor: '#f59e0b', area: 'Estratégia',   atividades: ['Organizando calendário...','Agendando conteúdo...','Planejando semana...'] },
+  { id: 18, nome: 'Plano IA',      iniciais: 'PI', x: 85,  y: 1050, cor: '#f59e0b', area: 'Estratégia',   atividades: ['Criando plano...','Definindo estratégia...','Mapeando conteúdo...'] },
+  { id: 19, nome: 'Brief IA',      iniciais: 'BI', x: 250, y: 1050, cor: '#f59e0b', area: 'Estratégia',   atividades: ['Coletando briefing...','Em reunião...','Documentando...'] },
+  { id: 20, nome: 'CRM IA',        iniciais: 'CR', x: 660, y: 870,  cor: '#ef4444', area: 'Comercial',    atividades: ['Monitorando leads...','Atualizando CRM...','Analisando funil...'] },
+  { id: 21, nome: 'CS',            iniciais: 'CS', x: 720, y: 960,  cor: '#ef4444', area: 'Comercial',    atividades: ['Atendendo cliente...','Registrando contato...','Verificando SLA...'] },
+  { id: 22, nome: 'SDR',           iniciais: 'SD', x: 660, y: 1050, cor: '#ef4444', area: 'Atendimento',  atividades: ['Qualificando lead...','Fazendo follow-up...','Agendando reunião...'] },
+  { id: 23, nome: 'Ger. Atend.',   iniciais: 'GA', x: 300, y: 1310, cor: '#10b981', area: 'Atendimento',  atividades: ['Monitorando qualidade...','Verificando SLA...','Orientando equipe...'] },
+  { id: 24, nome: 'Atendente',     iniciais: 'AA', x: 430, y: 1310, cor: '#10b981', area: 'Atendimento',  atividades: ['Atendendo lead...','Coletando dados...','Encaminhando...'] },
+  { id: 25, nome: 'Atendente B',   iniciais: 'AB', x: 140, y: 1350, cor: '#10b981', area: 'Atendimento',  atividades: ['Respondendo WhatsApp...','Qualificando...','Registrando dados...'] },
 ]
 
 const CAMPANHAS_MOCK = [
@@ -116,9 +116,9 @@ function calcOpacidade(lead: Lead): number {
 }
 
 function calcTamanho(lead: Lead): number {
-  if (lead.score >= 70) return 46
-  if (lead.score >= 40) return 40
-  return 34
+  if (lead.score >= 70) return 50
+  if (lead.score >= 40) return 44
+  return 38
 }
 
 export default function MobileExperience() {
@@ -415,7 +415,7 @@ export default function MobileExperience() {
                 }
 
                 return (
-                  <div key={ag.id} onClick={() => setAgenteDrawer(ag)} style={{ position: 'absolute', left: pos.x, top: pos.y, transform: 'translate(-50%, -50%)', zIndex: 5, cursor: 'pointer' }}>
+                  <div key={ag.id} onClick={() => setAgenteDrawer(ag)} style={{ position: 'absolute', left: pos.x, top: pos.y, transform: 'translate(-50%, -50%)', zIndex: 5, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     {temBolha && (
                       <div style={{ position: 'absolute', bottom: '110%', left: '50%', transform: 'translateX(-50%)', background: 'rgba(8,8,16,0.92)', border: `1px solid ${ag.cor}60`, borderRadius: 6, padding: '3px 7px', whiteSpace: 'nowrap', fontSize: 9, color: '#fff', marginBottom: 4, zIndex: 30 }}>
                         {bolhaTexto}
@@ -431,6 +431,12 @@ export default function MobileExperience() {
                       transition: 'all 0.3s ease',
                     }}>
                       {ag.iniciais}
+                    </div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: '#e2e8f0', whiteSpace: 'nowrap', marginTop: 2, lineHeight: 1 }}>
+                      {ag.nome.length > 10 ? ag.nome.slice(0, 9) + '…' : ag.nome}
+                    </div>
+                    <div style={{ fontSize: 7, color: '#94a3b8', whiteSpace: 'nowrap', lineHeight: 1 }}>
+                      {ag.area}
                     </div>
                   </div>
                 )

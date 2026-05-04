@@ -10,28 +10,35 @@ html, body {
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #f7f4ec;
+  --foreground: #1a1a1a;
+  --brand-green: #003b26;
+  --brand-green-deep: #00281a;
+  --brand-green-soft: #12382b;
+  --brand-gold: #f4cf72;
+  --brand-gold-mid: #c9a24a;
+  --brand-gold-dark: #d6a129;
+  --brand-cream: #f7f4ec;
+  --brand-cream-2: #eee5d6;
+  --brand-red: #b3261e;
+  --brand-muted: #7a786c;
+  --brand-line: rgba(18, 56, 43, 0.12);
+  --brand-shadow: 0 8px 32px rgba(0, 40, 26, 0.10);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-poppins, system-ui, sans-serif);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(201, 162, 74, 0.85);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(201, 162, 74, 0.30);
 }
 
 @keyframes fadeSlideUp {
@@ -147,4 +154,62 @@ body {
 @keyframes breatheAgent {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
+}
+
+/* ── Scrollbars ─────────────────────────────────────────── */
+.scrollbar-soft {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(18, 56, 43, 0.24) transparent;
+}
+.scrollbar-soft::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollbar-soft::-webkit-scrollbar-thumb {
+  background: rgba(18, 56, 43, 0.22);
+  border-radius: 999px;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* ── Brand animations ───────────────────────────────────── */
+@keyframes panelSlideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes barFill {
+  from { width: 0%; }
+}
+@keyframes scoreCount {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+
+.agent-panel-enter { animation: panelSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.agent-section-1 { animation: fadeInUp 0.35s ease-out 0.05s both; }
+.agent-section-2 { animation: fadeInUp 0.35s ease-out 0.12s both; }
+.agent-section-3 { animation: fadeInUp 0.35s ease-out 0.19s both; }
+.agent-section-4 { animation: fadeInUp 0.35s ease-out 0.26s both; }
+.gov-bar-fill { animation: barFill 0.8s cubic-bezier(0.25, 1, 0.5, 1) 0.3s both; }
+.score-appear { animation: scoreCount 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0.25s both; }
+
+.task-card {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms ease;
+}
+.task-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.06);
 }

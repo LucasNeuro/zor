@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { processarMensagem, enfileirarMensagem } from '@/lib/ia/engine'
+import { processarMensagem } from '@/lib/ia/engine'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -127,20 +127,14 @@ export async function POST(req: NextRequest) {
       conteudo:      mensagem,
     })
 
-    // Enfileirar para rastreamento
-    await enfileirarMensagem({
-      leadId:             lead?.id!,
-      conversaId:         conversa?.id!,
-      whatsappMessageId:  whatsappId,
-      remetenteNumero:    numeroLimpo,
-      conteudo:           mensagem,
-    })
-
     // Processar com IA
     const resultado = await processarMensagem({
-      leadId:          lead?.id!,
-      conversaId:      conversa?.id!,
-      mensagemUsuario: mensagem,
+      leadId:   lead?.id!,
+      mensagem: mensagem,
+      canal:    "whatsapp",
+      telefone: numeroLimpo,
+      nome:     nomeMeta,
+      metadata: { conversaId: conversa?.id, whatsappMessageId: whatsappId },
     })
 
     // TODO: enviar resultado.resposta pelo Meta API

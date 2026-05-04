@@ -27,9 +27,9 @@ const IMG_W = 863
 const IMG_H = 1822
 
 const FASE_SPAWN: Record<string, { x: number; y: number }> = {
-  entrada:      { x: 432, y: 1750 },
+  entrada:      { x: 120, y: 1720 },  // bottom-left on mobile
   espera:       { x: 660, y: 1340 },
-  qualificacao: { x: 660, y: 490  },
+  qualificacao: { x: 550, y: 1380 },  // lounge/reception area
   apresentacao: { x: 430, y: 970  },
   negociacao:   { x: 660, y: 970  },
   fechamento:   { x: 660, y: 970  },
@@ -122,7 +122,8 @@ function calcTamanho(lead: Lead): number {
 }
 
 export default function MobileExperience() {
-  const [aba, setAba] = useState(0)
+  const [aba, setAba] = useState(1)  // office is the default view
+  const [mostrarUI, setMostrarUI] = useState(false)
   const [leads, setLeads] = useState<Lead[]>([])
   const [alertas, setAlertas] = useState<{id:string;tipo:string;texto:string;tempo:string;cor:string}[]>([])
   const [horaAtual, setHoraAtual] = useState('')
@@ -142,6 +143,21 @@ export default function MobileExperience() {
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const mostrarUITimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastScrollTopRef = useRef(0)
+
+  // UI is always visible on non-office tabs; in office tab it toggles
+  const uiVisivel = aba !== 1 || mostrarUI
+
+  function exibirUI() {
+    setMostrarUI(true)
+    if (mostrarUITimer.current) clearTimeout(mostrarUITimer.current)
+    mostrarUITimer.current = setTimeout(() => setMostrarUI(false), 3000)
+  }
+
+  useEffect(() => {
+    return () => { if (mostrarUITimer.current) clearTimeout(mostrarUITimer.current) }
+  }, [])
 
   useEffect(() => {
     const tick = () => setHoraAtual(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))
@@ -212,6 +228,15 @@ export default function MobileExperience() {
     }
   }, [aba])
 
+  // Show controls briefly whenever the office tab is entered
+  useEffect(() => {
+    if (aba === 1) {
+      setMostrarUI(true)
+      if (mostrarUITimer.current) clearTimeout(mostrarUITimer.current)
+      mostrarUITimer.current = setTimeout(() => setMostrarUI(false), 3000)
+    }
+  }, [aba])
+
   const onImgLoad = useCallback(() => {
     if (imgRef.current) setImgSize({ w: imgRef.current.offsetWidth, h: imgRef.current.offsetHeight })
   }, [])
@@ -224,13 +249,23 @@ export default function MobileExperience() {
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
   }
+
   function onTouchEnd(e: React.TouchEvent) {
     const dx = e.changedTouches[0].clientX - touchStartX.current
     const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current)
     if (Math.abs(dx) > 60 && dy < 50) {
       if (dx < 0 && aba < 4) setAba(aba + 1)
       if (dx > 0 && aba > 0) setAba(aba - 1)
+      return
     }
+    // Any tap in office tab reveals controls temporarily
+    if (aba === 1) exibirUI()
+  }
+
+  function onEscritorioScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    if (el.scrollTop < lastScrollTopRef.current) exibirUI()
+    lastScrollTopRef.current = el.scrollTop
   }
 
   async function selecionarLeadAtend(lead: Lead) {
@@ -279,28 +314,39 @@ export default function MobileExperience() {
   const alertaPrincipal = alertas[0]
 
   return (
-    <div style={{ width: '100%', height: '100dvh', background: '#080810', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-geist-sans, system-ui)' }}
+    <div style={{ width: '100%', height: '100dvh', background: '#080810', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-geist-sans, system-ui)', position: 'relative' }}
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
 
+      {/* ALERTA FLUTUANTE — sempre visível em tela cheia no escritório */}
+      {aba === 1 && !mostrarUI && alertaPrincipal && (
+        <div style={{ position: 'fixed', top: 12, left: 12, right: 12, zIndex: 200, background: `${alertaPrincipal.cor}20`, border: `1px solid ${alertaPrincipal.cor}60`, borderRadius: 20, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(10px)' }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: alertaPrincipal.cor, boxShadow: `0 0 6px ${alertaPrincipal.cor}`, flexShrink: 0, animation: 'pulseRing 1.5s ease-out infinite' }} />
+          <div style={{ flex: 1, fontSize: 11, color: '#fff', fontWeight: 600, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{alertaPrincipal.texto}</div>
+          <div style={{ fontSize: 10, color: alertaPrincipal.cor, fontWeight: 700, flexShrink: 0 }}>{alertaPrincipal.tipo}</div>
+        </div>
+      )}
+
       {/* HEADER */}
-      <div style={{ padding: '12px 18px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>obra10+</div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{ABAS[aba].label}</div>
+      {uiVisivel && (
+        <div style={{ padding: '12px 18px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>obra10+</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{ABAS[aba].label}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {criticos > 0 && (
+              <div style={{ background: '#ef444420', border: '1px solid #ef4444', borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 6px #ef4444' }} />
+                {criticos} crítico{criticos > 1 ? 's' : ''}
+              </div>
+            )}
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.4)' }}>{horaAtual}</div>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {criticos > 0 && (
-            <div style={{ background: '#ef444420', border: '1px solid #ef4444', borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 6px #ef4444' }} />
-              {criticos} crítico{criticos > 1 ? 's' : ''}
-            </div>
-          )}
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.4)' }}>{horaAtual}</div>
-        </div>
-      </div>
+      )}
 
       {/* BARRA DE ALERTA */}
-      {alertaPrincipal && (
+      {uiVisivel && alertaPrincipal && (
         <div style={{ padding: '7px 18px', background: `${alertaPrincipal.cor}15`, borderBottom: `1px solid ${alertaPrincipal.cor}30`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: alertaPrincipal.cor, boxShadow: `0 0 6px ${alertaPrincipal.cor}`, flexShrink: 0 }} />
           <div style={{ flex: 1, fontSize: 11, color: '#fff', fontWeight: 600, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{alertaPrincipal.texto}</div>
@@ -382,9 +428,9 @@ export default function MobileExperience() {
           </div>
         )}
 
-        {/* ═══ ABA 1 — ESCRITÓRIO ═══ */}
+        {/* ═══ ABA 1 — ESCRITÓRIO (TELA CHEIA) ═══ */}
         {aba === 1 && (
-          <div ref={escritorioRef} style={{ height: '100%', overflowY: 'auto', position: 'relative' }}>
+          <div ref={escritorioRef} onScroll={onEscritorioScroll} style={{ height: '100%', overflowY: 'auto', position: 'relative' }}>
             <div style={{ position: 'relative', width: '100%' }}>
               <img ref={imgRef} src="/sprites/office-mobile-bg.png" alt="Escritório" onLoad={onImgLoad} style={{ width: '100%', height: 'auto', display: 'block' }} />
 
@@ -404,7 +450,7 @@ export default function MobileExperience() {
                       <img
                         src="/avatars/ariane/normal.png"
                         alt="Ariane"
-                        style={{ width: 36, height: 50, objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(139,92,246,0.8))' }}
+                        style={{ width: 54, height: 75, objectFit: 'contain', filter: 'drop-shadow(0 0 12px rgba(139,92,246,0.9))' }}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                       />
                       <div style={{ fontSize: 8, fontWeight: 700, color: '#8b5cf6', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 4, padding: '1px 5px', marginTop: 2, whiteSpace: 'nowrap' }}>
@@ -493,8 +539,8 @@ export default function MobileExperience() {
               })}
             </div>
 
-            {/* LEGENDA */}
-            <div style={{ position: 'fixed', bottom: 70, left: 12, right: 12, background: 'rgba(8,8,16,0.92)', backdropFilter: 'blur(10px)', borderRadius: 10, padding: '8px 14px', display: 'flex', gap: 14, justifyContent: 'center', border: '1px solid rgba(255,255,255,0.08)', zIndex: 50 }}>
+            {/* LEGENDA — sobe quando controles estão visíveis */}
+            <div style={{ position: 'fixed', bottom: uiVisivel ? 70 : 12, left: 12, right: 12, background: 'rgba(8,8,16,0.92)', backdropFilter: 'blur(10px)', borderRadius: 10, padding: '8px 14px', display: 'flex', gap: 14, justifyContent: 'center', border: '1px solid rgba(255,255,255,0.08)', zIndex: 50, transition: 'bottom 0.3s ease' }}>
               {[{ cor: '#ef4444', label: 'Crítico' },{ cor: '#f97316', label: 'Quente' },{ cor: '#10b981', label: 'Normal' },{ cor: '#6b7280', label: 'Frio' }].map(item => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.cor }} />
@@ -852,16 +898,18 @@ export default function MobileExperience() {
         </div>
       )}
 
-      {/* NAV INFERIOR */}
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(8,8,16,0.97)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)', zIndex: 100 }}>
-        {ABAS.map((item, i) => (
-          <button key={i} onClick={() => { setAba(i); setLeadDrawer(null); setAgenteDrawer(null) }} style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 2px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, position: 'relative' }}>
-            {aba === i && <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 24, height: 2, borderRadius: 1, background: '#f97316' }} />}
-            <span style={{ fontSize: 20 }}>{item.icone}</span>
-            <span style={{ fontSize: 9, fontWeight: aba === i ? 700 : 400, color: aba === i ? '#f97316' : 'rgba(255,255,255,0.35)' }}>{item.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* NAV INFERIOR — oculta em tela cheia do escritório */}
+      {uiVisivel && (
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(8,8,16,0.97)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)', zIndex: 100 }}>
+          {ABAS.map((item, i) => (
+            <button key={i} onClick={() => { setAba(i); setLeadDrawer(null); setAgenteDrawer(null) }} style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 2px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, position: 'relative' }}>
+              {aba === i && <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 24, height: 2, borderRadius: 1, background: '#f97316' }} />}
+              <span style={{ fontSize: 20 }}>{item.icone}</span>
+              <span style={{ fontSize: 9, fontWeight: aba === i ? 700 : 400, color: aba === i ? '#f97316' : 'rgba(255,255,255,0.35)' }}>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

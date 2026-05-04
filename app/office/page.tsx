@@ -1,42 +1,37 @@
 "use client";
 
-import { useState, useEffect, Suspense, useCallback } from "react";
+import { useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { OfficeCanvas, Agent } from "@/components/office/OfficeCanvas";
 import { AgentBubble } from "@/components/office/AgentBubble";
 import { AgentLogPanel } from "@/components/office/AgentLogPanel";
-import { KpiBar } from "@/components/office/KpiBar";
-import { MarketingPanel } from "@/components/office/MarketingPanel";
-import { DetailModal } from "@/components/office/DetailModal";
 import { ToastAlert } from "@/components/office/ToastAlert";
 import { LivePulse } from "@/components/office/LivePulse";
-import DecisionInbox from "@/components/office/DecisionInbox";
-import CriticalBar from "@/components/office/CriticalBar";
+import { CommandTop } from "@/components/office/CommandTop";
+import { CriticalStrip } from "@/components/office/CriticalStrip";
+import { DynamicKpis } from "@/components/office/DynamicKpis";
+import { ContextMenu } from "@/components/office/ContextMenu";
+import { DecisionPanel } from "@/components/office/DecisionPanel";
+import { AgentsDrawer } from "@/components/office/AgentsDrawer";
+import { OfficeFilters, type FiltroCanvas } from "@/components/office/OfficeFilters";
+import { DetailModal } from "@/components/office/DetailModal";
+import Lead360Drawer from "@/components/office/Lead360Drawer";
+import Partner360Drawer from "@/components/office/Partner360Drawer";
+import CriticalActionModal, { type CriticalActionModalProps } from "@/components/office/CriticalActionModal";
+import MobileExperience from "@/components/office/MobileExperience";
 import { useOfficeLife } from "@/hooks/useOfficeLife";
 import { useAlerts } from "@/hooks/useAlerts";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useSupabaseLeads, type LeadComPessoa } from "@/hooks/useSupabaseLeads";
-import LiveCrmPanel from "@/components/office/LiveCrmPanel";
 import { type LiveLead } from "@/lib/data/live-leads";
-import { DECISIONS_MOCK } from "@/lib/data/decisions-mock";
 import { getLeadById } from "@/lib/data/leads-mock";
 import { getPartnerById } from "@/lib/data/partners-mock";
-import Lead360Drawer from "@/components/office/Lead360Drawer";
-import Partner360Drawer from "@/components/office/Partner360Drawer";
-import CriticalActionModal, { type CriticalActionModalProps } from "@/components/office/CriticalActionModal";
-import MobileNav, { type MobileTab } from "@/components/office/MobileNav";
-import MobileHeader from "@/components/office/MobileHeader";
-import MobileKpiBar from "@/components/office/MobileKpiBar";
-import MobileCriticalBar from "@/components/office/MobileCriticalBar";
-import MobileCanvas from "@/components/office/MobileCanvas";
-import MobileExperience from "@/components/office/MobileExperience";
-import agentsData from "@/lib/data/agents-mock.json";
 import type { AgentState } from "@/lib/agent-states";
+import agentsData from "@/lib/data/agents-mock.json";
 
 const agents: Agent[] = agentsData.agents as Agent[];
-const ONLINE_COUNT = agents.filter((a) => a.status.online).length;
-const CRITICAL_COUNT = DECISIONS_MOCK.filter((d) => d.status === "critical").length;
+
+type Visao = "geral" | "atendimento" | "trafego" | "conteudo" | "sites" | "agentes" | "governanca" | "relatorios";
 
 function NotificationToast({ message }: { message: string }) {
   return (
@@ -62,30 +57,31 @@ function OfficePageInner() {
   const searchParams = useSearchParams();
   const isTvMode = searchParams.get("mode") === "tv";
 
+  const [visao, setVisao] = useState<Visao>("geral");
+  const [filtroCanvas, setFiltroCanvas] = useState<FiltroCanvas>("todos");
+  const [modoTV, setModoTV] = useState(isTvMode);
+  const [agentsDrawerAberto, setAgentsDrawerAberto] = useState(false);
+
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [hoveredAgent, setHoveredAgent] = useState<Agent | null>(null);
   const [hoveredState, setHoveredState] = useState<AgentState>("trabalhando");
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [detailModal, setDetailModal] = useState<string | null>(null);
-  const [horaAtual, setHoraAtual] = useState("");
   const [leadDrawerId, setLeadDrawerId] = useState<string | null>(null);
   const [partnerDrawerId, setPartnerDrawerId] = useState<string | null>(null);
   const [criticalModal, setCriticalModal] = useState<Omit<CriticalActionModalProps, "onConfirm" | "onCancel"> & { onConfirm: (j: string, a?: string) => void } | null>(null);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("inbox");
-  const [rightPanel, setRightPanel] = useState<"crm" | "inbox">("crm");
   const [selectedLiveLead, setSelectedLiveLead] = useState<LiveLead | null>(null);
-  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-  const [agenteDestaque, setAgenteDestaque] = useState<string | null>(null);
-  const bp = useBreakpoint();
-  const { leads: supaLeads, loading: leadsLoading, avancarFase: avancarFaseDB } = useSupabaseLeads();
 
-  // Adapter: HubLead → LiveLead enquanto os componentes de canvas são migrados
+  const bp = useBreakpoint();
+  const { leads: supaLeads, avancarFase: avancarFaseDB } = useSupabaseLeads();
+
   const HUB_FASE_TO_CANVAS: Record<string, LiveLead["fase"]> = {
     entrada: "entrando", espera: "aguardando", qualificacao: "qualificando",
     apresentacao: "qualificado", negociacao: "match_realizado",
     fechamento: "match_realizado", pos_venda: "saindo",
     perdido: "frio", ganho: "saindo",
   };
+
   const leads: LiveLead[] = supaLeads.map((l: LeadComPessoa) => ({
     id: l.id,
     numero: l.numero_visual,
@@ -111,10 +107,6 @@ function OfficePageInner() {
     movendo: false,
   }));
 
-  const CANVAS_FASE_TO_HUB: Record<string, LiveLead["fase"]> = {
-    aguardando: "espera", triagem: "qualificacao", qualificando: "qualificacao",
-    qualificado: "apresentacao", match_realizado: "negociacao",
-  } as unknown as Record<string, LiveLead["fase"]>;
   const avancarFase = useCallback((leadId: string) => {
     const raw = supaLeads.find((l) => l.id === leadId);
     if (!raw) return;
@@ -125,23 +117,16 @@ function OfficePageInner() {
     const novaFase = faseMap[raw.fase];
     if (novaFase) avancarFaseDB(leadId, novaFase, raw.sala_canvas).catch(console.error);
   }, [supaLeads, avancarFaseDB]);
+
   const removerLead = useCallback((_leadId: string) => {}, []);
   const marcarCritico = useCallback((_leadId: string) => {}, []);
-
-  useEffect(() => {
-    const tick = () =>
-      setHoraAtual(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const {
     posOverridesRef, packetsRef, statesRef, stateTimestampsRef,
     particlesRef, connectionsRef, notification,
   } = useOfficeLife(agents);
 
-  const { feed, newAlert, dismissNew } = useAlerts();
+  const { newAlert, dismissNew } = useAlerts();
 
   const handleHover = useCallback((agent: Agent, mx: number, my: number) => {
     setHoveredAgent(agent);
@@ -156,12 +141,6 @@ function OfficePageInner() {
     setSelectedAgent((prev) => (prev?.id === agent.id ? null : agent));
   }, []);
 
-  const handleVerAgente = useCallback((agenteId: string) => {
-    const agent = agents.find((a) => a.id === agenteId);
-    if (agent) setSelectedAgent(agent);
-  }, []);
-
-  /* SHARED OVERLAYS — rendered on both mobile and desktop */
   const sharedOverlays = (
     <>
       {selectedAgent && (
@@ -170,7 +149,10 @@ function OfficePageInner() {
       {detailModal && (
         <DetailModal area={detailModal} onClose={() => setDetailModal(null)} />
       )}
-      {leadDrawerId && (() => { const lead = getLeadById(leadDrawerId); return lead ? <Lead360Drawer lead={lead} onClose={() => setLeadDrawerId(null)} /> : null; })()}
+      {leadDrawerId && (() => {
+        const lead = getLeadById(leadDrawerId);
+        return lead ? <Lead360Drawer lead={lead} onClose={() => setLeadDrawerId(null)} /> : null;
+      })()}
       {selectedLiveLead && (
         <Lead360Drawer
           lead={{
@@ -213,7 +195,10 @@ function OfficePageInner() {
           }}
         />
       )}
-      {partnerDrawerId && (() => { const partner = getPartnerById(partnerDrawerId); return partner ? <Partner360Drawer partner={partner} onClose={() => setPartnerDrawerId(null)} /> : null; })()}
+      {partnerDrawerId && (() => {
+        const partner = getPartnerById(partnerDrawerId);
+        return partner ? <Partner360Drawer partner={partner} onClose={() => setPartnerDrawerId(null)} /> : null;
+      })()}
       {criticalModal && (
         <CriticalActionModal
           {...criticalModal}
@@ -226,13 +211,12 @@ function OfficePageInner() {
     </>
   );
 
-  /* MOBILE MODE */
   if (bp === "mobile") {
     return <MobileExperience />;
   }
 
   /* TV MODE */
-  if (isTvMode) {
+  if (modoTV) {
     return (
       <div style={{ width: "100vw", height: "100vh", background: "#0f172a", display: "flex", flexDirection: "column" }}>
         <div style={{ height: 52, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
@@ -242,9 +226,9 @@ function OfficePageInner() {
             <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Command Office — ao vivo</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ fontFamily: "monospace", fontSize: 22, color: "#22c55e", fontWeight: 700 }}>{horaAtual}</span>
+            <LivePulse />
             <button
-              onClick={() => { window.location.href = "/office"; }}
+              onClick={() => setModoTV(false)}
               style={{ padding: "6px 14px", borderRadius: 6, background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", fontSize: 12, cursor: "pointer" }}
             >
               ✕ Sair do Modo TV
@@ -259,13 +243,6 @@ function OfficePageInner() {
             particlesRef={particlesRef} connectionsRef={connectionsRef}
           />
         </div>
-        <div style={{ height: 48, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-around", borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", flexShrink: 0 }}>
-          <span style={{ color: "#22c55e", fontSize: 13 }}>🟢 {ONLINE_COUNT} online</span>
-          <span style={{ color: "#60a5fa", fontSize: 13 }}>⚡ 62 leads hoje</span>
-          <span style={{ color: "#22c55e", fontSize: 13 }}>✅ 24 qualificados</span>
-          <span style={{ color: "#f59e0b", fontSize: 13 }}>💼 Match Rate 87%</span>
-          <span style={{ color: "#a78bfa", fontSize: 13 }}>📊 ROAS 4.1x</span>
-        </div>
         {notification && <NotificationToast message={notification} />}
       </div>
     );
@@ -273,227 +250,74 @@ function OfficePageInner() {
 
   /* NORMAL MODE */
   return (
-    <div style={{ width: "100vw", height: "100vh", overflow: "hidden", background: "#0f172a", display: "flex", flexDirection: "column" }}>
+    <div className="flex flex-col w-screen h-screen overflow-hidden bg-gray-950">
 
-      {/* ZONA 1 — HEADER (56px) */}
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 20px", borderBottom: "1px solid rgba(255,255,255,0.06)",
-        flexShrink: 0, background: "rgba(15,23,42,0.95)", backdropFilter: "blur(12px)",
-        position: "relative",
-      }}>
-        {/* Zona esquerda */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, zIndex: 1 }}>
-          <span style={{ color: "#22c55e", fontWeight: 800, fontSize: 14 }}>obra10+</span>
-          <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 11 }}>/ Command Office</span>
+      {/* CommandTop */}
+      <CommandTop
+        visao={visao}
+        onResolverAgora={() => setAgentsDrawerAberto(false)}
+        onAbrirAgentes={() => setAgentsDrawerAberto(true)}
+        onModoTV={() => setModoTV(true)}
+        modoTV={modoTV}
+      />
+
+      {/* CriticalStrip */}
+      <CriticalStrip />
+
+      {/* DynamicKpis */}
+      <DynamicKpis visao={visao} />
+
+      {/* Body: 3 columns */}
+      <div className="flex flex-1 overflow-hidden min-h-0">
+
+        {/* Left: ContextMenu (208px) */}
+        <div className="w-52 flex-shrink-0 overflow-hidden">
+          <ContextMenu visao={visao} onVisaoChange={setVisao} />
         </div>
 
-        {/* Zona centro — LivePulse */}
-        <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", height: "100%", display: "flex", alignItems: "center" }}>
-          <LivePulse />
-        </div>
-
-        {/* Zona direita */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, zIndex: 1 }}>
-          <div
-            onClick={() => setShowOnlinePanel(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "3px 10px", borderRadius: 20,
-              background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)",
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#22c55e", animation: "pulse 2s infinite" }} />
-            <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 600 }}>{ONLINE_COUNT} online</span>
-          </div>
-
-          {CRITICAL_COUNT > 0 && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "3px 10px", borderRadius: 20,
-              background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
-            }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 5px #ef4444", animation: "pulse 1.5s infinite" }} />
-              <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700 }}>
-                {CRITICAL_COUNT} crítico{CRITICAL_COUNT > 1 ? "s" : ""}
-              </span>
-            </div>
-          )}
-
-          <Link href="/crm" style={{
-            background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.25)",
-            borderRadius: 8, padding: "6px 14px", color: "#f97316",
-            fontSize: 12, fontWeight: 700, textDecoration: "none",
-          }}>
-            CRM →
-          </Link>
-          <button
-            onClick={() => { window.location.href = "/office?mode=tv"; }}
-            style={{ padding: "3px 12px", borderRadius: 6, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)", fontSize: 11, cursor: "pointer" }}
-          >
-            📺 Modo TV
-          </button>
-        </div>
-      </div>
-
-      {/* ZONA 2 — BARRA CRÍTICA (44px, some quando vazia) */}
-      <CriticalBar onVerInbox={() => {}} />
-
-      {/* ZONA 3 — KPI BAR (44px) */}
-      <KpiBar />
-
-      {/* ZONA 4 — CORPO (3 colunas) */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
-
-        {/* Esquerda — Marketing (260px) */}
-        <div style={{ width: 260, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          <MarketingPanel
-            onVerTudo={(area) => setDetailModal(area)}
-            feed={feed}
-            onAgenteClick={handleVerAgente}
-          />
-        </div>
-
-        {/* Centro — Canvas (flex) */}
-        <div style={{ flex: 1, position: "relative", minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-          <OfficeCanvas
-            agents={agents}
-            selectedId={selectedAgent?.id ?? null}
-            onAgentClick={handleClick}
-            onAgentHover={handleHover}
-            onAgentLeave={handleLeave}
-            posOverridesRef={posOverridesRef}
-            packetsRef={packetsRef}
-            statesRef={statesRef}
-            stateTimestampsRef={stateTimestampsRef}
-            particlesRef={particlesRef}
-            connectionsRef={connectionsRef}
-            liveLeads={leads}
-            onLeadClick={setSelectedLiveLead}
-            selectedAgentId={agenteDestaque ?? undefined}
-          />
-          {hoveredAgent && !selectedAgent && (
-            <AgentBubble agent={hoveredAgent} state={hoveredState} x={mousePos.x} y={mousePos.y} />
-          )}
-        </div>
-
-        {/* Direita — CRM / Decisões (300px) */}
-        <div style={{ width: 300, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {/* Tab toggle */}
-          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-            {([["crm", "CRM ao Vivo"], ["inbox", "Decisões"]] as const).map(([id, label]) => {
-              const isActive = rightPanel === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setRightPanel(id)}
-                  style={{
-                    flex: 1, padding: "7px 0", fontSize: 9, fontWeight: isActive ? 700 : 500,
-                    color: isActive ? (id === "crm" ? "#22c55e" : "#ef4444") : "rgba(255,255,255,0.35)",
-                    background: "transparent", border: "none",
-                    borderBottom: isActive ? `2px solid ${id === "crm" ? "#22c55e" : "#ef4444"}` : "2px solid transparent",
-                    cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em",
-                    transition: "all 150ms",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-
-          {rightPanel === "crm" ? (
-            <LiveCrmPanel
-              leads={leads}
+        {/* Center: Canvas + Filters */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <OfficeFilters filtro={filtroCanvas} onFiltroChange={setFiltroCanvas} />
+          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+            <OfficeCanvas
+              agents={agents}
+              selectedId={selectedAgent?.id ?? null}
+              onAgentClick={handleClick}
+              onAgentHover={handleHover}
+              onAgentLeave={handleLeave}
+              posOverridesRef={posOverridesRef}
+              packetsRef={packetsRef}
+              statesRef={statesRef}
+              stateTimestampsRef={stateTimestampsRef}
+              particlesRef={particlesRef}
+              connectionsRef={connectionsRef}
+              liveLeads={leads}
               onLeadClick={setSelectedLiveLead}
-              onAvancarFase={avancarFase}
             />
-          ) : (
-            <DecisionInbox
-              onVerAgente={handleVerAgente}
-              onVerLead={(id) => setLeadDrawerId(id)}
-              onVerParceiro={(id) => setPartnerDrawerId(id)}
-            />
-          )}
+            {hoveredAgent && !selectedAgent && (
+              <AgentBubble agent={hoveredAgent} state={hoveredState} x={mousePos.x} y={mousePos.y} />
+            )}
+          </div>
+        </div>
+
+        {/* Right: DecisionPanel (288px) */}
+        <div className="w-72 flex-shrink-0 border-l border-gray-800 overflow-hidden">
+          <DecisionPanel />
         </div>
 
       </div>
+
+      {/* Agents overlay drawer */}
+      <AgentsDrawer
+        aberto={agentsDrawerAberto}
+        onFechar={() => setAgentsDrawerAberto(false)}
+        onAgenteClick={(agent) => {
+          setAgentsDrawerAberto(false);
+          handleClick(agent);
+        }}
+      />
 
       {sharedOverlays}
-
-      {/* PAINEL AGENTES ONLINE */}
-      {showOnlinePanel && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }}
-          onClick={() => { setShowOnlinePanel(false); setAgenteDestaque(null); }}
-        >
-          <div
-            style={{ width: 340, height: "100vh", background: "#0d0d1a", borderLeft: "1px solid rgba(255,255,255,0.08)", overflowY: "auto", padding: "20px 16px" }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>Equipe Online</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{agents.filter(a => a.status?.online).length} agentes ativos agora</div>
-              </div>
-              <button onClick={() => { setShowOnlinePanel(false); setAgenteDestaque(null); }} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "rgba(255,255,255,0.5)", cursor: "pointer", padding: "6px 10px", fontSize: 13 }}>✕</button>
-            </div>
-
-            {agents.map(agent => {
-              const isOnline = agent.status?.online;
-              const isDestaque = agenteDestaque === agent.id;
-              const isAriane = agent.avatar?.startsWith("/");
-              const AREA_COR: Record<string, string> = { "Marketing": "#22c55e", "Executivo": "#f59e0b", "Estratégia": "#60a5fa", "Conteúdo": "#a78bfa", "Design": "#f472b6", "Performance": "#34d399", "Atendimento": "#06b6d4", "Comercial": "#fb923c" };
-              const cor = AREA_COR[agent.area] ?? "#6b7280";
-              return (
-                <div
-                  key={agent.id}
-                  onClick={() => setAgenteDestaque(isDestaque ? null : agent.id)}
-                  style={{
-                    background: isDestaque ? "rgba(249,115,22,0.12)" : "rgba(255,255,255,0.03)",
-                    border: isDestaque ? "1px solid rgba(249,115,22,0.4)" : "1px solid rgba(255,255,255,0.06)",
-                    borderRadius: 12, padding: "12px 14px", marginBottom: 8,
-                    cursor: "pointer", transition: "all 0.2s ease",
-                    opacity: isOnline ? 1 : 0.45,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    {isAriane ? (
-                      <img src={agent.avatar} alt={agent.nome} style={{ width: 36, height: 50, objectFit: "contain", flexShrink: 0 }} />
-                    ) : (
-                      <div style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, background: `${cor}25`, border: `2px solid ${isOnline ? cor : "#6b7280"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff" }}>
-                        {agent.avatar}
-                      </div>
-                    )}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{agent.nome}</div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 1 }}>{agent.funcao}</div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: isOnline ? "#10b981" : "#6b7280", boxShadow: isOnline ? "0 0 6px #10b981" : "none" }} />
-                      <div style={{ fontSize: 9, color: isOnline ? "#10b981" : "rgba(255,255,255,0.3)", fontWeight: 600 }}>{isOnline ? "ONLINE" : "OFFLINE"}</div>
-                    </div>
-                  </div>
-
-                  {isDestaque && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>Status atual</div>
-                      <div style={{ fontSize: 13, color: "#fff", lineHeight: 1.5, marginBottom: 10 }}>
-                        {agent.currentActivity || "✅ Operando normalmente"}
-                      </div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.04)", borderRadius: 6, padding: "6px 10px" }}>
-                        {agent.area} · {agent.sala}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

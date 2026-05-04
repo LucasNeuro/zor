@@ -1,543 +1,463 @@
-import { createClient } from '@supabase/supabase-js'
-import Anthropic from '@anthropic-ai/sdk'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
-
-export type ModeloIA = 'claude-haiku-4-5-20251001' | 'claude-sonnet-4-6' | 'claude-opus-4-6'
-
-export interface ResultadoProcessamento {
-  resposta: string
-  modelo: ModeloIA
-  tempoResposta: number
-  tokensUsados: { entrada: number; saida: number }
-  custo: { usd: number; brl: number }
-  scriptUsado?: string
-}
-
 // ============================================================
-// CAMADA 1 — IDENTIDADE E CONFIGURAÇÃO DO AGENTE
+// ENGINE v2 — Motor de IA Universal
+// Integra: Router + Monitor + Aprovações + Storage
 // ============================================================
+import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@supabase/supabase-js";
+import { receberDemanda, escalarDemanda, verificarAutonomia, type Demanda } from "./router";
+import { criarAprovacao } from "./aprovacoes";
+import { salvarConversa } from "./storage";
 
-export async function buscarAgente(slugOuId: string) {
-  const { data } = await supabase
-    .from('hub_agente_identidade')
-    .select('*')
-    .or(`agente_slug.eq.${slugOuId},id.eq.${slugOuId}`)
-    .eq('ativo', true)
-    .single()
-  return data
+function supabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 }
 
-export async function agenteEstaNoHorario(config: any): Promise<boolean> {
-  if (!config) return true
-  const agora = new Date()
-  const diaSemana = agora.getDay()
-  const horaAtual = agora.getHours() * 60 + agora.getMinutes()
-  const diasOp: number[] = config.dias_operacao || [1, 2, 3, 4, 5]
-  if (!diasOp.includes(diaSemana)) return false
-  const inicio = parseInt(config.horario_inicio?.split(':')[0] || '8') * 60
-  const fim = parseInt(config.horario_fim?.split(':')[0] || '18') * 60
-  return horaAtual >= inicio && horaAtual <= fim
+// ── CACHE DE PROMPTS ──────────────────────────────────────────
+const promptCache = new Map<string, { prompt: string; expira: number }>();
+
+function obterPromptCacheado(chave: string, gerador: () => string): string {
+  const agora = Date.now();
+  const cached = promptCache.get(chave);
+  if (cached && cached.expira > agora) return cached.prompt;
+  const prompt = gerador();
+  promptCache.set(chave, { prompt, expira: agora + 5 * 60 * 1000 });
+  return prompt;
 }
 
-export async function selecionarMelhorAgente(fase: string, _leadId: string): Promise<string> {
-  const mapaFases: Record<string, string> = {
-    entrada: 'atendente',
-    qualificacao: 'sdr',
-    proposta: 'closer',
-    negociacao: 'closer',
-    'pos-venda': 'atendente',
-  }
-  return mapaFases[fase] || 'atendente'
+// ── TIPOS ─────────────────────────────────────────────────────
+export interface ContextoMensagem {
+  leadId: string;
+  mensagem: string;
+  canal: "whatsapp" | "instagram" | "email" | "interno" | "site";
+  telefone?: string;
+  nome?: string;
+  segmento?: string;
+  valorEstimado?: number;
+  arquivos?: string[];
+  metadata?: Record<string, unknown>;
 }
 
-// ============================================================
-// CAMADA 2 — SCRIPTS E REGRAS DE NEGÓCIO
-// ============================================================
-
-export async function buscarScriptPorGatilho(agenteId: string, gatilho: string) {
-  const { data } = await supabase
-    .from('hub_scripts')
-    .select('*')
-    .eq('agente_id', agenteId)
-    .eq('gatilho', gatilho)
-    .eq('ativo', true)
-    .order('ordem', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  return data
+export interface ResultadoEngine {
+  sucesso: boolean;
+  resposta?: string;
+  agenteSlug?: string;
+  agenteNome?: string;
+  modelo?: string;
+  tokens?: { entrada: number; saida: number };
+  custo?: { usd: number; brl: number };
+  latencia?: number;
+  precisaAprovacao?: boolean;
+  aprovacaoId?: string;
+  erro?: string;
+  logId?: string;
 }
 
-export async function buscarRegrasAplicaveis(contexto: Record<string, any>, agenteId: string) {
-  const { data } = await supabase
-    .from('hub_regras_negocio')
-    .select('*')
-    .eq('agente_id', agenteId)
-    .eq('ativo', true)
-    .order('prioridade', { ascending: false })
+// ── PROCESSAMENTO PRINCIPAL ───────────────────────────────────
+export async function processarMensagem(ctx: ContextoMensagem): Promise<ResultadoEngine> {
+  const inicio = Date.now();
+  const db = supabase();
 
-  if (!data) return []
+  try {
+    // ETAPA 1: Monta a demanda
+    const demanda: Demanda = {
+      tipo: "atendimento",
+      canal: ctx.canal,
+      mensagem: ctx.mensagem,
+      leadId: ctx.leadId,
+      segmento: ctx.segmento,
+      valorEstimado: ctx.valorEstimado,
+      contexto: ctx.metadata,
+    };
 
-  return data.filter((regra: any) => {
-    const valor = contexto[regra.condicao_campo]
-    switch (regra.condicao_operador) {
-      case 'eq':       return String(valor) === String(regra.condicao_valor)
-      case 'gt':       return Number(valor) > Number(regra.condicao_valor)
-      case 'lt':       return Number(valor) < Number(regra.condicao_valor)
-      case 'contains': return String(valor).includes(regra.condicao_valor)
-      default:         return false
+    // ETAPA 2: Router encontra o agente certo
+    const agente = await receberDemanda(demanda);
+    if (!agente) {
+      return { sucesso: false, erro: "Nenhum agente disponível para esta demanda" };
     }
-  })
-}
 
-export function aplicarRegras(regras: any[]): string {
-  if (!regras.length) return ''
-  return regras.map((r: any) => `REGRA ATIVA: ${r.acao_valor}`).join('\n')
-}
+    // ETAPA 3: Verifica autonomia do agente
+    const autonomia = await verificarAutonomia(
+      agente.slug,
+      ctx.mensagem,
+      ctx.valorEstimado || 0
+    );
 
-// ============================================================
-// CAMADA 3 — MEMÓRIA DO LEAD
-// ============================================================
+    if (!autonomia.podeAgir) {
+      const aprovacaoId = await criarAprovacao({
+        tipo: "atendimento_critico",
+        agenteSlug: agente.slug,
+        descricao: `${agente.nome} precisa de aprovação para continuar`,
+        motivo: autonomia.motivo,
+        impacto: `Lead ${ctx.leadId} aguardando atendimento`,
+        leadId: ctx.leadId,
+        valorEnvolvido: ctx.valorEstimado,
+        dados: { mensagem: ctx.mensagem, canal: ctx.canal },
+      });
 
-export async function buscarMemoriasLead(leadId: string, _limite = 10) {
-  const { data } = await supabase
-    .from('hub_memorias_lead')
-    .select('*')
-    .eq('lead_id', leadId)
-    .maybeSingle()
-  return data
-}
+      return {
+        sucesso: true,
+        resposta: "Sua solicitação foi encaminhada para análise. Em breve retornaremos.",
+        agenteSlug: agente.slug,
+        precisaAprovacao: true,
+        aprovacaoId: aprovacaoId || undefined,
+      };
+    }
 
-export async function salvarMemoria(leadId: string, updates: Record<string, any>) {
-  const { data: existing } = await supabase
-    .from('hub_memorias_lead')
-    .select('id, dados_coletados')
-    .eq('lead_id', leadId)
-    .maybeSingle()
+    // ETAPA 4: Busca memórias do lead (top 3 mais relevantes)
+    const { data: memorias } = await db
+      .from("hub_memorias_lead")
+      .select("tipo, conteudo, relevancia")
+      .eq("lead_id", ctx.leadId)
+      .order("relevancia", { ascending: false })
+      .limit(3);
 
-  if (existing) {
-    const dadosMesclados = { ...(existing.dados_coletados || {}), ...(updates.dados_coletados || {}) }
-    await supabase
-      .from('hub_memorias_lead')
-      .update({ ...updates, dados_coletados: dadosMesclados, atualizado_em: new Date().toISOString() })
-      .eq('lead_id', leadId)
-  } else {
-    await supabase.from('hub_memorias_lead').insert({ lead_id: leadId, nivel_engajamento: 5, ...updates })
+    // ETAPA 5: Busca histórico recente (últimas 5 mensagens)
+    const { data: historico } = await db
+      .from("hub_fila_mensagens")
+      .select("conteudo, direcao, criado_em")
+      .eq("lead_id", ctx.leadId)
+      .order("criado_em", { ascending: false })
+      .limit(5);
+
+    // ETAPA 6: Monta o system prompt completo com cache
+    const systemPrompt = obterPromptCacheado(
+      `${agente.slug}_${ctx.segmento || "geral"}`,
+      () => montarPromptCompleto(agente, memorias || [], agente.regras || [])
+    );
+
+    // ETAPA 7: Estima tokens antes de chamar
+    const estimativa = Math.ceil((systemPrompt.length + ctx.mensagem.length) / 4);
+    if (estimativa > 4000) {
+      console.warn(`[ENGINE] Prompt grande: ~${estimativa} tokens`);
+    }
+
+    // ETAPA 8: Chama a IA
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return { sucesso: false, erro: "ANTHROPIC_API_KEY não configurada" };
+
+    const anthropic = new Anthropic({ apiKey });
+
+    const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
+
+    // Adiciona histórico recente
+    if (historico && historico.length > 0) {
+      const histOrdenado = [...historico].reverse();
+      for (const h of histOrdenado.slice(-4)) {
+        mensagens.push({
+          role: h.direcao === "entrada" ? "user" : "assistant",
+          content: h.conteudo as string,
+        });
+      }
+    }
+
+    mensagens.push({ role: "user", content: ctx.mensagem });
+
+    const resposta = await anthropic.messages.create({
+      model: agente.modelo,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: mensagens,
+    });
+
+    const textoResposta = resposta.content[0].type === "text" ? resposta.content[0].text : "";
+    const tokensEntrada = resposta.usage.input_tokens;
+    const tokensSaida = resposta.usage.output_tokens;
+    const custo = calcularCusto(agente.modelo, tokensEntrada, tokensSaida);
+    const latencia = Date.now() - inicio;
+
+    // ETAPA 9: Registra log
+    const { data: logData } = await db
+      .from("hub_prompt_logs")
+      .insert({
+        agente_id: agente.slug,
+        lead_id: ctx.leadId,
+        modelo_usado: agente.modelo,
+        tokens_entrada: tokensEntrada,
+        tokens_saida: tokensSaida,
+        custo_usd: custo.usd,
+        custo_brl: custo.brl,
+        latencia_ms: latencia,
+        mensagem_usuario: ctx.mensagem,
+        resposta_ia: textoResposta,
+        metadata: ctx.metadata || {},
+      })
+      .select("id")
+      .single();
+
+    // ETAPA 10: Salva memórias extraídas
+    await extrairESalvarMemorias(ctx.leadId, agente.slug, ctx.mensagem, textoResposta);
+
+    // ETAPA 11: Enfileira resposta para envio
+    await db.from("hub_fila_mensagens").insert({
+      lead_id: ctx.leadId,
+      agente_id: agente.slug,
+      canal: ctx.canal,
+      direcao: "saida",
+      conteudo: textoResposta,
+      status: "pendente",
+      metadata: { logId: logData?.id, modelo: agente.modelo, latencia },
+    });
+
+    // ETAPA 12: Registra padrão de ML
+    const hora = new Date().getHours();
+    await db.from("hub_ml_padroes").upsert({
+      tipo: "horario_ideal",
+      agente_id: agente.slug,
+      padrao: { horario: `${hora}:00`, canal: ctx.canal, segmento: ctx.segmento },
+      score: 0.1,
+      amostras: 1,
+      confianca: 0.05,
+    }).eq("tipo", "horario_ideal");
+
+    return {
+      sucesso: true,
+      resposta: textoResposta,
+      agenteSlug: agente.slug,
+      agenteNome: agente.nome,
+      modelo: agente.modelo,
+      tokens: { entrada: tokensEntrada, saida: tokensSaida },
+      custo,
+      latencia,
+      logId: logData?.id,
+    };
+
+  } catch (erro) {
+    const errMsg = erro instanceof Error ? erro.message : "Erro desconhecido";
+    console.error("[ENGINE] Erro:", errMsg);
+
+    // Tenta escalar para supervisor em caso de erro
+    try {
+      await escalarDemanda("sistema", errMsg, {
+        tipo: "atendimento",
+        canal: ctx.canal,
+        mensagem: ctx.mensagem,
+        leadId: ctx.leadId,
+      }, ctx.leadId);
+    } catch {}
+
+    return { sucesso: false, erro: errMsg };
   }
 }
 
-export function extrairMemoriasDeResposta(mensagem: string, _resposta: string): Record<string, any> {
-  const dados: Record<string, any> = {}
-  const matchOrcamento = mensagem.match(/R\$\s*[\d.,]+/i)
-  if (matchOrcamento) dados.orcamento_mencionado = matchOrcamento[0]
-  if (/urgent|urgente|rápido|hoje|amanhã/i.test(mensagem)) dados.urgencia_detectada = true
-  if (/reforma|construção|obra|projeto/i.test(mensagem)) dados.interesse_detectado = 'obra'
-  return dados
-}
-
-// ============================================================
-// CAMADA 4 — SYSTEM PROMPT (6 sub-camadas)
-// ============================================================
-
-function dentroDoHorario(config: any): boolean {
-  if (!config) return true
-  const agora = new Date()
-  const hora = agora.getHours() * 60 + agora.getMinutes()
-  const inicio = parseInt(config.horario_inicio?.split(':')[0] || '8') * 60
-  const fim = parseInt(config.horario_fim?.split(':')[0] || '18') * 60
-  return hora >= inicio && hora <= fim
-}
-
-export function montarSystemPrompt(
-  identidade: any,
-  configuracao: any,
-  script: any,
-  memorias: any,
-  regrasInstrucoes: string
+// ── MONTA PROMPT COMPLETO ─────────────────────────────────────
+function montarPromptCompleto(
+  agente: { slug: string; nome: string; nivel: string; systemPrompt: string; fluxo?: { fase: string; proximoPasso: string; acaoEsperada: string }; regras?: Array<{ instrucao: string; prioridade: number }> },
+  memorias: Array<{ tipo: string; conteudo: string; relevancia: number }>,
+  regras: Array<{ instrucao: string; prioridade: number }>
 ): string {
-  const noHorario = dentroDoHorario(configuracao)
+  const secoes: string[] = [];
 
-  return `${identidade.system_prompt_base}
+  secoes.push(`
+═══════════════════════════════════════
+IDENTIDADE E FUNÇÃO
+═══════════════════════════════════════
+${agente.systemPrompt}
+Nível hierárquico: ${agente.nivel}
+`.trim());
 
+  if (agente.fluxo) {
+    secoes.push(`
 ═══════════════════════════════════════
-CAMADA 2 — MEMÓRIA DO LEAD
+FLUXO ATUAL
 ═══════════════════════════════════════
-${memorias ? `Dados coletados: ${JSON.stringify(memorias.dados_coletados || {})}
-Preferências: ${JSON.stringify(memorias.preferencias_detectadas || {})}
-Engajamento: ${memorias.nivel_engajamento}/10
-Humor: ${memorias.humor_predominante || 'não detectado'}
-Resumo: ${memorias.resumo_ia || 'primeira interação'}` : 'Primeira interação com este lead.'}
-
-═══════════════════════════════════════
-CAMADA 3 — SCRIPT ATIVO
-═══════════════════════════════════════
-${script ? `Script: ${script.conteudo}` : 'Responder naturalmente sem script específico.'}
-
-═══════════════════════════════════════
-CAMADA 4 — REGRAS DE NEGÓCIO
-═══════════════════════════════════════
-${regrasInstrucoes || 'Nenhuma regra específica ativa.'}
-
-═══════════════════════════════════════
-CAMADA 5 — OPERACIONAL
-═══════════════════════════════════════
-Horário atual: ${new Date().toLocaleTimeString('pt-BR')}
-Dentro do horário: ${noHorario ? 'SIM' : 'NÃO'}
-SLA primeira resposta: ${configuracao?.sla_primeira_resposta_min || 5} min
-Escalar para: ${configuracao?.escalar_para || 'supervisor'}
-Nunca dizer: ${(identidade.nunca_dizer || []).join(', ') || 'nenhuma restrição'}
-Sempre incluir: ${(identidade.sempre_dizer || []).join(', ') || 'nenhum'}
-${!noHorario ? `\nFORA DO HORÁRIO: ${configuracao?.mensagem_fora_horario}` : ''}
-
-═══════════════════════════════════════
-CAMADA 6 — INSTRUÇÕES FINAIS
-═══════════════════════════════════════
-- Responda APENAS como ${identidade.nome}
-- Tom: ${identidade.tom_voz}
-- Máximo 3 parágrafos curtos
-- Use o nome do cliente quando apropriado
-- Nunca invente informações
-- Idioma: português brasileiro`.trim()
-}
-
-// ============================================================
-// CAMADA 5 — SELEÇÃO DE MODELO
-// ============================================================
-
-export function selecionarModelo(configuracao: any, contexto: Record<string, any>): ModeloIA {
-  if ((contexto.valor_estimado || 0) > 200000) return 'claude-sonnet-4-6'
-  if (contexto.status_visual === 'critico') return 'claude-sonnet-4-6'
-  if (contexto.status_visual === 'quente')  return 'claude-sonnet-4-6'
-  if ((contexto.score || 50) < 30)          return 'claude-haiku-4-5-20251001'
-  return configuracao?.modelo_padrao === 'sonnet' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
-}
-
-// ============================================================
-// CAMADA 6 — CUSTO
-// ============================================================
-
-export function calcularCusto(
-  modelo: string,
-  tokensEntrada: number,
-  tokensSaida: number
-): { usd: number; brl: number } {
-  const taxas: Record<string, { input: number; output: number }> = {
-    'claude-haiku-4-5-20251001': { input: 0.00000025, output: 0.00000125 },
-    'claude-sonnet-4-6':         { input: 0.000003,   output: 0.000015   },
-    'claude-opus-4-6':           { input: 0.000015,   output: 0.000075   },
+Fase: ${agente.fluxo.fase}
+Próximo passo: ${agente.fluxo.proximoPasso}
+Ação esperada: ${agente.fluxo.acaoEsperada}
+`.trim());
   }
-  const taxa = taxas[modelo] || taxas['claude-haiku-4-5-20251001']
-  const usd = tokensEntrada * taxa.input + tokensSaida * taxa.output
-  return { usd, brl: usd * 5.75 }
+
+  if (memorias.length > 0) {
+    secoes.push(`
+═══════════════════════════════════════
+O QUE VOCÊ LEMBRA DESTE LEAD
+═══════════════════════════════════════
+${memorias.map(m => `• [${m.tipo}] ${m.conteudo}`).join("\n")}
+`.trim());
+  }
+
+  if (regras.length > 0) {
+    secoes.push(`
+═══════════════════════════════════════
+REGRAS ATIVAS
+═══════════════════════════════════════
+${regras.sort((a, b) => b.prioridade - a.prioridade).map(r => `• ${r.instrucao}`).join("\n")}
+`.trim());
+  }
+
+  secoes.push(`
+═══════════════════════════════════════
+INSTRUÇÕES GERAIS
+═══════════════════════════════════════
+- Nunca tome decisões financeiras, de prazo ou proposta sozinho
+- Quando não souber, diga que vai verificar
+- Respostas curtas para WhatsApp (máximo 3 parágrafos)
+- Nunca prometa o que não pode cumprir
+- Se perceber que excede sua autonomia, informe que vai escalar
+`.trim());
+
+  return secoes.join("\n\n");
 }
 
-// ============================================================
-// CAMADA 7 — LOGGING
-// ============================================================
+// ── EXTRAIR E SALVAR MEMÓRIAS ─────────────────────────────────
+async function extrairESalvarMemorias(
+  leadId: string,
+  agenteSlug: string,
+  mensagemUsuario: string,
+  respostaIA: string
+): Promise<void> {
+  const db = supabase();
+  const texto = `${mensagemUsuario} ${respostaIA}`.toLowerCase();
 
-export async function registrarLog(dados: {
-  leadId: string
-  conversaId: string
-  agenteSlug: string
-  systemPrompt: string
-  mensagemUsuario: string
-  respostaIa: string
-  modeloUsado: string
-  tokensInput: number
-  tokensOutput: number
-  custoEstimadoBrl: number
-  tempoRespostaMs: number
-}): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('hub_prompt_logs')
-    .insert({
-      lead_id:            dados.leadId,
-      conversa_id:        dados.conversaId,
-      agente_slug:        dados.agenteSlug,
-      system_prompt:      dados.systemPrompt,
-      mensagem_usuario:   dados.mensagemUsuario,
-      resposta_ia:        dados.respostaIa,
-      modelo_usado:       dados.modeloUsado,
-      tokens_input:       dados.tokensInput,
-      tokens_output:      dados.tokensOutput,
-      custo_estimado_brl: dados.custoEstimadoBrl,
-      tempo_resposta_ms:  dados.tempoRespostaMs,
-    })
-    .select('id')
-    .single()
+  const padroes = [
+    { regex: /não (tenho|quero|posso|consigo|preciso)/gi, tipo: "objecao", relevancia: 0.8 },
+    { regex: /preciso de|estou procurando|quero|gostaria|interesse/gi, tipo: "interesse", relevancia: 0.7 },
+    { regex: /prefiro|gosto de|sempre uso|tenho costume/gi, tipo: "preferencia", relevancia: 0.6 },
+    { regex: /comprei|fechei|acordo|contrato|fechamos/gi, tipo: "compra", relevancia: 0.9 },
+    { regex: /orçamento|budget|investimento|valor|preço/gi, tipo: "financeiro", relevancia: 0.7 },
+    { regex: /urgente|preciso logo|prazo|quando|data/gi, tipo: "comportamento", relevancia: 0.6 },
+  ];
 
-  return error ? null : (data?.id ?? null)
-}
+  for (const padrao of padroes) {
+    const matches = texto.match(padrao.regex);
+    if (matches) {
+      for (const match of matches.slice(0, 2)) {
+        const { data: existente } = await db
+          .from("hub_memorias_lead")
+          .select("id, relevancia, vezes_confirmado")
+          .eq("lead_id", leadId)
+          .eq("tipo", padrao.tipo)
+          .ilike("conteudo", `%${match.slice(0, 30)}%`)
+          .single();
 
-// ============================================================
-// CAMADA 8 — FILA DE MENSAGENS
-// ============================================================
-
-export async function enfileirarMensagem(dados: {
-  leadId: string
-  conversaId: string
-  whatsappMessageId?: string
-  remetenteNumero: string
-  conteudo: string
-  agenteResponsavel?: string
-}) {
-  await supabase.from('hub_fila_mensagens').insert({
-    lead_id:              dados.leadId,
-    conversa_id:          dados.conversaId,
-    whatsapp_message_id:  dados.whatsappMessageId,
-    remetente_numero:     dados.remetenteNumero,
-    conteudo:             dados.conteudo,
-    status:               'pendente',
-    agente_responsavel:   dados.agenteResponsavel || 'atendente',
-    tentativas:           0,
-  })
-}
-
-export async function processarFilaPendente(limite = 10) {
-  const { data } = await supabase
-    .from('hub_fila_mensagens')
-    .select('*')
-    .eq('status', 'pendente')
-    .lt('tentativas', 3)
-    .order('criado_em', { ascending: true })
-    .limit(limite)
-  return data || []
-}
-
-// ============================================================
-// CAMADA 9 — ML E MÉTRICAS
-// ============================================================
-
-export async function atualizarScoreScript(scriptId: string, converteu: boolean) {
-  const { data } = await supabase
-    .from('hub_scripts')
-    .select('vezes_usado, conversoes')
-    .eq('id', scriptId)
-    .single()
-
-  if (!data) return
-  await supabase.from('hub_scripts').update({
-    vezes_usado: (data.vezes_usado || 0) + 1,
-    conversoes:  converteu ? (data.conversoes || 0) + 1 : data.conversoes,
-  }).eq('id', scriptId)
-}
-
-export async function registrarPadraoML(tipo: string, padrao: string, agenteId: string) {
-  const { data: existing } = await supabase
-    .from('hub_ml_padroes')
-    .select('id, frequencia')
-    .eq('tipo', tipo)
-    .eq('padrao', padrao)
-    .eq('agente_id', agenteId)
-    .maybeSingle()
-
-  if (existing) {
-    await supabase.from('hub_ml_padroes').update({
-      frequencia: (existing.frequencia || 0) + 1,
-      ultima_vez: new Date().toISOString(),
-    }).eq('id', existing.id)
-  } else {
-    await supabase.from('hub_ml_padroes').insert({ tipo, padrao, agente_id: agenteId, frequencia: 1 })
+        if (existente) {
+          await db
+            .from("hub_memorias_lead")
+            .update({
+              relevancia: Math.min(1, existente.relevancia + 0.1),
+              vezes_confirmado: existente.vezes_confirmado + 1,
+            })
+            .eq("id", existente.id);
+        } else {
+          await db.from("hub_memorias_lead").insert({
+            lead_id: leadId,
+            agente_id: agenteSlug,
+            tipo: padrao.tipo,
+            conteudo: match,
+            relevancia: padrao.relevancia,
+            fonte: "analise",
+          });
+        }
+      }
+    }
   }
 }
 
-export async function buscarMelhorHorario(agenteId: string) {
-  const { data } = await supabase
-    .from('hub_ml_padroes')
-    .select('*')
-    .eq('agente_id', agenteId)
-    .eq('tipo', 'horario_conversao')
-    .order('efetividade', { ascending: false })
-    .limit(5)
-  return data || []
+// ── CALCULAR CUSTO ────────────────────────────────────────────
+export function calcularCusto(modelo: string, tokensEntrada: number, tokensSaida: number): { usd: number; brl: number } {
+  const taxas: Record<string, { entrada: number; saida: number }> = {
+    "claude-haiku-4-5":  { entrada: 0.00025, saida: 0.00125 },
+    "claude-sonnet-4-5": { entrada: 0.003,   saida: 0.015   },
+    "claude-opus-4-5":   { entrada: 0.015,   saida: 0.075   },
+  };
+  const taxa = taxas[modelo] || taxas["claude-haiku-4-5"];
+  const usd = (tokensEntrada / 1000) * taxa.entrada + (tokensSaida / 1000) * taxa.saida;
+  return { usd: parseFloat(usd.toFixed(6)), brl: parseFloat((usd * 5.75).toFixed(4)) };
 }
 
-// ============================================================
-// FUNÇÃO PRINCIPAL — processarMensagem
-// ============================================================
+// ── PROCESSAR DEMANDA INTERNA ─────────────────────────────────
+// Para demandas que não são de atendimento (conteúdo, tráfego, sites, etc.)
+export async function processarDemandaInterna(demanda: Demanda & {
+  titulo: string;
+  dados?: Record<string, unknown>;
+}): Promise<ResultadoEngine> {
+  const inicio = Date.now();
+  const db = supabase();
 
-export async function processarMensagem(
-  contexto: {
-    leadId: string
-    conversaId: string
-    mensagemUsuario: string
-    lead?: any
-  },
-  slugAgente = 'atendente'
-): Promise<ResultadoProcessamento> {
-  const inicio = Date.now()
+  try {
+    // Router encontra o agente certo para esta demanda
+    const agente = await receberDemanda(demanda);
+    if (!agente) return { sucesso: false, erro: "Nenhum agente disponível" };
 
-  // 1. Carregar lead
-  let lead = contexto.lead
-  if (!lead) {
-    const { data } = await supabase
-      .from('hub_leads')
-      .select('*, hub_pessoas(*)')
-      .eq('id', contexto.leadId)
-      .single()
-    lead = data
-  }
-  if (!lead) throw new Error('Lead não encontrado')
+    // Verifica autonomia
+    const autonomia = await verificarAutonomia(agente.slug, demanda.tipo, 0);
 
-  // 2. Selecionar agente pela fase
-  const slugFinal = slugAgente !== 'atendente'
-    ? slugAgente
-    : await selecionarMelhorAgente(lead.fase || 'entrada', contexto.leadId)
+    if (!autonomia.podeAgir) {
+      const aprovacaoId = await criarAprovacao({
+        tipo: demanda.tipo as "conteudo" | "campanha" | "site",
+        agenteSlug: agente.slug,
+        descricao: demanda.titulo,
+        motivo: autonomia.motivo,
+        impacto: "Aguardando aprovação para executar",
+        dados: demanda.dados,
+      });
 
-  // 3. Carregar identidade
-  const identidade = await buscarAgente(slugFinal)
-  if (!identidade) throw new Error(`Agente '${slugFinal}' não encontrado`)
+      return { sucesso: true, precisaAprovacao: true, aprovacaoId: aprovacaoId || undefined };
+    }
 
-  // 4. Carregar configuração
-  const { data: configuracao } = await supabase
-    .from('hub_agente_configuracao')
-    .select('*')
-    .eq('agente_slug', slugFinal)
-    .maybeSingle()
+    const systemPrompt = montarPromptCompleto(agente, [], agente.regras || []);
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return { sucesso: false, erro: "ANTHROPIC_API_KEY não configurada" };
 
-  // 5. Script pelo gatilho (fase do lead)
-  const script = await buscarScriptPorGatilho(identidade.id, lead.fase || 'entrada')
+    const anthropic = new Anthropic({ apiKey });
+    const resposta = await anthropic.messages.create({
+      model: agente.modelo,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: "user", content: `${demanda.titulo}\n\n${demanda.mensagem}` }],
+    });
 
-  // 6. Regras de negócio
-  const contextoRegras = {
-    score:         lead.score,
-    valor_estimado: lead.valor_estimado,
-    status_visual: lead.status_visual,
-    fase:          lead.fase,
-  }
-  const regras = await buscarRegrasAplicaveis(contextoRegras, identidade.id)
-  const regrasInstrucoes = aplicarRegras(regras)
+    const textoResposta = resposta.content[0].type === "text" ? resposta.content[0].text : "";
+    const custo = calcularCusto(agente.modelo, resposta.usage.input_tokens, resposta.usage.output_tokens);
 
-  // 7. Memórias do lead
-  const memorias = await buscarMemoriasLead(contexto.leadId)
+    await db.from("hub_prompt_logs").insert({
+      agente_id: agente.slug,
+      modelo_usado: agente.modelo,
+      tokens_entrada: resposta.usage.input_tokens,
+      tokens_saida: resposta.usage.output_tokens,
+      custo_usd: custo.usd,
+      custo_brl: custo.brl,
+      latencia_ms: Date.now() - inicio,
+      mensagem_usuario: demanda.mensagem,
+      resposta_ia: textoResposta,
+      metadata: demanda.dados || {},
+    });
 
-  // 8. Histórico da conversa
-  const { data: historico } = await supabase
-    .from('hub_mensagens')
-    .select('remetente, conteudo, enviada_em')
-    .eq('conversa_id', contexto.conversaId)
-    .order('enviada_em', { ascending: false })
-    .limit(10)
+    // Se o resultado precisa de aprovação humana, cria o card
+    if (agente.hierarquia && agente.hierarquia.limiteAutonomiaBrl === 0) {
+      await criarAprovacao({
+        tipo: demanda.tipo as "conteudo" | "campanha" | "site",
+        agenteSlug: agente.slug,
+        descricao: `${agente.nome} concluiu: ${demanda.titulo}`,
+        motivo: "Resultado pronto para revisão e aprovação",
+        impacto: "Publicação ou execução após aprovação",
+        recomendacao: textoResposta.slice(0, 200),
+        confiancaIA: 85,
+        dados: { resultado: textoResposta, demanda: demanda.dados },
+      });
+    }
 
-  // 9. System prompt
-  const systemPrompt = montarSystemPrompt(identidade, configuracao, script, memorias, regrasInstrucoes)
+    return {
+      sucesso: true,
+      resposta: textoResposta,
+      agenteSlug: agente.slug,
+      agenteNome: agente.nome,
+      modelo: agente.modelo,
+      tokens: { entrada: resposta.usage.input_tokens, saida: resposta.usage.output_tokens },
+      custo,
+      latencia: Date.now() - inicio,
+    };
 
-  // 10. Modelo
-  const modelo = selecionarModelo(configuracao, contextoRegras)
-
-  // 11. Histórico formatado
-  const mensagensHistorico = (historico || []).reverse().map((msg: any) => ({
-    role: (msg.remetente === 'lead' ? 'user' : 'assistant') as 'user' | 'assistant',
-    content: msg.conteudo || '',
-  }))
-
-  // 12. Chamar Claude API
-  const response = await anthropic.messages.create({
-    model: modelo,
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages: [
-      ...mensagensHistorico,
-      { role: 'user', content: contexto.mensagemUsuario },
-    ],
-  })
-
-  const resposta = response.content[0].type === 'text' ? response.content[0].text : ''
-  const tempoResposta = Date.now() - inicio
-  const custo = calcularCusto(modelo, response.usage.input_tokens, response.usage.output_tokens)
-
-  // 13. Registrar log
-  await registrarLog({
-    leadId:            contexto.leadId,
-    conversaId:        contexto.conversaId,
-    agenteSlug:        slugFinal,
-    systemPrompt,
-    mensagemUsuario:   contexto.mensagemUsuario,
-    respostaIa:        resposta,
-    modeloUsado:       modelo,
-    tokensInput:       response.usage.input_tokens,
-    tokensOutput:      response.usage.output_tokens,
-    custoEstimadoBrl:  custo.brl,
-    tempoRespostaMs:   tempoResposta,
-  })
-
-  // 14. Salvar resposta da IA
-  await supabase.from('hub_mensagens').insert({
-    conversa_id:   contexto.conversaId,
-    lead_id:       contexto.leadId,
-    pessoa_id:     lead.pessoa_id,
-    remetente:     'ia',
-    tipo_conteudo: 'texto',
-    conteudo:      resposta,
-  })
-
-  // 15. Atualizar memória
-  const novosDados = extrairMemoriasDeResposta(contexto.mensagemUsuario, resposta)
-  if (Object.keys(novosDados).length > 0) {
-    await salvarMemoria(contexto.leadId, {
-      dados_coletados: novosDados,
-      ultima_interacao: new Date().toISOString(),
-    })
-  }
-
-  // 16. Padrão ML
-  await registrarPadraoML('resposta_efetiva', lead.fase || 'entrada', identidade.id)
-
-  return {
-    resposta,
-    modelo,
-    tempoResposta,
-    tokensUsados: { entrada: response.usage.input_tokens, saida: response.usage.output_tokens },
-    custo,
-    scriptUsado: script?.id,
+  } catch (erro) {
+    const errMsg = erro instanceof Error ? erro.message : "Erro desconhecido";
+    return { sucesso: false, erro: errMsg };
   }
 }
 
-// ============================================================
-// UTILITÁRIOS
-// ============================================================
-
-export async function listarAgentes() {
-  const { data } = await supabase
-    .from('hub_agente_identidade')
-    .select('agente_slug, nome, descricao, ativo')
-    .order('nome')
-  return data || []
-}
-
-export async function listarScripts(agenteId: string) {
-  const { data } = await supabase
-    .from('hub_scripts')
-    .select('*')
-    .eq('agente_id', agenteId)
-    .order('ordem')
-  return data || []
-}
-
-export async function metricas(agenteId?: string) {
-  let query = supabase
-    .from('hub_prompt_logs')
-    .select('agente_slug, modelo_usado, tokens_input, tokens_output, custo_estimado_brl, tempo_resposta_ms')
-
-  if (agenteId) query = (query as any).eq('agente_slug', agenteId)
-
-  const { data } = await query
-  if (!data || data.length === 0) return { total: 0, custo_total_brl: 0, tempo_medio_ms: 0, por_modelo: {} }
-
-  return {
-    total:           data.length,
-    custo_total_brl: data.reduce((acc: number, r: any) => acc + (r.custo_estimado_brl || 0), 0),
-    tempo_medio_ms:  Math.round(data.reduce((acc: number, r: any) => acc + (r.tempo_resposta_ms || 0), 0) / data.length),
-    por_modelo:      data.reduce((acc: Record<string, number>, r: any) => {
-      acc[r.modelo_usado] = (acc[r.modelo_usado] || 0) + 1
-      return acc
-    }, {}),
-  }
-}
+// ── API ROUTE HANDLER ─────────────────────────────────────────
+export { receberDemanda, escalarDemanda, verificarAutonomia } from "./router";
+export { varrerSistema, monitorarTrafego } from "./monitor";
+export { buscarAprovacoesPendentes, aprovar, rejeitar, criarAprovacao } from "./aprovacoes";
+export { uploadArquivo, salvarConversa, buscarArquivosLead } from "./storage";

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import Link from 'next/link'
+import Image from 'next/image'
 
 type Lead = {
   id: string
@@ -628,6 +629,29 @@ export default function MobileExperience() {
         {/* ABA 3 — MARKETING */}
         {aba === 3 && (
           <div style={{ height: '100%', overflowY: 'auto', padding: '14px 16px 100px' }}>
+
+            {/* Card Ariane */}
+            <div style={{
+              background: 'rgba(139,92,246,0.08)',
+              border: '1px solid rgba(139,92,246,0.25)',
+              borderRadius: 14,
+              padding: '14px 16px',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+            }}>
+              <div style={{ position: 'relative', width: 56, height: 78, flexShrink: 0 }}>
+                <Image src="/avatars/ariane/apresentando.png" alt="Ariane" fill style={{ objectFit: 'contain' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', marginBottom: 2 }}>Ariane</div>
+                <div style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, marginBottom: 6 }}>Diretora de Marketing</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>
+                  CPL acima da meta. Revisando estratégia de tráfego.
+                </div>
+              </div>
+            </div>
 
             {/* KPIs Marketing */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>

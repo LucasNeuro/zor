@@ -18,6 +18,7 @@ import { useAlerts } from "@/hooks/useAlerts";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useSupabaseLeads, type LeadComPessoa } from "@/hooks/useSupabaseLeads";
 import LiveCrmPanel from "@/components/office/LiveCrmPanel";
+import { Ariane } from "@/components/office/Ariane";
 import { type LiveLead } from "@/lib/data/live-leads";
 import { DECISIONS_MOCK } from "@/lib/data/decisions-mock";
 import { getLeadById } from "@/lib/data/leads-mock";
@@ -412,6 +413,8 @@ function OfficePageInner() {
         </div>
 
       </div>
+
+      <Ariane tamanho={90} posicao={{ bottom: 80, right: 20 }} />
 
       {sharedOverlays}
 

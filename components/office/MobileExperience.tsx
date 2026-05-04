@@ -27,14 +27,14 @@ const IMG_W = 863
 const IMG_H = 1822
 
 const FASE_SPAWN: Record<string, { x: number; y: number }> = {
-  entrada:      { x: 432, y: 1700 },
-  espera:       { x: 690, y: 1380 },
-  qualificacao: { x: 695, y: 480  },
-  apresentacao: { x: 430, y: 970  },
-  negociacao:   { x: 695, y: 970  },
-  fechamento:   { x: 695, y: 970  },
-  ganho:        { x: 435, y: 480  },
-  perdido:      { x: 175, y: 480  },
+  entrada:      { x: 432, y: 1680 },
+  espera:       { x: 690, y: 1310 },
+  qualificacao: { x: 680, y: 500  },
+  apresentacao: { x: 430, y: 960  },
+  negociacao:   { x: 680, y: 960  },
+  fechamento:   { x: 680, y: 960  },
+  ganho:        { x: 175, y: 500  },
+  perdido:      { x: 175, y: 500  },
 }
 
 const AGENTES = [
@@ -107,9 +107,9 @@ function calcOpacidade(lead: Lead): number {
 }
 
 function calcTamanho(lead: Lead): number {
-  if (lead.score >= 70) return 36
-  if (lead.score >= 40) return 30
-  return 26
+  if (lead.score >= 70) return 44
+  if (lead.score >= 40) return 38
+  return 32
 }
 
 export default function MobileExperience() {
@@ -127,6 +127,7 @@ export default function MobileExperience() {
   const [texto, setTexto] = useState('')
   const [convId, setConvId] = useState<string | null>(null)
   const imgRef = useRef<HTMLImageElement>(null)
+  const escritorioRef = useRef<HTMLDivElement>(null)
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -209,6 +210,15 @@ export default function MobileExperience() {
     }
     fetchAlertas()
   }, [leads])
+
+  // Scroll para o final da imagem ao abrir aba Escritório
+  useEffect(() => {
+    if (aba === 1 && escritorioRef.current) {
+      setTimeout(() => {
+        escritorioRef.current!.scrollTo({ top: escritorioRef.current!.scrollHeight, behavior: 'instant' })
+      }, 150)
+    }
+  }, [aba])
 
   // Bolhas de atividade dos agentes
   useEffect(() => {
@@ -320,6 +330,23 @@ export default function MobileExperience() {
         </div>
       </div>
 
+      {/* Barra de notificação ao vivo */}
+      {alertas.length > 0 && (
+        <div style={{
+          padding: '8px 18px',
+          background: `${alertas[0].cor}15`,
+          borderBottom: `1px solid ${alertas[0].cor}30`,
+          display: 'flex', alignItems: 'center', gap: 8,
+          flexShrink: 0,
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: alertas[0].cor, boxShadow: `0 0 6px ${alertas[0].cor}`, flexShrink: 0 }} />
+          <div style={{ flex: 1, fontSize: 11, color: '#fff', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+            {alertas[0].texto}
+          </div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>{alertas[0].tempo}</div>
+        </div>
+      )}
+
       {/* Conteúdo */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
 
@@ -392,7 +419,7 @@ export default function MobileExperience() {
 
         {/* ABA 1 — ESCRITÓRIO */}
         {aba === 1 && (
-          <div style={{ height: '100%', overflowY: 'auto', position: 'relative' }}>
+          <div ref={escritorioRef} style={{ height: '100%', overflowY: 'auto', position: 'relative' }}>
             <div style={{ position: 'relative', width: '100%' }}>
               <img
                 ref={imgRef}
@@ -420,11 +447,11 @@ export default function MobileExperience() {
                       </div>
                     )}
                     <div style={{
-                      width: 22, height: 22, borderRadius: '50%',
+                      width: 18, height: 18, borderRadius: '50%',
                       background: `${ag.cor}30`,
                       border: `1.5px solid ${ag.cor}${temBolha ? 'ff' : '80'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 7, fontWeight: 800, color: '#fff',
+                      fontSize: 6, fontWeight: 800, color: '#fff',
                       boxShadow: temBolha ? `0 0 10px ${ag.cor}` : `0 0 4px ${ag.cor}40`,
                       transition: 'all 0.3s ease',
                     }}>
@@ -459,9 +486,11 @@ export default function MobileExperience() {
                     {lead.status_visual === 'critico' && (
                       <div style={{
                         position: 'absolute', left: '50%', top: '50%',
-                        width: tamanho + 14, height: tamanho + 14,
+                        transform: 'translate(-50%, -50%)',
+                        width: tamanho + 18, height: tamanho + 18,
                         border: '2px solid #ef4444', borderRadius: '50%',
                         animation: 'pulseRing 1.5s ease-out infinite',
+                        zIndex: -1, pointerEvents: 'none',
                       }} />
                     )}
                     <div style={{
@@ -471,7 +500,7 @@ export default function MobileExperience() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: tamanho * 0.38, fontWeight: 800, color: '#fff',
                       boxShadow: `0 0 12px ${cor}60`, position: 'relative',
-                      animation: `floatBubble ${2.5 + lead.numero_visual * 0.3}s ease-in-out infinite`,
+                      animation: `floatUp ${2.5 + lead.numero_visual * 0.4}s ease-in-out infinite`,
                     }}>
                       {lead.hub_pessoas?.nome?.[0] || '?'}
                       <div style={{

@@ -125,8 +125,8 @@ body {
 }
 
 @keyframes pulseRing {
-  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
-  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
 }
 
 @keyframes floatBubble {
@@ -134,7 +134,17 @@ body {
   50% { transform: translate(-50%, -50%) translateY(-4px); }
 }
 
+@keyframes floatUp {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+  50% { transform: translate(-50%, -50%) translateY(-6px); }
+}
+
 @keyframes breathe {
   0%, 100% { opacity: 0.85; }
   50% { opacity: 0.5; }
+}
+
+@keyframes breatheAgent {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }

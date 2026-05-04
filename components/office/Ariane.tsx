@@ -23,7 +23,7 @@ const ESTADO_AUTOMATICO: { estado: ArianeEstado; mensagem: string; duracao: numb
   { estado: 'normal', mensagem: 'Ariane — Diretora de Marketing', duracao: 6000 },
 ]
 
-export function Ariane({ estado, mensagem, tamanho = 80, posicao, onClick }: ArianeProps) {
+export function Ariane({ estado, mensagem, tamanho = 80, onClick }: ArianeProps) {
   const [estadoAtual, setEstadoAtual] = useState<ArianeEstado>(estado || 'normal')
   const [mensagemAtual, setMensagemAtual] = useState(mensagem || 'Ariane — Diretora de Marketing')
   const [mostrarBolha, setMostrarBolha] = useState(true)
@@ -45,74 +45,18 @@ export function Ariane({ estado, mensagem, tamanho = 80, posicao, onClick }: Ari
     return () => clearInterval(timer)
   }, [estado, idx])
 
-  const posicaoStyle = posicao || { bottom: 20, right: 20 }
-
   return (
-    <div
-      onClick={onClick}
-      style={{
-        position: 'fixed',
-        zIndex: 500,
-        cursor: onClick ? 'pointer' : 'default',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 6,
-        ...Object.fromEntries(Object.entries(posicaoStyle).map(([k, v]) => [k, `${v}px`])),
-      }}
-    >
-      {/* Bolha de fala */}
+    <div onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: onClick ? 'pointer' : 'default' }}>
       {mostrarBolha && mensagemAtual && (
-        <div style={{
-          background: 'rgba(8,8,16,0.92)',
-          border: '1px solid rgba(139,92,246,0.4)',
-          borderRadius: 10,
-          padding: '8px 12px',
-          maxWidth: 200,
-          fontSize: 11,
-          color: '#fff',
-          lineHeight: 1.4,
-          textAlign: 'center',
-          boxShadow: '0 4px 20px rgba(139,92,246,0.2)',
-          animation: 'fadeIn 0.3s ease',
-        }}>
-          <div style={{ fontSize: 9, color: '#8b5cf6', fontWeight: 700, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Ariane · Dir. Marketing
-          </div>
+        <div style={{ background: 'rgba(8,8,16,0.92)', border: '1px solid rgba(139,92,246,0.4)', borderRadius: 10, padding: '8px 12px', maxWidth: 180, fontSize: 11, color: '#fff', lineHeight: 1.4, textAlign: 'center', boxShadow: '0 4px 20px rgba(139,92,246,0.2)' }}>
+          <div style={{ fontSize: 9, color: '#8b5cf6', fontWeight: 700, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Ariane · Dir. Marketing</div>
           {mensagemAtual}
         </div>
       )}
-
-      {/* Avatar */}
-      <div style={{
-        width: tamanho,
-        height: tamanho * 1.4,
-        position: 'relative',
-        filter: 'drop-shadow(0 4px 12px rgba(139,92,246,0.4))',
-        transition: 'transform 0.3s ease',
-        transform: estadoAtual === 'andando' ? 'translateX(-4px)' : 'translateX(0)',
-        animation: estadoAtual === 'alerta' ? 'pulseRing 0.5s ease infinite alternate' : 'none',
-      }}>
-        <Image
-          src={`/avatars/ariane/${estadoAtual}.png`}
-          alt="Ariane - Diretora de Marketing"
-          fill
-          style={{ objectFit: 'contain' }}
-          priority
-        />
+      <div style={{ width: tamanho, height: tamanho * 1.4, position: 'relative', filter: 'drop-shadow(0 4px 12px rgba(139,92,246,0.4))', transition: 'transform 0.3s ease', transform: estadoAtual === 'andando' ? 'translateX(-4px)' : 'translateX(0)' }}>
+        <Image src={`/avatars/ariane/${estadoAtual}.png`} alt="Ariane" fill style={{ objectFit: 'contain' }} priority />
       </div>
-
-      {/* Nome tag */}
-      <div style={{
-        background: 'rgba(139,92,246,0.15)',
-        border: '1px solid rgba(139,92,246,0.3)',
-        borderRadius: 6,
-        padding: '2px 8px',
-        fontSize: 9,
-        color: '#8b5cf6',
-        fontWeight: 700,
-        letterSpacing: '0.3px',
-      }}>
+      <div style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 6, padding: '2px 8px', fontSize: 9, color: '#8b5cf6', fontWeight: 700, letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>
         ARIANE ✦ DIR. MARKETING
       </div>
     </div>

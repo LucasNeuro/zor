@@ -370,6 +370,20 @@ function OfficePageInner() {
           {hoveredAgent && !selectedAgent && (
             <AgentBubble agent={hoveredAgent} state={hoveredState} x={mousePos.x} y={mousePos.y} />
           )}
+          {/* Ariane — Diretora de Marketing — posicionada na sala dela */}
+          <div style={{
+            position: 'absolute',
+            bottom: 16,
+            left: 16,
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: 6,
+            pointerEvents: 'none',
+          }}>
+            <Ariane tamanho={72} />
+          </div>
         </div>
 
         {/* Direita — CRM / Decisões (300px) */}
@@ -413,8 +427,6 @@ function OfficePageInner() {
         </div>
 
       </div>
-
-      <Ariane tamanho={80} posicao={{ bottom: 120, left: 270 }} />
 
       {sharedOverlays}
 

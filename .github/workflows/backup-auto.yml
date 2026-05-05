@@ -1,0 +1,35 @@
+name: Backup Automático
+on:
+  schedule:
+    - cron: '0 */2 * * *'  # a cada 2 horas
+  push:
+    branches: [main]
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Snapshot do banco
+        run: |
+          DATE=$(date +%Y%m%d-%H%M)
+          mkdir -p backups
+          curl -s -H "apikey: ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/hub_agente_identidade?select=*" \
+            -o backups/agentes-$DATE.json
+          curl -s -H "apikey: ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/hub_leads_crm?select=*" \
+            -o backups/leads-$DATE.json
+
+      - name: Commit backup
+        run: |
+          git config user.name "Backup Bot"
+          git config user.email "backup@obra10.com"
+          git add backups/
+          git commit -m "backup: snapshot $DATE" || true
+          git push || true

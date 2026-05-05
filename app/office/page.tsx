@@ -8,23 +8,18 @@ import MobileExperience from "@/components/office/MobileExperience";
 import FFTAgentNode from "@/components/office/FFTAgentNode";
 import FFTLeadNode from "@/components/office/FFTLeadNode";
 import AnalyticsPanel from "@/components/office/AnalyticsPanel";
+import { MAPA_AGENTES, CORES_AREA, TAMANHO_NIVEL, getInitials } from "@/lib/data/office-map";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const AGENTES_POSICOES = [
-  { slug: "sdr",                 x: 505, y: 568 },
-  { slug: "atendente",           x: 460, y: 640 },
-  { slug: "gerente_atendimento", x: 840, y: 295 },
-  { slug: "diretor",             x: 460, y: 340 },
-];
-
+// Leads aparecem na área de recepção/entrada (% do container)
 const POSICOES_LEADS = [
-  { x: 505, y: 720 }, { x: 620, y: 720 }, { x: 740, y: 720 },
-  { x: 860, y: 720 }, { x: 980, y: 720 }, { x: 1100, y: 720 },
-  { x: 505, y: 780 }, { x: 620, y: 780 },
+  { x: 12, y: 82 }, { x: 18, y: 82 }, { x: 24, y: 82 },
+  { x: 30, y: 82 }, { x: 36, y: 82 }, { x: 42, y: 82 },
+  { x: 12, y: 89 }, { x: 18, y: 89 },
 ];
 
 interface Lead {
@@ -46,6 +41,8 @@ interface Agente {
   nome: string;
   cargo: string;
   nivel: number;
+  area: string;
+  ativo: boolean;
 }
 
 function MobileOfficeView({ leads, agentes, metricas }: {
@@ -86,30 +83,27 @@ function MobileOfficeView({ leads, agentes, metricas }: {
           background: "radial-gradient(ellipse at center, transparent 20%, rgba(13,17,23,0.8) 100%)"
         }} />
 
-        {/* Agentes no mobile */}
-        {agentes.slice(0, 4).map((ag, i) => {
-          const posicoes = [
-            { x: "25%", y: "35%" }, { x: "45%", y: "55%" },
-            { x: "65%", y: "35%" }, { x: "75%", y: "60%" },
-          ];
-          const pos = posicoes[i] || posicoes[0];
-          const cores: Record<string, string> = {
-            sdr: "#60a5fa", atendente: "#c9a24a",
-            gerente_atendimento: "#c0c0c0", diretor: "#a78bfa",
-          };
-          const cor = cores[ag.agente_slug] || "#c9a24a";
+        {/* Agentes no mobile — usa mesmas coordenadas % do desktop */}
+        {agentes.map(ag => {
+          const pos = MAPA_AGENTES[ag.agente_slug];
+          if (!pos) return null;
+          const cor = CORES_AREA[ag.area] || "#c9a24a";
+          const tam = (TAMANHO_NIVEL[ag.nivel] || 24) * 0.75;
           return (
             <div key={ag.agente_slug}
               className="absolute flex flex-col items-center gap-0.5 cursor-pointer"
-              style={{ left: pos.x, top: pos.y, transform: "translate(-50%,-50%)" }}
+              style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: "translate(-50%,-50%)", opacity: ag.ativo ? 1 : 0.3 }}
               onClick={() => router.push(`/crm/agentes/${ag.agente_slug}`)}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black"
-                style={{ background: `radial-gradient(circle, ${cor}88, #0d1117)`, border: `1.5px solid ${cor}`, boxShadow: `0 0 10px ${cor}66` }}>
-                {ag.nome.charAt(0)}
+              <div className="rounded-full flex items-center justify-center font-black text-white"
+                style={{
+                  width: `${tam}px`, height: `${tam}px`,
+                  background: `radial-gradient(circle, ${cor}88, #0d1117)`,
+                  border: `1.5px solid ${cor}`,
+                  boxShadow: ag.ativo ? `0 0 8px ${cor}66` : "none",
+                  fontSize: `${Math.max(8, tam * 0.35)}px`,
+                }}>
+                {getInitials(ag.cargo)}
               </div>
-              <p className="text-xs font-bold px-1 rounded" style={{ color: cor, background: "rgba(13,17,23,0.8)", fontSize: "8px" }}>
-                {ag.nome}
-              </p>
             </div>
           );
         })}
@@ -225,8 +219,8 @@ export default function OfficePage() {
       supabase.from("hub_leads_crm").select("*")
         .not("estagio", "in", '("ganho","perdido","arquivado")')
         .order("atualizado_em", { ascending: false }).limit(20),
-      supabase.from("hub_agente_identidade").select("agente_slug, nome, cargo, nivel")
-        .eq("ativo", true).order("nivel"),
+      supabase.from("hub_agente_identidade").select("agente_slug, nome, cargo, nivel, area, ativo")
+        .order("nivel"),
       supabase.from("hub_aprovacoes").select("id", { count: "exact", head: true }).eq("status", "pendente"),
     ]);
 
@@ -393,21 +387,27 @@ export default function OfficePage() {
               <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(13,17,23,0.25)" }} />
             </div>
 
-            {/* Agentes */}
-            {AGENTES_POSICOES.map(pos => {
-              const agente = agentes.find(a => a.agente_slug === pos.slug);
-              if (!agente) return null;
-              const leadsDoAgente = leads.filter(l => l.agente_responsavel === pos.slug).length;
+            {/* Todos os 26 agentes mapeados por slug */}
+            {agentes.map(agente => {
+              const pos = MAPA_AGENTES[agente.agente_slug];
+              if (!pos) return null;
+              const leadsDoAgente = leads.filter(l => l.agente_responsavel === agente.agente_slug).length;
+              const cor = CORES_AREA[agente.area] || "#c9a24a";
+              const tamanho = TAMANHO_NIVEL[agente.nivel] || 24;
               return (
                 <FFTAgentNode
-                  key={pos.slug}
-                  slug={pos.slug}
-                  nome={agente.nome}
+                  key={agente.agente_slug}
+                  slug={agente.agente_slug}
+                  nome={agente.cargo}
                   cargo={agente.cargo}
                   x={pos.x}
                   y={pos.y}
                   leadsAtivos={leadsDoAgente}
                   status={leadsDoAgente > 3 ? "critico" : leadsDoAgente > 0 ? "ocupado" : "ativo"}
+                  cor={cor}
+                  tamanho={tamanho}
+                  ativoDb={agente.ativo}
+                  iniciais={getInitials(agente.cargo)}
                 />
               );
             })}

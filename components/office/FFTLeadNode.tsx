@@ -54,7 +54,7 @@ export default function FFTLeadNode({ nome, mercado = "geral", estagio, valor, x
   return (
     <div
       className="absolute flex flex-col items-center gap-1 cursor-pointer group"
-      style={{ left: `${x}px`, top: `${y}px`, transform: "translate(-50%, -50%)", zIndex: 8 }}
+      style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)", zIndex: 8 }}
       onClick={handleClick}
     >
       {selected && (

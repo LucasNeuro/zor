@@ -20,6 +20,9 @@ const MODELOS = [
 const NIVEL_COR: Record<number, string> = {
   1: "#b3261e", 2: "#f97316", 3: "#eab308", 4: "#3b82f6", 5: "#6b7280",
 };
+const NIVEL_LABEL: Record<number, string> = {
+  1: "CEO", 2: "Diretor", 3: "Gerente", 4: "Executor", 5: "Especialista",
+};
 
 interface CargoItem { cargo: string; area: string; mercados?: string[]; ativo: boolean; }
 type Aba = "basico" | "cargos" | "personalidade" | "conhecimento" | "regras";
@@ -35,18 +38,27 @@ export default function EditarAgentePage() {
   const [aba, setAba] = useState<Aba>("basico");
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [cargos, setCargos] = useState<CargoCatalogo[]>([]);
+  const [perfis, setPerfis] = useState<PerfilPersonalidade[]>([]);
+  const [mercadosCat, setMercadosCat] = useState<MercadoCatalogo[]>([]);
 
   useEffect(() => { if (slug) carregar(); }, [slug]);
 
   async function carregar() {
-    const [a, c, p] = await Promise.all([
+    const [a, c, p, cargosData, perfisData, mercadosData] = await Promise.all([
       supabase.from("hub_agente_identidade").select("*").eq("agente_slug", slug).single(),
       supabase.from("hub_agente_conhecimento").select("*").eq("agente_slug", slug).order("ordem"),
       supabase.from("hub_personalidade").select("*").eq("agente_slug", slug).maybeSingle(),
+      fetchCargosCatalogo(),
+      fetchPerfisPersonalidade(),
+      fetchMercados(),
     ]);
     if (a.data) setAgente(a.data);
     if (c.data) setConhecimentos(c.data);
     if (p.data) setPersonalidade(p.data);
+    setCargos(cargosData);
+    setPerfis(perfisData);
+    setMercadosCat(mercadosData);
   }
 
   async function salvar() {
@@ -70,8 +82,8 @@ export default function EditarAgentePage() {
         agente_slug: slug,
         humor: personalidade.humor,
         personalidade: personalidade.personalidade,
-        humor_label: HUMORES[((personalidade.humor as number) || 1) - 1],
-        personalidade_label: PERSONALIDADES[((personalidade.personalidade as number) || 1) - 1],
+        humor_label: HUMORES_ORD[((personalidade.humor as number) || 1) - 1],
+        personalidade_label: PERS_ORD[((personalidade.personalidade as number) || 1) - 1],
         descricao_comportamento: personalidade.descricao_comportamento,
         tom_comunicacao: personalidade.tom_comunicacao,
       });
@@ -137,7 +149,7 @@ export default function EditarAgentePage() {
     );
   }
 
-  const cargos = (agente.cargos as CargoItem[]) || [];
+  const cargosAgente = (agente.cargos as CargoItem[]) || [];
   const SECOES = [
     { id: "empresa", label: "🏢 Sobre o negócio" },
     { id: "servicos", label: "🛠 Serviços" },
@@ -173,7 +185,7 @@ export default function EditarAgentePage() {
       <div style={{ display: "flex", borderBottom: "1px solid #30363d", background: "#0d1117" }}>
         {([
           { id: "basico", label: "Básico" },
-          { id: "cargos", label: `Cargos (${cargos.length})` },
+          { id: "cargos", label: `Cargos (${cargosAgente.length})` },
           { id: "personalidade", label: "Personalidade" },
           { id: "conhecimento", label: `Conhecimento (${conhecimentos.length})` },
           { id: "regras", label: "Regras" },
@@ -202,14 +214,38 @@ export default function EditarAgentePage() {
               <label style={labelStyle}>Nome</label>
               <input value={agente.nome as string || ""} onChange={e => update("nome", e.target.value)} style={inputStyle} />
             </div>
+            <div>
+              <label style={labelStyle}>Cargo principal</label>
+              <select
+                value={agente.cargo as string || ""}
+                onChange={e => {
+                  const c = cargos.find(x => x.titulo === e.target.value);
+                  if (c) { update("cargo", c.titulo); update("area", c.area); update("nivel", c.nivel); update("modelo_padrao", c.modelo_padrao); }
+                  else update("cargo", e.target.value);
+                }}
+                style={{ ...inputStyle, cursor: "pointer" }}>
+                <option value="">Selecionar cargo...</option>
+                {[1, 2, 3, 4, 5].map(nivel => {
+                  const nivelCargos = cargos.filter(c => c.nivel === nivel);
+                  if (!nivelCargos.length) return null;
+                  return (
+                    <optgroup key={nivel} label={`N${nivel} — ${NIVEL_LABEL[nivel]}`}>
+                      {nivelCargos.map(c => <option key={c.slug} value={c.titulo}>{c.titulo}</option>)}
+                    </optgroup>
+                  );
+                })}
+              </select>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Cargo principal</label>
-                <input value={agente.cargo as string || ""} onChange={e => update("cargo", e.target.value)} style={inputStyle} />
+                <label style={labelStyle}>Área <span style={{ color: "#484f58", fontWeight: 400 }}>(auto)</span></label>
+                <div style={{ ...inputStyle, color: "#8b949e" }}>{agente.area as string || "—"}</div>
               </div>
               <div>
-                <label style={labelStyle}>Área</label>
-                <input value={agente.area as string || ""} onChange={e => update("area", e.target.value)} style={inputStyle} />
+                <label style={labelStyle}>Modelo de IA <span style={{ color: "#484f58", fontWeight: 400 }}>(do cargo)</span></label>
+                <div style={{ ...inputStyle, color: "#8b949e" }}>
+                  {MODELOS.find(m => m.id === (agente.modelo_padrao as string))?.label || agente.modelo_padrao as string || "—"}
+                </div>
               </div>
             </div>
             <div>
@@ -217,17 +253,28 @@ export default function EditarAgentePage() {
               <textarea value={agente.bio as string || ""} onChange={e => update("bio", e.target.value)} rows={3}
                 style={{ ...inputStyle, resize: "none" }} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Modelo de IA</label>
-                <select value={agente.modelo_padrao as string || MODELOS[0].id} onChange={e => update("modelo_padrao", e.target.value)}
-                  style={{ ...inputStyle, cursor: "pointer" }}>
-                  {MODELOS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Mercados (ex: IMB,ARQ)</label>
-                <input value={agente.prefixo_mercado as string || ""} onChange={e => update("prefixo_mercado", e.target.value)} style={inputStyle} />
+            <div>
+              <label style={labelStyle}>Mercados</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                {mercadosCat.map(m => {
+                  const sel = ((agente.prefixo_mercado as string) || "").split(",").map(s => s.trim()).includes(m.sigla);
+                  return (
+                    <button key={m.sigla} onClick={() => {
+                      const atual = ((agente.prefixo_mercado as string) || "").split(",").map(s => s.trim()).filter(Boolean);
+                      const novos = sel ? atual.filter(x => x !== m.sigla) : [...atual, m.sigla];
+                      update("prefixo_mercado", novos.join(","));
+                    }} style={{
+                      padding: "4px 10px", borderRadius: 20, fontSize: 11, cursor: "pointer",
+                      background: sel ? (m.cor + "20") : "#21262d",
+                      color: sel ? m.cor : "#8b949e",
+                      border: `1px solid ${sel ? m.cor : "#30363d"}`,
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: m.cor, display: "inline-block" }} />
+                      {m.sigla} — {m.nome}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -241,30 +288,39 @@ export default function EditarAgentePage() {
         {aba === "cargos" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>Um agente pode ocupar múltiplos cargos, cada um atendendo mercados específicos.</p>
-            {cargos.map((c, i) => (
+            {cargosAgente.map((c, i) => (
               <div key={i} style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                   <span style={{ fontSize: 11, color: "#c9a24a", fontWeight: 700 }}>Cargo {i + 1}</span>
                   <button onClick={() => removerCargo(i)} style={{ fontSize: 11, color: "#b3261e", background: "none", border: "none", cursor: "pointer" }}>Remover</button>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                  <input value={c.cargo} onChange={e => updateCargo(i, "cargo", e.target.value)} placeholder="Cargo" style={{ ...inputStyle, padding: "6px 10px" }} />
-                  <input value={c.area} onChange={e => updateCargo(i, "area", e.target.value)} placeholder="Área" style={{ ...inputStyle, padding: "6px 10px" }} />
+                  <select value={c.cargo} onChange={e => {
+                    const cat = cargos.find(x => x.titulo === e.target.value);
+                    updateCargo(i, "cargo", e.target.value);
+                    if (cat) updateCargo(i, "area", cat.area);
+                  }} style={{ ...inputStyle, padding: "6px 10px", cursor: "pointer" }}>
+                    <option value="">Cargo...</option>
+                    {cargos.map(cat => <option key={cat.slug} value={cat.titulo}>{cat.titulo}</option>)}
+                  </select>
+                  <div style={{ ...inputStyle, padding: "6px 10px", color: "#8b949e" }}>{c.area || "—"}</div>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  {MERCADOS.map(m => {
-                    const ativo = (c.mercados || []).includes(m);
+                  {mercadosCat.map(m => {
+                    const ativo = (c.mercados || []).includes(m.sigla);
                     return (
-                      <button key={m} onClick={() => {
-                        const mercados = ativo ? (c.mercados || []).filter(x => x !== m) : [...(c.mercados || []), m];
+                      <button key={m.sigla} onClick={() => {
+                        const mercados = ativo ? (c.mercados || []).filter((x: string) => x !== m.sigla) : [...(c.mercados || []), m.sigla];
                         updateCargo(i, "mercados", mercados);
                       }} style={{
-                        padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer",
-                        background: ativo ? "#003b26" : "#21262d",
-                        color: ativo ? "#c9a24a" : "#8b949e",
-                        border: `1px solid ${ativo ? "#c9a24a40" : "#30363d"}`,
+                        padding: "4px 10px", borderRadius: 20, fontSize: 11, cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: 4,
+                        background: ativo ? (m.cor + "20") : "#21262d",
+                        color: ativo ? m.cor : "#8b949e",
+                        border: `1px solid ${ativo ? m.cor : "#30363d"}`,
                       }}>
-                        {m}
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: m.cor, display: "inline-block" }} />
+                        {m.sigla}
                       </button>
                     );
                   })}
@@ -281,55 +337,71 @@ export default function EditarAgentePage() {
         )}
 
         {/* ── PERSONALIDADE ── */}
-        {aba === "personalidade" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {aba === "personalidade" && (() => {
+          const humorIdx = ((personalidade?.humor as number) || 1) - 1;
+          const persIdx  = ((personalidade?.personalidade as number) || 1) - 1;
+          const humorStr = HUMORES_ORD[humorIdx] || HUMORES_ORD[0];
+          const persStr  = PERS_ORD[persIdx]  || PERS_ORD[0];
+          const perfilAtual = perfis.find(p => p.humor === humorStr && p.personalidade === persStr);
+
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <label style={labelStyle}>Humor</label>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {HUMORES.map((h, i) => (
-                    <button key={h} onClick={() => setPersonalidade(prev => ({ ...(prev || {}), humor: i + 1 }))}
-                      style={{
-                        padding: "8px 12px", borderRadius: 8, textAlign: "left", fontSize: 13, cursor: "pointer",
-                        background: personalidade?.humor === i + 1 ? "#003b26" : "#161b22",
-                        color: personalidade?.humor === i + 1 ? "#c9a24a" : "#e6edf3",
-                        border: `1px solid ${personalidade?.humor === i + 1 ? "#c9a24a40" : "#30363d"}`,
-                      }}>
-                      {h}
-                    </button>
-                  ))}
+                <label style={labelStyle}>Personalidade (5×5)</label>
+                <p style={{ fontSize: 11, color: "#484f58", margin: "0 0 10px" }}>Selecione Humor (linha) + Personalidade (coluna)</p>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left", color: "#8b949e", paddingBottom: 6, paddingRight: 8, whiteSpace: "nowrap" }}>↓ / →</th>
+                        {PERS_ORD.map(p => (
+                          <th key={p} style={{ textAlign: "center", color: "#c9a24a", paddingBottom: 6, paddingLeft: 4, paddingRight: 4, minWidth: 72 }}>{p}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HUMORES_ORD.map((humor, hi) => (
+                        <tr key={humor}>
+                          <td style={{ paddingRight: 8, paddingTop: 4, paddingBottom: 4, color: "#c9a24a", whiteSpace: "nowrap", fontWeight: 700 }}>{humor}</td>
+                          {PERS_ORD.map((pers, pi) => {
+                            const ativo = hi === humorIdx && pi === persIdx;
+                            return (
+                              <td key={pers} style={{ padding: "4px 2px", textAlign: "center" }}>
+                                <button onClick={() => setPersonalidade(prev => ({ ...(prev || {}), humor: hi + 1, personalidade: pi + 1 }))}
+                                  style={{
+                                    width: "100%", padding: "6px 4px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                                    background: ativo ? "#003b26" : "#161b22",
+                                    color: ativo ? "#c9a24a" : "#484f58",
+                                    border: `1px solid ${ativo ? "#c9a24a40" : "#30363d"}`,
+                                  }}>
+                                  {ativo ? "✓" : "·"}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-              <div>
-                <label style={labelStyle}>Personalidade</label>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {PERSONALIDADES.map((p, i) => (
-                    <button key={p} onClick={() => setPersonalidade(prev => ({ ...(prev || {}), personalidade: i + 1 }))}
-                      style={{
-                        padding: "8px 12px", borderRadius: 8, textAlign: "left", fontSize: 13, cursor: "pointer",
-                        background: personalidade?.personalidade === i + 1 ? "#003b26" : "#161b22",
-                        color: personalidade?.personalidade === i + 1 ? "#c9a24a" : "#e6edf3",
-                        border: `1px solid ${personalidade?.personalidade === i + 1 ? "#c9a24a40" : "#30363d"}`,
-                      }}>
-                      {p}
-                    </button>
-                  ))}
+
+              {perfilAtual && (
+                <div style={{ background: "#161b22", border: "1px solid #c9a24a40", borderRadius: 12, padding: 14 }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#c9a24a", marginBottom: 8 }}>{humorStr} + {persStr}</p>
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={labelStyle}>Tom de comunicação <span style={{ color: "#484f58", fontWeight: 400 }}>(do catálogo)</span></label>
+                    <div style={{ ...inputStyle, color: "#8b949e" }}>{perfilAtual.tom_comunicacao}</div>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Estilo de trabalho <span style={{ color: "#484f58", fontWeight: 400 }}>(do catálogo)</span></label>
+                    <div style={{ ...inputStyle, color: "#8b949e" }}>{perfilAtual.estilo_trabalho}</div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-            <div>
-              <label style={labelStyle}>Tom de comunicação</label>
-              <input value={personalidade?.tom_comunicacao as string || ""} placeholder="Ex: acolhedor, profissional e direto"
-                onChange={e => setPersonalidade(prev => ({ ...(prev || {}), tom_comunicacao: e.target.value }))} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Descrição do comportamento</label>
-              <textarea value={personalidade?.descricao_comportamento as string || ""}
-                onChange={e => setPersonalidade(prev => ({ ...(prev || {}), descricao_comportamento: e.target.value }))}
-                rows={4} style={{ ...inputStyle, resize: "none" }} />
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── CONHECIMENTO ── */}
         {aba === "conhecimento" && (

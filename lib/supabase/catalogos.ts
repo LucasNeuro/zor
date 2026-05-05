@@ -71,3 +71,22 @@ export async function fetchMercados(): Promise<MercadoCatalogo[]> {
     .order("sigla");
   return (data || []) as MercadoCatalogo[];
 }
+
+export async function fetchCargoPorSlug(slug: string): Promise<CargoCatalogo | null> {
+  const { data } = await sb()
+    .from("hub_cargos_catalogo")
+    .select("*")
+    .eq("slug", slug)
+    .single();
+  return (data || null) as CargoCatalogo | null;
+}
+
+export async function fetchPerfilPorCombinacao(humor: string, personalidade: string): Promise<PerfilPersonalidade | null> {
+  const { data } = await sb()
+    .from("hub_perfis_personalidade")
+    .select("*")
+    .eq("humor", humor)
+    .eq("personalidade", personalidade)
+    .single();
+  return (data || null) as PerfilPersonalidade | null;
+}

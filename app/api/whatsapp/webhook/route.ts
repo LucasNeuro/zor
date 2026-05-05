@@ -11,8 +11,66 @@ function db() {
   );
 }
 
+async function encontrarOuCriarPessoa(telefone: string, nome: string, origem: string) {
+  const supabase = db();
+
+  const { data: pessoaExistente } = await supabase
+    .from("hub_pessoas")
+    .select("*")
+    .eq("telefone", telefone)
+    .maybeSingle();
+
+  if (pessoaExistente) return pessoaExistente;
+
+  const { count } = await supabase
+    .from("hub_pessoas")
+    .select("*", { count: "exact", head: true });
+  const seq = String((count || 0) + 1).padStart(4, "0");
+  const codigo = `PES-${new Date().getFullYear()}-${seq}`;
+
+  const { data: novaPessoa } = await supabase
+    .from("hub_pessoas")
+    .insert({
+      codigo,
+      nome: nome || `Lead WhatsApp`,
+      telefone,
+      whatsapp_id: telefone,
+      tipo: "lead",
+      origem: origem || "whatsapp",
+    })
+    .select()
+    .single();
+
+  return novaPessoa;
+}
+
+async function enviarMensagemWhatsApp(telefone: string, mensagem: string) {
+  const url = process.env.EVOLUTION_API_URL;
+  const key = process.env.EVOLUTION_API_KEY;
+  const instance = process.env.EVOLUTION_INSTANCE || "obra10plus";
+
+  if (!url || !key) {
+    console.log("[WEBHOOK] EVOLUTION_API_URL ou KEY não configurados");
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${url}/message/sendText/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": key },
+      body: JSON.stringify({ number: telefone, text: mensagem }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("[WEBHOOK] Erro ao enviar mensagem:", error);
+    return null;
+  }
+}
+
 async function encontrarOuCriarLead(telefone: string, nome: string, mercado: string, mensagem: string) {
   const supabase = db();
+
+  const pessoa = await encontrarOuCriarPessoa(telefone, nome, "whatsapp");
 
   const { data: leadExistente } = await supabase
     .from("hub_leads_crm")
@@ -23,7 +81,7 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
   if (leadExistente) {
     await supabase
       .from("hub_leads_crm")
-      .update({ atualizado_em: new Date().toISOString() })
+      .update({ atualizado_em: new Date().toISOString(), pessoa_id: pessoa?.id ?? leadExistente.pessoa_id })
       .eq("id", leadExistente.id);
 
     await supabase.from("hub_memorias_lead").insert({
@@ -37,7 +95,7 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
     return { lead: leadExistente, isNovo: false };
   }
 
-  const agenteResponsavel = mercado === "imobiliario" || mercado === "arquitetura" ? "mari" : "sdr";
+  const agenteResponsavel = mercado === "imobiliario" || mercado === "arquitetura" ? "atendente" : "sdr";
 
   const { data: novoLead, error } = await supabase
     .from("hub_leads_crm")
@@ -49,6 +107,7 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
       score: 10,
       valor_estimado: 0,
       agente_responsavel: agenteResponsavel,
+      pessoa_id: pessoa?.id ?? null,
       metadata: { mercado, primeira_mensagem: mensagem.slice(0, 200) },
     })
     .select()
@@ -106,7 +165,7 @@ async function buscarAgente(mercado: string) {
     const { data } = await supabase
       .from("hub_agente_identidade")
       .select("*")
-      .eq("agente_slug", "mari")
+      .eq("agente_slug", "atendente")
       .single();
     if (data) return data;
   }
@@ -116,7 +175,7 @@ async function buscarAgente(mercado: string) {
     .select("*")
     .eq("ativo", true)
     .ilike("prefixo_mercado", `%${mercado.toUpperCase().slice(0, 3)}%`)
-    .neq("agente_slug", "mari")
+    .neq("agente_slug", "atendente")
     .maybeSingle();
 
   if (agente) return agente;
@@ -340,13 +399,7 @@ export async function POST(request: NextRequest) {
             metadata: { feito_por: "ia", modelo: promptData.modelo, tokens: response.usage },
           });
 
-          try {
-            await fetch(`${process.env.EVOLUTION_API_URL}/message/sendText/obra10plus`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "apikey": process.env.EVOLUTION_API_KEY! },
-              body: JSON.stringify({ number: telefone, text: respostaTexto }),
-            });
-          } catch (e) { console.error("[WEBHOOK] Erro ao enviar via Evolution:", e); }
+          await enviarMensagemWhatsApp(telefone, respostaTexto);
         }
       } catch (e) {
         console.error("[WEBHOOK] Erro IA:", e);
@@ -359,7 +412,7 @@ export async function POST(request: NextRequest) {
       mercado,
       agente:        agente?.agente_slug,
       isNovo,
-      tabelasSalvas: ["hub_leads_crm", "hub_memorias_lead", "hub_fila_mensagens", "hub_acoes_ia", "hub_contatos_notificacao"],
+      tabelasSalvas: ["hub_pessoas", "hub_leads_crm", "hub_memorias_lead", "hub_fila_mensagens", "hub_acoes_ia", "hub_contatos_notificacao"],
     });
 
   } catch (erro) {

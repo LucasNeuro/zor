@@ -48,12 +48,167 @@ interface Agente {
   nivel: number;
 }
 
+function MobileOfficeView({ leads, agentes, metricas }: {
+  leads: Lead[];
+  agentes: Agente[];
+  metricas: { leadsAguardando: number; aprovacoesPendentes: number; leadsHoje: number };
+}) {
+  const router = useRouter();
+
+  return (
+    <div className="flex flex-col h-screen" style={{ background: "#0d1117" }}>
+      {/* Header mobile */}
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3"
+        style={{ background: "#161b22", borderBottom: "1px solid #30363d" }}>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-sm"
+            style={{ background: "#003b26" }}>O+</div>
+          <div>
+            <p className="text-white font-black text-sm">OBRA10+</p>
+            <p className="text-xs" style={{ color: "#c9a24a", fontSize: "9px" }}>ESCRITÓRIO VIRTUAL</p>
+          </div>
+        </div>
+        {metricas.aprovacoesPendentes > 0 && (
+          <button onClick={() => router.push("/crm/aprovacoes")}
+            className="px-2 py-1 rounded-full text-xs font-bold"
+            style={{ background: "#b3261e", color: "white" }}>
+            🔴 {metricas.aprovacoesPendentes} crítico(s)
+          </button>
+        )}
+      </div>
+
+      {/* CANVAS MOBILE — escritório SVG + agentes */}
+      <div className="relative flex-shrink-0 overflow-hidden" style={{ maxHeight: "45vh" }}>
+        <img src="/sprites/bg-office.svg" alt="Escritório"
+          className="w-full h-full object-cover"
+          onError={e => { (e.target as HTMLImageElement).style.opacity = "0.1"; }} />
+        <div className="absolute inset-0" style={{
+          background: "radial-gradient(ellipse at center, transparent 20%, rgba(13,17,23,0.8) 100%)"
+        }} />
+
+        {/* Agentes no mobile */}
+        {agentes.slice(0, 4).map((ag, i) => {
+          const posicoes = [
+            { x: "25%", y: "35%" }, { x: "45%", y: "55%" },
+            { x: "65%", y: "35%" }, { x: "75%", y: "60%" },
+          ];
+          const pos = posicoes[i] || posicoes[0];
+          const cores: Record<string, string> = {
+            sdr: "#60a5fa", atendente: "#c9a24a",
+            gerente_atendimento: "#c0c0c0", diretor: "#a78bfa",
+          };
+          const cor = cores[ag.agente_slug] || "#c9a24a";
+          return (
+            <div key={ag.agente_slug}
+              className="absolute flex flex-col items-center gap-0.5 cursor-pointer"
+              style={{ left: pos.x, top: pos.y, transform: "translate(-50%,-50%)" }}
+              onClick={() => router.push(`/crm/agentes/${ag.agente_slug}`)}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black"
+                style={{ background: `radial-gradient(circle, ${cor}88, #0d1117)`, border: `1.5px solid ${cor}`, boxShadow: `0 0 10px ${cor}66` }}>
+                {ag.nome.charAt(0)}
+              </div>
+              <p className="text-xs font-bold px-1 rounded" style={{ color: cor, background: "rgba(13,17,23,0.8)", fontSize: "8px" }}>
+                {ag.nome}
+              </p>
+            </div>
+          );
+        })}
+
+        {/* Leads no mobile */}
+        {leads.slice(0, 5).map((lead, i) => {
+          const mins = (Date.now() - new Date(lead.atualizado_em).getTime()) / 60000;
+          const cor = mins > 15 ? "#b3261e" : mins > 5 ? "#c9a24a" : "#003b26";
+          const posX = 15 + (i * 18);
+          return (
+            <div key={lead.id}
+              className="absolute flex flex-col items-center gap-0.5 cursor-pointer"
+              style={{ left: `${posX}%`, bottom: "10%", transform: "translateX(-50%)" }}
+              onClick={() => router.push(`/crm/leads/${lead.id}`)}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white"
+                style={{ background: `radial-gradient(circle, ${cor}66, #0d1117)`, border: `1.5px solid ${cor}` }}>
+                {lead.nome.charAt(0)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Métricas rápidas */}
+      <div className="flex-shrink-0 grid grid-cols-4 gap-0"
+        style={{ borderTop: "1px solid #30363d", borderBottom: "1px solid #30363d" }}>
+        {[
+          { label: "Leads", valor: leads.length, rota: "/crm/leads", cor: "#c9a24a" },
+          { label: "Aguard.", valor: metricas.leadsAguardando, rota: "/crm/atendimento", cor: metricas.leadsAguardando > 0 ? "#c9a24a" : "#8b949e" },
+          { label: "Mensagens", valor: 0, rota: "/crm/atendimento", cor: "#8b949e" },
+          { label: "Aprovações", valor: metricas.aprovacoesPendentes, rota: "/crm/aprovacoes", cor: metricas.aprovacoesPendentes > 0 ? "#b3261e" : "#8b949e" },
+        ].map((m, i) => (
+          <button key={m.label} onClick={() => router.push(m.rota)}
+            className="flex flex-col items-center py-3"
+            style={{ borderRight: i < 3 ? "1px solid #30363d" : "none", background: "#161b22" }}>
+            <p className="text-lg font-black leading-none" style={{ color: m.cor }}>{m.valor}</p>
+            <p className="text-xs mt-0.5" style={{ color: "#484f58" }}>{m.label}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Leads recentes */}
+      <div className="flex-1 overflow-y-auto px-3 py-2">
+        <p className="text-xs font-black mb-2" style={{ color: "#c9a24a", letterSpacing: "0.08em" }}>LEADS ATIVOS</p>
+        <div className="space-y-2">
+          {leads.length === 0 ? (
+            <p className="text-xs text-center py-4" style={{ color: "#484f58" }}>Nenhum lead ativo</p>
+          ) : leads.slice(0, 6).map(lead => {
+            const mins = (Date.now() - new Date(lead.atualizado_em).getTime()) / 60000;
+            const cor = mins > 15 ? "#b3261e" : mins > 5 ? "#c9a24a" : "#003b26";
+            const tempo = mins < 1 ? "agora" : mins < 60 ? `${Math.round(mins)}min` : `${Math.round(mins / 60)}h`;
+            return (
+              <button key={lead.id}
+                onClick={() => router.push(`/crm/leads/${lead.id}`)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left"
+                style={{ background: "#161b22", border: `1px solid #30363d`, borderLeft: `3px solid ${cor}` }}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-sm flex-shrink-0"
+                  style={{ background: `${cor}33`, border: `1px solid ${cor}` }}>
+                  {lead.nome.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-sm truncate">{lead.nome}</p>
+                  <p className="text-xs truncate" style={{ color: "#484f58" }}>{lead.estagio} · {lead.origem}</p>
+                </div>
+                <span className="text-xs font-bold flex-shrink-0" style={{ color: cor }}>{tempo}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Bottom nav */}
+      <div className="flex-shrink-0 flex"
+        style={{ background: "#161b22", borderTop: "1px solid #30363d", paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
+        {[
+          { icon: "🏢", label: "Office", rota: "/office" },
+          { icon: "👥", label: "Leads", rota: "/crm/leads" },
+          { icon: "💬", label: "Chat", rota: "/crm/atendimento" },
+          { icon: "✅", label: "Aprov.", rota: "/crm/aprovacoes" },
+          { icon: "🤖", label: "Agentes", rota: "/crm/agentes" },
+        ].map(tab => (
+          <button key={tab.rota} onClick={() => router.push(tab.rota)}
+            className="flex-1 flex flex-col items-center py-2 gap-0.5"
+            style={{ color: "#484f58" }}>
+            <span className="text-xl">{tab.icon}</span>
+            <span className="text-xs">{tab.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OfficePage() {
   const router = useRouter();
   const [isMobile, setIsMobile] = useState(false);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agentes, setAgentes] = useState<Agente[]>([]);
-  const [metricas, setMetricas] = useState({ leadsAguardando: 0, aprovacoesPendentes: 0 });
+  const [metricas, setMetricas] = useState({ leadsAguardando: 0, aprovacoesPendentes: 0, leadsHoje: 0 });
   const [modoVisual, setModoVisual] = useState<"escritorio" | "analytics">("escritorio");
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
   const [transitioning, setTransitioning] = useState(false);
@@ -77,9 +232,11 @@ export default function OfficePage() {
 
     if (l.data) setLeads(l.data as Lead[]);
     if (a.data) setAgentes(a.data as Agente[]);
+    const hoje = new Date().toDateString();
     setMetricas({
       leadsAguardando: (l.data || []).filter(x => !x.humano_responsavel).length,
       aprovacoesPendentes: aprov.count || 0,
+      leadsHoje: (l.data || []).filter(x => new Date(x.criado_em).toDateString() === hoje).length,
     });
   }, []);
 
@@ -98,7 +255,7 @@ export default function OfficePage() {
     setTimeout(() => { setModoVisual(modo); setTransitioning(false); }, 200);
   }
 
-  if (isMobile) return <MobileExperience />;
+  if (isMobile) return <MobileOfficeView leads={leads} agentes={agentes} metricas={metricas} />;
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "#0d1117" }}>
@@ -216,11 +373,24 @@ export default function OfficePage() {
 
             {/* Fundo */}
             <div className="absolute inset-0">
-              <img src="/sprites/bg-office.png" alt="Escritório"
+              <img
+                src="/sprites/bg-office.svg"
+                alt="Escritório"
                 className="w-full h-full object-cover"
-                onError={e => { (e.target as HTMLImageElement).style.opacity = "0.2"; }} />
-              <div className="absolute inset-0 canvas-vignette" />
-              <div className="absolute inset-0" style={{ background: "rgba(13,17,23,0.35)" }} />
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  const fallbacks = ["/sprites/office-bg.png", "/sprites/bg-office.png", "/sprites/office-bg.jpg"];
+                  const idx = parseInt(img.dataset.attempt || "0");
+                  if (idx < fallbacks.length) {
+                    img.dataset.attempt = String(idx + 1);
+                    img.src = fallbacks[idx];
+                  } else {
+                    img.style.display = "none";
+                  }
+                }}
+              />
+              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 30%, rgba(13,17,23,0.75) 100%)" }} />
+              <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(13,17,23,0.25)" }} />
             </div>
 
             {/* Agentes */}

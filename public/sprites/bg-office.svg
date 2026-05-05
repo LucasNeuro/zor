@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <rect width="1200" height="800" fill="#0d1117"/>
+
+  <!-- Grid isométrico -->
+  <defs>
+    <pattern id="iso" width="80" height="46" patternUnits="userSpaceOnUse">
+      <path d="M40 0 L80 23 L40 46 L0 23 Z" fill="none" stroke="#003b26" stroke-width="0.6" opacity="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="800" fill="url(#iso)"/>
+
+  <!-- SALA DIRETORIA - topo esquerda -->
+  <polygon points="80,230 280,150 460,230 280,310" fill="#0a1f14" stroke="#c9a24a" stroke-width="1" opacity="0.8"/>
+  <polygon points="80,230 80,330 280,410 280,310" fill="#071510" stroke="#003b26" stroke-width="0.8"/>
+  <polygon points="280,310 460,230 460,330 280,410" fill="#081610" stroke="#003b26" stroke-width="0.8"/>
+  <text x="280" y="235" text-anchor="middle" fill="#c9a24a" font-size="10" font-family="monospace" font-weight="bold">DIRETORIA</text>
+
+  <!-- SALA GERÊNCIA - topo centro -->
+  <polygon points="440,210 640,130 820,210 640,290" fill="#0a1f14" stroke="#c9a24a" stroke-width="1" opacity="0.8"/>
+  <polygon points="440,210 440,310 640,390 640,290" fill="#071510" stroke="#003b26" stroke-width="0.8"/>
+  <polygon points="640,290 820,210 820,310 640,390" fill="#081610" stroke="#003b26" stroke-width="0.8"/>
+  <text x="640" y="215" text-anchor="middle" fill="#c9a24a" font-size="10" font-family="monospace" font-weight="bold">GERÊNCIA</text>
+
+  <!-- SALA TRÁFEGO - topo direita -->
+  <polygon points="760,230 960,150 1120,230 960,310" fill="#0a1f14" stroke="#c9a24a" stroke-width="1" opacity="0.8"/>
+  <polygon points="760,230 760,330 960,410 960,310" fill="#071510" stroke="#003b26" stroke-width="0.8"/>
+  <polygon points="960,310 1120,230 1120,330 960,410" fill="#081610" stroke="#003b26" stroke-width="0.8"/>
+  <text x="960" y="235" text-anchor="middle" fill="#c9a24a" font-size="10" font-family="monospace" font-weight="bold">TRÁFEGO</text>
+
+  <!-- SALA COPY - meio esquerda -->
+  <polygon points="60,390 260,310 440,390 260,470" fill="#0a1f14" stroke="#a78bfa" stroke-width="1" opacity="0.7"/>
+  <polygon points="60,390 60,490 260,570 260,470" fill="#0d1020" stroke="#a78bfa" stroke-width="0.8" opacity="0.7"/>
+  <polygon points="260,470 440,390 440,490 260,570" fill="#0e1122" stroke="#a78bfa" stroke-width="0.8" opacity="0.7"/>
+  <text x="260" y="395" text-anchor="middle" fill="#a78bfa" font-size="10" font-family="monospace" font-weight="bold">COPY LAB</text>
+
+  <!-- SALA ATENDIMENTO - meio centro (destaque) -->
+  <polygon points="390,420 590,340 790,420 590,500" fill="#0d2016" stroke="#c9a24a" stroke-width="2" opacity="0.95"/>
+  <polygon points="390,420 390,520 590,600 590,500" fill="#0a1a10" stroke="#c9a24a" stroke-width="1.2"/>
+  <polygon points="590,500 790,420 790,520 590,600" fill="#0b1b12" stroke="#c9a24a" stroke-width="1.2"/>
+  <text x="590" y="425" text-anchor="middle" fill="#c9a24a" font-size="11" font-family="monospace" font-weight="bold">ATENDIMENTO</text>
+  <!-- Glow no atendimento -->
+  <ellipse cx="590" cy="470" rx="200" ry="80" fill="#c9a24a" opacity="0.02"/>
+
+  <!-- SALA DESIGN - meio direita -->
+  <polygon points="740,390 940,310 1100,390 940,470" fill="#0a1f14" stroke="#f59e0b" stroke-width="1" opacity="0.7"/>
+  <polygon points="740,390 740,490 940,570 940,470" fill="#1a1205" stroke="#f59e0b" stroke-width="0.8" opacity="0.7"/>
+  <polygon points="940,470 1100,390 1100,490 940,570" fill="#1a1305" stroke="#f59e0b" stroke-width="0.8" opacity="0.7"/>
+  <text x="940" y="395" text-anchor="middle" fill="#f59e0b" font-size="10" font-family="monospace" font-weight="bold">DESIGN</text>
+
+  <!-- RECEPÇÃO LEADS - baixo centro (destaque máximo) -->
+  <polygon points="380,590 590,510 800,590 590,670" fill="#0f2518" stroke="#c9a24a" stroke-width="2.5"/>
+  <polygon points="380,590 380,670 590,750 590,670" fill="#0a1c10" stroke="#c9a24a" stroke-width="1.5"/>
+  <polygon points="590,670 800,590 800,670 590,750" fill="#0b1e12" stroke="#c9a24a" stroke-width="1.5"/>
+  <text x="590" y="596" text-anchor="middle" fill="#c9a24a" font-size="13" font-family="monospace" font-weight="bold">RECEPÇÃO</text>
+  <text x="590" y="614" text-anchor="middle" fill="#8b949e" font-size="9" font-family="monospace">leads aguardando atendimento</text>
+  <!-- Glow recepção -->
+  <ellipse cx="590" cy="630" rx="220" ry="70" fill="#c9a24a" opacity="0.03"/>
+
+  <!-- Detalhes: mesas -->
+  <ellipse cx="280" cy="270" rx="35" ry="16" fill="#003b26" opacity="0.5"/>
+  <ellipse cx="640" cy="250" rx="35" ry="16" fill="#003b26" opacity="0.5"/>
+  <ellipse cx="520" cy="470" rx="40" ry="18" fill="#003b26" opacity="0.5"/>
+  <ellipse cx="650" cy="465" rx="40" ry="18" fill="#003b26" opacity="0.5"/>
+
+  <!-- Vinheta nas bordas -->
+  <defs>
+    <radialGradient id="vig" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0d1117" stop-opacity="0"/>
+      <stop offset="85%" stop-color="#0d1117" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0d1117" stop-opacity="0.9"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#vig)"/>
+</svg>

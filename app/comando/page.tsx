@@ -1,5 +1,5 @@
 "use client";
-import { DecisionPanel } from "@/components/office/DecisionPanel";
+import DecisionPanel from "@/components/office/DecisionPanel";
 
 export default function ComandoPage() {
   return (

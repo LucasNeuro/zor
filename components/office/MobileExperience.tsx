@@ -398,7 +398,7 @@ function MenuOverlay({
         {/* MÉTRICAS */}
         <div style={{ display: "flex", gap: 8, marginTop: 12, overflowX: "auto", paddingBottom: 4 }}>
           {[
-            { label: "Online", valor: metricas.online || 18, rota: "/crm/agentes" },
+            { label: "Online", valor: metricas.online, rota: "/crm/agentes" },
             { label: "Conversas", valor: metricas.conversas || 0, rota: "/crm/atendimento" },
             { label: "Pendentes", valor: metricas.aprovacoes || 0, rota: "/crm/aprovacoes" },
             { label: "Leads", valor: metricas.leads || 0, rota: "/crm/leads" },
@@ -465,7 +465,7 @@ export default function MobileExperience() {
     conversas: hookMetricas.conversasAtivas,
     aprovacoes: hookMetricas.aprovacoesPendentes,
     leads: hookMetricas.leadsHoje,
-    online: hookMetricas.agentesAtivos || 18,
+    online: hookMetricas.agentesAtivos,
   };
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastScrollY = useRef(0);

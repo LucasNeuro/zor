@@ -1,360 +1,357 @@
 "use client";
-
-import { useState, useCallback, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { OfficeCanvas, Agent } from "@/components/office/OfficeCanvas";
-import { AgentBubble } from "@/components/office/AgentBubble";
-import { AgentLogPanel } from "@/components/office/AgentLogPanel";
-import { ToastAlert } from "@/components/office/ToastAlert";
-import { LivePulse } from "@/components/office/LivePulse";
-import { CommandTop } from "@/components/office/CommandTop";
-import { CriticalStrip } from "@/components/office/CriticalStrip";
-import { DynamicKpis } from "@/components/office/DynamicKpis";
-import { ContextMenu } from "@/components/office/ContextMenu";
-import { DecisionPanel } from "@/components/office/DecisionPanel";
-import { AgentsDrawer } from "@/components/office/AgentsDrawer";
-import { OfficeFilters, type FiltroCanvas } from "@/components/office/OfficeFilters";
-import { DetailModal } from "@/components/office/DetailModal";
-import Lead360Drawer from "@/components/office/Lead360Drawer";
-import Partner360Drawer from "@/components/office/Partner360Drawer";
-import CriticalActionModal, { type CriticalActionModalProps } from "@/components/office/CriticalActionModal";
-import MobileExperience from "@/components/office/MobileExperience";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+import DecisionPanel from "@/components/office/DecisionPanel";
 import LiveMessageFeed from "@/components/office/LiveMessageFeed";
-import { useOfficeLife } from "@/hooks/useOfficeLife";
-import { useAlerts } from "@/hooks/useAlerts";
-import { useBreakpoint } from "@/hooks/useBreakpoint";
-import { useMetricas } from "@/hooks/useMetricas";
-import ContextSlidePanel from "@/components/office/ContextSlidePanel";
-import { SidebarPanel } from "@/components/office/SidebarPanel";
-import { useSupabaseLeads, type LeadComPessoa } from "@/hooks/useSupabaseLeads";
-import { type LiveLead } from "@/lib/data/live-leads";
-import { getLeadById } from "@/lib/data/leads-mock";
-import { getPartnerById } from "@/lib/data/partners-mock";
-import type { AgentState } from "@/lib/agent-states";
-import agentsData from "@/lib/data/agents-mock.json";
+import MobileExperience from "@/components/office/MobileExperience";
 
-const agents: Agent[] = agentsData.agents as Agent[];
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-type Visao = "geral" | "atendimento" | "trafego" | "conteudo" | "sites" | "agentes" | "governanca" | "relatorios";
+// Agentes REAIS do banco — slugs fixos
+const AGENTES_CANVAS = [
+  { slug: "sdr", label: "SDR", x: 505, y: 568, cor: "#003b26" },
+  { slug: "atendente", label: "Atendente", x: 460, y: 640, cor: "#003b26" },
+  { slug: "gerente_atendimento", label: "Gerente", x: 840, y: 295, cor: "#c9a24a" },
+  { slug: "ariane", label: "Diretora", x: 460, y: 340, cor: "#c9a24a" },
+];
 
-function NotificationToast({ message }: { message: string }) {
-  return (
-    <div
-      className="pointer-events-none fixed bottom-6 left-1/2 z-[9999] -translate-x-1/2 rounded-2xl px-5 py-3 shadow-2xl"
-      style={{
-        background: "rgba(4,8,20,0.96)",
-        border: "1px solid rgba(34,197,94,0.35)",
-        backdropFilter: "blur(12px)",
-        animation: "fadeSlideUp 0.3s ease",
-        maxWidth: "520px",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <p className="text-center text-[13px] font-medium" style={{ color: "#f0fdf4" }}>
-        {message}
-      </p>
-    </div>
-  );
+interface Lead {
+  id: string;
+  nome: string;
+  telefone?: string;
+  estagio: string;
+  valor_estimado: number;
+  agente_responsavel?: string;
+  humano_responsavel?: string;
+  origem: string;
+  criado_em: string;
+  atualizado_em: string;
+  metadata?: Record<string, unknown>;
 }
 
-function getTituloDoPainel(painel: string): { titulo: string; subtitulo: string; cor: string } {
-  const map: Record<string, { titulo: string; subtitulo: string; cor: string }> = {
-    funil_leads: { titulo: "Funil de Leads", subtitulo: "Entradas de hoje", cor: "#22c55e" },
-    pipeline_crm: { titulo: "Pipeline CRM", subtitulo: "Leads ativos", cor: "#60a5fa" },
-    fila_whatsapp: { titulo: "Aguardando Resposta", subtitulo: "Leads sem atendimento humano", cor: "#c9a24a" },
-    conversas_ativas: { titulo: "Conversas Ativas", subtitulo: "Atendimentos em andamento", cor: "#22c55e" },
-    sla_monitor: { titulo: "SLA Monitor", subtitulo: "Tempos de resposta", cor: "#a78bfa" },
-    aprovacoes_pendentes: { titulo: "Aprovações Pendentes", subtitulo: "Decisões aguardando você", cor: "#ef4444" },
-    ias_ativas: { titulo: "Equipe Online", subtitulo: "Agentes em operação", cor: "#34d399" },
-    equipe_online: { titulo: "Equipe Online", subtitulo: "Agentes em operação", cor: "#34d399" },
-    logs_decisao: { titulo: "Histórico", subtitulo: "Registro de decisões", cor: "#8b949e" },
-    custos_ia: { titulo: "Custos IA", subtitulo: "Consumo e gastos", cor: "#f59e0b" },
-  };
-  return map[painel] ?? { titulo: painel.replace(/_/g, " "), subtitulo: "", cor: "#c9a24a" };
+interface Agente {
+  agente_slug: string;
+  nome: string;
+  cargo: string;
+  nivel: number;
+  ativo: boolean;
 }
 
-function OfficePageInner() {
-  const searchParams = useSearchParams();
-  const isTvMode = searchParams.get("mode") === "tv";
+interface Metricas {
+  leadsAguardando: number;
+  aprovacoesPendentes: number;
+  conversasAtivas: number;
+  leadsHoje: number;
+}
 
-  const [visao, setVisao] = useState<Visao>("geral");
-  const [filtroCanvas, setFiltroCanvas] = useState<FiltroCanvas>("todos");
-  const [modoTV, setModoTV] = useState(isTvMode);
-  const [agentsDrawerAberto, setAgentsDrawerAberto] = useState(false);
+function tempoRelativo(data: string) {
+  const diff = (Date.now() - new Date(data).getTime()) / 60000;
+  if (diff < 1) return "agora";
+  if (diff < 60) return `${Math.round(diff)}min`;
+  return `${Math.round(diff / 60)}h`;
+}
 
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [hoveredAgent, setHoveredAgent] = useState<Agent | null>(null);
-  const [hoveredState, setHoveredState] = useState<AgentState>("trabalhando");
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [detailModal, setDetailModal] = useState<string | null>(null);
-  const [leadDrawerId, setLeadDrawerId] = useState<string | null>(null);
-  const [partnerDrawerId, setPartnerDrawerId] = useState<string | null>(null);
-  const [criticalModal, setCriticalModal] = useState<Omit<CriticalActionModalProps, "onConfirm" | "onCancel"> & { onConfirm: (j: string, a?: string) => void } | null>(null);
-  const [selectedLiveLead, setSelectedLiveLead] = useState<LiveLead | null>(null);
-
-  const bp = useBreakpoint();
-  const router = useRouter();
-  const metricas = useMetricas();
-  const [painelAtivo, setPainelAtivo] = useState<string | null>(null);
-  const { leads: supaLeads, avancarFase: avancarFaseDB } = useSupabaseLeads();
-
-  const HUB_FASE_TO_CANVAS: Record<string, LiveLead["fase"]> = {
-    entrada: "entrando", espera: "aguardando", qualificacao: "qualificando",
-    apresentacao: "qualificado", negociacao: "match_realizado",
-    fechamento: "match_realizado", pos_venda: "saindo",
-    perdido: "frio", ganho: "saindo",
-  };
-
-  const leads: LiveLead[] = supaLeads.map((l: LeadComPessoa) => ({
-    id: l.id,
-    numero: l.numero_visual,
-    nome: l.hub_pessoas?.nome ?? "Lead",
-    nome_curto: (l.hub_pessoas?.nome ?? "Lead").split(" ").slice(0, 2).join(" "),
-    valor_estimado: l.valor_estimado ?? 0,
-    tipo: (l.tipo === "imobiliario" ? "mercado_imobiliario" : l.tipo) as LiveLead["tipo"],
-    fase: HUB_FASE_TO_CANVAS[l.fase] ?? "aguardando",
-    sala_atual: (l.sala_canvas ?? "waiting_area") as LiveLead["sala_atual"],
-    sala_destino: null,
-    posicao: { x: l.posicao_x ?? 488, y: l.posicao_y ?? 482 },
-    posicao_destino: null,
-    tempo_na_fase_ms: 0,
-    sla_target_ms: (l.sla_horas ?? 5) * 3600000,
-    agente_responsavel_id: l.atendente_id,
-    agente_responsavel_nome: l.atendente_id ? "SDR Alpha" : null,
-    ultima_mensagem: null,
-    mensagem_visivel: false,
-    score_prioridade: l.score ?? 50,
-    canal: "organico" as LiveLead["canal"],
-    categoria: l.tipo,
-    created_at: new Date(l.criado_em),
-    movendo: false,
-  }));
-
-  const avancarFase = useCallback((leadId: string) => {
-    const raw = supaLeads.find((l) => l.id === leadId);
-    if (!raw) return;
-    const faseMap: Record<string, import("@/lib/supabase/client").HubLead["fase"]> = {
-      espera: "qualificacao", qualificacao: "apresentacao",
-      apresentacao: "negociacao", negociacao: "fechamento",
-    };
-    const novaFase = faseMap[raw.fase];
-    if (novaFase) avancarFaseDB(leadId, novaFase, raw.sala_canvas).catch(console.error);
-  }, [supaLeads, avancarFaseDB]);
-
-  const removerLead = useCallback((_leadId: string) => {}, []);
-  const marcarCritico = useCallback((_leadId: string) => {}, []);
-
-  const {
-    posOverridesRef, packetsRef, statesRef, stateTimestampsRef,
-    particlesRef, connectionsRef, notification,
-  } = useOfficeLife(agents);
-
-  const { newAlert, dismissNew } = useAlerts();
-
-  const handleHover = useCallback((agent: Agent, mx: number, my: number) => {
-    setHoveredAgent(agent);
-    setHoveredState(statesRef.current[agent.id] ?? "trabalhando");
-    setMousePos({ x: mx, y: my });
-  }, [statesRef]);
-
-  const handleLeave = useCallback(() => setHoveredAgent(null), []);
-
-  const handleClick = useCallback((agent: Agent) => {
-    setHoveredAgent(null);
-    setSelectedAgent((prev) => (prev?.id === agent.id ? null : agent));
-  }, []);
-
-  const sharedOverlays = (
-    <>
-      {selectedAgent && (
-        <AgentLogPanel agent={selectedAgent} onClose={() => setSelectedAgent(null)} />
-      )}
-      {detailModal && (
-        <DetailModal area={detailModal} onClose={() => setDetailModal(null)} />
-      )}
-      {leadDrawerId && (() => {
-        const lead = getLeadById(leadDrawerId);
-        return lead ? <Lead360Drawer lead={lead} onClose={() => setLeadDrawerId(null)} /> : null;
-      })()}
-      {selectedLiveLead && (
-        <Lead360Drawer
-          lead={{
-            id: selectedLiveLead.id,
-            numero: selectedLiveLead.numero,
-            nome: selectedLiveLead.nome,
-            telefone: "—",
-            email: "—",
-            cidade: "São Paulo",
-            estado: "SP",
-            origem: selectedLiveLead.canal === "meta_ads" ? "Meta Ads" : selectedLiveLead.canal === "google_ads" ? "Google Ads" : selectedLiveLead.canal === "indicacao" ? "Indicação" : "Orgânico",
-            campanha: selectedLiveLead.canal,
-            status: selectedLiveLead.fase === "critico" ? "em_contato" : selectedLiveLead.fase === "qualificado" || selectedLiveLead.fase === "match_realizado" ? "qualificado" : "em_contato",
-            intencao: selectedLiveLead.categoria === "reforma_completa" ? "reforma_completa" : selectedLiveLead.categoria === "construcao" ? "construcao" : selectedLiveLead.categoria === "decoracao" || selectedLiveLead.categoria === "marcenaria" ? "decoracao" : "reforma_parcial",
-            urgencia: "1_3_meses",
-            categoria: selectedLiveLead.valor_estimado >= 60000 ? "alto_valor" : selectedLiveLead.valor_estimado >= 30000 ? "medio_valor" : "baixo_valor",
-            orcamento_estimado: selectedLiveLead.valor_estimado,
-            descricao_projeto: selectedLiveLead.ultima_mensagem?.texto ?? "Lead ativo no escritório virtual.",
-            prioridade: selectedLiveLead.score_prioridade,
-            sla_tempo: Math.floor(selectedLiveLead.tempo_na_fase_ms / 60000),
-            sla_meta: Math.floor(selectedLiveLead.sla_target_ms / 60000),
-            fit_score: selectedLiveLead.score_prioridade,
-            proxima_acao: selectedLiveLead.fase === "critico" ? "Acionar SDR imediatamente — SLA estourado" : "Continuar qualificação",
-            notas: `Lead em fase: ${selectedLiveLead.fase}. Responsável: ${selectedLiveLead.agente_responsavel_nome ?? "Não atribuído"}.`,
-            historico: selectedLiveLead.ultima_mensagem ? [{
-              tipo: selectedLiveLead.ultima_mensagem.de === "agente" ? "ligacao" as const : "whatsapp" as const,
-              texto: selectedLiveLead.ultima_mensagem.texto,
-              agente: selectedLiveLead.ultima_mensagem.agente_nome ?? selectedLiveLead.nome,
-              timestamp: selectedLiveLead.ultima_mensagem.timestamp.toISOString(),
-            }] : [],
-            criado_em: selectedLiveLead.created_at.toISOString(),
-            atualizado_em: new Date().toISOString(),
-          }}
-          onClose={() => setSelectedLiveLead(null)}
-          onAction={(acao) => {
-            if (acao === "realizar_match") avancarFase(selectedLiveLead.id);
-            if (acao === "marcar_perdido") removerLead(selectedLiveLead.id);
-            if (acao === "escalar") marcarCritico(selectedLiveLead.id);
-            setSelectedLiveLead(null);
-          }}
-        />
-      )}
-      {partnerDrawerId && (() => {
-        const partner = getPartnerById(partnerDrawerId);
-        return partner ? <Partner360Drawer partner={partner} onClose={() => setPartnerDrawerId(null)} /> : null;
-      })()}
-      {criticalModal && (
-        <CriticalActionModal
-          {...criticalModal}
-          onConfirm={(j, a) => { criticalModal.onConfirm(j, a); setCriticalModal(null); }}
-          onCancel={() => setCriticalModal(null)}
-        />
-      )}
-      {notification && <NotificationToast message={notification} />}
-      <ToastAlert alert={newAlert} onDismiss={dismissNew} />
-    </>
-  );
-
-  if (bp === "mobile") {
-    return <MobileExperience />;
-  }
-
-  /* TV MODE */
-  if (modoTV) {
-    return (
-      <div style={{ width: "100vw", height: "100vh", background: "#0f172a", display: "flex", flexDirection: "column" }}>
-        <div style={{ height: 52, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 8px #22c55e" }} />
-            <span style={{ color: "#22c55e", fontWeight: 700, fontSize: 16 }}>obra10+</span>
-            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Command Office — ao vivo</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <LivePulse />
-            <button
-              onClick={() => setModoTV(false)}
-              style={{ padding: "6px 14px", borderRadius: 6, background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", fontSize: 12, cursor: "pointer" }}
-            >
-              ✕ Sair do Modo TV
-            </button>
-          </div>
-        </div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
-          <OfficeCanvas
-            agents={agents} selectedId={null} onAgentClick={() => {}}
-            posOverridesRef={posOverridesRef} packetsRef={packetsRef}
-            statesRef={statesRef} stateTimestampsRef={stateTimestampsRef}
-            particlesRef={particlesRef} connectionsRef={connectionsRef}
-          />
-        </div>
-        {notification && <NotificationToast message={notification} />}
-      </div>
-    );
-  }
-
-  /* NORMAL MODE */
-  return (
-    <div className="flex flex-col w-screen h-screen overflow-hidden bg-gray-950">
-
-      {/* CommandTop */}
-      <CommandTop
-        visao={visao}
-        onResolverAgora={() => setAgentsDrawerAberto(false)}
-        onAbrirAgentes={() => setAgentsDrawerAberto(true)}
-        onModoTV={() => setModoTV(true)}
-        modoTV={modoTV}
-      />
-
-      {/* CriticalStrip */}
-      <CriticalStrip />
-
-      {/* DynamicKpis */}
-      <DynamicKpis metricas={metricas} onNavegar={(href) => router.push(href)} />
-
-      {/* Body: 3 columns */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
-
-        {/* Left: ContextMenu (208px) */}
-        <div className="w-52 flex-shrink-0 overflow-hidden">
-          <ContextMenu metricas={metricas} onNavegar={(href) => router.push(href)} onItemClick={setPainelAtivo} />
-        </div>
-
-        {/* Center: Canvas + Filters */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <OfficeFilters filtro={filtroCanvas} onFiltroChange={setFiltroCanvas} />
-          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-            <OfficeCanvas
-              agents={agents}
-              selectedId={selectedAgent?.id ?? null}
-              onAgentClick={handleClick}
-              onAgentHover={handleHover}
-              onAgentLeave={handleLeave}
-              posOverridesRef={posOverridesRef}
-              packetsRef={packetsRef}
-              statesRef={statesRef}
-              stateTimestampsRef={stateTimestampsRef}
-              particlesRef={particlesRef}
-              connectionsRef={connectionsRef}
-              liveLeads={leads}
-              onLeadClick={setSelectedLiveLead}
-            />
-            {hoveredAgent && !selectedAgent && (
-              <AgentBubble agent={hoveredAgent} state={hoveredState} x={mousePos.x} y={mousePos.y} />
-            )}
-          </div>
-        </div>
-
-        {/* Right: DecisionPanel (288px) */}
-        <div className="w-72 flex-shrink-0 overflow-hidden" style={{ borderLeft: "1px solid #e0ddd6" }}>
-          <DecisionPanel />
-        </div>
-
-      </div>
-
-      {/* Agents overlay drawer */}
-      <AgentsDrawer
-        aberto={agentsDrawerAberto}
-        onFechar={() => setAgentsDrawerAberto(false)}
-        onAgenteClick={(agent) => {
-          setAgentsDrawerAberto(false);
-          handleClick(agent);
-        }}
-      />
-
-      <LiveMessageFeed />
-      {painelAtivo && (
-        <ContextSlidePanel aberto={true} onFechar={() => setPainelAtivo(null)} {...getTituloDoPainel(painelAtivo)}>
-          <SidebarPanel painel={painelAtivo} metricas={metricas} />
-        </ContextSlidePanel>
-      )}
-      {sharedOverlays}
-    </div>
-  );
+function urgenciaCor(data: string) {
+  const mins = (Date.now() - new Date(data).getTime()) / 60000;
+  if (mins > 15) return "#b3261e";
+  if (mins > 5) return "#c9a24a";
+  return "#003b26";
 }
 
 export default function OfficePage() {
+  const router = useRouter();
+  const [isMobile, setIsMobile] = useState(false);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [agentes, setAgentes] = useState<Agente[]>([]);
+  const [metricas, setMetricas] = useState<Metricas>({ leadsAguardando: 0, aprovacoesPendentes: 0, conversasAtivas: 0, leadsHoje: 0 });
+  const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const carregar = useCallback(async () => {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+
+    const [l, a, aprov, msgs] = await Promise.all([
+      supabase.from("hub_leads_crm").select("*")
+        .not("estagio", "in", '("ganho","perdido")')
+        .order("atualizado_em", { ascending: false })
+        .limit(20),
+      supabase.from("hub_agente_identidade").select("agente_slug, nome, cargo, nivel, ativo")
+        .eq("ativo", true).order("nivel"),
+      supabase.from("hub_aprovacoes").select("id", { count: "exact", head: true }).eq("status", "pendente"),
+      supabase.from("hub_fila_mensagens").select("id").eq("direcao", "entrada").eq("status", "pendente"),
+    ]);
+
+    if (l.data) setLeads(l.data as Lead[]);
+    if (a.data) setAgentes(a.data as Agente[]);
+
+    const todosLeads = l.data || [];
+    const aguardando = todosLeads.filter((x: Lead) => !x.humano_responsavel).length;
+    const leadsHoje = todosLeads.filter((x: Lead) => new Date(x.criado_em) >= hoje).length;
+
+    setMetricas({
+      leadsAguardando: aguardando,
+      aprovacoesPendentes: aprov.count || 0,
+      conversasAtivas: (msgs.data || []).length,
+      leadsHoje,
+    });
+  }, []);
+
+  useEffect(() => {
+    carregar();
+    const sub = supabase.channel("office-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_leads_crm" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_aprovacoes" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_fila_mensagens" }, carregar)
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [carregar]);
+
+  if (isMobile) return <MobileExperience />;
+
+  const SIDEBAR_ITENS = [
+    {
+      secao: "geral",
+      items: [
+        { id: "dashboard", label: "Dashboard", icon: "⚡", badge: 0, acao: () => router.push("/crm") },
+        { id: "pipeline", label: "Pipeline", icon: "👥", badge: metricas.leadsHoje, acao: () => router.push("/crm/leads") },
+        { id: "agentes", label: "Agentes", icon: "🤖", badge: agentes.length, acao: () => router.push("/crm/agentes") },
+      ]
+    },
+    {
+      secao: "atendimento",
+      items: [
+        { id: "aguardando", label: "Aguardando resposta", icon: "💬", badge: metricas.leadsAguardando, acao: () => router.push("/crm/atendimento") },
+        { id: "atendimento", label: "Atendimento ativo", icon: "🎧", badge: metricas.conversasAtivas, acao: () => router.push("/crm/atendimento") },
+      ]
+    },
+    {
+      secao: "decisoes",
+      items: [
+        { id: "aprovacoes", label: "Aprovações", icon: "✅", badge: metricas.aprovacoesPendentes, acao: () => router.push("/crm/aprovacoes") },
+      ]
+    },
+    {
+      secao: "configuracao",
+      items: [
+        { id: "novo_agente", label: "Novo agente", icon: "➕", badge: 0, acao: () => router.push("/crm/agentes/novo") },
+        { id: "parceiros", label: "Parceiros", icon: "🤝", badge: 0, acao: () => router.push("/crm/parceiros") },
+        { id: "contatos", label: "Notificações", icon: "🔔", badge: 0, acao: () => router.push("/crm/contatos") },
+      ]
+    },
+  ];
+
+  const SECAO_LABELS: Record<string, string> = {
+    geral: "GERAL",
+    atendimento: "ATENDIMENTO",
+    decisoes: "DECISÕES",
+    configuracao: "CONFIGURAÇÃO",
+  };
+
+  const POSICOES_LEADS = [
+    { x: 505, y: 660 }, { x: 620, y: 660 }, { x: 740, y: 660 },
+    { x: 860, y: 660 }, { x: 980, y: 660 }, { x: 505, y: 720 },
+    { x: 620, y: 720 }, { x: 740, y: 720 },
+  ];
+
   return (
-    <Suspense>
-      <OfficePageInner />
-    </Suspense>
+    <div className="flex h-screen overflow-hidden" style={{ background: "#0d1117" }}>
+
+      {/* SIDEBAR ESQUERDA */}
+      <div className="flex-shrink-0 flex flex-col" style={{ width: "220px", background: "#161b22", borderRight: "1px solid #30363d" }}>
+        {/* LOGO */}
+        <div className="px-4 py-4" style={{ borderBottom: "1px solid #30363d" }}>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-sm" style={{ background: "#003b26" }}>O+</div>
+            <div>
+              <p className="text-white font-black text-sm leading-none">OBRA10+</p>
+              <p className="text-xs leading-none" style={{ color: "#8b949e" }}>Escritório</p>
+            </div>
+          </div>
+        </div>
+
+        {/* MÉTRICAS REAIS */}
+        <div className="grid grid-cols-2 gap-2 p-3" style={{ borderBottom: "1px solid #30363d" }}>
+          <button onClick={() => router.push("/crm/leads")}
+            className="rounded-lg p-2 text-left transition-colors hover:opacity-80"
+            style={{ background: metricas.leadsAguardando > 0 ? "#c9a24a22" : "#21262d", border: `1px solid ${metricas.leadsAguardando > 0 ? "#c9a24a44" : "#30363d"}` }}>
+            <p className="text-xs" style={{ color: "#8b949e" }}>Aguardando</p>
+            <p className="font-black text-lg leading-none" style={{ color: metricas.leadsAguardando > 0 ? "#c9a24a" : "#e6edf3" }}>
+              {metricas.leadsAguardando}
+            </p>
+          </button>
+          <button onClick={() => router.push("/crm/aprovacoes")}
+            className="rounded-lg p-2 text-left transition-colors hover:opacity-80"
+            style={{ background: metricas.aprovacoesPendentes > 0 ? "#b3261e22" : "#21262d", border: `1px solid ${metricas.aprovacoesPendentes > 0 ? "#b3261e44" : "#30363d"}` }}>
+            <p className="text-xs" style={{ color: "#8b949e" }}>Aprovações</p>
+            <p className="font-black text-lg leading-none" style={{ color: metricas.aprovacoesPendentes > 0 ? "#b3261e" : "#e6edf3" }}>
+              {metricas.aprovacoesPendentes}
+            </p>
+          </button>
+        </div>
+
+        {/* NAVEGAÇÃO */}
+        <div className="flex-1 overflow-y-auto py-2">
+          {SIDEBAR_ITENS.map(secao => (
+            <div key={secao.secao} className="mb-3">
+              <p className="px-4 py-1 text-xs font-bold tracking-wider" style={{ color: "#484f58" }}>
+                {SECAO_LABELS[secao.secao]}
+              </p>
+              {secao.items.map(item => (
+                <button key={item.id} onClick={item.acao}
+                  className="w-full flex items-center justify-between px-4 py-2 text-left transition-colors hover:bg-white hover:bg-opacity-5"
+                  style={{ color: "#8b949e" }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{item.icon}</span>
+                    <span className="text-sm">{item.label}</span>
+                  </div>
+                  {item.badge > 0 && (
+                    <span className="text-xs px-1.5 py-0.5 rounded-full font-bold"
+                      style={{
+                        background: item.id === "aprovacoes" ? "#b3261e" : "#003b26",
+                        color: item.id === "aprovacoes" ? "white" : "#c9a24a",
+                        minWidth: "20px", textAlign: "center",
+                      }}>
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* LINK CRM BOTTOM */}
+        <div className="p-3" style={{ borderTop: "1px solid #30363d" }}>
+          <button onClick={() => router.push("/crm")} className="w-full py-2 rounded-xl text-xs font-bold transition-colors"
+            style={{ background: "#003b26", color: "#c9a24a" }}>
+            Abrir CRM completo →
+          </button>
+        </div>
+      </div>
+
+      {/* CANVAS PRINCIPAL */}
+      <div className="flex-1 relative overflow-hidden">
+
+        {/* IMAGEM DE FUNDO */}
+        <div className="absolute inset-0">
+          <img src="/sprites/bg-office.png" alt="Escritório"
+            className="w-full h-full object-cover"
+            onError={e => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
+          <div className="absolute inset-0" style={{ background: "rgba(13,17,23,0.4)" }} />
+        </div>
+
+        {/* AGENTES REAIS NO CANVAS */}
+        {AGENTES_CANVAS.map(pos => {
+          const agente = agentes.find(a => a.agente_slug === pos.slug);
+          if (!agente) return null;
+          return (
+            <button key={pos.slug}
+              onClick={() => router.push(`/crm/agentes/${pos.slug}`)}
+              className="absolute flex flex-col items-center gap-1 transition-transform hover:scale-110"
+              style={{ left: `${pos.x}px`, top: `${pos.y}px`, transform: "translate(-50%, -50%)" }}>
+              <div className="w-12 h-12 rounded-full border-2 flex items-center justify-center font-black text-white shadow-lg animate-pulse"
+                style={{ background: pos.cor, borderColor: pos.cor }}>
+                {agente.nome.charAt(0)}
+              </div>
+              <div className="px-2 py-0.5 rounded-full text-xs font-bold"
+                style={{ background: "rgba(13,17,23,0.8)", color: pos.cor, border: `1px solid ${pos.cor}44` }}>
+                {agente.nome}
+              </div>
+            </button>
+          );
+        })}
+
+        {/* LEADS REAIS NO CANVAS */}
+        {leads.slice(0, 8).map((lead, idx) => {
+          const pos = POSICOES_LEADS[idx];
+          if (!pos) return null;
+          const cor = urgenciaCor(lead.atualizado_em);
+          return (
+            <button key={lead.id}
+              onClick={() => setLeadSelecionado(lead)}
+              className="absolute flex flex-col items-center gap-1 transition-transform hover:scale-110"
+              style={{ left: `${pos.x}px`, top: `${pos.y}px`, transform: "translate(-50%, -50%)" }}>
+              <div className="w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-white shadow-lg"
+                style={{ background: "#0d1117", borderColor: cor }}>
+                {lead.nome.charAt(0).toUpperCase()}
+              </div>
+              <div className="px-2 py-0.5 rounded-full text-xs"
+                style={{ background: "rgba(13,17,23,0.8)", color: cor, border: `1px solid ${cor}44`, maxWidth: "80px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {lead.nome.split(" ")[0]}
+              </div>
+              <div className="text-xs font-bold" style={{ color: cor }}>{tempoRelativo(lead.atualizado_em)}</div>
+            </button>
+          );
+        })}
+
+        {/* ESTADO VAZIO */}
+        {leads.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center p-6 rounded-2xl" style={{ background: "rgba(13,17,23,0.8)", border: "1px solid #30363d" }}>
+              <p className="text-2xl mb-2">✓</p>
+              <p className="text-white font-bold mb-1">Escritório tranquilo</p>
+              <p className="text-sm" style={{ color: "#8b949e" }}>Nenhum lead ativo no momento</p>
+            </div>
+          </div>
+        )}
+
+        {/* FEED DE MENSAGENS AO VIVO */}
+        <LiveMessageFeed />
+
+        {/* MODAL LEAD SELECIONADO */}
+        {leadSelecionado && (
+          <div className="absolute inset-0 flex items-center justify-center z-40"
+            style={{ background: "rgba(0,0,0,0.6)" }}
+            onClick={() => setLeadSelecionado(null)}>
+            <div className="rounded-2xl p-4 w-80" style={{ background: "#161b22", border: "1px solid #30363d" }}
+              onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white font-bold">{leadSelecionado.nome}</h3>
+                <button onClick={() => setLeadSelecionado(null)} style={{ color: "#8b949e" }}>✕</button>
+              </div>
+              <div className="space-y-1 mb-4 text-sm" style={{ color: "#8b949e" }}>
+                {leadSelecionado.telefone && <p>📱 {leadSelecionado.telefone}</p>}
+                <p>📍 {leadSelecionado.estagio}</p>
+                <p>📌 {leadSelecionado.origem}</p>
+                {leadSelecionado.valor_estimado > 0 && (
+                  <p>💰 R$ {(leadSelecionado.valor_estimado / 1000).toFixed(0)}k</p>
+                )}
+                <p>⏱ {tempoRelativo(leadSelecionado.atualizado_em)}</p>
+                {leadSelecionado.agente_responsavel && (
+                  <p>🤖 {leadSelecionado.agente_responsavel}</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => { router.push(`/crm/leads/${leadSelecionado.id}`); setLeadSelecionado(null); }}
+                  className="flex-1 py-2 rounded-xl text-sm font-bold text-white"
+                  style={{ background: "#003b26" }}>
+                  💬 Ver conversa
+                </button>
+                <button onClick={() => { router.push("/crm/atendimento"); setLeadSelecionado(null); }}
+                  className="flex-1 py-2 rounded-xl text-sm"
+                  style={{ background: "#21262d", color: "#c9a24a" }}>
+                  Atender →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* DECISION PANEL DIREITO */}
+      <div className="flex-shrink-0" style={{ width: "300px", borderLeft: "1px solid #30363d" }}>
+        <DecisionPanel />
+      </div>
+    </div>
   );
 }

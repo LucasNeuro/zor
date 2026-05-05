@@ -13,13 +13,20 @@ export default function DashboardPage() {
     { label: "Aprovações pendentes", valor: m.aprovacoesPendentes, cor: m.aprovacoesPendentes > 0 ? "#b3261e" : "#003b26", rota: "/crm/aprovacoes" },
     { label: "Conversas ativas", valor: m.conversasAtivas, cor: "#003b26", rota: "/crm/atendimento" },
     { label: "Leads hoje", valor: m.leadsHoje, cor: "#003b26", rota: "/crm/leads" },
-    { label: "Agentes ativos", valor: m.agentesAtivos, cor: "#003b26", rota: "/crm/agentes" },
+    { label: "Agentes IA ativos", valor: m.agentesAtivos, cor: "#003b26", rota: "/crm/agentes" },
     {
       label: "Receita potencial",
       valor: m.receitaPotencial > 0 ? `R$${(m.receitaPotencial / 1000).toFixed(0)}k` : "R$0",
       cor: "#c9a24a",
       rota: "/crm/leads",
     },
+  ];
+
+  const cardsParceiros = [
+    { label: "Parceiros ativos", valor: m.parceirosAtivos, cor: "#60a5fa", rota: "/crm/parceiros" },
+    { label: "Encaminhamentos hoje", valor: m.encaminhamentosHoje, cor: "#a78bfa", rota: "/crm/parceiros" },
+    { label: "Taxa qualificação", valor: `${m.taxaQualificacao}%`, cor: "#34d399", rota: "/crm/leads" },
+    { label: "Taxa encaminhamento", valor: `${m.taxaEncaminhamento}%`, cor: "#f59e0b", rota: "/crm/parceiros" },
   ];
 
   return (
@@ -31,32 +38,62 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Métricas */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 28 }}>
-        {cards.map(c => (
-          <button key={c.label} onClick={() => router.push(c.rota)}
-            style={{
-              borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer",
-              background: "#161b22",
-              border: `1px solid ${c.cor}40`,
-              borderLeft: `3px solid ${c.cor}`,
-              transition: "transform 150ms",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.02)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
-          >
-            <p style={{ color: "#8b949e", fontSize: 11, margin: "0 0 4px" }}>{c.label}</p>
-            <p style={{ fontSize: 32, fontWeight: 900, margin: 0, color: (c.valor !== 0 && c.valor !== "R$0") ? c.cor : "#e6edf3", letterSpacing: "-1px" }}>
-              {c.valor}
-            </p>
+      {/* Atendimento */}
+      <div style={{ marginBottom: 8 }}>
+        <p style={{ color: "#484f58", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 8px" }}>Atendimento</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+          {cards.map(c => (
+            <button key={c.label} onClick={() => router.push(c.rota)}
+              style={{
+                borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer",
+                background: "#161b22", border: `1px solid ${c.cor}40`,
+                borderLeft: `3px solid ${c.cor}`, transition: "transform 150ms",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.02)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
+            >
+              <p style={{ color: "#8b949e", fontSize: 11, margin: "0 0 4px" }}>{c.label}</p>
+              <p style={{ fontSize: 28, fontWeight: 900, margin: 0, color: (c.valor !== 0 && c.valor !== "R$0") ? c.cor : "#e6edf3", letterSpacing: "-1px" }}>
+                {c.valor}
+              </p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Parceiros */}
+      <div style={{ marginBottom: 24, marginTop: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <p style={{ color: "#484f58", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>Rede de Parceiros</p>
+          <button onClick={() => router.push("/crm/parceiros/novo")}
+            style={{ fontSize: 11, color: "#60a5fa", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
+            + Convidar parceiro
           </button>
-        ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+          {cardsParceiros.map(c => (
+            <button key={c.label} onClick={() => router.push(c.rota)}
+              style={{
+                borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer",
+                background: "#161b22", border: `1px solid ${c.cor}40`,
+                borderLeft: `3px solid ${c.cor}`, transition: "transform 150ms",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.02)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
+            >
+              <p style={{ color: "#8b949e", fontSize: 11, margin: "0 0 4px" }}>{c.label}</p>
+              <p style={{ fontSize: 28, fontWeight: 900, margin: 0, color: c.cor, letterSpacing: "-1px" }}>
+                {c.valor}
+              </p>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Equipe */}
       <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 14, padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h2 style={{ color: "#e6edf3", fontWeight: 700, fontSize: 14, margin: 0 }}>Equipe</h2>
+          <h2 style={{ color: "#e6edf3", fontWeight: 700, fontSize: 14, margin: 0 }}>Equipe IA</h2>
           <button onClick={() => router.push("/crm/agentes")} style={{ fontSize: 12, color: "#c9a24a", background: "none", border: "none", cursor: "pointer" }}>
             Ver todos →
           </button>

@@ -226,6 +226,31 @@ export async function POST(request: NextRequest) {
         .eq("id", lead.id);
     }
 
+    if (isNovo) {
+      try {
+        const { data: contatos } = await supabase
+          .from("hub_contatos_notificacao")
+          .select("telefone, receber_novo_lead, canal")
+          .eq("ativo", true)
+          .eq("receber_novo_lead", true);
+
+        if (contatos && contatos.length > 0 && process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY) {
+          const msg = `🔔 *Novo lead recebido!*\n\n*Nome:* ${pushName || telefone}\n*Mercado:* ${mercado}\n*Mensagem:* ${mensagemFinal.slice(0, 100)}\n\nAcesse o CRM para acompanhar.`;
+          await Promise.allSettled(
+            contatos
+              .filter(c => c.canal === "whatsapp" || c.canal === "ambos")
+              .map(c =>
+                fetch(`${process.env.EVOLUTION_API_URL}/message/sendText/obra10plus`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "apikey": process.env.EVOLUTION_API_KEY! },
+                  body: JSON.stringify({ number: c.telefone, text: msg }),
+                })
+              )
+          );
+        }
+      } catch (e) { console.error("[WEBHOOK] Erro notificação:", e); }
+    }
+
     if (IA_ATIVA && agente) {
       try {
         const { construirPrompt } = await import("@/lib/ia/prompt-builder");
@@ -278,7 +303,7 @@ export async function POST(request: NextRequest) {
       mercado,
       agente:        agente?.agente_slug,
       isNovo,
-      tabelasSalvas: ["hub_leads_crm", "hub_memorias_lead", "hub_fila_mensagens", "hub_acoes_ia"],
+      tabelasSalvas: ["hub_leads_crm", "hub_memorias_lead", "hub_fila_mensagens", "hub_acoes_ia", "hub_contatos_notificacao"],
     });
 
   } catch (erro) {

@@ -26,6 +26,15 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   title: "Escritório Virtual — Obra10+",
   description: "Plataforma de agentes IA da Obra10+",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Obra10+",
+  },
+  other: {
+    "theme-color": "#c9a24a",
+  },
 };
 
 export default function RootLayout({

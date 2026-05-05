@@ -8,19 +8,19 @@ const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// ─── Brand palette ────────────────────────────────────────────────────────────
+// ─── Brand palette (dark premium) ─────────────────────────────────────────────
 const C = {
-  bg:         "#f7f4ec",
+  bg:         "#161b22",
   green:      "#003b26",
   gold:       "#c9a24a",
-  goldBg:     "rgba(201,162,74,0.08)",
+  goldBg:     "rgba(201,162,74,0.10)",
   red:        "#b3261e",
-  redSoft:    "rgba(179,38,30,0.10)",
-  text:       "#1a1a1a",
-  muted:      "#7a786c",
-  line:       "#e0ddd6",
-  white:      "#ffffff",
-  greenMoney: "#16a34a",
+  redSoft:    "rgba(179,38,30,0.15)",
+  text:       "#e6edf3",
+  muted:      "#8b949e",
+  line:       "#30363d",
+  white:      "#21262d",
+  greenMoney: "#34d399",
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -451,7 +451,7 @@ export function DecisionPanel() {
   const TABS: { id: Tab; label: string; count: number; hasUrgent?: boolean }[] = [
     { id: "decisoes",   label: "Decisões",   count: aprovacoes.length, hasUrgent: aprovacoes.some(a => a.impacto === "alto" || a.impacto === "critico") },
     { id: "crm",        label: "CRM",        count: leads.length },
-    { id: "aprovacoes", label: "Aprovações", count: aprovacoes.length, hasUrgent: aprovacoes.length > 0 },
+    { id: "aprovacoes", label: "Aprov.", count: aprovacoes.length, hasUrgent: aprovacoes.length > 0 },
     { id: "gargalos",   label: "Gargalos",   count: GARGALOS.length,   hasUrgent: true },
     { id: "alertas",    label: "Alertas",    count: alertsVisiveis.length, hasUrgent: alertsVisiveis.some(a => a.tipo === "critico") },
   ];
@@ -510,7 +510,7 @@ export function DecisionPanel() {
       <div style={{ display: "flex", flexDirection: "column", height: "100%", background: C.bg, overflow: "hidden" }}>
 
         {/* ── Tab bar ─── */}
-        <div style={{ display: "flex", background: C.green, flexShrink: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", background: "#0d1117", borderBottom: `1px solid ${C.line}`, flexShrink: 0, overflow: "hidden" }}>
           {TABS.map(t => {
             const active = tab === t.id;
             const badgeBg = active ? C.gold : t.hasUrgent ? C.red : "rgba(255,255,255,0.14)";

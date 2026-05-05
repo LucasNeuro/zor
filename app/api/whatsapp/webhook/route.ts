@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { identificarMercado } from "@/lib/ia/agentes-config";
 
 function db() {
   return createClient(
@@ -8,66 +9,34 @@ function db() {
   );
 }
 
-// ─── Market identification from message content ───────────────────────────────
-
-function identificarMercado(mensagem: string): string {
-  const t = mensagem.toLowerCase();
-
-  if (t.includes("imóvel") || t.includes("imovel") || t.includes("apartamento") ||
-      t.includes("casa") || t.includes("terreno") || t.includes("imobili")) {
-    return "imobiliario";
-  }
-  if (t.includes("arquitet") || t.includes("projeto") || t.includes("planta") ||
-      t.includes("reforma") || t.includes("obra") || t.includes("construç")) {
-    return "arquitetura";
-  }
-  if (t.includes("fornece") || t.includes("serviço") || t.includes("servico") ||
-      t.includes("orçamento") || t.includes("orcamento")) {
-    return "fornecedor";
-  }
-  if (t.includes("produto") || t.includes("comprar") || t.includes("adquirir") ||
-      t.includes("quanto custa") || t.includes("valor")) {
-    return "produto";
-  }
-
-  return "geral";
-}
-
-// ─── Find or create lead by phone ────────────────────────────────────────────
-
-async function encontrarOuCriarLead(
-  telefone: string,
-  nome: string,
-  mercado: string,
-  mensagem: string
-) {
+async function encontrarOuCriarLead(telefone: string, nome: string, mercado: string, mensagem: string) {
   const supabase = db();
 
-  // Check returning lead
-  const { data: existente } = await supabase
+  const { data: leadExistente } = await supabase
     .from("hub_leads_crm")
     .select("*")
     .eq("telefone", telefone)
     .maybeSingle();
 
-  if (existente) {
+  if (leadExistente) {
     await supabase
       .from("hub_leads_crm")
       .update({ atualizado_em: new Date().toISOString() })
-      .eq("id", existente.id);
+      .eq("id", leadExistente.id);
 
-    await supabase.from("hub_atividades").insert({
-      lead_id: existente.id,
-      tipo: "mensagem",
-      descricao: `WhatsApp: ${mensagem.slice(0, 100)}`,
-      feito_por: "sistema",
-      feito_por_tipo: "ia",
+    await supabase.from("hub_memorias_lead").insert({
+      lead_id: leadExistente.id,
+      chave: "retorno_wa",
+      valor: mensagem.slice(0, 100),
+      confianca: 0.8,
+      criado_por: "whatsapp",
     });
 
-    return { lead: existente, isNovo: false };
+    return { lead: leadExistente, isNovo: false };
   }
 
-  // Create new lead
+  const agenteResponsavel = mercado === "imobiliario" || mercado === "arquitetura" ? "mari" : "sdr";
+
   const { data: novoLead, error } = await supabase
     .from("hub_leads_crm")
     .insert({
@@ -77,99 +46,100 @@ async function encontrarOuCriarLead(
       estagio: "novo",
       score: 10,
       valor_estimado: 0,
-      agente_responsavel: "sdr",
+      agente_responsavel: agenteResponsavel,
       metadata: { mercado, primeira_mensagem: mensagem.slice(0, 200) },
     })
     .select()
     .single();
 
   if (error || !novoLead) {
-    throw new Error(`Falha ao criar lead: ${error?.message}`);
+    console.error("[WEBHOOK] Erro ao criar lead:", error);
+    return { lead: null, isNovo: false };
   }
 
-  // Save memories using our schema (chave/valor/confianca/criado_por)
-  await supabase.from("hub_memorias_lead").insert([
-    {
-      lead_id: novoLead.id,
-      chave: "telefone",
-      valor: telefone,
-      confianca: 1.0,
-      criado_por: "sistema",
-    },
-    {
-      lead_id: novoLead.id,
-      chave: "mercado",
-      valor: mercado,
-      confianca: 0.9,
-      criado_por: "analise",
-    },
-  ]);
+  await Promise.all([
+    // TABELA 1: hub_memorias_lead — memórias do lead
+    supabase.from("hub_memorias_lead").insert([
+      {
+        lead_id: novoLead.id,
+        chave: "telefone",
+        valor: telefone,
+        confianca: 1.0,
+        criado_por: "sistema",
+      },
+      {
+        lead_id: novoLead.id,
+        chave: "mercado",
+        valor: mercado,
+        confianca: 0.9,
+        criado_por: "analise",
+      },
+      {
+        lead_id: novoLead.id,
+        chave: "nome",
+        valor: nome || `Lead ${telefone.slice(-4)}`,
+        confianca: 0.9,
+        criado_por: "whatsapp",
+      },
+    ]),
 
-  await supabase.from("hub_atividades").insert({
-    lead_id: novoLead.id,
-    tipo: "mensagem",
-    descricao: `Novo lead via WhatsApp — mercado: ${mercado}`,
-    feito_por: "sistema",
-    feito_por_tipo: "ia",
-  });
+    // TABELA 2: hub_atividades — timeline do lead
+    supabase.from("hub_atividades").insert({
+      lead_id: novoLead.id,
+      tipo: "mensagem",
+      descricao: `Novo lead via WhatsApp — mercado: ${mercado} — mensagem: ${mensagem.slice(0, 100)}`,
+      feito_por: "sistema",
+      feito_por_tipo: "ia",
+      metadata: { telefone, mercado, primeira_mensagem: true },
+    }),
+  ]);
 
   return { lead: novoLead, isNovo: true };
 }
 
-// ─── Find best agent for market ───────────────────────────────────────────────
-
-async function buscarAgentePorMercado(mercado: string) {
+async function buscarAgente(mercado: string) {
   const supabase = db();
 
-  // Mari handles imobiliario and arquitetura directly
   if (mercado === "imobiliario" || mercado === "arquitetura") {
-    const { data: mari } = await supabase
+    const { data } = await supabase
       .from("hub_agente_identidade")
-      .select("agente_slug, nome, area, prefixo_mercado")
+      .select("*")
       .eq("agente_slug", "mari")
-      .eq("ativo", true)
-      .maybeSingle();
-
-    if (mari) return mari;
+      .single();
+    if (data) return data;
   }
 
-  // Generic: match by area field
-  const { data: especifico } = await supabase
+  const { data: agente } = await supabase
     .from("hub_agente_identidade")
-    .select("agente_slug, nome, area")
+    .select("*")
     .eq("ativo", true)
-    .ilike("area", `%${mercado}%`)
+    .ilike("prefixo_mercado", `%${mercado.toUpperCase().slice(0, 3)}%`)
     .neq("agente_slug", "mari")
     .maybeSingle();
 
-  if (especifico) return especifico;
+  if (agente) return agente;
 
-  // Fallback: SDR
   const { data: sdr } = await supabase
     .from("hub_agente_identidade")
-    .select("agente_slug, nome, area")
+    .select("*")
     .eq("agente_slug", "sdr")
-    .maybeSingle();
+    .single();
 
   return sdr;
 }
 
-// ─── GET — health check + Meta verification ───────────────────────────────────
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const mode      = searchParams.get("hub.mode");
-  const token     = searchParams.get("hub.verify_token");
-  const challenge = searchParams.get("hub.challenge");
+  const hub_mode      = searchParams.get("hub.mode");
+  const hub_token     = searchParams.get("hub.verify_token");
+  const hub_challenge = searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    return new NextResponse(challenge ?? "", { status: 200 });
+  if (hub_mode === "subscribe" && hub_token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return new NextResponse(hub_challenge, { status: 200 });
   }
 
-  return NextResponse.json({ status: "ok", service: "obra10plus-webhook" });
+  return NextResponse.json({ status: "ok", service: "obra10plus-webhook", version: "2.0" });
 }
-
-// ─── POST — Evolution API messages ───────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   const supabase = db();
@@ -177,15 +147,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // ── Evolution API format ──
     const event    = body.event as string | undefined;
-    const instance = body.instance as string | undefined;
     const data     = body.data as Record<string, unknown> | undefined;
-
-    // ── Legacy Meta format ──
-    if (body.object === "whatsapp_business_account") {
-      return NextResponse.json({ status: "meta_format_deprecated" });
-    }
+    const instance = body.instance as string | undefined;
 
     if (event !== "messages.upsert") {
       return NextResponse.json({ status: "ignored", event });
@@ -193,74 +157,85 @@ export async function POST(request: NextRequest) {
 
     if (!data) return NextResponse.json({ status: "no_data" });
 
-    const key     = data.key as Record<string, unknown> | undefined;
-    const msg     = data.message as Record<string, unknown> | undefined;
-    const fromMe  = (key?.fromMe as boolean) || false;
+    const msg       = data.message as Record<string, unknown> | undefined;
+    const key       = data.key    as Record<string, unknown> | undefined;
+    const fromMe    = (key?.fromMe as boolean) || false;
     const remoteJid = (key?.remoteJid as string) || "";
-    const telefone  = remoteJid.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+    const telefone  = remoteJid.replace("@s.whatsapp.net", "").replace("@g.us", "").replace(/\D/g, "");
     const pushName  = (data.pushName as string) || "";
     const messageId = (key?.id as string) || "";
-    const timestamp = (data.messageTimestamp as number) || Date.now();
+    const tsRaw     = data.messageTimestamp as number | undefined;
+    const timestamp = tsRaw ? new Date(tsRaw * 1000).toISOString() : new Date().toISOString();
 
-    const texto =
-      (msg?.conversation as string) ||
-      ((msg?.extendedTextMessage as Record<string, unknown>)?.text as string) ||
-      ((msg?.imageMessage as Record<string, unknown>)?.caption as string) ||
-      "";
+    const imageMsg  = msg?.imageMessage  as Record<string, unknown> | undefined;
+    const videoMsg  = msg?.videoMessage  as Record<string, unknown> | undefined;
+    const tipoMidia = imageMsg ? "imagem" : videoMsg ? "video"
+      : msg?.audioMessage ? "audio" : msg?.documentMessage ? "documento" : "texto";
 
-    if (fromMe)           return NextResponse.json({ status: "outgoing_ignored" });
-    if (!telefone || !texto) return NextResponse.json({ status: "invalid_message" });
+    const texto = (msg?.conversation as string)
+      || ((msg?.extendedTextMessage as Record<string, unknown>)?.text as string)
+      || (imageMsg?.caption as string)
+      || (videoMsg?.caption as string)
+      || "";
 
-    console.log(`[WEBHOOK] ${telefone}: ${texto.slice(0, 80)}`);
+    if (fromMe) return NextResponse.json({ status: "outgoing_ignored" });
+    if (!telefone || remoteJid.endsWith("@g.us")) return NextResponse.json({ status: "group_ignored" });
+    if (!texto && tipoMidia === "texto") return NextResponse.json({ status: "empty_message" });
 
-    const mercado = identificarMercado(texto);
-    const { lead, isNovo } = await encontrarOuCriarLead(telefone, pushName, mercado, texto);
+    const mensagemFinal = texto || `[${tipoMidia} recebido]`;
 
-    // Save to message queue (non-blocking — ignore if table doesn't exist yet)
-    try {
-      await supabase.from("hub_fila_mensagens").insert({
-        lead_id:   lead.id,
-        agente_id: lead.agente_responsavel || "sdr",
-        canal:     "whatsapp",
-        direcao:   "entrada",
-        conteudo:  texto,
-        status:    "pendente",
-        metadata:  { telefone, pushName, messageId, timestamp, mercado, instance, isNovo },
-      });
-    } catch {
-      // Table may not exist yet — not critical
+    console.log(`[WEBHOOK] ${pushName || telefone}: ${mensagemFinal.slice(0, 80)}`);
+
+    const mercado = identificarMercado(mensagemFinal);
+
+    const { lead, isNovo } = await encontrarOuCriarLead(telefone, pushName, mercado, mensagemFinal);
+
+    if (!lead) {
+      return NextResponse.json({ status: "erro", erro: "Falha ao criar lead" }, { status: 500 });
     }
 
-    const agente = await buscarAgentePorMercado(mercado);
+    // TABELA 3: hub_fila_mensagens
+    await supabase.from("hub_fila_mensagens").insert({
+      lead_id:   lead.id,
+      agente_id: lead.agente_responsavel || "sdr",
+      canal:     "whatsapp",
+      direcao:   "entrada",
+      conteudo:  mensagemFinal,
+      status:    "pendente",
+      metadata:  { telefone, pushName, messageId, timestamp, mercado, instance, isNovo, tipoMidia },
+    });
 
-    // Log IA action (non-blocking)
-    try {
-      await supabase.from("hub_acoes_ia").insert({
-        agente_slug: agente?.agente_slug || "sdr",
-        tipo:        "lead_qualificado",
-        descricao:   `Mensagem recebida — mercado: ${mercado} — lead: ${isNovo ? "novo" : "retornou"}`,
-        lead_id:     lead.id,
-        sucesso:     true,
-        metadata:    { telefone, mercado, isNovo, agente: agente?.agente_slug },
-      });
-    } catch {
-      // Table may not exist yet — not critical
+    // TABELA 4: hub_acoes_ia
+    const agente = await buscarAgente(mercado);
+
+    await supabase.from("hub_acoes_ia").insert({
+      agente_slug: agente?.agente_slug || "sdr",
+      tipo:        isNovo ? "novo_lead" : "lead_retornou",
+      descricao:   `${isNovo ? "Novo lead" : "Lead retornou"} — mercado: ${mercado} — "${mensagemFinal.slice(0, 50)}"`,
+      lead_id:     lead.id,
+      sucesso:     true,
+      metadata:    { telefone, mercado, isNovo, agente: agente?.agente_slug },
+    });
+
+    if (agente && lead.agente_responsavel !== agente.agente_slug) {
+      await supabase
+        .from("hub_leads_crm")
+        .update({ agente_responsavel: agente.agente_slug })
+        .eq("id", lead.id);
     }
-
-    // TODO: uncomment when ready to send automatic replies
-    // await processarMensagem({ leadId: lead.id, mensagem: texto, canal: "whatsapp", telefone, segmento: mercado })
 
     return NextResponse.json({
-      status:  "ok",
-      lead_id: lead.id,
+      status:        "ok",
+      lead_id:       lead.id,
       mercado,
-      agente:  agente?.agente_slug,
+      agente:        agente?.agente_slug,
       isNovo,
+      tabelasSalvas: ["hub_leads_crm", "hub_memorias_lead", "hub_fila_mensagens", "hub_acoes_ia"],
     });
 
   } catch (erro) {
-    const msg = erro instanceof Error ? erro.message : "Erro desconhecido";
-    console.error("[WEBHOOK] Erro:", msg);
-    return NextResponse.json({ status: "erro", erro: msg }, { status: 500 });
+    const errMsg = erro instanceof Error ? erro.message : "Erro desconhecido";
+    console.error("[WEBHOOK] Erro:", errMsg);
+    return NextResponse.json({ status: "erro", erro: errMsg }, { status: 500 });
   }
 }

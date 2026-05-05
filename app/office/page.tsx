@@ -19,6 +19,8 @@ import Lead360Drawer from "@/components/office/Lead360Drawer";
 import Partner360Drawer from "@/components/office/Partner360Drawer";
 import CriticalActionModal, { type CriticalActionModalProps } from "@/components/office/CriticalActionModal";
 import MobileExperience from "@/components/office/MobileExperience";
+import LiveMessageFeed from "@/components/office/LiveMessageFeed";
+import Link from "next/link";
 import { useOfficeLife } from "@/hooks/useOfficeLife";
 import { useAlerts } from "@/hooks/useAlerts";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -317,6 +319,23 @@ function OfficePageInner() {
         }}
       />
 
+      {/* CRM NAV — fixed top-right */}
+      <div className="fixed top-3 right-4 z-40 flex items-center gap-2">
+        <Link href="/crm/leads" className="text-xs px-3 py-1.5 rounded-full font-bold transition-colors"
+          style={{ background: "rgba(201,162,74,0.15)", color: "#c9a24a", border: "1px solid rgba(201,162,74,0.3)" }}>
+          Pipeline
+        </Link>
+        <Link href="/crm/atendimento" className="text-xs px-3 py-1.5 rounded-full font-bold transition-colors"
+          style={{ background: "rgba(0,59,38,0.4)", color: "#34d399", border: "1px solid rgba(0,59,38,0.6)" }}>
+          Atendimento
+        </Link>
+        <Link href="/crm/aprovacoes" className="text-xs px-3 py-1.5 rounded-full font-bold transition-colors"
+          style={{ background: "rgba(179,38,30,0.15)", color: "#f87171", border: "1px solid rgba(179,38,30,0.3)" }}>
+          Aprovações
+        </Link>
+      </div>
+
+      <LiveMessageFeed />
       {sharedOverlays}
     </div>
   );

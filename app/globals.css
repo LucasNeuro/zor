@@ -24,6 +24,23 @@ html, body {
   --brand-muted: #7a786c;
   --brand-line: rgba(18, 56, 43, 0.12);
   --brand-shadow: 0 8px 32px rgba(0, 40, 26, 0.10);
+  /* Dark premium tokens */
+  --obra-dark: #0d1117;
+  --obra-dark-2: #161b22;
+  --obra-dark-3: #21262d;
+  --obra-dark-4: #30363d;
+  --obra-verde: #003b26;
+  --obra-verde-light: #005c3d;
+  --obra-dourado: #c9a24a;
+  --obra-dourado-light: #e0b86a;
+  --obra-creme: #f7f4ec;
+  --obra-vermelho: #b3261e;
+  --obra-vermelho-light: #dc2626;
+  --obra-texto: #e6edf3;
+  --obra-texto-2: #8b949e;
+  --obra-texto-3: #484f58;
+  --obra-borda: #30363d;
+  --obra-borda-2: #21262d;
 }
 
 body {

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 const sb = createClient(
@@ -109,6 +110,7 @@ function borderColor(iso: string) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LeadsPage() {
+  const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [busca, setBusca] = useState("");
@@ -225,14 +227,14 @@ export default function LeadsPage() {
           <button onClick={() => setView("lista")} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${view === "lista" ? "bg-gray-700 text-white" : "text-gray-500 hover:text-white"}`}>Lista</button>
         </div>
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar lead..."
-          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 border border-gray-700 focus:border-orange-500 outline-none w-44 placeholder:text-gray-600" />
+          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 border border-gray-700 focus:border-[#c9a24a] outline-none w-44 placeholder:text-gray-600" />
         <select value={filtroEstagio} onChange={e => setFiltroEstagio(e.target.value)}
           className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 border border-gray-700 outline-none">
           <option value="">Todos os estágios</option>
           {ESTAGIOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
         </select>
         <button onClick={() => setNovoAberto(true)}
-          className="bg-orange-600 hover:bg-orange-500 text-white text-sm px-4 py-2 rounded-lg font-bold transition-colors flex-shrink-0">
+          className="bg-[#c9a24a] hover:bg-[#e0b86a] text-white text-sm px-4 py-2 rounded-lg font-bold transition-colors flex-shrink-0">
           + Novo Lead
         </button>
       </div>
@@ -274,7 +276,7 @@ export default function LeadsPage() {
                   {/* Cards */}
                   <div className="flex-1 bg-gray-900/40 rounded-b-xl border border-t-0 border-gray-800 p-2 space-y-2 overflow-y-auto" style={{ minHeight: 80 }}>
                     {col.map(lead => (
-                      <div key={lead.id} onClick={() => abrirDetalhe(lead)}
+                      <div key={lead.id} onClick={() => router.push(`/crm/leads/${lead.id}`)}
                         className="bg-gray-900 rounded-xl p-3 cursor-pointer hover:bg-gray-800 transition-all"
                         style={{ borderWidth: 1, borderStyle: "solid", borderColor: "#374151", borderLeftWidth: 3, borderLeftColor: borderColor(lead.atualizado_em) }}>
                         <p className="text-white text-xs font-bold truncate leading-tight">{lead.nome}</p>
@@ -315,7 +317,7 @@ export default function LeadsPage() {
                 {filtrados.map(lead => {
                   const est = ESTAGIOS.find(e => e.id === lead.estagio);
                   return (
-                    <tr key={lead.id} onClick={() => abrirDetalhe(lead)}
+                    <tr key={lead.id} onClick={() => router.push(`/crm/leads/${lead.id}`)}
                       className="border-b border-gray-800/50 hover:bg-gray-900/60 cursor-pointer transition-colors">
                       <td className="px-4 py-3">
                         <p className="text-white font-bold">{lead.nome}</p>
@@ -344,7 +346,7 @@ export default function LeadsPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-400 text-xs">{lead.agente_responsavel || "—"}</td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{tempo(lead.atualizado_em)}</td>
-                      <td className="px-4 py-3"><button className="text-orange-500 hover:text-orange-400 text-xs">Ver →</button></td>
+                      <td className="px-4 py-3"><button className="text-[#c9a24a] hover:text-[#e0b86a] text-xs">Ver →</button></td>
                     </tr>
                   );
                 })}
@@ -377,7 +379,7 @@ export default function LeadsPage() {
                   <input type={f.type} value={(form as Record<string, string>)[f.key]}
                     onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
                     placeholder={f.placeholder}
-                    className="w-full bg-gray-800 text-white text-sm rounded-lg px-3 py-2.5 border border-gray-700 focus:border-orange-500 outline-none placeholder:text-gray-600" />
+                    className="w-full bg-gray-800 text-white text-sm rounded-lg px-3 py-2.5 border border-gray-700 focus:border-[#c9a24a] outline-none placeholder:text-gray-600" />
                 </div>
               ))}
               <div>
@@ -397,7 +399,7 @@ export default function LeadsPage() {
             </div>
             <div className="px-5 py-4 border-t border-gray-800">
               <button onClick={criarLead} disabled={salvando || !form.nome.trim()}
-                className="w-full bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-sm py-3 rounded-xl transition-colors">
+                className="w-full bg-[#c9a24a] hover:bg-[#e0b86a] disabled:opacity-50 text-white font-bold text-sm py-3 rounded-xl transition-colors">
                 {salvando ? "Criando..." : "+ Criar Lead"}
               </button>
             </div>
@@ -465,7 +467,7 @@ export default function LeadsPage() {
             <div className="flex border-b border-gray-800 flex-shrink-0">
               {(["info", "timeline", "notas", "memorias"] as const).map(t => (
                 <button key={t} onClick={() => setTabDetalhe(t)}
-                  className={`flex-1 py-2.5 text-xs font-bold transition-colors ${tabDetalhe === t ? "text-orange-500 border-b-2 border-orange-500" : "text-gray-500 hover:text-white"}`}>
+                  className={`flex-1 py-2.5 text-xs font-bold transition-colors ${tabDetalhe === t ? "text-[#c9a24a] border-b-2 border-[#c9a24a]" : "text-gray-500 hover:text-white"}`}>
                   {t === "info" ? "Info" : t === "timeline" ? "Timeline" : t === "notas" ? `Notas (${notas.length})` : "Memórias IA"}
                 </button>
               ))}
@@ -492,8 +494,8 @@ export default function LeadsPage() {
                     ))}
                   </div>
                   {detalhe.proxima_acao && (
-                    <div className="bg-orange-950 border border-orange-800 rounded-xl p-3">
-                      <p className="text-orange-400 text-xs font-bold uppercase mb-1">Próxima Ação</p>
+                    <div className="bg-[#1a1200] border border-[#4a3500] rounded-xl p-3">
+                      <p className="text-[#c9a24a] text-xs font-bold uppercase mb-1">Próxima Ação</p>
                       <p className="text-white text-sm">{detalhe.proxima_acao}</p>
                     </div>
                   )}
@@ -527,7 +529,7 @@ export default function LeadsPage() {
                                 <span className="text-gray-600 text-xs">{a.feito_por}</span>
                                 <span className="text-gray-700">·</span>
                                 <span className="text-gray-600 text-xs">{tempo(a.criado_em)} atrás</span>
-                                {a.feito_por_tipo === "ia" && <span className="text-purple-400 text-xs font-bold">IA</span>}
+                                {a.feito_por_tipo === "ia" && <span className="text-[#c9a24a] text-xs font-bold">IA</span>}
                               </div>
                             </div>
                           </div>
@@ -543,9 +545,9 @@ export default function LeadsPage() {
                     <textarea value={novaNota} onChange={e => setNovaNota(e.target.value)}
                       placeholder="Escreva uma nota..."
                       rows={3}
-                      className="w-full bg-gray-800 text-white text-sm rounded-xl p-3 border border-gray-700 focus:border-orange-500 outline-none resize-none placeholder:text-gray-600" />
+                      className="w-full bg-gray-800 text-white text-sm rounded-xl p-3 border border-gray-700 focus:border-[#c9a24a] outline-none resize-none placeholder:text-gray-600" />
                     <button onClick={adicionarNota} disabled={!novaNota.trim()}
-                      className="w-full mt-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-sm py-2 rounded-xl font-bold transition-colors">
+                      className="w-full mt-2 bg-[#c9a24a] hover:bg-[#e0b86a] disabled:opacity-40 text-white text-sm py-2 rounded-xl font-bold transition-colors">
                       + Adicionar Nota
                     </button>
                   </div>
@@ -573,7 +575,7 @@ export default function LeadsPage() {
                         {memorias.map(m => (
                           <div key={m.id} className="bg-gray-800 rounded-xl p-3 border border-gray-700">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-purple-400 text-xs font-bold uppercase">{m.chave}</span>
+                              <span className="text-[#c9a24a] text-xs font-bold uppercase">{m.chave}</span>
                               <span className="text-gray-600 text-xs">{Math.round(m.confianca * 100)}% confiança</span>
                             </div>
                             <p className="text-white text-sm">{m.valor}</p>
@@ -588,7 +590,7 @@ export default function LeadsPage() {
 
             {/* Marcar perdido */}
             {confirmandoPerda && (
-              <div className="flex-shrink-0 p-4 border-t border-red-900 bg-red-950">
+              <div className="flex-shrink-0 p-4 border-t border-red-900 bg-[#1a0000]">
                 <p className="text-red-400 text-xs font-bold mb-2">Motivo da perda (obrigatório):</p>
                 <input value={motivoPerda} onChange={e => setMotivoPerda(e.target.value)}
                   placeholder="Ex: Preço alto, foi para concorrente..."

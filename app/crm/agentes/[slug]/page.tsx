@@ -2,20 +2,24 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import { fetchCargosCatalogo, fetchPerfisPersonalidade, fetchMercados } from "@/lib/supabase/catalogos";
+import type { CargoCatalogo, PerfilPersonalidade, MercadoCatalogo } from "@/lib/supabase/catalogos";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const HUMORES = ["Analítico","Criativo","Pragmático","Empático","Competitivo"];
-const PERSONALIDADES = ["Formal","Casual","Assertivo","Entusiasta","Estratégico"];
+const HUMORES_ORD    = ["Analítico","Criativo","Pragmático","Empático","Competitivo"];
+const PERS_ORD       = ["Formal","Casual","Assertivo","Entusiasta","Estratégico"];
 const MODELOS = [
   { id: "claude-haiku-4-5-20251001", label: "Haiku — Rápido e econômico" },
   { id: "claude-sonnet-4-6", label: "Sonnet — Equilibrado" },
   { id: "claude-opus-4-7", label: "Opus — Mais poderoso" },
 ];
-const MERCADOS = ["IMB","ARQ","RFM","SRV","PRO","GRL"];
+const NIVEL_COR: Record<number, string> = {
+  1: "#b3261e", 2: "#f97316", 3: "#eab308", 4: "#3b82f6", 5: "#6b7280",
+};
 
 interface CargoItem { cargo: string; area: string; mercados?: string[]; ativo: boolean; }
 type Aba = "basico" | "cargos" | "personalidade" | "conhecimento" | "regras";

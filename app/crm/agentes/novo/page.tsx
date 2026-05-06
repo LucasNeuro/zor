@@ -207,6 +207,7 @@ export default function NovoAgentePage() {
   const [secaoAtiva, setSecaoAtiva] = useState("empresa");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [tipoSel, setTipoSel] = useState("");
 
   const totalPassos = 5;
 
@@ -299,8 +300,15 @@ export default function NovoAgentePage() {
   const tokensEstimados = Math.ceil(previewPrompt.length / 4);
   const progresso = (passo / totalPassos) * 100;
 
-  // Cargos agrupados por nível
-  const niveisList = [1, 2, 3, 4, 5].filter(n => cargos.some(c => c.nivel === n));
+  // Cargos filtrados por tipo/área
+  const ATENDIMENTO_SLUGS = ["atendente", "sdr"];
+  const areas = Array.from(new Set(cargos.map(c => c.area))).sort();
+  const cargosFiltrados = tipoSel === "Atendimento"
+    ? cargos.filter(c => ATENDIMENTO_SLUGS.includes(c.slug))
+    : tipoSel
+    ? cargos.filter(c => c.area === tipoSel)
+    : cargos;
+  const niveisList = [1, 2, 3, 4, 5].filter(n => cargosFiltrados.some(c => c.nivel === n));
 
   if (carregando) {
     return (
@@ -349,6 +357,22 @@ export default function NovoAgentePage() {
               <h2 className="text-[#003b26] font-black text-xl mb-1">Qual é o cargo deste agente?</h2>
               <p className="text-[#888] text-sm mb-5">O cargo determina automaticamente o nível, modelo de IA, supervisor e permissões padrão.</p>
 
+              {/* Filtro por tipo/área */}
+              <div className="flex flex-wrap gap-2 mb-5">
+                <button onClick={() => setTipoSel("")}
+                  className="text-xs px-3 py-1.5 rounded-full border-2 font-bold transition-all"
+                  style={{ borderColor: tipoSel === "" ? "#003b26" : "#e0ddd6", background: tipoSel === "" ? "#003b26" : "white", color: tipoSel === "" ? "#c9a24a" : "#888" }}>
+                  Todos
+                </button>
+                {areas.map(area => (
+                  <button key={area} onClick={() => setTipoSel(area)}
+                    className="text-xs px-3 py-1.5 rounded-full border-2 font-bold transition-all"
+                    style={{ borderColor: tipoSel === area ? "#003b26" : "#e0ddd6", background: tipoSel === area ? "#003b26" : "white", color: tipoSel === area ? "#c9a24a" : "#888" }}>
+                    {area}
+                  </button>
+                ))}
+              </div>
+
               {niveisList.map(nivel => (
                 <div key={nivel} className="mb-5">
                   <div className="flex items-center gap-2 mb-2">
@@ -359,7 +383,7 @@ export default function NovoAgentePage() {
                     <div className="flex-1 h-px bg-[#e0ddd6]" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {cargos.filter(c => c.nivel === nivel).map(c => (
+                    {cargosFiltrados.filter(c => c.nivel === nivel).map(c => (
                       <CardCargo key={c.slug} cargo={c} ativo={cargo?.slug === c.slug} onClick={() => selecionarCargo(c)} />
                     ))}
                   </div>
@@ -388,6 +412,28 @@ export default function NovoAgentePage() {
                   {cargo.limite_autonomia_brl > 0 && (
                     <p className="text-[#c9a24a80] text-xs mt-1">Autonomia: até R${cargo.limite_autonomia_brl.toLocaleString("pt-BR")}</p>
                   )}
+                </div>
+              )}
+
+              {/* Nível hierárquico (visual-only, determinado pelo cargo) */}
+              {cargo && (
+                <div>
+                  <label className="text-[#003b26] text-xs font-black block mb-2">Nível hierárquico</label>
+                  <div className="flex gap-2 mb-1.5">
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <div key={n} className="flex-1 text-center py-2 rounded-lg border-2 text-xs font-black"
+                        style={{
+                          borderColor: cargo.nivel === n ? NIVEL_COR[n] : "#e0ddd6",
+                          background: cargo.nivel === n ? NIVEL_COR[n] + "20" : "white",
+                          color: cargo.nivel === n ? NIVEL_COR[n] : "#aaa",
+                          opacity: cargo.nivel === n ? 1 : 0.3,
+                          cursor: "default",
+                        }}>
+                        N{n}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[#003b26] text-xs font-bold">{NIVEL_LABEL[cargo.nivel]}</p>
                 </div>
               )}
 

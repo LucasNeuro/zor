@@ -289,7 +289,10 @@ export default function NovoAgentePage() {
 
     const res = await fetch("/api/agentes", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.NEXT_PUBLIC_INTERNAL_API_KEY || "",
+      },
       body: JSON.stringify(payload),
     });
 

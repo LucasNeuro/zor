@@ -57,6 +57,21 @@ export async function POST(request: NextRequest) {
   const supabase = db();
   const body = await request.json() as Record<string, unknown>;
 
+  // Validar cargo contra catálogo e forçar nivel/modelo do servidor
+  const cargoSlug = (body.cargo_slug || body.agente_slug) as string;
+  if (cargoSlug) {
+    const { data: cargoReal } = await supabase
+      .from("hub_cargos_catalogo")
+      .select("nivel, modelo_padrao, titulo")
+      .eq("slug", cargoSlug)
+      .maybeSingle();
+
+    if (cargoReal) {
+      body.nivel = cargoReal.nivel;
+      body.modelo_padrao = cargoReal.modelo_padrao;
+    }
+  }
+
   const {
     agente_slug, nome, cargo, area, nivel,
     modelo_padrao, humor, personalidade_id,

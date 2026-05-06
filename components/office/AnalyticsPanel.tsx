@@ -90,7 +90,9 @@ export default function AnalyticsPanel() {
     setCiclos(cics.data || []);
 
     try {
-      const res = await fetch("/api/windsor/campanhas");
+      const res = await fetch("/api/windsor/campanhas", {
+        headers: { "x-api-key": process.env.NEXT_PUBLIC_INTERNAL_API_KEY || "" },
+      });
       if (res.ok) setCampanhas(await res.json());
     } catch { /* Windsor opcional */ }
   }, []);

@@ -206,7 +206,25 @@ export async function POST(request: NextRequest) {
   const supabase = db();
 
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+
+    if (process.env.WEBHOOK_SECRET) {
+      const signature = request.headers.get("x-hub-signature-256")
+        || request.headers.get("x-signature")
+        || request.headers.get("x-evolution-signature");
+      const crypto = await import("crypto");
+      const expectedSig = crypto
+        .createHmac("sha256", process.env.WEBHOOK_SECRET)
+        .update(rawBody)
+        .digest("hex");
+      const incoming = (signature || "").replace("sha256=", "");
+      if (incoming !== expectedSig) {
+        console.warn("[WEBHOOK] Assinatura inválida — rejeitando");
+        return NextResponse.json({ error: "Assinatura inválida" }, { status: 401 });
+      }
+    }
+
+    const body = JSON.parse(rawBody);
 
     const event    = body.event as string | undefined;
     const data     = body.data as Record<string, unknown> | undefined;

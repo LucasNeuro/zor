@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import DecisionPanel from "@/components/office/DecisionPanel";
 import LiveMessageFeed from "@/components/office/LiveMessageFeed";
-import MobileExperience from "@/components/office/MobileExperience";
 import FFTAgentNode from "@/components/office/FFTAgentNode";
 import FFTLeadNode from "@/components/office/FFTLeadNode";
 import AnalyticsPanel from "@/components/office/AnalyticsPanel";
@@ -53,7 +52,7 @@ function MobileOfficeView({ leads, agentes, metricas }: {
   const router = useRouter();
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: "#0d1117" }}>
+    <div className="flex flex-col h-full" style={{ background: "#0d1117" }}>
       {/* Header mobile */}
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-3"
         style={{ background: "#161b22", borderBottom: "1px solid #30363d" }}>
@@ -74,10 +73,10 @@ function MobileOfficeView({ leads, agentes, metricas }: {
         )}
       </div>
 
-      {/* CANVAS MOBILE — CSS background-image persiste entre navegações */}
-      <div className="relative flex-shrink-0 overflow-hidden" style={{
-        height: "45vh",
-        maxHeight: "45vh",
+      {/* CANVAS MOBILE — ocupa o espaço restante após o header */}
+      <div className="relative overflow-hidden" style={{
+        flex: 1,
+        minHeight: 0,
         backgroundImage: "url(/sprites/office-mobile-bg.png)",
         backgroundSize: "contain",
         backgroundRepeat: "no-repeat",
@@ -180,24 +179,6 @@ function MobileOfficeView({ leads, agentes, metricas }: {
         </div>
       </div>
 
-      {/* Bottom nav */}
-      <div className="flex-shrink-0 flex"
-        style={{ background: "#161b22", borderTop: "1px solid #30363d", paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
-        {[
-          { icon: "🏢", label: "Office", rota: "/office" },
-          { icon: "👥", label: "Leads", rota: "/crm/leads" },
-          { icon: "💬", label: "Chat", rota: "/crm/atendimento" },
-          { icon: "✅", label: "Aprov.", rota: "/crm/aprovacoes" },
-          { icon: "🤖", label: "Agentes", rota: "/crm/agentes" },
-        ].map(tab => (
-          <button key={tab.rota} onClick={() => router.push(tab.rota)}
-            className="flex-1 flex flex-col items-center py-2 gap-0.5"
-            style={{ color: "#484f58" }}>
-            <span className="text-xl">{tab.icon}</span>
-            <span className="text-xs">{tab.label}</span>
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

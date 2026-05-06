@@ -71,6 +71,9 @@ export default function RootLayout({
       className={`${poppins.variable} ${playfair.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <head>
+        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta httpEquiv="Pragma" content="no-cache" />
+        <meta httpEquiv="Expires" content="0" />
         <link rel="preload" as="image" href="/sprites/office-bg.png" />
       </head>
       <body className={`${poppins.className} min-h-full flex flex-col`}>

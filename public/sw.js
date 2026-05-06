@@ -1,73 +1,22 @@
-const CACHE_NAME = 'obra10plus-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/office',
-  '/crm',
-  '/crm/leads',
-  '/crm/atendimento',
-  '/crm/aprovacoes',
-  '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png',
-];
+// Service worker auto-destruidor — apaga todos os caches antigos e se desregistra.
+// Qualquer SW anterior (obra10plus-v1, v2, …) que ainda esteja instalado vai
+// ser substituído por este, que imediatamente limpa tudo e força reload.
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS.map(url => {
-        return new Request(url, { cache: 'reload' });
-      })).catch(err => console.log('Cache parcial:', err));
-    })
-  );
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
-      );
-    })
-  );
-  self.clients.claim();
-});
+self.addEventListener('activate', async () => {
+  // Apaga todos os caches (v1, v2, qualquer nome)
+  const keys = await caches.keys();
+  await Promise.all(keys.map(k => caches.delete(k)));
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  // Remove este próprio SW do registro
+  await self.registration.unregister();
 
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return new Response(JSON.stringify({ erro: 'Sem conexão', offline: true }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      })
-    );
-    return;
-  }
-
-  if (url.hostname.includes('supabase')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        if (response.ok && event.request.method === 'GET') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => {
-        if (event.request.destination === 'document') {
-          return caches.match('/office');
-        }
-      });
-    })
-  );
+  // Força cada aba/janela a navegar para a própria URL (reload limpo, sem cache)
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  clients.forEach(client => client.navigate(client.url));
 });
 
 self.addEventListener('push', (event) => {

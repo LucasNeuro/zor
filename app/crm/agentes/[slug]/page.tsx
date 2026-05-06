@@ -109,7 +109,6 @@ type Agente = {
   nome: string;
   cargo?: string;
   area?: string;
-  segmento?: string;
   nivel?: string | number;
   modelo_padrao?: string;
   prefixo_mercado?: string;

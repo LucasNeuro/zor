@@ -154,7 +154,6 @@ export default function NovoAgentePage() {
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setCargos(data);
-        else if (Array.isArray(data)) setCargos(data);
       })
       .catch(() => setErroCargos(true))
       .finally(() => setCarregando(false));

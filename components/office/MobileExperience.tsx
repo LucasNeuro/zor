@@ -628,13 +628,11 @@ export default function MobileExperience() {
 
       {/* FUNDO */}
       <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%)" }} />
-        {/* Grade decorativa */}
-        <div style={{
-          position: "absolute", inset: 0, opacity: 0.03,
-          backgroundImage: "linear-gradient(#30363d 1px, transparent 1px), linear-gradient(90deg, #30363d 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
-        }} />
+        <img src="/sprites/office-mobile-bg.png" alt=""
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+        <div style={{ position: "absolute", inset: 0, background: "rgba(13,17,23,0.6)" }} />
       </div>
 
       {/* CONTEÚDO */}

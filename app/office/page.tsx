@@ -238,7 +238,7 @@ export default function OfficePage() {
   if (isMobile) return <MobileOfficeView leads={leads} agentes={agentes} metricas={metricas} />;
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "#0d1117" }}>
+    <div className="flex h-screen overflow-hidden">
 
       {/* ── SIDEBAR ESQUERDA ── */}
       <div className="flex-shrink-0 flex flex-col" style={{ width: "200px", background: "#161b22", borderRight: "1px solid #30363d" }}>
@@ -351,14 +351,8 @@ export default function OfficePage() {
           <div className="absolute inset-0"
             style={{ opacity: transitioning ? 0 : 1, transition: "opacity 0.2s ease", animation: !transitioning ? "office-enter 0.3s ease" : "none" }}>
 
-            {/* Fundo — CSS background-image persiste entre navegações client-side */}
-            <div className="absolute inset-0" style={{
-              backgroundImage: "url(/sprites/office-bg.png)",
-              backgroundSize: "contain",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center",
-              backgroundColor: "#0d1117",
-            }}>
+            {/* Fundo via globals.css body background-attachment: fixed */}
+            <div className="absolute inset-0">
               <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 30%, rgba(13,17,23,0.75) 100%)" }} />
               <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(13,17,23,0.25)" }} />
             </div>

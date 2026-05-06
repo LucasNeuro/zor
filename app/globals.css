@@ -47,6 +47,11 @@ html, body {
 
 body {
   background: var(--background);
+  background-image: url('/sprites/office-bg.png');
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-poppins, system-ui, sans-serif);
 }

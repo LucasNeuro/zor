@@ -457,7 +457,7 @@ function BottomNav({ metricas, onNavegar, visivel }: { metricas: Record<string, 
 export default function MobileExperience() {
   const router = useRouter();
   const [popups, setPopups] = useState<Popup[]>([]);
-  const [menuVisivel, setMenuVisivel] = useState(true);
+  const [menuVisivel, setMenuVisivel] = useState(false);
   const [conversaAberta, setConversaAberta] = useState<Conversa | null>(null);
   const hookMetricas = useMetricas();
   const metricas = {
@@ -635,28 +635,6 @@ export default function MobileExperience() {
         <div style={{ position: "absolute", inset: 0, background: "rgba(13,17,23,0.6)" }} />
       </div>
 
-      {/* CONTEÚDO */}
-      <div style={{ position: "relative", zIndex: 10, minHeight: "100svh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 16px 100px" }}>
-
-        {/* LOGO CENTRAL */}
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ width: 72, height: 72, borderRadius: 20, background: "#003b26", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", border: "2px solid rgba(201,162,74,0.3)" }}>
-            <span style={{ fontSize: 32 }}>🏢</span>
-          </div>
-          <h1 style={{ fontWeight: 900, fontSize: 24, color: "#c9a24a", margin: 0, lineHeight: 1 }}>OBRA10+</h1>
-          <p style={{ fontSize: 13, color: "#8b949e", margin: "4px 0 0 0" }}>Escritório Virtual</p>
-        </div>
-
-        {/* INDICADOR */}
-        {popups.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, opacity: 0.6, marginTop: 24 }}>
-            <div style={{ width: 24, height: 40, borderRadius: 12, border: "2px solid rgba(201,162,74,0.4)", display: "flex", justifyContent: "center", paddingTop: 4 }}>
-              <div style={{ width: 4, height: 8, borderRadius: 2, background: "#c9a24a", animation: "float-up 1.5s ease infinite" }} />
-            </div>
-            <p style={{ fontSize: 11, color: "rgba(201,162,74,0.6)", margin: 0 }}>role para ver menus</p>
-          </div>
-        )}
-      </div>
 
       {/* STACK DE POPUPS */}
       <div style={{ position: "fixed", bottom: 96, left: 12, right: 12, zIndex: 30, display: "flex", flexDirection: "column-reverse", gap: 8 }}>

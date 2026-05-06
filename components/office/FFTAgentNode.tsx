@@ -99,7 +99,6 @@ export default function FFTAgentNode({ slug, nome, cargo, x, y, status = "ativo"
       <div className="px-2 py-0.5 rounded text-center"
         style={{ background: "rgba(13,17,23,0.85)", border: `1px solid ${nodeCor}44`, backdropFilter: "blur(4px)" }}>
         <p className="font-bold text-xs leading-none" style={{ color: nodeCor }}>{nome}</p>
-        <p className="leading-none mt-0.5" style={{ color: "#484f58", fontSize: "9px" }}>{cargo}</p>
       </div>
 
       <div className="absolute bottom-full mb-2 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap"

@@ -74,11 +74,16 @@ function MobileOfficeView({ leads, agentes, metricas }: {
         )}
       </div>
 
-      {/* CANVAS MOBILE — escritório SVG + agentes */}
-      <div className="relative flex-shrink-0 overflow-hidden" style={{ maxHeight: "45vh" }}>
-        <img src="/sprites/office-mobile-bg.png" alt="Escritório"
-          className="w-full h-full object-cover"
-          onError={e => { (e.target as HTMLImageElement).style.opacity = "0.1"; }} />
+      {/* CANVAS MOBILE — CSS background-image persiste entre navegações */}
+      <div className="relative flex-shrink-0 overflow-hidden" style={{
+        height: "45vh",
+        maxHeight: "45vh",
+        backgroundImage: "url(/sprites/office-mobile-bg.png)",
+        backgroundSize: "contain",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center top",
+        backgroundColor: "#0d1117",
+      }}>
         <div className="absolute inset-0" style={{
           background: "radial-gradient(ellipse at center, transparent 20%, rgba(13,17,23,0.8) 100%)"
         }} />
@@ -365,14 +370,14 @@ export default function OfficePage() {
           <div className="absolute inset-0"
             style={{ opacity: transitioning ? 0 : 1, transition: "opacity 0.2s ease", animation: !transitioning ? "office-enter 0.3s ease" : "none" }}>
 
-            {/* Fundo */}
-            <div className="absolute inset-0">
-              <img
-                src="/sprites/office-bg.png"
-                alt="Escritório"
-                className="w-full h-full object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
+            {/* Fundo — CSS background-image persiste entre navegações client-side */}
+            <div className="absolute inset-0" style={{
+              backgroundImage: "url(/sprites/office-bg.png)",
+              backgroundSize: "contain",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center",
+              backgroundColor: "#0d1117",
+            }}>
               <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 30%, rgba(13,17,23,0.75) 100%)" }} />
               <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(13,17,23,0.25)" }} />
             </div>

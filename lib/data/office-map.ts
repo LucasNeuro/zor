@@ -5,13 +5,13 @@ export const MAPA_AGENTES: Record<string, { sala: string; x: number; y: number }
   // N1 — CEO
   ceo:                     { sala: "Sala do CEO",               x: 41.5, y: 21.1 },
   // N2 — Diretores
-  ariane:                  { sala: "Diretoria Executiva",       x: 27.2, y: 21.1 },
+  ariane:                  { sala: "Marketing Director",        x: 27.2, y: 19.5 },
   diretor_comercial:       { sala: "Sala de Reunião 01",        x: 56.3, y: 21.1 },
   diretor_operacoes:       { sala: "Sala de Reunião 02",        x: 68.8, y: 21.1 },
   // N3 — Gestores
   gestor_trafego:          { sala: "Performance & Tráfego",     x: 72.5, y: 44.4 },
   gestor_conteudo:         { sala: "Copy Lab",                  x: 38.8, y: 44.4 },
-  gerente_atendimento:     { sala: "Recepção",                  x: 52.8, y: 73.9 },
+  gerente_atendimento:     { sala: "Atendimento Ativo",          x: 57.0, y: 74.5 },
   gerente_vendas:          { sala: "Recepção",                  x: 58.8, y: 73.9 },
   gestor_projetos:         { sala: "Estratégia & Planejamento", x: 25.0, y: 44.4 },
   // N4 — Executores de Conteúdo
@@ -25,8 +25,8 @@ export const MAPA_AGENTES: Record<string, { sala: string; x: number; y: number }
   analista_trafego_meta:   { sala: "Performance & Tráfego",     x: 73.4, y: 48.9 },
   analytics_ia:            { sala: "Performance & Tráfego",     x: 77.5, y: 44.4 },
   // N4 — Executores Comercial / Vendas
-  sdr:                     { sala: "Recepção",                  x: 49.4, y: 73.9 },
-  atendente:               { sala: "Recepção",                  x: 55.6, y: 73.9 },
+  sdr:                     { sala: "Lead Qualification Zone",   x: 44.0, y: 78.0 },
+  atendente:               { sala: "Atendimento Ativo",          x: 62.0, y: 76.5 },
   closer:                  { sala: "Sala de Reunião 01",        x: 53.1, y: 21.1 },
   cs:                      { sala: "Sala de Reunião 02",        x: 65.6, y: 21.1 },
   crm_ia:                  { sala: "Estratégia & Planejamento", x: 21.9, y: 48.9 },

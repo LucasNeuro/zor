@@ -22,6 +22,12 @@ const MODELO_LABEL: Record<string, string> = {
   "claude-sonnet-4-6":         "Sonnet 4.6",
   "claude-haiku-4-5-20251001": "Haiku 4.5",
 };
+const MODELO_COR: Record<string, string> = {
+  "claude-opus-4-7":           "#a78bfa",
+  "claude-sonnet-4-6":         "#3b82f6",
+  "claude-haiku-4-5-20251001": "#6b7280",
+};
+const MODELOS_ORD = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"];
 
 const SECOES_CONHECIMENTO = [
   { id: "empresa",     label: "🏢 Sobre o negócio",      placeholder: "Quem somos, diferenciais, valores e proposta de valor..." },
@@ -434,6 +440,32 @@ export default function NovoAgentePage() {
                     ))}
                   </div>
                   <p className="text-[#003b26] text-xs font-bold">{NIVEL_LABEL[cargo.nivel]}</p>
+                </div>
+              )}
+
+              {/* Modelo de IA (visual-only, determinado pelo cargo) */}
+              {cargo && (
+                <div>
+                  <label className="text-[#003b26] text-xs font-black block mb-2">Modelo de IA</label>
+                  <div className="flex gap-2 mb-1.5">
+                    {MODELOS_ORD.map(modeloId => {
+                      const ativo = cargo.modelo_padrao === modeloId;
+                      const cor = MODELO_COR[modeloId];
+                      return (
+                        <div key={modeloId} className="flex-1 text-center py-2 rounded-lg border-2 text-xs font-black"
+                          style={{
+                            borderColor: ativo ? cor : "#e0ddd6",
+                            background: ativo ? cor + "20" : "white",
+                            color: ativo ? cor : "#aaa",
+                            opacity: ativo ? 1 : 0.3,
+                            cursor: "default",
+                          }}>
+                          {MODELO_LABEL[modeloId]}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[#003b26] text-xs font-bold">Determinado automaticamente pelo cargo</p>
                 </div>
               )}
 

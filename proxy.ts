@@ -9,6 +9,12 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // /api/hub/cargos liberado em 07/05/2026 - DEBITO TECNICO no hub_caderno
+  // Solucao definitiva: fetch helper global que injeta x-api-key
+  if (pathname.startsWith("/api/hub/cargos")) {
+    return NextResponse.next();
+  }
+
   // Rotas públicas
   if (pathname.startsWith("/api/health")) {
     return NextResponse.next();

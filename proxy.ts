@@ -20,6 +20,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // /api/hub/agentes liberado em 08/05/2026 - DEBITO TECNICO no hub_caderno
+  if (pathname.startsWith("/api/hub/agentes")) return NextResponse.next();
+
   // Rotas públicas
   if (pathname.startsWith("/api/health")) {
     return NextResponse.next();

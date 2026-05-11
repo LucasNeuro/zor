@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { defaultTenantId } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
@@ -61,6 +62,8 @@ export async function POST(request: NextRequest) {
     horario_fim,
     dias_semana,
     system_prompt_base,
+    tom_voz,
+    estilo_comunicacao,
   } = body as {
     cargo_slug?: string;
     nome?: string;
@@ -71,6 +74,8 @@ export async function POST(request: NextRequest) {
     horario_fim?: string;
     dias_semana?: unknown;
     system_prompt_base?: string;
+    tom_voz?: string;
+    estilo_comunicacao?: string;
   };
 
   if (!cargo_slug || !nome) {
@@ -79,6 +84,32 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+
+  const { data: cat, error: catErr } = await supabase
+    .from("hub_cargos_catalogo")
+    .select(
+      "slug, titulo, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao"
+    )
+    .eq("slug", cargo_slug)
+    .eq("ativo", true)
+    .maybeSingle();
+
+  if (catErr) {
+    return NextResponse.json({ error: catErr.message }, { status: 500 });
+  }
+  if (!cat) {
+    return NextResponse.json(
+      { error: `Cargo "${cargo_slug}" não encontrado em hub_cargos_catalogo (ativo).` },
+      { status: 400 }
+    );
+  }
+
+  const nivel = typeof cat.nivel === "number" ? cat.nivel : Number(cat.nivel) || 3;
+  const promptBase =
+    (system_prompt_base && String(system_prompt_base).trim()) ||
+    (cat.prompt_template && String(cat.prompt_template).trim()) ||
+    (cat.descricao && String(cat.descricao).trim()) ||
+    `Agente ${nome} — ${cat.titulo}. Siga as regras do Obra10+ e escale decisões críticas para humano.`;
 
   // Gerar slug único
   const baseSlug = slugify(nome);
@@ -98,23 +129,46 @@ export async function POST(request: NextRequest) {
     sufixo++;
   }
 
-  const { data, error } = await supabase
-    .from("hub_agente_identidade")
-    .insert({
-      agente_slug,
-      cargo_slug,
-      nome,
-      personalidade,
-      prefixo_mercado,
-      bio,
-      horario_inicio,
-      horario_fim,
-      dias_semana,
-      system_prompt_base,
-      ativo: true,
+  const podeFazer = Array.isArray(cat.pode_fazer_padrao) ? cat.pode_fazer_padrao : [];
+  const naoPode = Array.isArray(cat.nao_pode_fazer_padrao) ? cat.nao_pode_fazer_padrao : [];
+
+  const diaLabels = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+  const rawDias = Array.isArray(dias_semana) ? (dias_semana as unknown[]) : [0, 1, 2, 3, 4, 5, 6];
+  const diasParsed = rawDias
+    .map((d) => {
+      const n = typeof d === "number" ? d : parseInt(String(d), 10);
+      return Number.isFinite(n) && n >= 0 && n <= 6 ? diaLabels[n] : null;
     })
-    .select()
-    .single();
+    .filter((x): x is string => x != null);
+  const diasTexto = [...new Set(diasParsed)];
+
+  const row: Record<string, unknown> = {
+    agente_slug,
+    nome: nome.trim(),
+    cargo: cat.titulo as string,
+    area: (cat.area as string) || "geral",
+    nivel,
+    personalidade: (personalidade && String(personalidade).trim()) || "## Tom\n\nTom alinhado ao cargo.",
+    tom_voz: (tom_voz && String(tom_voz).trim()) || "profissional e cordial",
+    estilo_comunicacao: (estilo_comunicacao && String(estilo_comunicacao).trim()) || "Direto",
+    system_prompt_base: promptBase,
+    modelo_padrao: (cat.modelo_padrao as string) || "claude-haiku-4-5-20251001",
+    modelo_critico: (cat.modelo_critico as string) || "claude-sonnet-4-6",
+    modelo_alto_valor: (cat.modelo_alto_valor as string) || "claude-opus-4-7",
+    pode_fazer: podeFazer,
+    nao_pode_fazer: naoPode,
+    sempre_dizer: [],
+    nunca_dizer: [],
+    prefixo_mercado: (prefixo_mercado && String(prefixo_mercado).trim()) || "GRL",
+    bio: (bio && String(bio).trim()) || null,
+    horario_inicio: horario_inicio || "08:00:00",
+    horario_fim: horario_fim || "22:00:00",
+    dias_semana: diasTexto.length > 0 ? diasTexto : ["seg", "ter", "qua", "qui", "sex"],
+    ativo: true,
+    tenant_id: defaultTenantId(),
+  };
+
+  const { data, error } = await supabase.from("hub_agente_identidade").insert(row).select().single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

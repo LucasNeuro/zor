@@ -27,6 +27,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Obra10LogoBadge, Obra10BrandHeader } from "@/components/brand/Obra10Brand";
+import { CrmSignOutButton } from "@/components/crm/CrmSignOutButton";
 
 const SIDEBAR_STORAGE_KEY = "crm-sidebar-expanded";
 
@@ -367,6 +368,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
               <Building2 size={sidebarExpanded ? 18 : 20} strokeWidth={2} className="flex-shrink-0" aria-hidden />
               {sidebarExpanded && <span className="truncate">Escritório virtual</span>}
             </Link>
+            <CrmSignOutButton expanded={sidebarExpanded} />
           </div>
         </aside>
       </div>
@@ -460,7 +462,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                 <X size={20} strokeWidth={2} aria-hidden />
               </button>
             </div>
-            <div className="flex-shrink-0 border-b px-2 py-2" style={{ borderColor: "var(--obra-borda, #30363d)" }}>
+            <div className="flex-shrink-0 space-y-2 border-b px-2 py-2" style={{ borderColor: "var(--obra-borda, #30363d)" }}>
               <Link
                 href="/office"
                 onClick={() => setMobileMenuOpen(false)}
@@ -470,6 +472,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                 <Building2 size={18} strokeWidth={2} className="flex-shrink-0" aria-hidden />
                 Escritório virtual
               </Link>
+              <div className="px-0">
+                <CrmSignOutButton expanded />
+              </div>
             </div>
             <nav className="min-h-0 flex-1 overflow-y-auto py-2" style={{ WebkitOverflowScrolling: "touch" }}>
               {NAV_GROUPS.map(group => {

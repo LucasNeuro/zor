@@ -498,8 +498,9 @@ Sequência idealizada de uma obra ponta a ponta:
 ### 5.4 Por que os ciclos não rodam
 
 1. **SDR (contínuo):** dispara pelo webhook com lead novo, mas sem **`ANTHROPIC_API_KEY`** em produção a chamada Claude não completa o ciclo.  
-2. **Programados:** precisam de **Vercel Cron**, **pg_cron** ou outro agendador chamando a execução (ex.: rota tipo **`/api/ciclos/executar?ciclo=X`** — conforme desenho discutido no documento). As rotas existem sob **`app/api/ciclos/{atendente,gerente,diretor}/`**, mas **ninguém as aciona** automaticamente hoje.  
-3. **Ciclos “Diretor”:** mesmo com cron, falhariam enquanto **`agente_slug = 'diretor'`** não existir em **`hub_agente_identidade`**.  
+2. **Programados:** no repositório ativo existem **crons no `vercel.json`** que chamam `/api/ciclos/atendente`, `/api/ciclos/gerente`, `/api/ciclos/diretor` e `/api/ml/ciclo`. Em produção, **`cronRequestAuthorized`** aceita o header **`x-vercel-cron: 1`** (injetado pelo Vercel nas invocações de cron) ou **`CRON_SECRET`** (Bearer / query / header). Em **plano Hobby** do Vercel, crons podem não estar disponíveis — confirmar no dashboard.  
+3. **Slug `diretor` inexistente:** corrigido na migração **`supabase/migrations/20260509120000_hub_ciclos_slugs_e_tenants.sql`** (`diretor` → `diretor_geral_ia` / `diretor_operacoes` conforme nome do ciclo). Aplicar no Supabase se ainda não aplicado.  
+4. **Bug de contagem (até 2026-05-11):** a rota **atendente** usava `.single()` com `ilike` rígido no nome do ciclo; se o seed tiver outro texto, **`hub_ciclos_ia.total_execucoes` nunca subia**. A rota **gerente** não atualizava `hub_ciclos_ia` nem `hub_ciclos_log`. **Correção no código:** lookup tolerante em `atendente` e registo completo em `gerente`.
 
 ---
 

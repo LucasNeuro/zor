@@ -162,6 +162,41 @@ async function cicloSLA() {
   return { alertas, total: alertas.length };
 }
 
+/** Resolve linha em hub_ciclos_ia (nomes variam no seed — evita .single() falhar e total_execucoes ficar sempre 0). */
+async function resolveAtendenteCicloId(ciclo: string): Promise<string | undefined> {
+  const mode = ciclo === "sla" ? "sla" : "followup";
+  const patterns =
+    mode === "followup"
+      ? ["%Follow-up%", "%Follow up%", "%followup%", "%follow-up%", "%Followup%"]
+      : ["%SLA%", "%Monitor SLA%", "%monitor%", "%sla%", "%SLA %"];
+
+  for (const pat of patterns) {
+    const { data } = await supabase
+      .from("hub_ciclos_ia")
+      .select("id")
+      .eq("agente_slug", "atendente")
+      .eq("tipo", "programado")
+      .ilike("nome", pat)
+      .maybeSingle();
+    if (data?.id) return data.id as string;
+  }
+
+  const { data: rows } = await supabase
+    .from("hub_ciclos_ia")
+    .select("id, nome")
+    .eq("agente_slug", "atendente")
+    .eq("tipo", "programado");
+
+  if (!rows?.length) return undefined;
+
+  if (mode === "followup") {
+    const row = rows.find((r) => /follow|followup|follow-up/i.test(String(r.nome ?? "")));
+    return row?.id as string | undefined;
+  }
+  const row = rows.find((r) => /sla|monitor|tempo|resposta/i.test(String(r.nome ?? "")));
+  return row?.id as string | undefined;
+}
+
 export async function GET(request: NextRequest) {
   const ciclo = request.nextUrl.searchParams.get("ciclo") || "followup";
 
@@ -171,16 +206,11 @@ export async function GET(request: NextRequest) {
 
   const inicio = Date.now();
 
-  const { data: cicloConfig } = await supabase
-    .from("hub_ciclos_ia")
-    .select("id")
-    .eq("agente_slug", "atendente")
-    .eq("tipo", "programado")
-    .ilike("nome", `%${ciclo === "followup" ? "Follow-up" : "SLA"}%`)
-    .single();
+  const cicloId = await resolveAtendenteCicloId(ciclo);
+  const cicloConfig = cicloId ? { id: cicloId } : null;
 
   const logRes = await supabase.from("hub_ciclos_log").insert({
-    ciclo_id: cicloConfig?.id,
+    ciclo_id: cicloConfig?.id ?? null,
     agente_slug: "atendente",
     status: "rodando",
   }).select("id").single();
@@ -208,7 +238,7 @@ export async function GET(request: NextRequest) {
         .from("hub_ciclos_ia")
         .select("total_execucoes")
         .eq("id", cicloConfig.id)
-        .single();
+        .maybeSingle();
       await supabase
         .from("hub_ciclos_ia")
         .update({

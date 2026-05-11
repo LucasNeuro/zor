@@ -19,6 +19,8 @@ npm run dev
 
 Abra [http://localhost:3001](http://localhost:3001).
 
+**TLS / `fetch failed` só depois de clicar Entrar:** o browser fala com o Supabase, mas o **servidor Next.js** (`/api/auth/crm-session`) também faz `fetch` ao Supabase. Em alguns PCs (antivírus, proxy SSL) o Node falha com erro de certificado ou `fetch failed`. Em **desenvolvimento local**, use `npm run dev:insecure-tls` em vez de `npm run dev` (apenas local; **nunca** em produção). Alternativa correta em ambiente empresarial: `NODE_EXTRA_CA_CERTS` com o PEM do certificado raiz que assina o tráfego interceptado — ver comentário em [`.env.example`](.env.example).
+
 ## Variáveis de ambiente
 
 | Variável | Uso |
@@ -33,16 +35,36 @@ Abra [http://localhost:3001](http://localhost:3001).
 | `EVOLUTION_API_URL` / `EVOLUTION_API_KEY` | Envio WhatsApp |
 | `WEBHOOK_HMAC_SECRET` | Validação HMAC do webhook Evolution — ver [`docs/EVOLUTION_SETUP.md`](docs/EVOLUTION_SETUP.md) |
 | `WINDSOR_API_KEY` | Ciclo de tráfego (métricas de campanha) |
-| `INTERNAL_API_KEY` | Chave para rotas `/api/*` (servidor) |
+| `INTERNAL_API_KEY` | Chave para rotas `/api/*` quando não há sessão CRM (crons, scripts, alguns `fetch` do cliente) |
 | `NEXT_PUBLIC_INTERNAL_API_KEY` | Mesmo valor exposto ao browser — usado em `lib/internal-api-headers.ts` |
+| `LOGIN_REQUIRE_PUBLIC_USERS_ROW` | `true` — exige `public.users` com `auth_id`, `status = Ativo` (`record_status`) e e-mail igual ao Auth |
+| `LOGIN_ENFORCE_APP_USERS` | Alias do anterior (mesmo efeito); use o nome que preferir na equipe |
+| `LOGIN_ALLOWED_APP_ROLES` | (Opcional) Papéis permitidos no login (vírgula), p.ex. `owner,admin`; compara com `public.users.role` (valores do enum `app_role` no Postgres, case-insensitive) |
 | `DEFAULT_TENANT_ID` | UUID do tenant padrão nas escritas server-side (padrão: Obra10 fixo da migração) |
 | `PORTAL_VERIFY_RATE_MAX` / `PORTAL_VERIFY_RATE_WINDOW_MS` | Rate limit do POST `/api/parceiros/portal/verify` |
 
 Modelo de variáveis (sem segredos): copie [`.env.example`](.env.example) para `.env.local`.
 
-## Middleware (`middleware.ts`)
+## Login e logout (plataforma)
 
-Rotas `/api/*` exigem header `x-api-key` igual a `INTERNAL_API_KEY`, exceto as documentadas em [`proxy.ts`](proxy.ts): WhatsApp webhook, health, verificação do portal parceiro, validação CPF/CNPJ, ciclos agendados e `GET /api/ml/ciclo` (auth própria nas handlers).
+Fluxo em produção e em local (`/office`, `/crm`, `/login`):
+
+1. **Utilizador** acede a `/login`, faz login com **email + senha** (Supabase Auth — provider Email).
+2. O browser chama `POST /api/auth/crm-session` com o `access_token` da sessão Supabase. A rota valida o token em `/auth/v1/user` (mesma identidade que o Supabase Auth) e grava o cookie **httpOnly** `obra10_crm_access`. Controlo adicional de acesso é opcional via `public.users` (variáveis `LOGIN_*` abaixo), não via lista de e-mails em ambiente.
+3. O **`proxy.ts`** (Next.js 16) corre antes das rotas: para **`/office/*`** e **`/crm/*`** exige esse cookie válido; caso contrário redireciona para `/login?next=…`. Para rotas `/api/*` protegidas, aceita **ou** o cookie de sessão **ou** o header `x-api-key` (= `INTERNAL_API_KEY`) — útil para crons e integrações sem “login humano”.
+4. **Logout:** o botão “Sair” no layout do CRM chama `DELETE /api/auth/crm-session` (limpa o cookie) e `supabase.auth.signOut()` (limpa a sessão no cliente).
+
+**Tabela `public.users` (app):** o `POST /api/auth/crm-session` valida alinhamento com o schema (`auth_id` → `auth.users`, `email`, `role` → `app_role`, `status` → `record_status`):
+
+- Com **`LOGIN_ENFORCE_APP_USERS=true`** ou **`LOGIN_REQUIRE_PUBLIC_USERS_ROW=true`**: exige linha com `auth_id` = UUID em **Authentication**, `status` compatível com **Ativo**, e e-mail da sessão igual ao **`users.email`**.
+- Com **`LOGIN_ALLOWED_APP_ROLES=owner,admin`** (exemplo): além disso, `role` tem de estar na lista (valores do enum `app_role` no Postgres).
+
+**Recomendação:** defina **owner/admin** (e outros papéis) na coluna **`role`** quando usar `LOGIN_ENFORCE_APP_USERS` / `LOGIN_ALLOWED_APP_ROLES`; acrescente novos valores ao enum com `ALTER TYPE public.app_role ADD VALUE ...` quando necessário. Cada utilizador: **Auth** (e-mail/senha) e, se a verificação estiver ligada, linha em **`public.users`** com o mesmo **e-mail** e **`auth_id`** coerente.
+ [http://localhost:3001/login](http://localhost:3001/login) → após sucesso, [http://localhost:3001/office](http://localhost:3001/office) (ou `?next=` para outra rota interna).
+
+## Proxy (`proxy.ts`)
+
+Rotas **`/office/*`** e **`/crm/*`** exigem cookie de sessão válido (mesma regra que acima). Rotas `/api/*` exigem header `x-api-key` igual a `INTERNAL_API_KEY` **ou** esse cookie, exceto as documentadas em [`proxy.ts`](proxy.ts): WhatsApp webhook, health, verificação do portal parceiro, validação CPF/CNPJ, ciclos agendados, `GET /api/ml/ciclo`, `POST`/`DELETE /api/auth/crm-session` (auth própria nas handlers ou rota pública controlada).
 
 ## RLS multi-tenant (Supabase)
 
@@ -74,8 +96,9 @@ Scripts de referência em `lib/supabase/*.sql`. Migração alinhada ao documento
 - `supabase/migrations/20260509120000_hub_ciclos_slugs_e_tenants.sql` — `hub_tenants`, `tenant_id` piloto, slugs `diretor_*` em `hub_ciclos_ia`.
 - `supabase/migrations/20260510130000_rls_tenant_pilot.sql` — RLS piloto.
 - `supabase/migrations/20260510140000_hub_cotacoes.sql` — cotações fornecedor + RLS.
+- `supabase/migrations/20260511120000_app_role_owner_admin.sql` — valores opcionais `owner` / `admin` no enum `app_role` (login + coluna `users.role`).
 
-Aplicar no projeto Supabase (SQL editor ou `supabase db push` se usar CLI).
+Se o **Dashboard** não conseguir apagar utilizadores (**"Database error loading user"**), usa o SQL [`docs/sql/delete-auth-users-by-email.sql`](docs/sql/delete-auth-users-by-email.sql) e volta a criar com o script de provisionamento.
 
 ## Backup
 

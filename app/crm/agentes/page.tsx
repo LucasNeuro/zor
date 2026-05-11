@@ -42,15 +42,33 @@ export default function AgentesPage() {
   const [agentes, setAgentes] = useState<Agente[]>([]);
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
   const [carregando, setCarregando] = useState(true);
+  const [erroLista, setErroLista] = useState<string | null>(null);
 
   useEffect(() => {
+    setErroLista(null);
     fetch("/api/hub/agentes?ativo=true", { headers: internalApiHeaders() })
-      .then((r) => r.json())
-      .then((data) => {
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const msg =
+            typeof data?.error === "string"
+              ? data.error
+              : `Erro ${r.status} ao carregar agentes.`;
+          setErroLista(msg);
+          setAgentes([]);
+          return;
+        }
         if (Array.isArray(data)) setAgentes(data);
         else if (Array.isArray(data?.agentes)) setAgentes(data.agentes);
+        else {
+          setAgentes([]);
+          setErroLista("Resposta inesperada do servidor.");
+        }
       })
-      .catch(() => {})
+      .catch((e: Error) => {
+        setErroLista(e?.message || "Falha de rede ao carregar agentes.");
+        setAgentes([]);
+      })
       .finally(() => setCarregando(false));
   }, []);
 
@@ -134,13 +152,29 @@ export default function AgentesPage() {
       </div>
 
       {/* GRID */}
+      {erroLista && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 8,
+            background: "#3d1414",
+            border: "1px solid #f8514966",
+            color: "#f85149",
+            fontSize: 13,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {erroLista}
+        </div>
+      )}
       {carregando ? (
         <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando...</p>
-      ) : agentesFiltrados.length === 0 ? (
+      ) : agentesFiltrados.length === 0 && !erroLista ? (
         <p style={{ color: "#8b949e", fontSize: 13 }}>
           Nenhum agente encontrado.
         </p>
-      ) : (
+      ) : agentesFiltrados.length === 0 ? null : (
         <div
           style={{
             display: "grid",

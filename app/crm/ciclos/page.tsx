@@ -148,10 +148,13 @@ export default function CiclosPage() {
             className="flex-1 py-3 text-sm transition-colors"
             style={{
               color: aba === t.id ? "#c9a24a" : "#8b949e",
-              borderBottom: aba === t.id ? "2px solid #c9a24a" : "2px solid transparent",
               background: "#0d1117",
-              border: "none",
               cursor: "pointer",
+              outline: "none",
+              borderTop: "none",
+              borderLeft: "none",
+              borderRight: "none",
+              borderBottom: aba === t.id ? "2px solid #c9a24a" : "2px solid transparent",
             }}>
             {t.label}
           </button>
@@ -250,7 +253,13 @@ export default function CiclosPage() {
               const cor = a.tipo === "critico" ? "#b3261e" : a.tipo === "importante" ? "#c9a24a" : a.tipo === "sugestao" ? "#003b26" : "#8b949e";
               return (
                 <div key={a.id as string} className="rounded-xl p-3"
-                  style={{ background: "#161b22", border: `1px solid ${cor}44`, borderLeft: `3px solid ${cor}` }}>
+                  style={{
+                    background: "#161b22",
+                    borderTop: `1px solid ${cor}44`,
+                    borderRight: `1px solid ${cor}44`,
+                    borderBottom: `1px solid ${cor}44`,
+                    borderLeft: `3px solid ${cor}`,
+                  }}>
                   <div className="flex items-start justify-between mb-1">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">

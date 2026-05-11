@@ -1,5 +1,5 @@
 /**
- * Cabeçalho esperado pelo middleware em `proxy.ts` para rotas /api internas.
+ * Cabeçalho esperado pelo `proxy.ts` para rotas /api internas (alternativa: sessão Supabase no browser).
  * No cliente use NEXT_PUBLIC_INTERNAL_API_KEY (mesmo valor que INTERNAL_API_KEY).
  */
 export function internalApiHeaders(): Record<string, string> {

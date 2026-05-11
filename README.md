@@ -31,7 +31,7 @@ Abra [http://localhost:3001](http://localhost:3001).
 | `PORTAL_HMAC_SECRET` | (Opcional) Assinatura do link `/parceiro/dashboard`; padrão: `CRON_SECRET` |
 | `ANTHROPIC_API_KEY` | Respostas IA |
 | `EVOLUTION_API_URL` / `EVOLUTION_API_KEY` | Envio WhatsApp |
-| `WEBHOOK_HMAC_SECRET` | Validação HMAC do webhook Evolution — ver `EVOLUTION_SETUP.md` |
+| `WEBHOOK_HMAC_SECRET` | Validação HMAC do webhook Evolution — ver [`../docs/EVOLUTION_SETUP.md`](../docs/EVOLUTION_SETUP.md) |
 | `WINDSOR_API_KEY` | Ciclo de tráfego (métricas de campanha) |
 | `INTERNAL_API_KEY` | Chave para rotas `/api/*` (servidor) |
 | `NEXT_PUBLIC_INTERNAL_API_KEY` | Mesmo valor exposto ao browser — usado em `lib/internal-api-headers.ts` |
@@ -83,10 +83,14 @@ Workflow GitHub Actions: `.github/workflows/supabase-backup.yml`. Configure o se
 
 ## Documentação
 
+**No repositório (`docs/`):**
+
 - `docs/01_documento_mestre.md` — visão e fases do produto
 - `docs/diagnostico-fase0.md` — saneamento e checklist Fase 0
 - `docs/backlog-fases-6-9.md` — épicos pós 27/05
 - `docs/fase5-go-live-checklist.md` — go/no-go e rollback
+
+**Workspace local `vitual/docs/` (pasta irmã, fora do clone Git):** documento mestre estendido, Evolution/Railway, manifest de proteção, relatórios e status — ver índice em [`../docs/README.md`](../docs/README.md).
 
 ## Scripts
 

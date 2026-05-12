@@ -53,10 +53,11 @@ type AgenteLog = {
   [key: string]: unknown;
 };
 
-type ListMode = "ativos" | "inativos" | "arquivados";
+type ListMode = "todos" | "ativos" | "inativos" | "arquivados";
 type DetailTab = "editar" | "logs";
 
 function urlParaModo(modo: ListMode): string {
+  if (modo === "todos") return "/api/hub/agentes?todos=true";
   if (modo === "arquivados") return "/api/hub/agentes?arquivados=somente";
   if (modo === "inativos") return "/api/hub/agentes?ativo=false";
   return "/api/hub/agentes?ativo=true";
@@ -86,7 +87,7 @@ function AgentesView() {
   const { setSlot } = useCrmHeaderSlot();
 
   const [agentes, setAgentes] = useState<Agente[]>([]);
-  const [modoLista, setModoLista] = useState<ListMode>("ativos");
+  const [modoLista, setModoLista] = useState<ListMode>("todos");
   const [carregando, setCarregando] = useState(true);
   const [erroLista, setErroLista] = useState<string | null>(null);
   const [drawerNovoOpen, setDrawerNovoOpen] = useState(false);
@@ -320,6 +321,7 @@ function AgentesView() {
               : a
           )
           .filter((a) => {
+            if (modoLista === "todos") return true;
             if (modoLista === "ativos") return a.ativo !== false && !a.arquivado_em;
             if (modoLista === "inativos") return a.ativo === false && !a.arquivado_em;
             return !!a.arquivado_em;
@@ -340,6 +342,7 @@ function AgentesView() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
             {(
               [
+                { id: "todos" as const, label: "Todos" },
                 { id: "ativos" as const, label: "Ativos" },
                 { id: "inativos" as const, label: "Inativos" },
                 { id: "arquivados" as const, label: "Arquivados" },
@@ -484,7 +487,7 @@ function AgentesView() {
                         {agente.nivel}
                       </span>
                     )}
-                    {modoLista === "arquivados" && (
+                    {(modoLista === "arquivados" || modoLista === "todos") && agente.arquivado_em && (
                       <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#7c3aed1f", color: "#c4b5fd", border: "1px solid #7c3aed44" }}>
                         Arquivado
                       </span>

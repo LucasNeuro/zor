@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
   const supabase = db();
   const { searchParams } = new URL(request.url);
   const ativo = searchParams.get("ativo");
+  const todos = searchParams.get("todos") === "true";
   /** `somente` = linhas com arquivado_em preenchido (exclui ativos/inativos “de produção”). */
   const arquivados = searchParams.get("arquivados");
 
@@ -40,7 +41,9 @@ export async function GET(request: NextRequest) {
       query = query.eq("tenant_id", defaultTenantId());
     }
 
-    if (arquivados === "somente") {
+    if (todos) {
+      // Inclui ativos, inativos e arquivados.
+    } else if (arquivados === "somente") {
       query = query.not("arquivado_em", "is", null);
     } else {
       query = query.is("arquivado_em", null);

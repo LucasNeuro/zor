@@ -1,6 +1,13 @@
 # AI Skills — Escritório Virtual Obra10+
 
-## Skills Instaladas
+## Cursor IDE
+
+**Skills ativas para o Agent:** pasta **`.cursor/skills/`** (mesmo conteúdo; formato oficial Cursor). Ver [`.cursor/skills/README.md`](../.cursor/skills/README.md).
+
+- Abre o workspace na raiz **`escritorio-virtual/`**.
+- O agente usa a `description` de cada `SKILL.md` para decidir quando aplicar; podes anexar um ficheiro com `@.cursor/skills/…/SKILL.md` no chat.
+
+## Claude Code (comandos `/nome`)
 
 | Skill | Categoria | O que faz |
 |-------|-----------|-----------|
@@ -28,13 +35,11 @@ No Claude Code:
 
 ```
 .ai-skills/
-├── installed/          ← skills ativas
-│   ├── frontend-design/SKILL.md
-│   ├── dashboard-premium/SKILL.md
-│   ├── marketing-agent/SKILL.md
-│   └── ai-agent-system/SKILL.md
+├── installed/          ← espelho / Claude Code (sincronizar com .cursor/skills se editar)
 ├── candidates/         ← em avaliação
 ├── rejected/           ← descartadas
 ├── docs/               ← documentação extra
 └── tests/              ← testes de skill
+
+.cursor/skills/         ← usado pelo Cursor Agent (fonte recomendada para edição no Cursor)
 ```

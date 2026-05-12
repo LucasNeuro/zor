@@ -1,13 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "@/lib/supabase/client";
 
 interface Modulo { id: string; modulo_numero: number; titulo: string; status: string; nota: number | null; feedback: string | null; concluido_em: string | null; tentativas: number; }
 interface Documento { id: string; tipo: string; nome_arquivo: string | null; status: string; observacoes: string | null; enviado_em: string | null; }

@@ -241,7 +241,7 @@ export function DetailModal({ area, onClose }: Props) {
         </div>
 
         {/* Scrollable content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 20px", scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.10) transparent" } as React.CSSProperties}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 20px" } as React.CSSProperties}>
           <ContentByArea area={area} />
         </div>
       </div>

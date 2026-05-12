@@ -15,10 +15,6 @@ export default function OnboardingTenantPage() {
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white px-4 py-8 max-w-2xl mx-auto">
-      <h1 className="text-xl font-bold text-[#c9a24a] mb-2">Onboarding multi-empresa (piloto)</h1>
-      <p className="text-sm text-[#8b949e] mb-6">
-        Use esta página como roteiro interno até o fluxo guiado estar no produto.
-      </p>
       <ol className="list-decimal list-inside space-y-3 text-sm text-[#e6edf3]">
         {itens.map((t) => (
           <li key={t}>{t}</li>

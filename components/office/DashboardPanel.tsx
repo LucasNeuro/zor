@@ -108,8 +108,6 @@ export function DashboardPanel({ agents, activeMeeting }: Props) {
       style={{
         background: "#131c2e",
         borderLeft: "1px solid rgba(255,255,255,0.07)",
-        scrollbarWidth: "thin",
-        scrollbarColor: "rgba(255,255,255,0.10) transparent",
       }}
     >
 

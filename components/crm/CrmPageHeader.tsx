@@ -1,0 +1,63 @@
+"use client";
+
+import type { CSSProperties, ReactNode } from "react";
+import { CRM_HEADER_BAR_GRADIENT } from "@/lib/crm-shell-theme";
+
+export type CrmPageHeaderProps = {
+  title: string;
+  /** Texto ou conteúdo sob o título (contagens, descrição curta, etc.) */
+  subtitle?: ReactNode;
+  /** Botões / menu à direita */
+  actions?: ReactNode;
+  className?: string;
+  /**
+   * No desktop CRM: faixa colorida está num layer full-bleed por baixo da sidebar;
+   * este header fica só com o conteúdo (fundo transparente em md+).
+   */
+  blendDesktopUnderlap?: boolean;
+};
+
+/**
+ * Faixa superior padrão das páginas do CRM (título + subtítulo + ações).
+ * Use em cada `page.tsx` com conteúdo específico; depois pode-se ligar a `usePathname()` + mapa se quiserem defaults por rota.
+ */
+export function CrmPageHeader({
+  title,
+  subtitle,
+  actions,
+  className = "",
+  blendDesktopUnderlap = false,
+}: CrmPageHeaderProps) {
+  const barStyle = blendDesktopUnderlap
+    ? ({
+        ["--crm-header-grad" as string]: CRM_HEADER_BAR_GRADIENT,
+      } as CSSProperties)
+    : ({
+        background: CRM_HEADER_BAR_GRADIENT,
+        boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.25)",
+        borderBottomWidth: 1,
+        borderBottomStyle: "solid",
+        borderBottomColor: "var(--obra-borda, #30363d)",
+      } satisfies CSSProperties);
+
+  return (
+    <header
+      className={`relative z-[12] flex min-h-14 flex-shrink-0 items-start justify-between gap-4 border-b px-4 py-3 md:px-6 ${
+        blendDesktopUnderlap
+          ? "max-md:[background:var(--crm-header-grad)] max-md:[box-shadow:inset_0_-1px_0_rgba(0,0,0,0.25)] md:!border-b-0 md:!bg-transparent md:!shadow-none"
+          : ""
+      } ${className}`}
+      style={barStyle}
+    >
+      <div className="min-w-0 flex-1">
+        <h1 className="text-lg font-bold tracking-tight text-white md:text-xl">{title}</h1>
+        {subtitle != null && subtitle !== "" ? (
+          <div className="mt-0.5 text-xs leading-snug md:text-sm" style={{ color: "var(--obra-texto-2, #8b949e)" }}>
+            {subtitle}
+          </div>
+        ) : null}
+      </div>
+      {actions ? <div className="flex flex-shrink-0 items-center gap-2">{actions}</div> : null}
+    </header>
+  );
+}

@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { KpiBar } from "@/components/crm/KpiBar";
 import { SearchBar } from "@/components/crm/SearchBar";
 import { FilterPills } from "@/components/crm/FilterPills";
@@ -73,6 +75,8 @@ const TD: React.CSSProperties = {
 };
 
 export default function NegociosPage() {
+  const pathname = usePathname();
+  const { setSlot } = useCrmHeaderSlot();
   const [negocios, setNegocios] = useState<Negocio[]>([]);
   const [total, setTotal] = useState(0);
   const [busca, setBusca] = useState("");
@@ -120,19 +124,33 @@ export default function NegociosPage() {
   const concluidoCount = negocios.filter((n) => n.etapa === "concluido").length;
   const temMais = negocios.length < total;
 
-  return (
-    <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: "24px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h1 style={{ color: "#e6edf3", fontSize: 22, fontWeight: 700, margin: 0 }}>Negócios</h1>
+  useEffect(() => {
+    setSlot({
+      path: pathname,
+      actions: (
         <button
+          type="button"
           onClick={() => alert("Formulário disponível em breve")}
-          style={{ background: "#003b26", color: "#c9a24a", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+          style={{
+            background: "#003b26",
+            color: "#c9a24a",
+            border: "none",
+            borderRadius: 8,
+            padding: "10px 20px",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
         >
           + Novo
         </button>
-      </div>
+      ),
+    });
+    return () => setSlot(null);
+  }, [pathname, setSlot]);
 
+  return (
+    <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: "24px" }}>
       {/* KPI Bar — by etapa */}
       <KpiBar kpis={[
         { label: "Total", value: total, color: "#c9a24a" },

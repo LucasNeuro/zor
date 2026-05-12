@@ -1,12 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "@/lib/supabase/client";
 
 export default function NovoParceiro() {
   const router = useRouter();
@@ -52,9 +47,6 @@ export default function NovoParceiro() {
         style={{ background: "none", border: "none", color: "#8b949e", fontSize: 13, cursor: "pointer", marginBottom: 16, padding: 0 }}>
         ← Voltar
       </button>
-
-      <h1 style={{ color: "#e6edf3", fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>Convidar Parceiro</h1>
-      <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 24px" }}>Gere um link de auto-cadastro para um novo parceiro ou profissional.</p>
 
       {!linkGerado ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

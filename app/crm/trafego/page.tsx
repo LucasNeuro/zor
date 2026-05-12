@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 
 type Campanha = {
   campaign_name: string;
@@ -29,6 +31,8 @@ function num(v: number) {
 }
 
 export default function TrafegoPage() {
+  const pathname = usePathname();
+  const { setSlot } = useCrmHeaderSlot();
   const [periodo, setPeriodo] = useState("7d");
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,25 +63,33 @@ export default function TrafegoPage() {
     { label: "Conversões", value: String(totalConversoes), cor: "#22C55E" },
   ];
 
-  return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: "#0d1117" }}>
-      {/* Header */}
-      <div className="flex items-center gap-4 px-5 py-3 flex-shrink-0" style={{ background: "#161b22", borderBottom: "1px solid #30363d" }}>
-        <div className="flex-1">
-          <h1 className="font-black text-base" style={{ color: "#e6edf3" }}>Tráfego & Campanhas</h1>
-          <p className="text-xs" style={{ color: "#8b949e" }}>Dados Windsor.ai · Meta Ads · Google Ads</p>
-        </div>
+  useEffect(() => {
+    setSlot({
+      path: pathname,
+      actions: (
         <div className="flex rounded-lg p-0.5" style={{ background: "#21262d" }}>
-          {PERIODOS.map(p => (
-            <button key={p.value} onClick={() => setPeriodo(p.value)}
-              className="px-3 py-1.5 rounded-md text-xs font-bold transition-colors"
-              style={{ background: periodo === p.value ? "#30363d" : "transparent", color: periodo === p.value ? "#e6edf3" : "#8b949e" }}>
+          {PERIODOS.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => setPeriodo(p.value)}
+              className="rounded-md px-3 py-1.5 text-xs font-bold transition-colors"
+              style={{
+                background: periodo === p.value ? "#30363d" : "transparent",
+                color: periodo === p.value ? "#e6edf3" : "#8b949e",
+              }}
+            >
               {p.label}
             </button>
           ))}
         </div>
-      </div>
+      ),
+    });
+    return () => setSlot(null);
+  }, [pathname, setSlot, periodo]);
 
+  return (
+    <div className="flex h-screen flex-col overflow-hidden" style={{ background: "#0d1117" }}>
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-px flex-shrink-0" style={{ background: "#21262d" }}>
         {kpis.map(k => (

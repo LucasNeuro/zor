@@ -3,12 +3,6 @@
 export default function Configuracoes() {
   return (
     <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: 0 }}>Configurações</h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', margin: '4px 0 0' }}>
-          Regras operacionais sem precisar de programador
-        </p>
-      </div>
       {[
         { titulo: 'Horário de Atendimento', desc: 'Defina janelas por dia da semana e canal' },
         { titulo: 'SLA por Canal', desc: 'WhatsApp, email, telefone — prazos diferentes' },

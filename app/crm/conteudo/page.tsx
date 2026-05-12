@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+
 const CATEGORIAS = [
   { icon: "✍️", label: "Copy", descricao: "Scripts, títulos e textos persuasivos", cor: "#c9a24a" },
   { icon: "📱", label: "Social", descricao: "Posts, stories e reels para redes sociais", cor: "#3B82F6" },
@@ -10,19 +14,26 @@ const CATEGORIAS = [
 ];
 
 export default function ConteudoPage() {
-  return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: "#0d1117" }}>
-      {/* Header */}
-      <div className="flex items-center gap-4 px-5 py-3 flex-shrink-0" style={{ background: "#161b22", borderBottom: "1px solid #30363d" }}>
-        <div className="flex-1">
-          <h1 className="font-black text-base" style={{ color: "#e6edf3" }}>Conteúdo & Copy</h1>
-          <p className="text-xs" style={{ color: "#8b949e" }}>Central de criação de conteúdo — em desenvolvimento</p>
-        </div>
-        <span className="text-xs px-2 py-1 rounded-full font-bold" style={{ background: "#c9a24a20", color: "#c9a24a", border: "1px solid #c9a24a40" }}>
+  const pathname = usePathname();
+  const { setSlot } = useCrmHeaderSlot();
+
+  useEffect(() => {
+    setSlot({
+      path: pathname,
+      actions: (
+        <span
+          className="rounded-full border px-2 py-1 text-xs font-bold"
+          style={{ background: "#c9a24a20", color: "#c9a24a", border: "1px solid #c9a24a40" }}
+        >
           Em breve
         </span>
-      </div>
+      ),
+    });
+    return () => setSlot(null);
+  }, [pathname, setSlot]);
 
+  return (
+    <div className="flex h-screen flex-col overflow-hidden" style={{ background: "#0d1117" }}>
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-3 gap-4 mb-8">

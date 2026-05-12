@@ -43,6 +43,11 @@ html, body {
   --obra-texto-3: #484f58;
   --obra-borda: #30363d;
   --obra-borda-2: #21262d;
+  /* Barras de rolagem — alinhadas ao sideover / DecisionPanel (global) */
+  --obra-scrollbar-size: 3px;
+  --obra-scrollbar-thumb: rgba(255, 255, 255, 0.22);
+  --obra-scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
+  --obra-scrollbar-track: transparent;
 }
 
 body {
@@ -84,11 +89,43 @@ body {
   animation: fadeIn 200ms ease;
 }
 
-.panel-scroll::-webkit-scrollbar { width: 3px; }
-.panel-scroll::-webkit-scrollbar-track { background: transparent; }
+/* ══ Scrollbars globais (mesmo padrão do sideover: fino, trilho transparente, polegar claro arredondado) ══ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--obra-scrollbar-thumb) var(--obra-scrollbar-track);
+}
+*::-webkit-scrollbar {
+  width: var(--obra-scrollbar-size);
+  height: var(--obra-scrollbar-size);
+}
+*::-webkit-scrollbar-track {
+  background: var(--obra-scrollbar-track);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--obra-scrollbar-thumb);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--obra-scrollbar-thumb-hover);
+}
+
+.panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--obra-scrollbar-thumb) var(--obra-scrollbar-track);
+}
+.panel-scroll::-webkit-scrollbar {
+  width: var(--obra-scrollbar-size);
+  height: var(--obra-scrollbar-size);
+}
+.panel-scroll::-webkit-scrollbar-track {
+  background: var(--obra-scrollbar-track);
+}
 .panel-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
-  border-radius: 2px;
+  background: var(--obra-scrollbar-thumb);
+  border-radius: 9999px;
+}
+.panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--obra-scrollbar-thumb-hover);
 }
 
 @keyframes dotBlink {
@@ -181,27 +218,44 @@ body {
 }
 
 /* ── Scrollbars ─────────────────────────────────────────── */
+/* Legado: mesmas tokens do sideover (evita barras grossas em telas antigas) */
 .scrollbar-soft {
   scrollbar-width: thin;
-  scrollbar-color: rgba(18, 56, 43, 0.24) transparent;
+  scrollbar-color: var(--obra-scrollbar-thumb) var(--obra-scrollbar-track);
 }
-.scrollbar-soft::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollbar-soft::-webkit-scrollbar {
+  width: var(--obra-scrollbar-size);
+  height: var(--obra-scrollbar-size);
+}
+.scrollbar-soft::-webkit-scrollbar-track {
+  background: var(--obra-scrollbar-track);
+}
 .scrollbar-soft::-webkit-scrollbar-thumb {
-  background: rgba(18, 56, 43, 0.22);
-  border-radius: 999px;
+  background: var(--obra-scrollbar-thumb);
+  border-radius: 9999px;
+}
+.scrollbar-soft::-webkit-scrollbar-thumb:hover {
+  background: var(--obra-scrollbar-thumb-hover);
 }
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #d1d5db transparent;
+  scrollbar-color: var(--obra-scrollbar-thumb) var(--obra-scrollbar-track);
 }
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar {
+  width: var(--obra-scrollbar-size);
+  height: var(--obra-scrollbar-size);
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--obra-scrollbar-track);
+}
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
+  background: var(--obra-scrollbar-thumb);
+  border-radius: 9999px;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--obra-scrollbar-thumb-hover);
+}
 
 /* ── Brand animations ───────────────────────────────────── */
 @keyframes panelSlideIn {

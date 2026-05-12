@@ -194,7 +194,6 @@ export function AgentPanel({ agent, onClose }: Props) {
         {/* ── Scrollable content ── */}
         <div
           className="flex-1 overflow-y-auto"
-          style={{ scrollbarWidth: "thin", scrollbarColor: "#e5e7eb transparent" }}
         >
           <div className="px-5 py-4">
             {/* Sala */}

@@ -51,15 +51,10 @@ const STATUS_LABELS = {
 export default function IntegracoesPage() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--obra-dark, #0d1117)", padding: "32px 24px" }}>
-      {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <Link href="/office" style={{ fontSize: 11, color: "var(--obra-texto-2, #8b949e)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 16 }}>
           ← Escritório Virtual
         </Link>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--obra-texto, #e6edf3)", margin: 0, lineHeight: 1 }}>Integrações</h1>
-        <p style={{ fontSize: 13, color: "var(--obra-texto-2, #8b949e)", margin: "6px 0 0 0" }}>
-          Conecte suas plataformas de marketing para ver dados reais no escritório virtual.
-        </p>
       </div>
 
       {/* Cards */}

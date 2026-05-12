@@ -1,12 +1,9 @@
 "use client";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 
 interface Lead {
   id: string;
@@ -37,6 +34,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function AtendimentoPage() {
+  const pathname = usePathname();
+  const { setSlot } = useCrmHeaderSlot();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [leadSel, setLeadSel] = useState<Lead | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
@@ -88,19 +87,22 @@ export default function AtendimentoPage() {
     return m < 1 ? "agora" : m < 60 ? `${Math.round(m)}min` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
   };
 
-  return (
-    <div className="h-screen flex flex-col bg-gray-950 overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-3 bg-gray-900 border-b border-gray-800 flex-shrink-0">
-        <div>
-          <h1 className="text-white font-bold text-lg">Central de Atendimento</h1>
-          <p className="text-gray-500 text-xs">{leads.length} conversas ativas</p>
+  useEffect(() => {
+    setSlot({
+      path: pathname,
+      subtitle: `${leads.length} conversas ativas`,
+      actions: (
+        <div className="flex items-center gap-2 rounded-full bg-gray-800 px-3 py-1.5">
+          <div className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+          <span className="text-xs font-bold text-green-400">Ariane online</span>
         </div>
-        <div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-green-400 text-xs font-bold">Ariane online</span>
-        </div>
-      </div>
+      ),
+    });
+    return () => setSlot(null);
+  }, [pathname, setSlot, leads.length]);
 
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-gray-950">
       <div className="flex flex-1 overflow-hidden">
         {/* Lista */}
         <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-800">

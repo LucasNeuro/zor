@@ -31,13 +31,6 @@ export default function DashboardPage() {
 
   return (
     <div style={{ background: "#0d1117", minHeight: "100vh", padding: "1.5rem" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ color: "#e6edf3", fontSize: 22, fontWeight: 800, margin: 0 }}>Dashboard</h1>
-        <p style={{ color: "#8b949e", fontSize: 13, margin: "4px 0 0" }}>
-          {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
-        </p>
-      </div>
-
       {/* Atendimento */}
       <div style={{ marginBottom: 8 }}>
         <p style={{ color: "#484f58", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 8px" }}>Atendimento</p>

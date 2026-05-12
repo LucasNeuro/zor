@@ -1,11 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 
 interface Contato {
   id: string;
@@ -40,6 +37,8 @@ function Toggle({ ativo, onChange }: { ativo: boolean; onChange: () => void }) {
 const CANAL_LABEL: Record<string, string> = { whatsapp: "WhatsApp", email: "E-mail", ambos: "Ambos" };
 
 export default function ContatosPage() {
+  const pathname = usePathname();
+  const { setSlot } = useCrmHeaderSlot();
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [loading, setLoading] = useState(true);
   const [mostraNovo, setMostraNovo] = useState(false);
@@ -107,21 +106,36 @@ export default function ContatosPage() {
     color: "#e6edf3", fontSize: 14, boxSizing: "border-box" as const,
   };
 
+  useEffect(() => {
+    setSlot({
+      path: pathname,
+      actions: !mostraNovo ? (
+        <button
+          type="button"
+          onClick={() => {
+            resetForm();
+            setMostraNovo(true);
+          }}
+          style={{
+            padding: "10px 16px",
+            borderRadius: 10,
+            border: "none",
+            cursor: "pointer",
+            background: "#c9a24a",
+            color: "#0d1117",
+            fontWeight: 800,
+            fontSize: 13,
+          }}
+        >
+          + Adicionar
+        </button>
+      ) : undefined,
+    });
+    return () => setSlot(null);
+  }, [pathname, setSlot, mostraNovo]);
+
   return (
     <div style={{ background: "#0d1117", minHeight: "100vh", padding: "1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ color: "#e6edf3", fontSize: 22, fontWeight: 800, margin: 0 }}>Contatos de Notificação</h1>
-          <p style={{ color: "#8b949e", fontSize: 13, margin: "4px 0 0" }}>Quem recebe alertas de novos leads e aprovações</p>
-        </div>
-        {!mostraNovo && (
-          <button onClick={() => { resetForm(); setMostraNovo(true); }}
-            style={{ padding: "10px 16px", borderRadius: 10, border: "none", cursor: "pointer", background: "#c9a24a", color: "#0d1117", fontWeight: 800, fontSize: 13 }}>
-            + Adicionar
-          </button>
-        )}
-      </div>
-
       {mostraNovo && (
         <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 14, padding: 18, marginBottom: 20 }}>
           <h2 style={{ color: "#e6edf3", fontSize: 15, fontWeight: 700, margin: "0 0 14px" }}>

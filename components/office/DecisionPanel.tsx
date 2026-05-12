@@ -1,12 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "@/lib/supabase/client";
 
 interface Lead {
   id: string;
@@ -269,10 +264,13 @@ export default function DecisionPanel() {
             className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors"
             style={{
               color: aba === t.id ? "#c9a24a" : "#8b949e",
-              borderBottom: `2px solid ${aba === t.id ? "#c9a24a" : "transparent"}`,
-              background: "none", border: "none",
+              background: "none",
+              borderTop: "none",
+              borderLeft: "none",
+              borderRight: "none",
+              borderBottomWidth: "2px",
+              borderBottomStyle: "solid",
               borderBottomColor: aba === t.id ? "#c9a24a" : "transparent",
-              borderBottomStyle: "solid", borderBottomWidth: "2px",
               cursor: "pointer",
             }}>
             {t.label}

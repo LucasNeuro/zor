@@ -1,12 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const sb = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { useRouter, usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -111,6 +107,8 @@ function borderColor(iso: string) {
 
 export default function LeadsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { setSlot } = useCrmHeaderSlot();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [busca, setBusca] = useState("");
@@ -130,16 +128,16 @@ export default function LeadsPage() {
   const [dragOver, setDragOver] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
-    const { data } = await sb.from("hub_leads_crm").select("*").order("criado_em", { ascending: false });
+    const { data } = await supabase.from("hub_leads_crm").select("*").order("criado_em", { ascending: false });
     if (data) setLeads(data as Lead[]);
   }, []);
 
   useEffect(() => {
     carregar();
-    const ch = sb.channel("leads_rt")
+    const ch = supabase.channel("leads_rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "hub_leads_crm" }, carregar)
       .subscribe();
-    return () => { sb.removeChannel(ch); };
+    return () => { supabase.removeChannel(ch); };
   }, [carregar]);
 
   async function abrirDetalhe(lead: Lead) {
@@ -148,9 +146,9 @@ export default function LeadsPage() {
     setConfirmandoPerda(false);
     setMotivoPerda("");
     const [{ data: a }, { data: n }, { data: m }] = await Promise.all([
-      sb.from("hub_atividades").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }).limit(30),
-      sb.from("hub_notas").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }),
-      sb.from("hub_memorias_lead").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }),
+      supabase.from("hub_atividades").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }).limit(30),
+      supabase.from("hub_notas").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }),
+      supabase.from("hub_memorias_lead").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }),
     ]);
     setAtividades((a || []) as Atividade[]);
     setNotas((n || []) as Nota[]);
@@ -160,7 +158,7 @@ export default function LeadsPage() {
   async function criarLead() {
     if (!form.nome.trim()) return;
     setSalvando(true);
-    await sb.from("hub_leads_crm").insert({
+    await supabase.from("hub_leads_crm").insert({
       nome: form.nome.trim(),
       telefone: form.telefone || null,
       origem: form.origem,
@@ -174,7 +172,7 @@ export default function LeadsPage() {
   }
 
   async function moverEstagio(leadId: string, novoEstagio: string) {
-    await sb.from("hub_leads_crm").update({ estagio: novoEstagio, atualizado_em: new Date().toISOString() }).eq("id", leadId);
+    await supabase.from("hub_leads_crm").update({ estagio: novoEstagio, atualizado_em: new Date().toISOString() }).eq("id", leadId);
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estagio: novoEstagio as Estagio } : l));
     if (detalhe?.id === leadId) setDetalhe(d => d ? { ...d, estagio: novoEstagio as Estagio } : null);
   }
@@ -182,15 +180,15 @@ export default function LeadsPage() {
   async function marcarGanho() {
     if (!detalhe) return;
     await moverEstagio(detalhe.id, "ganho");
-    await sb.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "status_change", descricao: "Lead marcado como GANHO", feito_por: "humano", feito_por_tipo: "humano" });
+    await supabase.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "status_change", descricao: "Lead marcado como GANHO", feito_por: "humano", feito_por_tipo: "humano" });
     setDetalhe(null);
   }
 
   async function marcarPerdido() {
     if (!detalhe || !motivoPerda.trim()) return;
-    await sb.from("hub_leads_crm").update({ motivo_perda: motivoPerda }).eq("id", detalhe.id);
+    await supabase.from("hub_leads_crm").update({ motivo_perda: motivoPerda }).eq("id", detalhe.id);
     await moverEstagio(detalhe.id, "perdido");
-    await sb.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "status_change", descricao: `Lead perdido: ${motivoPerda}`, feito_por: "humano", feito_por_tipo: "humano" });
+    await supabase.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "status_change", descricao: `Lead perdido: ${motivoPerda}`, feito_por: "humano", feito_por_tipo: "humano" });
     setDetalhe(null);
     setMotivoPerda("");
     setConfirmandoPerda(false);
@@ -198,9 +196,9 @@ export default function LeadsPage() {
 
   async function adicionarNota() {
     if (!detalhe || !novaNota.trim()) return;
-    const { data } = await sb.from("hub_notas").insert({ lead_id: detalhe.id, conteudo: novaNota.trim(), criado_por: "humano" }).select().single();
+    const { data } = await supabase.from("hub_notas").insert({ lead_id: detalhe.id, conteudo: novaNota.trim(), criado_por: "humano" }).select().single();
     if (data) setNotas(prev => [data as Nota, ...prev]);
-    await sb.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "nota", descricao: novaNota.trim().slice(0, 80), feito_por: "humano", feito_por_tipo: "humano" });
+    await supabase.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "nota", descricao: novaNota.trim().slice(0, 80), feito_por: "humano", feito_por_tipo: "humano" });
     setNovaNota("");
   }
 
@@ -215,43 +213,73 @@ export default function LeadsPage() {
   const emRisco = leads.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 3_600_000).reduce((s, l) => s + l.valor_estimado, 0);
   const pipeline = leads.filter(l => !["ganho", "perdido"].includes(l.estagio)).reduce((s, l) => s + l.valor_estimado, 0);
 
-  return (
-    <div className="flex flex-col h-screen bg-gray-950 overflow-hidden">
+  useEffect(() => {
+    setSlot({
+      path: pathname,
+      subtitle: `${leads.length} leads · tempo real`,
+      actions: (
+        <>
+          <div className="inline-flex w-full rounded-lg bg-[#21262d] p-0.5 min-[480px]:w-auto">
+            <button
+              type="button"
+              onClick={() => setView("kanban")}
+              className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "kanban" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"}`}
+            >
+              Kanban
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("lista")}
+              className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "lista" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"}`}
+            >
+              Lista
+            </button>
+          </div>
+          <input
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar lead..."
+            className="w-full min-h-11 min-w-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-44"
+          />
+          <select
+            value={filtroEstagio}
+            onChange={e => setFiltroEstagio(e.target.value)}
+            className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
+          >
+            <option value="">Todos os estágios</option>
+            {ESTAGIOS.map(e => (
+              <option key={e.id} value={e.id}>
+                {e.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setNovoAberto(true)}
+            className="min-h-11 w-full touch-manipulation rounded-lg bg-[#c9a24a] px-4 py-2 text-sm font-bold text-[#003b26] transition-colors hover:bg-[#e0b86a] min-[480px]:min-h-10 min-[480px]:w-auto"
+          >
+            + Novo Lead
+          </button>
+        </>
+      ),
+    });
+    return () => setSlot(null);
+  }, [pathname, setSlot, leads.length, view, busca, filtroEstagio]);
 
-      {/* ─── HEADER ─── */}
-      <div className="flex items-center gap-4 px-5 py-3 bg-gray-900 border-b border-gray-800 flex-shrink-0">
-        <div className="flex-1">
-          <h1 className="text-white font-black text-base">Pipeline de Leads</h1>
-          <p className="text-gray-500 text-xs">{leads.length} leads · tempo real</p>
-        </div>
-        <div className="flex bg-gray-800 rounded-lg p-0.5">
-          <button onClick={() => setView("kanban")} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${view === "kanban" ? "bg-gray-700 text-white" : "text-gray-500 hover:text-white"}`}>Kanban</button>
-          <button onClick={() => setView("lista")} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${view === "lista" ? "bg-gray-700 text-white" : "text-gray-500 hover:text-white"}`}>Lista</button>
-        </div>
-        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar lead..."
-          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 border border-gray-700 focus:border-[#c9a24a] outline-none w-44 placeholder:text-gray-600" />
-        <select value={filtroEstagio} onChange={e => setFiltroEstagio(e.target.value)}
-          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 border border-gray-700 outline-none">
-          <option value="">Todos os estágios</option>
-          {ESTAGIOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
-        </select>
-        <button onClick={() => setNovoAberto(true)}
-          className="bg-[#c9a24a] hover:bg-[#e0b86a] text-white text-sm px-4 py-2 rounded-lg font-bold transition-colors flex-shrink-0">
-          + Novo Lead
-        </button>
-      </div>
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
 
       {/* ─── METRICS ─── */}
-      <div className="grid grid-cols-4 gap-px bg-gray-800 flex-shrink-0">
+      <div className="grid grid-cols-2 gap-px sm:grid-cols-4 flex-shrink-0 bg-[#30363d]">
         {[
           { label: "Leads Hoje", value: String(leads.filter(l => new Date(l.criado_em).toDateString() === hoje).length), cor: "#F97316" },
           { label: "Sem Resposta +24h", value: String(semResposta), cor: semResposta > 0 ? "#EF4444" : "#22C55E" },
           { label: "Em Risco +1h", value: emRisco > 0 ? moeda(emRisco) : "—", cor: emRisco > 0 ? "#EAB308" : "#6B7280" },
           { label: "Pipeline Total", value: moeda(pipeline), cor: "#22C55E" },
         ].map(m => (
-          <div key={m.label} className="bg-gray-900 px-5 py-2.5">
-            <p className="text-gray-500 text-xs mb-0.5">{m.label}</p>
-            <p className="font-black text-lg" style={{ color: m.cor }}>{m.value}</p>
+          <div key={m.label} className="bg-[#161b22] px-3 py-2.5 sm:px-5">
+            <p className="mb-0.5 text-xs text-[#8b949e]">{m.label}</p>
+            <p className="text-base font-black sm:text-lg" style={{ color: m.cor }}>{m.value}</p>
           </div>
         ))}
       </div>

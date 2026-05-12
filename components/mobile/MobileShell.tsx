@@ -1,21 +1,18 @@
 "use client";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import type { LucideIcon } from "lucide-react";
+import { Building2, Users, MessageSquare, ClipboardCheck, Bot } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
 
 interface Props { children: React.ReactNode; }
 
-const ABAS = [
-  { id: "office", label: "Office", icon: "🏢", rota: "/office" },
-  { id: "leads", label: "Leads", icon: "👥", rota: "/crm/leads" },
-  { id: "chat", label: "Chat", icon: "💬", rota: "/crm/atendimento" },
-  { id: "aprovacoes", label: "Aprov.", icon: "✅", rota: "/crm/aprovacoes" },
-  { id: "agentes", label: "Agentes", icon: "🤖", rota: "/crm/agentes" },
+const ABAS: { id: string; label: string; icon: LucideIcon; rota: string }[] = [
+  { id: "office", label: "Office", icon: Building2, rota: "/office" },
+  { id: "leads", label: "Leads", icon: Users, rota: "/crm/leads" },
+  { id: "chat", label: "Chat", icon: MessageSquare, rota: "/crm/atendimento" },
+  { id: "aprovacoes", label: "Aprov.", icon: ClipboardCheck, rota: "/crm/aprovacoes" },
+  { id: "agentes", label: "Agentes", icon: Bot, rota: "/crm/agentes" },
 ];
 
 function abaAtivaPorRota(pathname: string): string {
@@ -129,7 +126,7 @@ export default function MobileShell({ children }: Props) {
 
   return (
     <div className="flex flex-col min-h-[100dvh]" style={{ background: "#0d1117" }}>
-      {pathname !== "/office" && (
+      {pathname !== "/office" && !pathname.startsWith("/crm") && (
         <div className="flex items-center gap-3 px-4 flex-shrink-0"
           style={{
             background: "#161b22",
@@ -203,12 +200,13 @@ export default function MobileShell({ children }: Props) {
           {ABAS.map(aba => {
             const ativo = abaAtiva === aba.id;
             const badge = getBadge(aba.id);
+            const TabIcon = aba.icon;
             return (
               <button key={aba.id} onClick={() => router.push(aba.rota)}
                 className="flex-1 flex flex-col items-center gap-0.5 py-2 transition-colors"
                 style={{ color: ativo ? "#c9a24a" : "#484f58", background: "none", border: "none", cursor: "pointer" }}>
                 <div className="relative">
-                  <span className="text-xl">{aba.icon}</span>
+                  <TabIcon size={22} strokeWidth={1.5} className="block" aria-hidden />
                   {badge > 0 && (
                     <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center font-black"
                       style={{ background: "#b3261e", color: "white", fontSize: "9px" }}>

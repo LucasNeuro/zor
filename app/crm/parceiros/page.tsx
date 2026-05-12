@@ -1,12 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { useRouter, usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 
 interface Modulo {
   modulo_numero: number;
@@ -89,6 +85,8 @@ function CardParceiro({ p, onClick }: { p: Parceiro; onClick: () => void }) {
 
 export default function ParceirosPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { setSlot } = useCrmHeaderSlot();
   const [parceiros, setParceiros] = useState<Parceiro[]>([]);
   const [aba, setAba] = useState<"captacao" | "homologacao" | "homologados">("captacao");
   const [loading, setLoading] = useState(true);
@@ -122,24 +120,26 @@ export default function ParceirosPage() {
 
   const contagens = { captacao: captacao.length, homologacao: homologacao.length, homologados: homologados.length };
 
-  return (
-    <div style={{ background: "#0d1117", minHeight: "100vh" }}>
-      {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-10"
-        style={{ background: "#161b22", borderBottom: "1px solid #30363d" }}>
-        <div>
-          <h1 className="text-white font-bold">Parceiros</h1>
-          <p className="text-xs" style={{ color: "#8b949e" }}>
-            {parceiros.length} cadastrados · {homologados.length} homologados
-          </p>
-        </div>
-        <button onClick={() => router.push("/crm/parceiros/novo")}
-          className="text-sm px-3 py-1.5 rounded-lg font-bold"
-          style={{ background: "#c9a24a", color: "#0d1117", border: "none", cursor: "pointer" }}>
+  useEffect(() => {
+    setSlot({
+      path: pathname,
+      subtitle: `${parceiros.length} cadastrados · ${homologados.length} homologados`,
+      actions: (
+        <button
+          type="button"
+          onClick={() => router.push("/crm/parceiros/novo")}
+          className="rounded-lg px-3 py-1.5 text-sm font-bold"
+          style={{ background: "#c9a24a", color: "#0d1117", cursor: "pointer" }}
+        >
           + Convidar
         </button>
-      </div>
+      ),
+    });
+    return () => setSlot(null);
+  }, [pathname, setSlot, parceiros.length, homologados.length, router]);
 
+  return (
+    <div className="flex min-h-full flex-col" style={{ background: "#0d1117" }}>
       {/* Search */}
       <div className="px-4 pt-3 pb-2">
         <input
@@ -161,8 +161,17 @@ export default function ParceirosPage() {
             className="flex-1 py-2.5 text-xs transition-colors"
             style={{
               color: aba === t.id ? "#c9a24a" : "#8b949e",
-              borderBottom: aba === t.id ? "2px solid #c9a24a" : "2px solid transparent",
-              background: "#0d1117", border: "none", cursor: "pointer",
+              background: "#0d1117",
+              cursor: "pointer",
+              borderTopWidth: 0,
+              borderLeftWidth: 0,
+              borderRightWidth: 0,
+              borderTopStyle: "none",
+              borderLeftStyle: "none",
+              borderRightStyle: "none",
+              borderBottomWidth: 2,
+              borderBottomStyle: "solid",
+              borderBottomColor: aba === t.id ? "#c9a24a" : "transparent",
             }}>
             {t.label}
           </button>

@@ -1,15 +1,24 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Variáveis de ambiente do Supabase não encontradas. Verifique o .env.local')
+  throw new Error("Variáveis de ambiente do Supabase não encontradas. Verifique o .env.local");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  realtime: { params: { eventsPerSecond: 10 } },
-})
+/** Uma instância por contexto browser; reutiliza em HMR para evitar avisos GoTrueClient duplicados. */
+const globalForSupabase = globalThis as unknown as { __supabaseBrowser?: SupabaseClient };
+
+export const supabase =
+  globalForSupabase.__supabaseBrowser ??
+  createClient(supabaseUrl, supabaseAnonKey, {
+    realtime: { params: { eventsPerSecond: 10 } },
+  });
+
+if (typeof globalThis !== "undefined") {
+  globalForSupabase.__supabaseBrowser = supabase;
+}
 
 export type HubPessoa = {
   id: string

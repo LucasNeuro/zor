@@ -1,12 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "@/lib/supabase/client";
 
 const ESTAGIOS = ["novo","qualificando","qualificado","proposta","negociando","fechamento","ganho","perdido"];
 const ESTAGIO_COR: Record<string, string> = {

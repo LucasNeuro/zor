@@ -14,8 +14,8 @@
   "categories": ["business", "productivity"],
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icon", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
     {
@@ -23,21 +23,21 @@
       "short_name": "Leads",
       "description": "Ver pipeline de leads",
       "url": "/crm/leads",
-      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon", "sizes": "192x192" }]
     },
     {
       "name": "Atendimento",
       "short_name": "Chat",
       "description": "Atender leads",
       "url": "/crm/atendimento",
-      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon", "sizes": "192x192" }]
     },
     {
       "name": "Aprovações",
       "short_name": "Aprovar",
       "description": "Decisões pendentes",
       "url": "/crm/aprovacoes",
-      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon", "sizes": "192x192" }]
     }
   ]
 }

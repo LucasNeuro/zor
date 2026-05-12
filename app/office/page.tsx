@@ -2,11 +2,14 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { Zap, Users, MessageSquare, Handshake, MailPlus, Bot, Settings, Bell, Building2, BarChart3, LayoutDashboard } from "lucide-react";
+import { Obra10BrandHeader } from "@/components/brand/Obra10Brand";
+import { CrmSessionFooter } from "@/components/crm/CrmSessionFooter";
 import { MAPA_AGENTES, CORES_AREA, TAMANHO_NIVEL, getInitials } from "@/lib/data/office-map";
 import MobileAgentDrawer from "@/components/mobile/MobileAgentDrawer";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { supabase } from "@/lib/supabase/client";
 
 const panelLoading = (
   <div className="flex items-center justify-center p-6 text-xs" style={{ color: "#484f58" }}>
@@ -38,11 +41,6 @@ const AnalyticsPanel = dynamic(() => import("@/components/office/AnalyticsPanel"
   ssr: false,
   loading: () => panelLoading,
 });
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 // Leads na área de espera + entrada (coordenadas % calibradas pelo office-map.json 1672×941)
 // waiting_area nav(740,720)=44.3%,76.5%  main_entrance nav(850,840)=50.8%,89.3%
@@ -165,17 +163,8 @@ function MobileOfficeView({ leads, metricas }: {
           style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)" }}
           onClick={e => e.stopPropagation()}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-xs font-black text-white"
-              style={{ background: "linear-gradient(135deg, #003b26, #005c3d)" }}
-            >
-              O+
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-black tracking-wide text-white">OBRA10+</p>
-              <p className="truncate text-[8px] tracking-widest text-[#c9a24a]">ESCRITÓRIO</p>
-            </div>
+          <div className="min-w-0 flex-1">
+            <Obra10BrandHeader size="sm" subtitle="ESCRITÓRIO VIRTUAL" />
           </div>
           {metricas.aprovacoesPendentes > 0 && (
             <button
@@ -497,40 +486,39 @@ export default function OfficePage() {
   if (narrow) return <MobileOfficeView leads={leads} metricas={metricas} />;
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-[100dvh] md:h-screen overflow-hidden box-border bg-[#0a0a0a] md:p-3 md:gap-3">
 
-      {/* ── SIDEBAR ESQUERDA ── */}
-      <div className="flex-shrink-0 flex flex-col" style={{ width: "200px", background: "#161b22", borderRight: "1px solid #30363d" }}>
+      {/* ── SIDEBAR ESQUERDA (flutuante em desktop) ── */}
+      <div
+        className="flex-shrink-0 flex flex-col w-[200px] rounded-2xl border overflow-hidden md:self-stretch md:h-[calc(100dvh-1.5rem)] md:max-h-[calc(100dvh-1.5rem)]"
+        style={{
+          background: "#161b22",
+          borderColor: "#30363d",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset",
+        }}
+      >
 
         {/* Logo */}
         <div className="px-4 py-4" style={{ borderBottom: "1px solid #30363d" }}>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-sm"
-              style={{ background: "linear-gradient(135deg, #003b26, #005c3d)", boxShadow: "0 0 12px rgba(0,59,38,0.5)" }}>
-              O+
-            </div>
-            <div>
-              <p className="text-white font-black text-sm leading-none" style={{ letterSpacing: "0.05em" }}>OBRA10+</p>
-              <p className="leading-none" style={{ color: "#c9a24a", fontSize: "9px", letterSpacing: "0.1em" }}>ESCRITÓRIO VIRTUAL</p>
-            </div>
-          </div>
+          <Obra10BrandHeader size="md" />
         </div>
 
         {/* Modo toggle */}
         <div className="p-3" style={{ borderBottom: "1px solid #30363d" }}>
           <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid #30363d" }}>
             {([
-              { id: "escritorio", label: "🏢 Office" },
-              { id: "analytics", label: "📊 Analytics" },
-            ] as const).map(m => (
+              { id: "escritorio" as const, label: "Office", Icon: Building2 },
+              { id: "analytics" as const, label: "Analytics", Icon: BarChart3 },
+            ]).map(m => (
               <button key={m.id} onClick={() => toggleModo(m.id)}
-                className="flex-1 py-1.5 text-xs font-bold transition-all"
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold transition-all"
                 style={{
                   background: modoVisual === m.id ? "#003b26" : "transparent",
                   color: modoVisual === m.id ? "#c9a24a" : "#484f58",
                   border: "none", cursor: "pointer",
                 }}>
-                {m.label}
+                <m.Icon size={14} strokeWidth={1.5} className="flex-shrink-0" aria-hidden />
+                <span>{m.label}</span>
               </button>
             ))}
           </div>
@@ -561,49 +549,57 @@ export default function OfficePage() {
         </div>
 
         {/* Navegação */}
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex-1 overflow-y-auto py-2 min-h-0">
           {[
             { secao: "OPERAÇÃO", items: [
-              { label: "Dashboard",    icon: "⚡", rota: "/crm" },
-              { label: "Pipeline",     icon: "👥", rota: "/crm/leads" },
-              { label: "Atendimento",  icon: "💬", rota: "/crm/atendimento" },
+              { label: "Dashboard", icon: Zap, rota: "/crm" },
+              { label: "Pipeline", icon: Users, rota: "/crm/leads" },
+              { label: "Atendimento", icon: MessageSquare, rota: "/crm/atendimento" },
             ]},
             { secao: "PARCEIROS", items: [
-              { label: "Homologação",  icon: "🤝", rota: "/crm/parceiros" },
-              { label: "Convites",     icon: "📨", rota: "/crm/parceiros/novo" },
+              { label: "Homologação", icon: Handshake, rota: "/crm/parceiros" },
+              { label: "Convites", icon: MailPlus, rota: "/crm/parceiros/novo" },
             ]},
             { secao: "SISTEMA", items: [
-              { label: "Agentes",      icon: "🤖", rota: "/crm/agentes" },
-              { label: "Ciclos IA",    icon: "⚙️", rota: "/crm/ciclos" },
-              { label: "Notificações", icon: "🔔", rota: "/crm/contatos" },
+              { label: "Agentes", icon: Bot, rota: "/crm/agentes" },
+              { label: "Ciclos IA", icon: Settings, rota: "/crm/ciclos" },
+              { label: "Notificações", icon: Bell, rota: "/crm/contatos" },
             ]},
           ].map(grupo => (
             <div key={grupo.secao} className="mb-3">
               <p className="px-4 py-1 font-black tracking-widest" style={{ color: "#30363d", fontSize: "9px" }}>
                 {grupo.secao}
               </p>
-              {grupo.items.map(item => (
-                <button key={item.rota} onClick={() => router.push(item.rota)}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-left transition-all hover:bg-white hover:bg-opacity-5"
-                  style={{ color: "#8b949e", border: "none", cursor: "pointer", background: "transparent" }}>
-                  <span className="text-sm">{item.icon}</span>
-                  <span className="text-xs">{item.label}</span>
-                </button>
-              ))}
+              {grupo.items.map(item => {
+                const Icon = item.icon;
+                return (
+                  <button key={item.rota} onClick={() => router.push(item.rota)}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-left transition-all hover:bg-white hover:bg-opacity-5"
+                    style={{ color: "#8b949e", border: "none", cursor: "pointer", background: "transparent" }}>
+                    <Icon size={16} strokeWidth={1.5} className="flex-shrink-0 opacity-90" aria-hidden />
+                    <span className="text-xs">{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
 
-        <div className="p-3" style={{ borderTop: "1px solid #30363d" }}>
-          <button onClick={() => router.push("/crm")} className="w-full py-2 rounded-xl text-xs font-bold"
-            style={{ background: "#003b26", color: "#c9a24a", letterSpacing: "0.05em", border: "none", cursor: "pointer" }}>
-            CRM COMPLETO →
-          </button>
+        <div className="mt-auto border-t" style={{ borderColor: "#30363d" }}>
+          <CrmSessionFooter
+            expanded
+            primaryAction={{
+              href: "/crm",
+              label: "CRM completo",
+              title: "Abrir CRM",
+              icon: LayoutDashboard,
+            }}
+          />
         </div>
       </div>
 
       {/* ── ÁREA CENTRAL ── */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden min-w-0">
 
         {/* MODO ESCRITÓRIO */}
         {modoVisual === "escritorio" && (

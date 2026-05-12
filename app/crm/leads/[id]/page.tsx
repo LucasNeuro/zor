@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
+import { Brain, ClipboardList, MessageSquare } from "lucide-react";
 
 const ESTAGIOS = ["novo","qualificando","qualificado","proposta","negociando","fechamento","ganho","perdido"];
 const ESTAGIO_COR: Record<string, string> = {
@@ -142,14 +144,20 @@ export default function LeadConversaPage() {
         {/* ÁREA PRINCIPAL */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* ABAS */}
-          <div className="flex border-b border-gray-800 flex-shrink-0">
-            {(["conversa", "atividades", "memorias"] as const).map(a => (
-              <button key={a} onClick={() => setAba(a)}
-                className={`flex-1 py-2.5 text-xs font-medium transition-colors ${aba === a ? "text-[#c9a24a] border-b-2 border-[#c9a24a]" : "text-gray-500 hover:text-gray-300"}`}>
-                {a === "conversa" ? `💬 Conversa (${mensagens.length})` : a === "atividades" ? `📋 Atividades (${atividades.length})` : `🧠 Memórias IA (${memorias.length})`}
-              </button>
-            ))}
-          </div>
+          <CrmStickyTabs
+            activeId={aba}
+            onChange={(id) => setAba(id as typeof aba)}
+            tabs={[
+              { id: "conversa", label: `Conversa (${mensagens.length})`, icon: MessageSquare },
+              { id: "atividades", label: `Atividades (${atividades.length})`, icon: ClipboardList },
+              { id: "memorias", label: `Memórias IA (${memorias.length})`, icon: Brain },
+            ]}
+            style={{
+              background: "rgba(17, 24, 39, 0.94)",
+              borderBottom: "1px solid rgb(55, 65, 81)",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+            }}
+          />
 
           {/* CONVERSA */}
           {aba === "conversa" && (

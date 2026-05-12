@@ -1,10 +1,18 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { AgenteNovoWizard } from "@/components/crm/AgenteNovoWizard";
+import {
+  CRM_ENTITY_GRID,
+  crmAvatarGlow,
+  crmBtnDesativar,
+  crmFooterStatusPill,
+  crmGlassCardSurface,
+} from "@/lib/crm-glass-card";
+import { calcularSaudeAgente, SAUDE_CORES } from "@/lib/agente-saude";
 
 const MERCADOS_FIXOS = ["IMB", "ARQ", "RFM", "MRC", "ENG", "SRV", "PRO", "FOR"];
 
@@ -90,6 +98,24 @@ function formatarData(v?: string) {
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+function tempoOpRelativo(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return "—";
+  const diff = (Date.now() - d) / 60000;
+  if (diff < 1) return "agora";
+  if (diff < 60) return `${Math.round(diff)}min`;
+  if (diff < 1440) return `${Math.round(diff / 60)}h`;
+  return `${Math.round(diff / 1440)}d`;
+}
+
+function matchesModo(agente: Pick<Agente, "ativo" | "arquivado_em">, modo: ListMode): boolean {
+  if (modo === "todos") return true;
+  if (modo === "ativos") return agente.ativo !== false && !agente.arquivado_em;
+  if (modo === "inativos") return agente.ativo === false && !agente.arquivado_em;
+  return !!agente.arquivado_em;
+}
+
 function AgentesView() {
   const router = useRouter();
   const pathname = usePathname();
@@ -108,6 +134,13 @@ function AgentesView() {
   const [carregandoCargos, setCarregandoCargos] = useState(false);
   const [erroCargos, setErroCargos] = useState<string | null>(null);
   const [alternandoCargoSlug, setAlternandoCargoSlug] = useState<string | null>(null);
+  const [editandoCargoSlug, setEditandoCargoSlug] = useState<string | null>(null);
+  const [cargoDraft, setCargoDraft] = useState<{ titulo: string; segmento: string; especialidade: string; descricao_curta: string }>({
+    titulo: "",
+    segmento: "",
+    especialidade: "",
+    descricao_curta: "",
+  });
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("editar");
@@ -119,6 +152,16 @@ function AgentesView() {
   const [logsErro, setLogsErro] = useState<string | null>(null);
   const [salvandoDetalhe, setSalvandoDetalhe] = useState(false);
 
+  type OperacaoAgentePayload = {
+    ciclos: Record<string, unknown>[];
+    execucoes_ciclo: Record<string, unknown>[];
+    acoes: Record<string, unknown>[];
+    ultimo_prompt_em: string | null;
+  };
+  const [operacao, setOperacao] = useState<OperacaoAgentePayload | null>(null);
+  const [operacaoLoading, setOperacaoLoading] = useState(false);
+  const [operacaoErro, setOperacaoErro] = useState<string | null>(null);
+
   const [editNome, setEditNome] = useState("");
   const [editMercados, setEditMercados] = useState<string[]>([]);
   const [editBio, setEditBio] = useState("");
@@ -128,6 +171,23 @@ function AgentesView() {
   const [editAtivo, setEditAtivo] = useState(true);
 
   const detalheAberto = !!selectedSlug;
+
+  const saudeAgente = useMemo(() => {
+    if (!detailAgente || !operacao) return null;
+    const ciclos = operacao.ciclos;
+    const ativos = ciclos.filter((c) => (c as { ativo?: boolean }).ativo !== false).length;
+    const logs = (operacao.execucoes_ciclo || []).map((l) => ({
+      status: (l as { status?: string }).status,
+      iniciado_em: (l as { iniciado_em?: string }).iniciado_em,
+    }));
+    return calcularSaudeAgente({
+      ativoOperacional: detailAgente.ativo !== false,
+      arquivado: !!detailAgente.arquivado_em,
+      ciclosAtivosCount: ativos,
+      logsCiclo: logs,
+      ultimoPromptEm: operacao.ultimo_prompt_em,
+    });
+  }, [detailAgente, operacao]);
 
   const carregarAgentes = useCallback(() => {
     setErroLista(null);
@@ -234,6 +294,33 @@ function AgentesView() {
     }
   }, []);
 
+  const carregarOperacao = useCallback(async (slug: string) => {
+    setOperacaoLoading(true);
+    setOperacaoErro(null);
+    try {
+      const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/operacao`, {
+        headers: internalApiHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setOperacaoErro(typeof data?.error === "string" ? data.error : "Falha ao carregar dados operacionais.");
+        setOperacao(null);
+        return;
+      }
+      setOperacao({
+        ciclos: Array.isArray(data?.ciclos) ? data.ciclos : [],
+        execucoes_ciclo: Array.isArray(data?.execucoes_ciclo) ? data.execucoes_ciclo : [],
+        acoes: Array.isArray(data?.acoes) ? data.acoes : [],
+        ultimo_prompt_em: typeof data?.ultimo_prompt_em === "string" ? data.ultimo_prompt_em : null,
+      });
+    } catch (e) {
+      setOperacaoErro((e as Error)?.message || "Falha de rede (operação).");
+      setOperacao(null);
+    } finally {
+      setOperacaoLoading(false);
+    }
+  }, []);
+
   async function alternarCargoAtivo(cargo: CargoCatalogo) {
     const slug = String(cargo.slug || "").trim();
     if (!slug) return;
@@ -252,6 +339,42 @@ function AgentesView() {
     }
   }
 
+  function iniciarEdicaoCargo(cargo: CargoCatalogo) {
+    setEditandoCargoSlug(String(cargo.slug || ""));
+    setCargoDraft({
+      titulo: String(cargo.titulo || ""),
+      segmento: String(cargo.segmento || ""),
+      especialidade: String(cargo.especialidade || ""),
+      descricao_curta: String(cargo.descricao_curta || ""),
+    });
+  }
+
+  function cancelarEdicaoCargo() {
+    setEditandoCargoSlug(null);
+    setCargoDraft({ titulo: "", segmento: "", especialidade: "", descricao_curta: "" });
+  }
+
+  async function salvarEdicaoCargo(slug: string) {
+    if (!slug) return;
+    setAlternandoCargoSlug(slug);
+    try {
+      const res = await fetch("/api/hub/cargos", {
+        method: "PATCH",
+        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, ...cargoDraft }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErroCargos(typeof data?.error === "string" ? data.error : "Falha ao salvar cargo.");
+        return;
+      }
+      setCargos((prev) => prev.map((c) => (c.slug === slug ? { ...c, ...data } : c)));
+      cancelarEdicaoCargo();
+    } finally {
+      setAlternandoCargoSlug(null);
+    }
+  }
+
   useEffect(() => {
     carregarAgentes();
   }, [carregarAgentes]);
@@ -260,6 +383,12 @@ function AgentesView() {
     if (!drawerCargosOpen) return;
     carregarCargos();
   }, [drawerCargosOpen, carregarCargos]);
+
+  useEffect(() => {
+    if (editandoCargoSlug && !drawerCargosOpen) {
+      cancelarEdicaoCargo();
+    }
+  }, [editandoCargoSlug, drawerCargosOpen]);
 
   useEffect(() => {
     if (openedFromQuery.current) return;
@@ -284,15 +413,23 @@ function AgentesView() {
   useEffect(() => {
     if (!selectedSlug) return;
     void carregarDetalhe(selectedSlug);
+    void carregarOperacao(selectedSlug);
     setLogs([]);
     setLogsErro(null);
-  }, [selectedSlug, carregarDetalhe]);
+  }, [selectedSlug, carregarDetalhe, carregarOperacao]);
 
   useEffect(() => {
     if (!selectedSlug || detailTab !== "logs") return;
     if (logs.length > 0 || logsLoading) return;
     void carregarLogs(selectedSlug);
   }, [selectedSlug, detailTab, logs.length, logsLoading, carregarLogs]);
+
+  const counters = {
+    todos: agentes.length,
+    ativos: agentes.filter((a) => matchesModo(a, "ativos")).length,
+    inativos: agentes.filter((a) => matchesModo(a, "inativos")).length,
+    arquivados: agentes.filter((a) => matchesModo(a, "arquivados")).length,
+  };
 
   useEffect(() => {
     setSlot({
@@ -392,6 +529,7 @@ function AgentesView() {
         return;
       }
       setDetailAgente(data);
+      void carregarOperacao(selectedSlug);
       setAgentes((prev) =>
         prev
           .map((a) =>
@@ -403,12 +541,7 @@ function AgentesView() {
                 }
               : a
           )
-          .filter((a) => {
-            if (modoLista === "todos") return true;
-            if (modoLista === "ativos") return a.ativo !== false && !a.arquivado_em;
-            if (modoLista === "inativos") return a.ativo === false && !a.arquivado_em;
-            return !!a.arquivado_em;
-          })
+          .filter((a) => matchesModo(a, modoLista))
       );
     } finally {
       setSalvandoDetalhe(false);
@@ -448,13 +581,13 @@ function AgentesView() {
                     color: sel ? "#d6b976" : "#99a6b8",
                   }}
                 >
-                  {opt.label}
+                  {opt.label} ({counters[opt.id]})
                 </button>
               );
             })}
             {!carregando && !erroLista && (
               <span style={{ fontSize: 12, color: "#708096", marginLeft: 6 }}>
-                {agentes.length} agente{agentes.length === 1 ? "" : "s"}
+                mostrando: {counters[modoLista]} agente{counters[modoLista] === 1 ? "" : "s"}
               </span>
             )}
           </div>
@@ -482,19 +615,17 @@ function AgentesView() {
         ) : agentes.length === 0 && !erroLista ? (
           <p style={{ color: "#8b949e", fontSize: 13 }}>Nenhum agente encontrado.</p>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-              gap: 14,
-            }}
-          >
+          <div style={CRM_ENTITY_GRID}>
             {agentes.map((agente) => {
-              const segCor = SEGMENTO_COR[String(agente.segmento || agente.area || "")] || "#7d8a9a";
+              const segCor = SEGMENTO_COR[String(agente.segmento || agente.area || "")] || "#3b82f6";
               const nivelCor = NIVEL_COR[String(agente.nivel || "")] || "#7d8a9a";
               const ativo = agente.ativo !== false;
               const avatarUrl = typeof agente.avatar_url === "string" && agente.avatar_url.trim() ? agente.avatar_url.trim() : null;
               const selecionado = selectedSlug === agente.agente_slug;
+              const bio =
+                typeof agente.bio === "string" && agente.bio.trim()
+                  ? agente.bio.trim().slice(0, 140) + (agente.bio.trim().length > 140 ? "…" : "")
+                  : null;
 
               return (
                 <div
@@ -513,35 +644,12 @@ function AgentesView() {
                     }
                   }}
                   style={{
-                    background: "linear-gradient(160deg, #161f2b 0%, #121a24 52%, #111821 100%)",
-                    border: selecionado ? "1px solid #c9a24a66" : "1px solid #273243",
-                    borderRadius: 14,
-                    padding: 14,
-                    cursor: "pointer",
-                    boxShadow: selecionado ? "0 12px 36px rgba(0,0,0,0.35)" : "0 8px 22px rgba(0,0,0,0.24)",
-                    transition: "all 150ms ease",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
+                    ...crmGlassCardSurface(selecionado),
+                    opacity: ativo ? 1 : 0.88,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div
-                      style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: "50%",
-                        background: segCor,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "#fff",
-                        fontSize: 14,
-                        fontWeight: 700,
-                        overflow: "hidden",
-                        border: "1px solid #ffffff22",
-                      }}
-                    >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={crmAvatarGlow(segCor)}>
                       {avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -550,52 +658,104 @@ function AgentesView() {
                       )}
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <p style={{ color: "#f0f5ff", fontWeight: 700, fontSize: 15, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <p
+                        style={{
+                          color: "#f8fafc",
+                          fontWeight: 700,
+                          fontSize: 15,
+                          margin: 0,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
                         {agente.nome}
                       </p>
-                      <p style={{ color: "#94a3b8", fontSize: 11, margin: "2px 0 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {agente.cargo}
+                      <p
+                        style={{
+                          color: "#94a3b8",
+                          fontSize: 11,
+                          margin: "4px 0 0",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {agente.agente_slug}
                       </p>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                    {agente.segmento && (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: `${segCor}1f`, color: segCor, border: `1px solid ${segCor}44` }}>
-                        {agente.segmento}
-                      </span>
-                    )}
-                    {agente.nivel && (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: `${nivelCor}1f`, color: nivelCor, border: `1px solid ${nivelCor}44` }}>
-                        {agente.nivel}
-                      </span>
-                    )}
-                    {(modoLista === "arquivados" || modoLista === "todos") && agente.arquivado_em && (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#7c3aed1f", color: "#c4b5fd", border: "1px solid #7c3aed44" }}>
-                        Arquivado
-                      </span>
-                    )}
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: ativo ? "#003b2620" : "#b3261e20", color: ativo ? "#22c55e" : "#ef4444", border: `1px solid ${ativo ? "#22c55e44" : "#ef444444"}` }}>
-                      {ativo ? "Ativo" : "Inativo"}
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: "#cbd5e1",
+                      margin: 0,
+                      lineHeight: 1.45,
+                      minHeight: 36,
+                    }}
+                  >
+                    {bio || "—"}
+                  </p>
+
+                  <p style={{ fontSize: 11, color: "#64748b", margin: 0, lineHeight: 1.5 }}>
+                    {agente.cargo}
+                    {agente.segmento ? (
+                      <>
+                        {" · "}
+                        <span style={{ color: segCor, fontWeight: 600 }}>{agente.segmento}</span>
+                      </>
+                    ) : null}
+                    {agente.nivel ? (
+                      <>
+                        {" · "}
+                        <span style={{ color: nivelCor, fontWeight: 600 }}>{agente.nivel}</span>
+                      </>
+                    ) : null}
+                    {(modoLista === "arquivados" || modoLista === "todos") && agente.arquivado_em ? " · Arquivado" : ""}
+                  </p>
+
+                  <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
+                    Status:{" "}
+                    <strong
+                      style={{
+                        color: agente.arquivado_em ? "#c4b5fd" : ativo ? "#4ade80" : "#f87171",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {agente.arquivado_em ? "Arquivado" : ativo ? "Ativo" : "Inativo"}
+                    </strong>
+                  </p>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      marginTop: "auto",
+                      gap: 10,
+                      paddingTop: 4,
+                    }}
+                  >
+                    <span
+                      style={
+                        agente.arquivado_em
+                          ? { ...crmFooterStatusPill(false), background: "#6d28d9" }
+                          : crmFooterStatusPill(ativo)
+                      }
+                    >
+                      {agente.arquivado_em ? "Arquivado" : ativo ? "Ativo" : "Inativo"}
                     </span>
                     <button
                       type="button"
                       onClick={(e) => alternarAtivo(agente, e)}
                       disabled={!!agente.arquivado_em || alternandoAtivoSlug === agente.agente_slug}
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: "4px 8px",
-                        borderRadius: 8,
-                        border: "1px solid #344256",
-                        background: "#1d2633",
-                        color: "#afbed1",
-                        cursor: agente.arquivado_em ? "not-allowed" : "pointer",
-                        opacity: agente.arquivado_em ? 0.5 : 1,
-                      }}
+                      style={crmBtnDesativar(!!agente.arquivado_em || alternandoAtivoSlug === agente.agente_slug)}
                     >
-                      {alternandoAtivoSlug === agente.agente_slug ? "..." : ativo ? "Desativar" : "Ativar"}
+                      {alternandoAtivoSlug === agente.agente_slug
+                        ? "…"
+                        : `⏻ ${ativo ? "Desativar" : "Ativar"}`}
                     </button>
                   </div>
                 </div>
@@ -692,6 +852,7 @@ function AgentesView() {
                   {cargos.map((cargo) => {
                     const ativo = cargo.ativo !== false;
                     const slug = String(cargo.slug || "");
+                    const emEdicao = editandoCargoSlug === slug;
                     return (
                       <div
                         key={slug}
@@ -706,34 +867,103 @@ function AgentesView() {
                           gap: 10,
                         }}
                       >
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ margin: 0, color: "#e6edf3", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {String(cargo.titulo || slug)}
-                          </p>
-                          <p style={{ margin: "2px 0 0", color: "#8394ab", fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            @{slug}
-                            {cargo.segmento ? ` · ${String(cargo.segmento)}` : ""}
-                            {cargo.especialidade ? ` · ${String(cargo.especialidade)}` : ""}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => alternarCargoAtivo(cargo)}
-                          disabled={alternandoCargoSlug === slug}
-                          style={{
-                            flexShrink: 0,
-                            border: `1px solid ${ativo ? "#ef444455" : "#22c55e55"}`,
-                            background: ativo ? "#ef444420" : "#22c55e20",
-                            color: ativo ? "#ef4444" : "#22c55e",
-                            borderRadius: 999,
-                            padding: "6px 10px",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            cursor: alternandoCargoSlug === slug ? "wait" : "pointer",
-                          }}
-                        >
-                          {alternandoCargoSlug === slug ? "..." : ativo ? "Desativar" : "Ativar"}
-                        </button>
+                        {!emEdicao ? (
+                          <>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ margin: 0, color: "#e6edf3", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {String(cargo.titulo || slug)}
+                              </p>
+                              <p style={{ margin: "2px 0 0", color: "#8394ab", fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                @{slug}
+                                {cargo.segmento ? ` · ${String(cargo.segmento)}` : ""}
+                                {cargo.especialidade ? ` · ${String(cargo.especialidade)}` : ""}
+                              </p>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                              <button
+                                type="button"
+                                onClick={() => iniciarEdicaoCargo(cargo)}
+                                style={{
+                                  border: "1px solid #334155",
+                                  background: "#1e293b",
+                                  color: "#94a3b8",
+                                  borderRadius: 8,
+                                  padding: "6px 9px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => alternarCargoAtivo(cargo)}
+                                disabled={alternandoCargoSlug === slug}
+                                style={{
+                                  border: `1px solid ${ativo ? "#ef444455" : "#22c55e55"}`,
+                                  background: ativo ? "#ef444420" : "#22c55e20",
+                                  color: ativo ? "#ef4444" : "#22c55e",
+                                  borderRadius: 999,
+                                  padding: "6px 10px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: alternandoCargoSlug === slug ? "wait" : "pointer",
+                                }}
+                              >
+                                {alternandoCargoSlug === slug ? "..." : ativo ? "Desativar" : "Ativar"}
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                              <input
+                                value={cargoDraft.titulo}
+                                onChange={(e) => setCargoDraft((p) => ({ ...p, titulo: e.target.value }))}
+                                placeholder="Título"
+                                style={{ background: "#0f1724", border: "1px solid #334155", color: "#e6edf3", borderRadius: 8, padding: "7px 9px", fontSize: 12 }}
+                              />
+                              <input
+                                value={cargoDraft.segmento}
+                                onChange={(e) => setCargoDraft((p) => ({ ...p, segmento: e.target.value }))}
+                                placeholder="Segmento"
+                                style={{ background: "#0f1724", border: "1px solid #334155", color: "#e6edf3", borderRadius: 8, padding: "7px 9px", fontSize: 12 }}
+                              />
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                              <input
+                                value={cargoDraft.especialidade}
+                                onChange={(e) => setCargoDraft((p) => ({ ...p, especialidade: e.target.value }))}
+                                placeholder="Especialidade"
+                                style={{ background: "#0f1724", border: "1px solid #334155", color: "#e6edf3", borderRadius: 8, padding: "7px 9px", fontSize: 12 }}
+                              />
+                              <input
+                                value={cargoDraft.descricao_curta}
+                                onChange={(e) => setCargoDraft((p) => ({ ...p, descricao_curta: e.target.value }))}
+                                placeholder="Descrição curta"
+                                style={{ background: "#0f1724", border: "1px solid #334155", color: "#e6edf3", borderRadius: 8, padding: "7px 9px", fontSize: 12 }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                              <button
+                                type="button"
+                                onClick={cancelarEdicaoCargo}
+                                style={{ border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => salvarEdicaoCargo(slug)}
+                                disabled={alternandoCargoSlug === slug}
+                                style={{ border: "none", background: "#003b26", color: "#c9a24a", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: alternandoCargoSlug === slug ? "wait" : "pointer" }}
+                              >
+                                {alternandoCargoSlug === slug ? "..." : "Salvar"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -775,6 +1005,25 @@ function AgentesView() {
                   <h3 style={{ margin: "3px 0 0", color: "#e6edf3", fontSize: 17 }}>
                     {detailAgente?.nome || selectedSlug}
                   </h3>
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 8 }}>
+                    {saudeAgente && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: "4px 10px",
+                          borderRadius: 999,
+                          background: SAUDE_CORES[saudeAgente].bg,
+                          color: SAUDE_CORES[saudeAgente].fg,
+                        }}
+                      >
+                        Saúde operacional · {SAUDE_CORES[saudeAgente].label}
+                      </span>
+                    )}
+                    {operacaoLoading && (
+                      <span style={{ fontSize: 11, color: "#7a8ca3" }}>Atualizando métricas…</span>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
@@ -830,6 +1079,169 @@ function AgentesView() {
                 <p style={{ color: "#8b949e", fontSize: 13 }}>Agente não encontrado.</p>
               ) : detailTab === "editar" ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {operacaoErro && (
+                    <div
+                      style={{
+                        color: "#fbbf24",
+                        background: "#422006",
+                        border: "1px solid #854d0e",
+                        borderRadius: 8,
+                        padding: 10,
+                        fontSize: 12,
+                      }}
+                    >
+                      Visão operacional: {operacaoErro}
+                    </div>
+                  )}
+                  {operacao && !operacaoLoading && (
+                    <div style={{ background: "#141d29", border: "1px solid #2c384b", borderRadius: 10, padding: 12 }}>
+                      <p style={{ color: "#8ea1ba", fontSize: 11, margin: "0 0 10px", fontWeight: 700 }}>
+                        Visão operacional
+                      </p>
+                      <p style={{ margin: "0 0 10px", color: "#9cb0c9", fontSize: 11, lineHeight: 1.5 }}>
+                        {saudeAgente === "ok" && "Execuções e ações recentes dentro do esperado."}
+                        {saudeAgente === "degradado" &&
+                          "Há erros em ciclos, ausência de logs com ciclos ativos ou atividade antiga. Revise Ciclos IA e logs."}
+                        {saudeAgente === "parado" && "Agente inativo ou arquivado — não há operação esperada."}
+                        {!saudeAgente && "—"}
+                      </p>
+                      {operacao.ultimo_prompt_em && (
+                        <p style={{ margin: "0 0 10px", color: "#7f90a8", fontSize: 11 }}>
+                          Última resposta IA registrada: {tempoOpRelativo(operacao.ultimo_prompt_em)} atrás
+                        </p>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+                        <span style={{ color: "#c4d2e5", fontSize: 12, fontWeight: 700 }}>Ciclos atribuídos</span>
+                        <button
+                          type="button"
+                          onClick={() => selectedSlug && router.push(`/crm/ciclos?q=${encodeURIComponent(selectedSlug)}`)}
+                          style={{
+                            border: "1px solid #c9a24a55",
+                            background: "#c9a24a18",
+                            color: "#d6b976",
+                            borderRadius: 8,
+                            padding: "5px 10px",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Abrir Ciclos IA (filtro)
+                        </button>
+                      </div>
+                      {operacao.ciclos.length === 0 ? (
+                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12 }}>Nenhum ciclo vinculado a este agente.</p>
+                      ) : (
+                        <ul style={{ margin: 0, paddingLeft: 18, color: "#c3d0e3", fontSize: 12, lineHeight: 1.6 }}>
+                          {operacao.ciclos.map((c) => {
+                            const row = c as {
+                              id?: string;
+                              nome?: string;
+                              ativo?: boolean;
+                              ultimo_status?: string;
+                              tipo?: string;
+                            };
+                            return (
+                              <li key={String(row.id || row.nome)}>
+                                <strong style={{ color: "#e6edf3" }}>{String(row.nome || "—")}</strong>
+                                {" · "}
+                                <span style={{ color: row.ativo !== false ? "#86efac" : "#fca5a5" }}>
+                                  {row.ativo !== false ? "ativo" : "inativo"}
+                                </span>
+                                {row.ultimo_status ? ` · último: ${row.ultimo_status}` : ""}
+                                {row.tipo ? ` · ${row.tipo}` : ""}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+
+                      <p style={{ color: "#c4d2e5", fontSize: 12, fontWeight: 700, margin: "14px 0 8px" }}>Últimas ações (IA)</p>
+                      {operacao.acoes.length === 0 ? (
+                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12 }}>Nenhuma linha em hub_acoes_ia ainda.</p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {operacao.acoes.map((a, i) => {
+                            const row = a as {
+                              id?: string;
+                              tipo?: string;
+                              descricao?: string;
+                              sucesso?: boolean;
+                              criado_em?: string;
+                              lead_id?: string;
+                            };
+                            return (
+                              <div
+                                key={String(row.id || i)}
+                                style={{
+                                  borderLeft: `3px solid ${row.sucesso !== false ? "#15803d" : "#b91c1c"}`,
+                                  padding: "8px 10px",
+                                  background: "#101822",
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                                  <strong style={{ color: "#d7e3f4", fontSize: 11 }}>{String(row.tipo || "ação")}</strong>
+                                  <span style={{ color: "#7f90a8", fontSize: 10 }}>{tempoOpRelativo(row.criado_em)}</span>
+                                </div>
+                                <p style={{ margin: "6px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.45 }}>
+                                  {String(row.descricao || "").slice(0, 200)}
+                                  {(row.descricao as string)?.length > 200 ? "…" : ""}
+                                </p>
+                                {row.lead_id && (
+                                  <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 10 }}>Lead: {row.lead_id}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <p style={{ color: "#c4d2e5", fontSize: 12, fontWeight: 700, margin: "14px 0 8px" }}>
+                        Execuções de ciclo (recentes)
+                      </p>
+                      {operacao.execucoes_ciclo.length === 0 ? (
+                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12 }}>
+                          Nenhum registro em hub_ciclos_log para este agente.
+                        </p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {operacao.execucoes_ciclo.slice(0, 8).map((ex, i) => {
+                            const row = ex as {
+                              id?: string;
+                              status?: string;
+                              erro?: string;
+                              iniciado_em?: string;
+                              custo_brl?: number;
+                              tokens_usados?: number;
+                            };
+                            const st = String(row.status || "—");
+                            const stCor =
+                              st === "erro" ? "#f87171" : st === "sucesso" ? "#86efac" : st === "sem_acao" ? "#94a3b8" : "#c9a24a";
+                            return (
+                              <div
+                                key={String(row.id || i)}
+                                style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "baseline", fontSize: 11 }}
+                              >
+                                <span style={{ color: stCor, fontWeight: 700 }}>{st}</span>
+                                <span style={{ color: "#7f90a8" }}>{tempoOpRelativo(row.iniciado_em)}</span>
+                                {row.tokens_usados != null && (
+                                  <span style={{ color: "#64748b" }}>{row.tokens_usados} tok</span>
+                                )}
+                                {row.custo_brl != null && (
+                                  <span style={{ color: "#64748b" }}>R$ {Number(row.custo_brl).toFixed(4)}</span>
+                                )}
+                                {row.erro && (
+                                  <span style={{ color: "#f87171", flex: "1 1 100%" }}>{String(row.erro).slice(0, 120)}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div style={{ background: "#141d29", border: "1px solid #2c384b", borderRadius: 10, padding: 12 }}>
                     <p style={{ color: "#8ea1ba", fontSize: 11, margin: "0 0 8px", fontWeight: 700 }}>FIXO</p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

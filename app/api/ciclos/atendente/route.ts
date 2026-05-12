@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
+import { parseFollowupFromCicloConfiguracoes } from "@/lib/hub-ciclos-configuracoes";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,7 +37,7 @@ async function gerarAlerta(tipo: string, agente: string, titulo: string, mensage
   }
 }
 
-async function cicloFollowup() {
+async function cicloFollowup(runtime: ReturnType<typeof parseFollowupFromCicloConfiguracoes>) {
   const agora = new Date();
   const acoes: string[] = [];
 
@@ -70,14 +71,23 @@ async function cicloFollowup() {
       : new Date(lead.atualizado_em);
     const horasPassadas = (agora.getTime() - ultimoContato.getTime()) / 3600000;
 
-    if (horasPassadas < config.horas_espera) continue;
+    let horasNecessarias = config.horas_espera;
+    if (runtime.horasPorPasso?.length) {
+      const idx = Math.min(passo - 1, runtime.horasPorPasso.length - 1);
+      const ov = runtime.horasPorPasso[idx];
+      if (typeof ov === "number" && ov > 0) {
+        horasNecessarias = ov;
+      }
+    }
 
-    if (passo > 3 && horasPassadas > 168) {
+    if (horasPassadas < horasNecessarias) continue;
+
+    if (passo > 3 && horasPassadas > runtime.arquivarAposHoras) {
       await supabase
         .from("hub_leads_crm")
         .update({ estagio: "arquivado", followup_pausado: true })
         .eq("id", lead.id);
-      acoes.push(`Lead ${lead.nome} arquivado após 7 dias sem resposta`);
+      acoes.push(`Lead ${lead.nome} arquivado após ${Math.round(runtime.arquivarAposHoras / 24)}d sem resposta`);
       continue;
     }
 
@@ -111,7 +121,7 @@ async function cicloFollowup() {
       .update({
         followup_passo: passo,
         ultimo_followup: agora.toISOString(),
-        proximo_followup: new Date(agora.getTime() + (config.horas_espera * 3600000 * 2)).toISOString(),
+        proximo_followup: new Date(agora.getTime() + horasNecessarias * 3600000 * 2).toISOString(),
       })
       .eq("id", lead.id);
 
@@ -209,6 +219,16 @@ export async function GET(request: NextRequest) {
   const cicloId = await resolveAtendenteCicloId(ciclo);
   const cicloConfig = cicloId ? { id: cicloId } : null;
 
+  let followupRuntime = parseFollowupFromCicloConfiguracoes(undefined);
+  if (ciclo === "followup" && cicloId) {
+    const { data: cicloRow } = await supabase
+      .from("hub_ciclos_ia")
+      .select("configuracoes")
+      .eq("id", cicloId)
+      .maybeSingle();
+    followupRuntime = parseFollowupFromCicloConfiguracoes(cicloRow?.configuracoes);
+  }
+
   const logRes = await supabase.from("hub_ciclos_log").insert({
     ciclo_id: cicloConfig?.id ?? null,
     agente_slug: "atendente",
@@ -217,7 +237,7 @@ export async function GET(request: NextRequest) {
 
   try {
     let resultado;
-    if (ciclo === "followup") resultado = await cicloFollowup();
+    if (ciclo === "followup") resultado = await cicloFollowup(followupRuntime);
     else if (ciclo === "sla") resultado = await cicloSLA();
     else resultado = { acoes: [], total: 0 };
 

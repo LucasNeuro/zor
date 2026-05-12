@@ -79,6 +79,32 @@ export async function PATCH(
   }
 
   const supabase = db();
+  const { data: current, error: currentError } = await supabase
+    .from("hub_agente_identidade")
+    .select("agente_slug, ativo, arquivado_em")
+    .eq("agente_slug", slug)
+    .maybeSingle();
+
+  if (currentError) {
+    return NextResponse.json({ error: currentError.message }, { status: 500 });
+  }
+  if (!current) {
+    return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
+  }
+
+  const arquivado = current.arquivado_em != null;
+  if ("ativo" in patch) {
+    const nextAtivo = patch.ativo === true;
+    // Regra única de estado: agente arquivado sempre permanece inativo.
+    if (arquivado && nextAtivo) {
+      return NextResponse.json(
+        { error: "Agente arquivado não pode ser reativado. Use fluxo específico de desarquivamento." },
+        { status: 409 }
+      );
+    }
+    if (arquivado) patch.ativo = false;
+  }
+
   const { data, error } = await supabase
     .from("hub_agente_identidade")
     .update(patch)

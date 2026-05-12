@@ -120,29 +120,94 @@ export async function receberDemanda(demanda: Demanda): Promise<AgenteSelecionad
   // 8. Seleciona modelo baseado no valor e criticidade
   const modelo = selecionarModelo(melhor.agente, demanda);
 
+  return montarAgenteSelecionado(melhor.agente as Record<string, unknown>, demanda, {
+    fluxo,
+    regras,
+    hierarquia,
+  });
+}
+
+/** Carrega um agente ativo por slug (fluxo, regras, hierarquia) — usado p.ex. pelo WhatsApp com mercado já resolvido. */
+export async function carregarAgentePorSlug(slug: string, demanda: Demanda): Promise<AgenteSelecionado | null> {
+  const db = supabase();
+  const { data: agenteRow } = await db
+    .from("hub_agente_identidade")
+    .select("*")
+    .eq("agente_slug", slug)
+    .eq("ativo", true)
+    .is("arquivado_em", null)
+    .maybeSingle();
+
+  if (!agenteRow) return null;
+
+  const { data: fluxos } = await db
+    .from("hub_fluxos")
+    .select("*")
+    .eq("agente_slug", slug)
+    .eq("ativo", true)
+    .order("ordem", { ascending: true })
+    .limit(1);
+
+  const { data: regras } = await db
+    .from("hub_regras_ia")
+    .select("*")
+    .eq("agente_slug", slug)
+    .eq("ativo", true)
+    .order("prioridade", { ascending: false });
+
+  const { data: hierarquia } = await db
+    .from("hub_hierarquia")
+    .select("*")
+    .eq("agente_slug", slug)
+    .maybeSingle();
+
+  const fluxo = fluxos?.[0];
+  return montarAgenteSelecionado(agenteRow as Record<string, unknown>, demanda, {
+    fluxo,
+    regras,
+    hierarquia,
+  });
+}
+
+function montarAgenteSelecionado(
+  agente: Record<string, unknown>,
+  demanda: Demanda,
+  parts: {
+    fluxo?: Record<string, unknown>;
+    regras?: Record<string, unknown>[] | null;
+    hierarquia?: Record<string, unknown> | null;
+  }
+): AgenteSelecionado {
+  const { fluxo, regras, hierarquia } = parts;
+  const modelo = selecionarModelo(agente, demanda);
+
   return {
-    slug: melhor.agente.agente_slug as string,
-    nome: melhor.agente.nome as string,
-    nivel: hierarquia?.nivel || "executor",
+    slug: agente.agente_slug as string,
+    nome: agente.nome as string,
+    nivel: (hierarquia?.nivel as string) || "executor",
     modelo,
-    systemPrompt: melhor.agente.system_prompt_base as string || "",
-    fluxo: fluxo ? {
-      id: fluxo.id,
-      fase: fluxo.fase,
-      proximoPasso: fluxo.proximo_passo,
-      acaoEsperada: fluxo.acao_esperada,
-    } : undefined,
+    systemPrompt: (agente.system_prompt_base as string) || "",
+    fluxo: fluxo
+      ? {
+          id: fluxo.id as string,
+          fase: fluxo.fase as string,
+          proximoPasso: fluxo.proximo_passo as string,
+          acaoEsperada: fluxo.acao_esperada as string,
+        }
+      : undefined,
     regras: regras?.map((r: Record<string, unknown>) => ({
       instrucao: r.instrucao as string,
       prioridade: r.prioridade as number,
     })),
-    hierarquia: hierarquia ? {
-      nivel: hierarquia.nivel,
-      supervisorSlug: hierarquia.supervisor_slug,
-      subordinados: hierarquia.subordinados || [],
-      limiteAutonomiaBrl: hierarquia.limite_autonomia_brl || 0,
-      criteriosEscalonamento: hierarquia.criterios_escalonamento || [],
-    } : undefined,
+    hierarquia: hierarquia
+      ? {
+          nivel: hierarquia.nivel as string,
+          supervisorSlug: hierarquia.supervisor_slug as string,
+          subordinados: (hierarquia.subordinados as string[]) || [],
+          limiteAutonomiaBrl: (hierarquia.limite_autonomia_brl as number) || 0,
+          criteriosEscalonamento: (hierarquia.criterios_escalonamento as string[]) || [],
+        }
+      : undefined,
   };
 }
 

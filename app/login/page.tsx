@@ -112,6 +112,22 @@ function LoginForm() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-[var(--obra-dark,#0d1117)] md:flex-row">
+      <style jsx global>{`
+        #login-email:-webkit-autofill,
+        #login-email:-webkit-autofill:hover,
+        #login-email:-webkit-autofill:focus,
+        #login-email:-webkit-autofill:active,
+        #login-password:-webkit-autofill,
+        #login-password:-webkit-autofill:hover,
+        #login-password:-webkit-autofill:focus,
+        #login-password:-webkit-autofill:active {
+          -webkit-text-fill-color: var(--obra-texto, #e6edf3);
+          caret-color: var(--obra-texto, #e6edf3);
+          box-shadow: 0 0 0 1000px var(--obra-dark-2, #161b22) inset;
+          -webkit-box-shadow: 0 0 0 1000px var(--obra-dark-2, #161b22) inset;
+          transition: background-color 9999s ease-out 0s;
+        }
+      `}</style>
       {/* Painel do formulário — esquerda no desktop, abaixo do hero no mobile */}
       <div className="order-2 flex flex-1 flex-col justify-center px-6 py-10 sm:px-10 md:order-1 md:w-[46%] md:max-w-xl md:flex-none md:px-12 lg:px-14 xl:px-16">
         <div className="mx-auto w-full max-w-[400px]">

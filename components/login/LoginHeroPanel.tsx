@@ -5,6 +5,7 @@
  * Substitui o mapa estilizado que não lia bem como forma geográfica.
  */
 function HeroArt() {
+
   return (
     <svg
       className="pointer-events-none absolute inset-0 h-full w-full"
@@ -147,11 +148,11 @@ export function LoginHeroPanel() {
         className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0d1117]/65 via-transparent to-[#0d1117]/92 md:bg-gradient-to-l md:from-[#0d1117]/45 md:via-transparent md:to-[#0d1117]/96"
         aria-hidden
       />
-      <div className="pointer-events-none relative z-10 flex h-full min-h-0 flex-col justify-end p-6 sm:p-8 md:p-10 lg:p-12">
-        <p className="max-w-lg text-base font-medium leading-snug tracking-tight text-white/95 drop-shadow-md sm:text-lg md:text-xl lg:text-2xl">
+      <div className="pointer-events-none relative z-10 flex h-full min-h-0 flex-col items-end justify-start p-6 text-right sm:p-8 md:p-10 lg:p-12">
+        <p className="ml-auto max-w-lg text-base font-medium leading-snug tracking-tight text-white/95 drop-shadow-md sm:text-lg md:text-xl lg:text-2xl">
           Operações, leads e equipe — seu escritório digital Obra10+.
         </p>
-        <p className="mt-2 max-w-md text-xs font-medium text-[var(--obra-dourado-light,#e0b86a)] drop-shadow sm:text-sm">
+        <p className="mt-2 ml-auto max-w-md text-xs font-medium text-[var(--obra-dourado-light,#e0b86a)] drop-shadow sm:text-sm">
           Imobiliário · Obras · Parceiros
         </p>
       </div>

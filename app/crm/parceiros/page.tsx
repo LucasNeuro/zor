@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
+import { BadgeCheck, ClipboardList, UserPlus } from "lucide-react";
 
 interface Modulo {
   modulo_numero: number;
@@ -150,33 +152,15 @@ export default function ParceirosPage() {
         />
       </div>
 
-      {/* Tabs */}
-      <div className="flex" style={{ borderBottom: "1px solid #30363d" }}>
-        {([
-          { id: "captacao", label: `Captação (${contagens.captacao})` },
-          { id: "homologacao", label: `Homologação (${contagens.homologacao})` },
-          { id: "homologados", label: `Homologados (${contagens.homologados})` },
-        ] as const).map(t => (
-          <button key={t.id} onClick={() => setAba(t.id)}
-            className="flex-1 py-2.5 text-xs transition-colors"
-            style={{
-              color: aba === t.id ? "#c9a24a" : "#8b949e",
-              background: "#0d1117",
-              cursor: "pointer",
-              borderTopWidth: 0,
-              borderLeftWidth: 0,
-              borderRightWidth: 0,
-              borderTopStyle: "none",
-              borderLeftStyle: "none",
-              borderRightStyle: "none",
-              borderBottomWidth: 2,
-              borderBottomStyle: "solid",
-              borderBottomColor: aba === t.id ? "#c9a24a" : "transparent",
-            }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <CrmStickyTabs
+        activeId={aba}
+        onChange={(id) => setAba(id as typeof aba)}
+        tabs={[
+          { id: "captacao", label: `Captação (${contagens.captacao})`, icon: UserPlus },
+          { id: "homologacao", label: `Homologação (${contagens.homologacao})`, icon: ClipboardList },
+          { id: "homologados", label: `Homologados (${contagens.homologados})`, icon: BadgeCheck },
+        ]}
+      />
 
       {loading ? (
         <p className="text-center py-12 text-sm" style={{ color: "#484f58" }}>Carregando...</p>

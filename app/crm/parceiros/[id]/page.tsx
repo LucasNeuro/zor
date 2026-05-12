@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { supabase } from "@/lib/supabase/client";
+import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
+import { FileText, Layers, Link2, ScrollText, User } from "lucide-react";
 
 interface Modulo { id: string; modulo_numero: number; titulo: string; status: string; nota: number | null; feedback: string | null; concluido_em: string | null; tentativas: number; }
 interface Documento { id: string; tipo: string; nome_arquivo: string | null; status: string; observacoes: string | null; enviado_em: string | null; }
@@ -152,20 +154,18 @@ export default function ParceiroDetalhePage() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex overflow-x-auto" style={{ borderBottom: "1px solid #30363d" }}>
-        {(["perfil", "modulos", "documentos", "referencias", "logs"] as const).map(t => (
-          <button key={t} onClick={() => setAba(t)}
-            className="py-2.5 px-3 text-xs whitespace-nowrap transition-colors flex-shrink-0"
-            style={{
-              color: aba === t ? "#c9a24a" : "#8b949e",
-              borderBottom: aba === t ? "2px solid #c9a24a" : "2px solid transparent",
-              background: "#0d1117", border: "none", cursor: "pointer",
-            }}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </div>
+      <CrmStickyTabs
+        scrollable
+        activeId={aba}
+        onChange={(id) => setAba(id as typeof aba)}
+        tabs={[
+          { id: "perfil", label: "Perfil", icon: User },
+          { id: "modulos", label: "Módulos", icon: Layers },
+          { id: "documentos", label: "Documentos", icon: FileText },
+          { id: "referencias", label: "Referências", icon: Link2 },
+          { id: "logs", label: "Logs", icon: ScrollText },
+        ]}
+      />
 
       <div className="p-4 max-w-2xl mx-auto">
         {/* PERFIL */}

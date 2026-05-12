@@ -4,7 +4,7 @@
 // ============================================================
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { receberDemanda, escalarDemanda, verificarAutonomia, type Demanda } from "./router";
+import { receberDemanda, escalarDemanda, verificarAutonomia, carregarAgentePorSlug, type Demanda } from "./router";
 import { criarAprovacao } from "./aprovacoes";
 import { salvarConversa } from "./storage";
 import { FLUXO_IMOBILIARIO, FLUXO_ARQUITETURA, MARI_CONFIG, identificarMercado, gerarSystemPromptCompleto } from "./agentes-config";
@@ -40,6 +40,11 @@ export interface ContextoMensagem {
   valorEstimado?: number;
   arquivos?: string[];
   metadata?: Record<string, unknown>;
+  /** Se ativo no banco, usa este agente; caso contrário aplica o router. */
+  agenteSlugHint?: string;
+  tenantId?: string;
+  /** Ex.: WhatsApp usa `pendente_envio` para alinhar à Evolution/outros emissores. */
+  statusFilaSaida?: string;
 }
 
 export interface ResultadoEngine {
@@ -74,8 +79,10 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       contexto: ctx.metadata,
     };
 
-    // ETAPA 2: Router encontra o agente certo
-    const agente = await receberDemanda(demanda);
+    // ETAPA 2: Agente preferencial (ex.: mercado já mapeado no webhook) ou router
+    const agente =
+      (ctx.agenteSlugHint ? await carregarAgentePorSlug(ctx.agenteSlugHint, demanda) : null) ??
+      (await receberDemanda(demanda));
     if (!agente) {
       return { sucesso: false, erro: "Nenhum agente disponível para esta demanda" };
     }
@@ -108,15 +115,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       };
     }
 
-    // ETAPA 4: Busca memórias do lead (top 3 mais relevantes)
-    const { data: memorias } = await db
-      .from("hub_memorias_lead")
-      .select("tipo, conteudo, relevancia")
-      .eq("lead_id", ctx.leadId)
-      .order("relevancia", { ascending: false })
-      .limit(3);
-
-    // ETAPA 5: Busca histórico recente (últimas 5 mensagens)
+    // ETAPA 4: Busca histórico recente (últimas 5 mensagens)
     const { data: historico } = await db
       .from("hub_fila_mensagens")
       .select("conteudo, direcao, criado_em")
@@ -124,7 +123,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       .order("criado_em", { ascending: false })
       .limit(5);
 
-    // ETAPA 6: Monta o system prompt completo via banco
+    // ETAPA 5: Monta o system prompt completo via banco
     const promptData = await construirPrompt({
       agenteSlug: agente.slug,
       leadId: ctx.leadId,
@@ -140,13 +139,13 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     const systemPrompt = promptData.systemPrompt;
     const modelo = promptData.modelo;
 
-    // ETAPA 7: Estima tokens antes de chamar
+    // ETAPA 6: Estima tokens antes de chamar
     const estimativa = Math.ceil((systemPrompt.length + ctx.mensagem.length) / 4);
     if (estimativa > 4000) {
       console.warn(`[ENGINE] Prompt grande: ~${estimativa} tokens`);
     }
 
-    // ETAPA 8: Chama a IA
+    // ETAPA 7: Chama a IA
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return { sucesso: false, erro: "ANTHROPIC_API_KEY não configurada" };
 
@@ -180,56 +179,59 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     const custo = calcularCusto(modelo, tokensEntrada, tokensSaida);
     const latencia = Date.now() - inicio;
 
-    // ETAPA 9: Registra log
+    // ETAPA 8: Registra log (mesmo shape do webhook WhatsApp / CRM)
     const { data: logData } = await db
       .from("hub_prompt_logs")
       .insert({
-        agente_id: agente.slug,
         lead_id: ctx.leadId,
-        modelo_usado: modelo,
-        tokens_entrada: tokensEntrada,
-        tokens_saida: tokensSaida,
-        custo_usd: custo.usd,
-        custo_brl: custo.brl,
-        latencia_ms: latencia,
+        agente_slug: agente.slug,
+        system_prompt: systemPrompt,
         mensagem_usuario: ctx.mensagem,
         resposta_ia: textoResposta,
-        metadata: ctx.metadata || {},
+        modelo_usado: modelo,
+        tokens_input: tokensEntrada,
+        tokens_output: tokensSaida,
+        custo_estimado_brl: custo.brl,
+        foi_escalado: false,
       })
       .select("id")
-      .single();
+      .maybeSingle();
 
-    // ETAPA 10: Salva memórias extraídas
-    await extrairESalvarMemorias(ctx.leadId, agente.slug, ctx.mensagem, textoResposta);
+    // ETAPA 9: Salva memórias extraídas (schema CRM: chave / valor)
+    await extrairESalvarMemorias(ctx.leadId, ctx.mensagem, textoResposta);
 
-    // ETAPA 11: Enfileira resposta para envio
-    await db.from("hub_fila_mensagens").insert({
+    const statusSaida = ctx.statusFilaSaida ?? "pendente";
+    const filaSaida: Record<string, unknown> = {
       lead_id: ctx.leadId,
       agente_id: agente.slug,
       canal: ctx.canal,
       direcao: "saida",
       conteudo: textoResposta,
-      status: "pendente",
-      metadata: { logId: logData?.id, modelo: agente.modelo, latencia },
-    });
+      status: statusSaida,
+      metadata: { logId: logData?.id, modelo, latencia, feito_por: "engine" },
+    };
+    if (ctx.tenantId) filaSaida.tenant_id = ctx.tenantId;
 
-    // ETAPA 12: Registra padrão de ML
+    // ETAPA 10: Enfileira resposta para envio
+    await db.from("hub_fila_mensagens").insert(filaSaida);
+
     const hora = new Date().getHours();
-    await db.from("hub_ml_padroes").upsert({
-      tipo: "horario_ideal",
-      agente_id: agente.slug,
-      padrao: { horario: `${hora}:00`, canal: ctx.canal, segmento: ctx.segmento },
-      score: 0.1,
-      amostras: 1,
-      confianca: 0.05,
-    }).eq("tipo", "horario_ideal");
+    try {
+      await db.from("hub_ml_padroes").insert({
+        tipo: "horario_ideal",
+        agente_id: agente.slug,
+        padrao: JSON.stringify({ horario: `${hora}:00`, canal: ctx.canal, segmento: ctx.segmento }),
+      });
+    } catch (e) {
+      console.warn("[ENGINE] hub_ml_padroes (opcional):", e);
+    }
 
     return {
       sucesso: true,
       resposta: textoResposta,
       agenteSlug: agente.slug,
       agenteNome: agente.nome,
-      modelo: agente.modelo,
+      modelo,
       tokens: { entrada: tokensEntrada, saida: tokensSaida },
       custo,
       latencia,
@@ -313,10 +315,9 @@ INSTRUÇÕES GERAIS
   return secoes.join("\n\n");
 }
 
-// ── EXTRAIR E SALVAR MEMÓRIAS ─────────────────────────────────
+// ── EXTRAIR E SALVAR MEMÓRIAS (hub_memorias_lead: chave / valor) ─────────────────────────
 async function extrairESalvarMemorias(
   leadId: string,
-  agenteSlug: string,
   mensagemUsuario: string,
   respostaIA: string
 ): Promise<void> {
@@ -334,34 +335,34 @@ async function extrairESalvarMemorias(
 
   for (const padrao of padroes) {
     const matches = texto.match(padrao.regex);
-    if (matches) {
-      for (const match of matches.slice(0, 2)) {
-        const { data: existente } = await db
-          .from("hub_memorias_lead")
-          .select("id, relevancia, vezes_confirmado")
-          .eq("lead_id", leadId)
-          .eq("tipo", padrao.tipo)
-          .ilike("conteudo", `%${match.slice(0, 30)}%`)
-          .single();
+    if (!matches) continue;
+    for (const match of matches.slice(0, 2)) {
+      const valor = match.slice(0, 200);
+      const chave = `${padrao.tipo}_auto`;
 
-        if (existente) {
-          await db
-            .from("hub_memorias_lead")
-            .update({
-              relevancia: Math.min(1, existente.relevancia + 0.1),
-              vezes_confirmado: existente.vezes_confirmado + 1,
-            })
-            .eq("id", existente.id);
-        } else {
-          await db.from("hub_memorias_lead").insert({
-            lead_id: leadId,
-            agente_id: agenteSlug,
-            tipo: padrao.tipo,
-            conteudo: match,
-            relevancia: padrao.relevancia,
-            fonte: "analise",
-          });
-        }
+      const { data: existente } = await db
+        .from("hub_memorias_lead")
+        .select("id, confianca")
+        .eq("lead_id", leadId)
+        .eq("chave", chave)
+        .ilike("valor", `%${valor.slice(0, Math.min(20, valor.length))}%`)
+        .maybeSingle();
+
+      if (existente) {
+        await db
+          .from("hub_memorias_lead")
+          .update({
+            confianca: Math.min(1, Number(existente.confianca) + 0.1),
+          })
+          .eq("id", existente.id);
+      } else {
+        await db.from("hub_memorias_lead").insert({
+          lead_id: leadId,
+          chave,
+          valor,
+          confianca: padrao.relevancia,
+          criado_por: "ia_engine",
+        });
       }
     }
   }
@@ -425,16 +426,14 @@ export async function processarDemandaInterna(demanda: Demanda & {
     const custo = calcularCusto(agente.modelo, resposta.usage.input_tokens, resposta.usage.output_tokens);
 
     await db.from("hub_prompt_logs").insert({
-      agente_id: agente.slug,
+      agente_slug: agente.slug,
       modelo_usado: agente.modelo,
-      tokens_entrada: resposta.usage.input_tokens,
-      tokens_saida: resposta.usage.output_tokens,
-      custo_usd: custo.usd,
-      custo_brl: custo.brl,
-      latencia_ms: Date.now() - inicio,
+      tokens_input: resposta.usage.input_tokens,
+      tokens_output: resposta.usage.output_tokens,
+      custo_estimado_brl: custo.brl,
       mensagem_usuario: demanda.mensagem,
       resposta_ia: textoResposta,
-      metadata: demanda.dados || {},
+      foi_escalado: false,
     });
 
     // Se o resultado precisa de aprovação humana, cria o card
@@ -469,7 +468,7 @@ export async function processarDemandaInterna(demanda: Demanda & {
 }
 
 // ── API ROUTE HANDLER ─────────────────────────────────────────
-export { receberDemanda, escalarDemanda, verificarAutonomia } from "./router";
+export { receberDemanda, escalarDemanda, verificarAutonomia, carregarAgentePorSlug } from "./router";
 export { varrerSistema, monitorarTrafego } from "./monitor";
 export { buscarAprovacoesPendentes, aprovar, rejeitar, criarAprovacao } from "./aprovacoes";
 export { uploadArquivo, salvarConversa, buscarArquivosLead } from "./storage";

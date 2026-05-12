@@ -73,10 +73,7 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
       subtitle: "Central de criação de conteúdo — em desenvolvimento",
     },
     agentes: { title: "Agentes IA" },
-    ciclos: {
-      title: "Central de Ciclos IA",
-      subtitle: "Agendamento e execução dos agentes",
-    },
+    ciclos: { title: "Central de Ciclos IA" },
     contatos: {
       title: "Contatos de Notificação",
       subtitle: "Quem recebe alertas de novos leads e aprovações",

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { CrmHeaderActionsRow } from "@/components/crm/CrmHeaderActionsRow";
 
 const HEADER_SURFACE =
   "sticky top-0 z-20 flex-shrink-0 border-b border-[#30363d]/90 bg-[#161b22]/95 backdrop-blur-md supports-[backdrop-filter]:bg-[#161b22]/88 shadow-[inset_0_-1px_0_0_rgba(201,162,74,0.12)]";
@@ -24,7 +25,11 @@ export function CrmStickyPageHeader({ title, description, actions, className = "
           <div className="text-base sm:text-lg font-black tracking-tight text-[#e6edf3]">{title}</div>
           {description != null && <div className="mt-0.5 text-xs text-[#8b949e]">{description}</div>}
         </div>
-        {actions != null && <div className="flex w-full min-w-0 flex-col gap-2 min-[480px]:w-auto min-[480px]:flex-row min-[480px]:items-center min-[480px]:justify-end min-[480px]:gap-2">{actions}</div>}
+        {actions != null && (
+          <div className="flex w-full min-w-0 flex-col gap-2 min-[480px]:w-auto min-[480px]:flex-row min-[480px]:items-center min-[480px]:justify-end">
+            <CrmHeaderActionsRow>{actions}</CrmHeaderActionsRow>
+          </div>
+        )}
       </div>
     </header>
   );

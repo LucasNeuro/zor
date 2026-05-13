@@ -588,7 +588,7 @@ export default function CiclosPage() {
                     borderRadius: 999,
                     fontSize: 12,
                     background: "#121923",
-                    border: "1px solid #293241",
+                    border: "1px solidrgb(13, 13, 13)",
                     color: "#e6edf3",
                   }}
                 />

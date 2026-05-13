@@ -49,6 +49,9 @@ function LoginForm() {
         })
       );
     }
+    if (searchParams.get("sessao") === "invalida") {
+      setMsg("Sessão expirada ou inválida no navegador. Entre novamente.");
+    }
   }, [searchParams]);
 
   async function onSubmit(e: FormEvent) {

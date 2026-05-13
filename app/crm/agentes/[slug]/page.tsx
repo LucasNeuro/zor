@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { AgenteBriefingDrawer } from "@/components/crm/AgenteBriefingChatPanel";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -126,6 +127,22 @@ type Agente = {
   [key: string]: unknown;
 };
 
+/** Alinha com `hub_agente_identidade`: arquivado_em > coluna ativo (inativo ≠ arquivado). */
+function badgeStatusAgente(agente: Pick<Agente, "arquivado_em" | "ativo">): {
+  label: string;
+  bg: string;
+  fg: string;
+  border: string;
+} {
+  if (agente.arquivado_em) {
+    return { label: "Arquivado", bg: "#ef444422", fg: "#ef4444", border: "#ef444444" };
+  }
+  if (agente.ativo === false) {
+    return { label: "Inativo", bg: "#3f1515", fg: "#fca5a5", border: "#7f1d1d66" };
+  }
+  return { label: "Ativo", bg: "#22c55e22", fg: "#22c55e", border: "#22c55e44" };
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AgentePage() {
@@ -157,6 +174,7 @@ export default function AgentePage() {
   const [salvando, setSalvando] = useState(false);
   const [toast, setToast] = useState("");
   const [erro, setErro] = useState("");
+  const [briefingOpen, setBriefingOpen] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!slug) return;
@@ -304,6 +322,7 @@ export default function AgentePage() {
 
   const segCor = SEGMENTO_COR[agente.area || ""] || "#8b949e";
   const nivelCor = NIVEL_COR[nivelTag(agente.nivel)] || "#8b949e";
+  const statusBadge = badgeStatusAgente(agente);
 
   const chipStyle = (ativo: boolean): React.CSSProperties => ({
     padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700,
@@ -457,8 +476,10 @@ export default function AgentePage() {
 
       {/* HEADER */}
       <div style={{
-        position: "sticky", top: 0, zIndex: 10,
-        background: "#161b22", borderBottom: "1px solid #30363d",
+        position: "sticky", top: 0, zIndex: 50,
+        background: "#161b22",
+        borderBottom: "1px solid #30363d",
+        boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
         padding: "16px 24px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
@@ -489,13 +510,18 @@ export default function AgentePage() {
               <span style={{ color: "#444c56", marginLeft: 6 }}>@{agente.agente_slug}</span>
             </p>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <span style={{
-                fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                background: agente.arquivado_em ? "#ef444422" : "#22c55e22",
-                color: agente.arquivado_em ? "#ef4444" : "#22c55e",
-                border: `1px solid ${agente.arquivado_em ? "#ef444444" : "#22c55e44"}`,
-              }}>
-                {agente.arquivado_em ? "Arquivado" : "Ativo"}
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "2px 8px",
+                  borderRadius: 20,
+                  background: statusBadge.bg,
+                  color: statusBadge.fg,
+                  border: `1px solid ${statusBadge.border}`,
+                }}
+              >
+                {statusBadge.label}
               </span>
               {agente.area && (
                 <span style={{
@@ -526,6 +552,17 @@ export default function AgentePage() {
             <span style={{ fontSize: 11, color: "#ef4444", maxWidth: 220 }}>{erro}</span>
           )}
           <button
+            type="button"
+            onClick={() => setBriefingOpen(true)}
+            style={{
+              padding: "8px 16px", borderRadius: 8,
+              background: "#c9a24a18", border: "1px solid #c9a24a66",
+              color: "#d6b976", fontSize: 12, fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            Briefing IA
+          </button>
+          <button
             onClick={() => { setShowArquivar(true); setMotivoArquivamento(""); }}
             style={{
               padding: "8px 16px", borderRadius: 8,
@@ -539,8 +576,16 @@ export default function AgentePage() {
       </div>
 
       {/* CONTEÚDO */}
-      <div style={{ maxWidth: 760, margin: "0 auto", padding: "28px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
-
+      <div
+        style={{
+          maxWidth: 880,
+          margin: "0 auto",
+          padding: "28px 28px 48px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 28,
+        }}
+      >
         {/* BLOCO: Configurações fixas */}
         <div>
           {/* Banner amarelo */}
@@ -560,7 +605,7 @@ export default function AgentePage() {
             <h2 style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
               Configurações fixas
             </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
               <div>
                 <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>Cargo</label>
                 <input
@@ -651,7 +696,7 @@ export default function AgentePage() {
             <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 14 }}>
               Personalidade
             </label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
               {EIXOS.map((eixo, i) => (
                 <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <span style={{ fontSize: 11, color: "#8b949e", fontWeight: 700 }}>{eixo.nome}</span>
@@ -785,6 +830,13 @@ export default function AgentePage() {
           </button>
         </div>
       </div>
+
+      <AgenteBriefingDrawer
+        open={briefingOpen}
+        onClose={() => setBriefingOpen(false)}
+        agenteSlug={slug}
+        agenteNome={agente.nome}
+      />
     </div>
   );
 }

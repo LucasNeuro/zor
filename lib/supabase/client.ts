@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { installCrmAuthBridge } from "@/lib/supabase/crm-auth-bridge";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -18,6 +19,10 @@ export const supabase =
 
 if (typeof globalThis !== "undefined") {
   globalForSupabase.__supabaseBrowser = supabase;
+}
+
+if (typeof window !== "undefined") {
+  installCrmAuthBridge(supabase);
 }
 
 export type HubPessoa = {

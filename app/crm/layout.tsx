@@ -211,11 +211,11 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col md:flex-row md:gap-2">
           {!shouldHideCrmUniversalHeader(pathname) ? (
             <div
-              className="pointer-events-none absolute left-0 right-0 top-0 z-[8] hidden h-14 border-b md:block"
+              className="pointer-events-none absolute left-0 right-0 top-0 z-[8] hidden min-h-[4.25rem] border-b md:block"
               style={{
                 background: CRM_HEADER_BAR_GRADIENT,
-                borderBottomColor: "var(--obra-borda, #30363d)",
-                boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.25)",
+                borderBottomColor: "rgba(48, 54, 61, 0.65)",
+                boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.05)",
               }}
               aria-hidden
             />

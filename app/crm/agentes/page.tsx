@@ -645,16 +645,15 @@ function AgentesView() {
     setSlot({
       path: pathname,
       actions: (
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <>
           <button
             type="button"
             onClick={() => setDrawerCargosOpen(true)}
             style={{
-              background: "#1b2330",
-              color: "#9fb0c6",
-              border: "1px solid #344256",
-              borderRadius: 8,
-              padding: "10px 14px",
+              background: "rgba(0,0,0,0.28)",
+              color: "var(--obra-texto, #e6edf3)",
+              border: "none",
+              padding: "12px 18px",
               fontSize: 12,
               fontWeight: 700,
               cursor: "pointer",
@@ -666,11 +665,10 @@ function AgentesView() {
             type="button"
             onClick={() => setDrawerNovoOpen(true)}
             style={{
-              background: "#003b26",
+              background: "linear-gradient(180deg, #065535 0%, #003b26 100%)",
               color: "#c9a24a",
               border: "none",
-              borderRadius: 8,
-              padding: "10px 20px",
+              padding: "12px 22px",
               fontSize: 13,
               fontWeight: 700,
               cursor: "pointer",
@@ -678,7 +676,7 @@ function AgentesView() {
           >
             + Novo agente
           </button>
-        </div>
+        </>
       ),
     });
     return () => setSlot(null);

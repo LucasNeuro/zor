@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 import { identificarMercado, identificarIntencao } from "@/lib/ia/agentes-config";
 import { defaultTenantId } from "@/lib/tenant-default";
+import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
+import { parseWhatsappWebhookBody } from "@/lib/whatsapp/webhook-inbound";
 
 let warnedMissingWebhookSecret = false;
 
@@ -96,26 +98,12 @@ async function encontrarOuCriarPessoa(telefone: string, nome: string, origem: st
 }
 
 async function enviarMensagemWhatsApp(telefone: string, mensagem: string) {
-  const url = process.env.EVOLUTION_API_URL;
-  const key = process.env.EVOLUTION_API_KEY;
-  const instance = process.env.EVOLUTION_INSTANCE || "obra10plus";
-
-  if (!url || !key) {
-    console.log("[WEBHOOK] EVOLUTION_API_URL ou KEY não configurados");
+  const r = await whatsappSendText(telefone, mensagem);
+  if (!r.ok) {
+    console.error("[WEBHOOK] Erro ao enviar mensagem:", r.provider, r.error, r.status, r.body);
     return null;
   }
-
-  try {
-    const response = await fetch(`${url}/message/sendText/${instance}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": key },
-      body: JSON.stringify({ number: telefone, text: mensagem }),
-    });
-    return await response.json();
-  } catch (error) {
-    console.error("[WEBHOOK] Erro ao enviar mensagem:", error);
-    return null;
-  }
+  return r.body ?? null;
 }
 
 async function encontrarOuCriarLead(telefone: string, nome: string, mercado: string, mensagem: string) {
@@ -387,7 +375,7 @@ export async function POST(request: NextRequest) {
       if (!warnedMissingWebhookSecret) {
         warnedMissingWebhookSecret = true;
         console.warn(
-          "[WEBHOOK] WEBHOOK_SECRET não definido — webhook aceita qualquer origem. Defina WEBHOOK_SECRET e configure Evolution (header ou HMAC). Em urgência local: WEBHOOK_SKIP_SIGNATURE_VERIFY=true"
+          "[WEBHOOK] WEBHOOK_SECRET não definido — webhook aceita qualquer origem. Defina WEBHOOK_SECRET e alinhe Evolution/UAZAPI (header ou HMAC). Em urgência local: WEBHOOK_SKIP_SIGNATURE_VERIFY=true"
         );
       }
     }
@@ -401,42 +389,23 @@ export async function POST(request: NextRequest) {
 
     const supabase = db();
 
-    const event    = body.event as string | undefined;
-    const data     = body.data as Record<string, unknown> | undefined;
-    const instance = body.instance as string | undefined;
-
-    if (event !== "messages.upsert") {
-      return NextResponse.json({ status: "ignored", event });
+    const inbound = parseWhatsappWebhookBody(body);
+    if (inbound.kind === "ignored") {
+      return NextResponse.json({ status: inbound.status });
+    }
+    if (inbound.kind === "unknown_event") {
+      return NextResponse.json({ status: "ignored", event: inbound.event });
     }
 
-    if (!data) return NextResponse.json({ status: "no_data" });
-
-    const msg       = data.message as Record<string, unknown> | undefined;
-    const key       = data.key    as Record<string, unknown> | undefined;
-    const fromMe    = (key?.fromMe as boolean) || false;
-    const remoteJid = (key?.remoteJid as string) || "";
-    const telefone  = remoteJid.replace("@s.whatsapp.net", "").replace("@g.us", "").replace(/\D/g, "");
-    const pushName  = (data.pushName as string) || "";
-    const messageId = (key?.id as string) || "";
-    const tsRaw     = data.messageTimestamp as number | undefined;
-    const timestamp = tsRaw ? new Date(tsRaw * 1000).toISOString() : new Date().toISOString();
-
-    const imageMsg  = msg?.imageMessage  as Record<string, unknown> | undefined;
-    const videoMsg  = msg?.videoMessage  as Record<string, unknown> | undefined;
-    const tipoMidia = imageMsg ? "imagem" : videoMsg ? "video"
-      : msg?.audioMessage ? "audio" : msg?.documentMessage ? "documento" : "texto";
-
-    const texto = (msg?.conversation as string)
-      || ((msg?.extendedTextMessage as Record<string, unknown>)?.text as string)
-      || (imageMsg?.caption as string)
-      || (videoMsg?.caption as string)
-      || "";
-
-    if (fromMe) return NextResponse.json({ status: "outgoing_ignored" });
-    if (!telefone || remoteJid.endsWith("@g.us")) return NextResponse.json({ status: "group_ignored" });
-    if (!texto && tipoMidia === "texto") return NextResponse.json({ status: "empty_message" });
-
-    const mensagemFinal = texto || `[${tipoMidia} recebido]`;
+    const {
+      telefone,
+      pushName,
+      messageId,
+      timestamp,
+      tipoMidia,
+      mensagemFinal,
+      instance,
+    } = inbound.value;
 
     console.log(`[WEBHOOK] ${pushName || telefone}: ${mensagemFinal.slice(0, 80)}`);
 
@@ -549,7 +518,23 @@ export async function POST(request: NextRequest) {
       } catch (e) { console.error("[WEBHOOK] Erro notificação:", e); }
     }
 
-    if (IA_ATIVA && agente) {
+    const humanoResponsavelAtivo =
+      typeof lead.humano_responsavel === "string" && lead.humano_responsavel.trim().length > 0;
+
+    if (humanoResponsavelAtivo) {
+      try {
+        await supabase.from("hub_atividades").insert({
+          lead_id: lead.id,
+          tipo: "mensagem",
+          descricao: `Mensagem recebida — humano (${lead.humano_responsavel.trim()}) a atender — IA não acionada.`,
+          feito_por: "sistema",
+          feito_por_tipo: "ia",
+          metadata: { telefone, humano_responsavel: lead.humano_responsavel, skip_ia: true },
+        });
+      } catch (e) {
+        console.error("[WEBHOOK] Erro ao registrar atividade (humano responsável):", e);
+      }
+    } else if (IA_ATIVA && agente) {
       const agenteSlug =
         typeof agente.agente_slug === "string" ? agente.agente_slug : "sdr";
       try {
@@ -711,7 +696,7 @@ export async function POST(request: NextRequest) {
           mensagemOriginal: mensagemFinal,
         });
       }
-    } else {
+    } else if (!humanoResponsavelAtivo) {
       await enviarFallbackIA({
         supabase,
         leadId: lead.id,

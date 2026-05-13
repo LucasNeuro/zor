@@ -13,7 +13,9 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("hub_leads_crm")
-      .select("id, nome, telefone, origem, estagio, score, valor_estimado, criado_em, atualizado_em")
+      .select(
+        "id, nome, telefone, email, origem, estagio, score, valor_estimado, criado_em, atualizado_em, agente_responsavel, humano_responsavel, ultimo_contato, campanha, proxima_acao, data_proxima_acao, interesse_principal, tags, observacoes, metadata"
+      )
       .order("criado_em", { ascending: false });
 
     if (estagio && estagio !== "todos") {

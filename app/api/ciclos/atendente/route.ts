@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
 import { parseFollowupFromCicloConfiguracoes } from "@/lib/hub-ciclos-configuracoes";
+import { whatsappConfigured, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,16 +22,15 @@ async function gerarAlerta(tipo: string, agente: string, titulo: string, mensage
       .eq("ativo", true)
       .eq("notificar_critico", true);
 
-    if (contatos && process.env.EVOLUTION_API_URL) {
+    if (contatos && whatsappConfigured()) {
       for (const c of contatos) {
         if (c.tipo === "whatsapp") {
           try {
-            await fetch(`${process.env.EVOLUTION_API_URL}/message/sendText/obra10plus`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "apikey": process.env.EVOLUTION_API_KEY! },
-              body: JSON.stringify({ number: c.valor, text: `🔴 *CRÍTICO — Obra10+*\n\n${titulo}\n\n${mensagem}` }),
-            });
-          } catch (e) { console.error("Erro notificação:", e); }
+            const r = await whatsappSendText(String(c.valor), `🔴 *CRÍTICO — Obra10+*\n\n${titulo}\n\n${mensagem}`);
+            if (!r.ok) console.error("Erro notificação WhatsApp:", r.error);
+          } catch (e) {
+            console.error("Erro notificação:", e);
+          }
         }
       }
     }
@@ -106,14 +106,13 @@ async function cicloFollowup(runtime: ReturnType<typeof parseFollowupFromCicloCo
       metadata: { tipo: "followup", passo, mercado },
     });
 
-    if (lead.telefone && process.env.EVOLUTION_API_URL) {
+    if (lead.telefone && whatsappConfigured()) {
       try {
-        await fetch(`${process.env.EVOLUTION_API_URL}/message/sendText/obra10plus`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "apikey": process.env.EVOLUTION_API_KEY! },
-          body: JSON.stringify({ number: lead.telefone, text: mensagem }),
-        });
-      } catch (e) { console.error("Erro envio follow-up:", e); }
+        const r = await whatsappSendText(lead.telefone, mensagem);
+        if (!r.ok) console.error("Erro envio follow-up:", r.error);
+      } catch (e) {
+        console.error("Erro envio follow-up:", e);
+      }
     }
 
     await supabase

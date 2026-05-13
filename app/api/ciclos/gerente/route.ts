@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
+import { whatsappConfigured, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,14 +44,13 @@ ${totalAlerts > 0 ? "⚡ Há alertas pendentes no sistema." : "✓ Operação sa
     .eq("notificar_novo_lead", true);
 
   for (const c of contatos || []) {
-    if (c.tipo === "whatsapp" && process.env.EVOLUTION_API_URL) {
+    if (c.tipo === "whatsapp" && whatsappConfigured()) {
       try {
-        await fetch(`${process.env.EVOLUTION_API_URL}/message/sendText/obra10plus`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "apikey": process.env.EVOLUTION_API_KEY! },
-          body: JSON.stringify({ number: c.valor, text: relatorio }),
-        });
-      } catch (e) { console.error("Erro relatório:", e); }
+        const r = await whatsappSendText(String(c.valor), relatorio);
+        if (!r.ok) console.error("Erro relatório:", r.error);
+      } catch (e) {
+        console.error("Erro relatório:", e);
+      }
     }
   }
 

@@ -32,14 +32,14 @@ const ACAO_COLORS = {
 
 export default function DecisionCard({ decision, onAction, onVerLead, onVerParceiro }: DecisionCardProps) {
   const [expanded, setExpanded] = useState(decision.status === "critical");
-  const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [confirmando, setConfirmando] = useState<{ texto: string; label: string } | null>(null);
 
   const sc = STATUS_COLORS[decision.status];
   const prioColor = getPriorityColor(decision.prioridade);
 
   function handleAcao(acao: DecisionAction) {
     if (acao.critica && acao.confirma_com) {
-      setConfirmando(acao.confirma_com);
+      setConfirmando({ texto: acao.confirma_com, label: acao.label });
     } else {
       onAction(decision.id, acao.label);
     }
@@ -140,9 +140,9 @@ export default function DecisionCard({ decision, onAction, onVerLead, onVerParce
 
           {confirmando ? (
             <div style={{ padding: "10px", borderRadius: 6, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", marginBottom: 8, lineHeight: 1.4 }}>{confirmando}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", marginBottom: 8, lineHeight: 1.4 }}>{confirmando.texto}</div>
               <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => { onAction(decision.id, "confirmado"); setConfirmando(null); }} style={{ flex: 1, padding: "6px", borderRadius: 5, background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
+                <button onClick={() => { onAction(decision.id, confirmando.label); setConfirmando(null); }} style={{ flex: 1, padding: "6px", borderRadius: 5, background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
                   Confirmar
                 </button>
                 <button onClick={() => setConfirmando(null)} style={{ flex: 1, padding: "6px", borderRadius: 5, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", fontSize: 11, cursor: "pointer" }}>

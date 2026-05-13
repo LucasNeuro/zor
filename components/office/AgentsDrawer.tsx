@@ -1,9 +1,7 @@
 "use client";
-import { useState, useMemo } from "react";
-import agentsData from "@/lib/data/agents-mock.json";
+import { useEffect, useMemo, useState } from "react";
 import { type Agent } from "@/components/office/OfficeCanvas";
-
-const agents: Agent[] = agentsData.agents as Agent[];
+import { internalApiHeaders } from "@/lib/internal-api-headers";
 
 type FiltroAgente = "todos" | "humanos" | "ias" | "produzindo" | "aguardando" | "travados";
 
@@ -31,9 +29,80 @@ const AREA_COR: Record<string, string> = {
   Atendimento: "#06b6d4", Comercial: "#fb923c",
 };
 
+type AgenteApi = {
+  agente_slug: string;
+  nome: string;
+  cargo: string;
+  area: string | null;
+  nivel: number | null;
+  ativo: boolean | null;
+};
+
+function initials(nome: string) {
+  return nome
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase())
+    .join("") || "IA";
+}
+
+function mapAgente(row: AgenteApi): Agent {
+  const area = row.area || "Geral";
+  return {
+    id: row.agente_slug,
+    nome: row.nome,
+    avatar: initials(row.nome),
+    funcao: row.cargo,
+    area,
+    sala: area,
+    posicao: { x: 0, y: 0 },
+    perfil: {
+      humor: "operacional",
+      personalidade: "profissional",
+      tom_comunicacao: "profissional",
+      estilo_trabalho: "orientado a dados",
+    },
+    status: { online: row.ativo !== false, modo: row.ativo === false ? "inativo" : "operando" },
+    tarefas: { ativas: 0, concluidas_hoje: 0 },
+    governanca: { nivel: String(row.nivel ?? 3), score: row.ativo === false ? 50 : 90 },
+    currentActivity: row.ativo === false ? "Agente inativo" : "Sincronizado com Supabase",
+  };
+}
+
 export function AgentsDrawer({ aberto, onFechar, onAgenteClick }: AgentsDrawerProps) {
   const [filtro, setFiltro] = useState<FiltroAgente>("todos");
   const [busca, setBusca] = useState("");
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    let ativo = true;
+    setLoading(true);
+    fetch("/api/hub/agentes", { headers: internalApiHeaders() })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Falha ao carregar agentes (${res.status})`);
+        return (await res.json()) as AgenteApi[];
+      })
+      .then((rows) => {
+        if (!ativo) return;
+        setAgents(rows.map(mapAgente));
+        setErro(null);
+      })
+      .catch((error) => {
+        if (!ativo) return;
+        setErro(error instanceof Error ? error.message : "Erro ao carregar agentes");
+      })
+      .finally(() => {
+        if (ativo) setLoading(false);
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [aberto]);
 
   const filtrados = useMemo(() => {
     let list = agents;
@@ -100,7 +169,15 @@ export function AgentsDrawer({ aberto, onFechar, onAgenteClick }: AgentsDrawerPr
 
         {/* List */}
         <div className="flex-1 overflow-y-auto">
-          {filtrados.map(agent => {
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-600">
+              <div className="text-xs">Carregando agentes...</div>
+            </div>
+          )}
+          {erro && (
+            <div className="px-4 py-6 text-xs text-red-400">{erro}</div>
+          )}
+          {!loading && !erro && filtrados.map(agent => {
             const isOnline = agent.status?.online;
             const cor = AREA_COR[agent.area] ?? "#6b7280";
             const isAriane = agent.avatar?.startsWith("/");
@@ -140,7 +217,7 @@ export function AgentsDrawer({ aberto, onFechar, onAgenteClick }: AgentsDrawerPr
               </div>
             );
           })}
-          {filtrados.length === 0 && (
+          {!loading && !erro && filtrados.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-gray-600">
               <div className="text-2xl mb-2">🔍</div>
               <div className="text-xs">Nenhum agente encontrado</div>

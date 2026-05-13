@@ -45,4 +45,10 @@ describe("cronRequestAuthorized", () => {
     const req = new NextRequest("http://x/api/ciclos/diretor?secret=wrong");
     expect(cronRequestAuthorized(req)).toBe(false);
   });
+
+  it("rejects manual calls when CRON_SECRET is missing in production", () => {
+    delete process.env.CRON_SECRET;
+    const req = new NextRequest("http://x/api/ciclos/diretor?secret=obra10plus_cron_2026");
+    expect(cronRequestAuthorized(req)).toBe(false);
+  });
 });

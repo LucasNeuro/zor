@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
@@ -14,8 +15,7 @@ export async function GET(request: NextRequest) {
   const since =
     sinceParam ||
     new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())).toISOString();
-
-  const base = () => supabase.from("hub_leads_crm");
+  const tenantId = tenantIdFromRequest(request.headers);
 
   const [
     leadsHoje,
@@ -30,25 +30,35 @@ export async function GET(request: NextRequest) {
     parceiros,
     encaminhamentosHoje,
   ] = await Promise.all([
-    base()
+    supabase
+      .from("hub_leads_crm")
       .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
       .gte("criado_em", since),
-    base()
+    supabase
+      .from("hub_leads_crm")
       .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
       .or("estagio.is.null,estagio.not.in.(ganho,perdido)")
       .or("humano_responsavel.is.null,humano_responsavel.eq."),
-    base()
+    supabase
+      .from("hub_leads_crm")
       .select("valor_estimado.sum()")
+      .eq("tenant_id", tenantId)
       .or("estagio.is.null,estagio.not.in.(ganho,perdido)")
       .maybeSingle(),
-    base().select("id", { count: "exact", head: true }),
-    base()
+    supabase.from("hub_leads_crm").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    supabase
+      .from("hub_leads_crm")
       .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
       .not("estagio", "is", null)
       .neq("estagio", "")
       .not("estagio", "in", "(novo,perdido)"),
-    base()
+    supabase
+      .from("hub_leads_crm")
       .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
       .not("encaminhado_para", "is", null)
       .neq("encaminhado_para", ""),
     supabase.from("hub_aprovacoes").select("id", { count: "exact", head: true }).eq("status", "pendente"),
@@ -57,7 +67,7 @@ export async function GET(request: NextRequest) {
       .select("id", { count: "exact", head: true })
       .eq("direcao", "entrada")
       .eq("status", "pendente"),
-    supabase.from("hub_agente_identidade").select("id", { count: "exact", head: true }).eq("ativo", true),
+    supabase.from("hub_agente_identidade").select("id", { count: "exact", head: true }).eq("ativo", true).eq("tenant_id", tenantId),
     supabase.from("hub_profissionais").select("id", { count: "exact", head: true }).eq("status", "ativo"),
     supabase
       .from("hub_encaminhamentos")

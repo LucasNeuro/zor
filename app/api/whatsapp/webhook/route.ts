@@ -362,8 +362,13 @@ export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
 
-    const skipVerify = process.env.WEBHOOK_SKIP_SIGNATURE_VERIFY === "true";
+    const skipVerify = process.env.NODE_ENV !== "production" && process.env.WEBHOOK_SKIP_SIGNATURE_VERIFY === "true";
     const secret = process.env.WEBHOOK_SECRET?.trim();
+
+    if (process.env.NODE_ENV === "production" && !secret) {
+      console.error("[WEBHOOK] WEBHOOK_SECRET obrigatório em produção.");
+      return NextResponse.json({ error: "Webhook não configurado" }, { status: 500 });
+    }
 
     if (secret && !skipVerify) {
       if (!webhookAutenticado(request, rawBody, secret)) {

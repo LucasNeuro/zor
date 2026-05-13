@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { defaultTenantId } from "@/lib/tenant-default";
+import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
   const todos = searchParams.get("todos") === "true";
   /** `somente` = linhas com arquivado_em preenchido (exclui ativos/inativos “de produção”). */
   const arquivados = searchParams.get("arquivados");
+  const tenantId = tenantIdFromRequest(request.headers);
 
   async function executarConsulta(aplicarTenant: boolean) {
     let query = supabase
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
       .order("nome");
 
     if (aplicarTenant) {
-      query = query.eq("tenant_id", defaultTenantId());
+      query = query.eq("tenant_id", tenantId);
     }
 
     if (todos) {
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return query;
+    return await query;
   }
 
   let { data, error } = await executarConsulta(true);
@@ -73,6 +74,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const supabase = db();
+  const tenantId = tenantIdFromRequest(request.headers);
 
   let body: Record<string, unknown>;
   try {
@@ -196,7 +198,7 @@ export async function POST(request: NextRequest) {
     horario_fim: horario_fim || "22:00:00",
     dias_semana: diasTexto.length > 0 ? diasTexto : ["seg", "ter", "qua", "qui", "sex"],
     ativo: true,
-    tenant_id: defaultTenantId(),
+    tenant_id: tenantId || defaultTenantId(),
   };
 
   const avatarTrim = avatar_url != null ? String(avatar_url).trim() : "";

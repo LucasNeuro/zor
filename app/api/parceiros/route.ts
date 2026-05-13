@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { defaultTenantId } from "@/lib/tenant-default";
+import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status");
   const mercado = searchParams.get("mercado");
   const busca = searchParams.get("busca");
+  const tenantId = tenantIdFromRequest(request.headers);
 
   let query = supabase
     .from("hub_parceiros")
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
       hub_parceiros_homologacao(estagio, modulos_concluidos, data_conclusao),
       hub_parceiros_modulos(modulo_numero, status, concluido_em)
     `)
+    .eq("tenant_id", tenantId)
     .order("criado_em", { ascending: false });
 
   if (status) query = query.eq("status", status);
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const supabase = db();
+  const tenantId = tenantIdFromRequest(request.headers);
 
   try {
     const body = await request.json();
@@ -49,14 +52,14 @@ export async function POST(request: NextRequest) {
 
     // Duplicate detection
     if (cpf) {
-      const { data: dup } = await supabase.from("hub_parceiros").select("id, nome").eq("cpf", cpf.replace(/\D/g, "")).maybeSingle();
+      const { data: dup } = await supabase.from("hub_parceiros").select("id, nome").eq("tenant_id", tenantId).eq("cpf", cpf.replace(/\D/g, "")).maybeSingle();
       if (dup) return NextResponse.json({ erro: "CPF já cadastrado", parceiro_id: dup.id }, { status: 409 });
     }
     if (cnpj) {
-      const { data: dup } = await supabase.from("hub_parceiros").select("id, nome").eq("cnpj", cnpj.replace(/\D/g, "")).maybeSingle();
+      const { data: dup } = await supabase.from("hub_parceiros").select("id, nome").eq("tenant_id", tenantId).eq("cnpj", cnpj.replace(/\D/g, "")).maybeSingle();
       if (dup) return NextResponse.json({ erro: "CNPJ já cadastrado", parceiro_id: dup.id }, { status: 409 });
     }
-    const { data: dupTel } = await supabase.from("hub_parceiros").select("id, nome").eq("telefone", telefone.replace(/\D/g, "")).maybeSingle();
+    const { data: dupTel } = await supabase.from("hub_parceiros").select("id, nome").eq("tenant_id", tenantId).eq("telefone", telefone.replace(/\D/g, "")).maybeSingle();
     if (dupTel) return NextResponse.json({ erro: "Telefone já cadastrado", parceiro_id: dupTel.id }, { status: 409 });
 
     // Create partner
@@ -73,7 +76,7 @@ export async function POST(request: NextRequest) {
       comissao_pct: comissao_pct || 5,
       indicado_por: indicado_por || null,
       status: "captacao",
-      tenant_id: defaultTenantId(),
+      tenant_id: tenantId || defaultTenantId(),
     }).select().single();
 
     if (errP || !parceiro) return NextResponse.json({ erro: errP?.message || "Erro ao criar parceiro" }, { status: 500 });

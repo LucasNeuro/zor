@@ -1,9 +1,7 @@
 "use client";
-import { useState } from "react";
-import agentsData from "@/lib/data/agents-mock.json";
+import { useEffect, useMemo, useState } from "react";
 import { type Agent } from "@/components/office/OfficeCanvas";
-
-const agents: Agent[] = agentsData.agents as Agent[];
+import { internalApiHeaders } from "@/lib/internal-api-headers";
 
 const NIVEIS = [
   { nivel: 1, label: "Sugestão apenas", desc: "IA sugere, humano executa tudo" },
@@ -41,14 +39,87 @@ const AREA_COR: Record<string, string> = {
   Atendimento: "#06b6d4", Comercial: "#fb923c",
 };
 
+type AgenteApi = {
+  agente_slug: string;
+  nome: string;
+  cargo: string;
+  area: string | null;
+  nivel: number | null;
+  ativo: boolean | null;
+  modelo_padrao?: string | null;
+};
+
+function initials(nome: string) {
+  return nome
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase())
+    .join("") || "IA";
+}
+
+function mapAgente(row: AgenteApi): Agent {
+  const area = row.area || "Geral";
+  return {
+    id: row.agente_slug,
+    nome: row.nome,
+    avatar: initials(row.nome),
+    funcao: row.cargo,
+    area,
+    sala: area,
+    posicao: { x: 0, y: 0 },
+    perfil: {
+      humor: "operacional",
+      personalidade: "profissional",
+      tom_comunicacao: "profissional",
+      estilo_trabalho: "orientado a dados",
+    },
+    status: { online: row.ativo !== false, modo: row.ativo === false ? "inativo" : "operando" },
+    tarefas: { ativas: 0, concluidas_hoje: 0 },
+    governanca: { nivel: String(row.nivel ?? 3), score: row.ativo === false ? 50 : 90 },
+    currentActivity: row.ativo === false ? "Agente inativo" : "Sincronizado com hub_agente_identidade",
+  };
+}
+
 export default function AgentesPage() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
   const [configs, setConfigs] = useState<Record<string, AgenteConfig>>(
-    Object.fromEntries(agents.map(a => [a.id, defaultConfig()]))
+    {}
   );
-  const [selecionado, setSelecionado] = useState<string | null>(agents[0]?.id ?? null);
+  const [selecionado, setSelecionado] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
 
-  const agent = agents.find(a => a.id === selecionado);
+  useEffect(() => {
+    let ativo = true;
+    setLoading(true);
+    fetch("/api/hub/agentes", { headers: internalApiHeaders() })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Falha ao carregar agentes (${res.status})`);
+        return (await res.json()) as AgenteApi[];
+      })
+      .then((rows) => {
+        if (!ativo) return;
+        const mapped = rows.map(mapAgente);
+        setAgents(mapped);
+        setConfigs(Object.fromEntries(mapped.map((a) => [a.id, defaultConfig()])));
+        setSelecionado((atual) => atual ?? mapped[0]?.id ?? null);
+        setErro(null);
+      })
+      .catch((error) => {
+        if (!ativo) return;
+        setErro(error instanceof Error ? error.message : "Erro ao carregar agentes");
+      })
+      .finally(() => {
+        if (ativo) setLoading(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  const agent = useMemo(() => agents.find(a => a.id === selecionado), [agents, selecionado]);
   const cfg = selecionado ? configs[selecionado] : null;
 
   function update(field: keyof AgenteConfig, value: AgenteConfig[keyof AgenteConfig]) {
@@ -85,7 +156,13 @@ export default function AgentesPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar — lista de agentes */}
         <div className="w-64 flex-shrink-0 border-r border-gray-800 overflow-y-auto">
-          {agents.map(a => {
+          {loading && (
+            <div className="px-4 py-6 text-xs text-gray-500">Carregando agentes do Supabase...</div>
+          )}
+          {erro && (
+            <div className="px-4 py-6 text-xs text-red-400">{erro}</div>
+          )}
+          {!loading && !erro && agents.map(a => {
             const isSelected = a.id === selecionado;
             const cor = AREA_COR[a.area] ?? "#6b7280";
             const isAriane = a.avatar?.startsWith("/");

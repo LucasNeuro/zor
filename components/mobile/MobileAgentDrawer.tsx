@@ -66,10 +66,15 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
       ref={overlayRef}
       onClick={e => { if (e.target === overlayRef.current) onClose(); }}
       style={{
-        position: "fixed", inset: 0, zIndex: 50,
+        position: "fixed",
+        inset: 0,
+        zIndex: 200,
+        minHeight: "100dvh",
         background: "rgba(0,0,0,0.6)",
         transition: "opacity 0.2s ease",
-        display: "flex", flexDirection: "column", justifyContent: "flex-end",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-end",
       }}>
       <div
         style={{

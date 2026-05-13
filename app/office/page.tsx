@@ -178,17 +178,20 @@ function MobileOfficeView({ leads, metricas }: {
         </div>
 
         <div
-          className="relative w-full min-h-0 overflow-hidden bg-[#0a0a0a]"
+          className="relative flex w-full min-h-0 items-center justify-center overflow-hidden bg-[#0a0a0a]"
           style={{ height: "clamp(168px, 40vh, 340px)" }}
           onClick={e => e.stopPropagation()}
         >
-          <img
-            src="/sprites/office-mobile-bg.webp"
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover object-top"
-            loading="eager"
-            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-          />
+          {/* Mesmo encaixe visual do desktop: 1672×941 + fill (coords % do MAPA_AGENTES). */}
+          <div className="relative" style={{ aspectRatio: "1672 / 941", width: "100%", maxHeight: "100%" }}>
+            <img
+              src="/sprites/office-bg.webp"
+              alt=""
+              className="absolute inset-0 h-full w-full"
+              style={{ objectFit: "fill" }}
+              loading="eager"
+              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
 
           {/* Pop-ups de dashboard sobre o escritório */}
           <div className="pointer-events-auto absolute left-2 top-2 z-[2] max-w-[48%]">
@@ -235,6 +238,9 @@ function MobileOfficeView({ leads, metricas }: {
           )}
 
           {(Array.isArray(agentesMap) ? agentesMap : []).map(ag => {
+            const mapPos = MAPA_AGENTES[ag.agente_slug];
+            const px = mapPos ? mapPos.x : ag.pos_mobile_x;
+            const py = mapPos ? mapPos.y : ag.pos_mobile_y;
             const tamanho = ag.ativo && ag.leads_atendendo > 0 ? 34 : ag.ativo ? 26 : 20;
             const opacity = ag.ativo ? 1 : 0.35;
             const cor = ag.cor_departamento || "#c9a24a";
@@ -245,8 +251,8 @@ function MobileOfficeView({ leads, metricas }: {
                 key={ag.agente_slug}
                 className="absolute z-[3]"
                 style={{
-                  left: `${ag.pos_mobile_x}%`,
-                  top: `${ag.pos_mobile_y}%`,
+                  left: `${px}%`,
+                  top: `${py}%`,
                   transform: "translate(-50%, -50%)",
                 }}
                 onClick={e => e.stopPropagation()}
@@ -326,6 +332,7 @@ function MobileOfficeView({ leads, metricas }: {
               <span className="text-2xl tracking-widest text-white">⋯</span>
             </div>
           )}
+          </div>
         </div>
       </div>
 

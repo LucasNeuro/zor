@@ -5,6 +5,10 @@ import { createClient } from "@supabase/supabase-js";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
 
 export async function POST(request: NextRequest) {
+  if (!cronRequestAuthorized(request)) {
+    return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const { tipo = "completo", agenteSlug } = body;

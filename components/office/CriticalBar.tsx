@@ -1,17 +1,81 @@
 "use client";
 
-import { DECISIONS_MOCK, REVENUE_AT_RISK } from "@/lib/data/decisions-mock";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 interface CriticalBarProps {
   onVerInbox: () => void;
 }
 
+type CriticalItem = {
+  id: string;
+  titulo: string;
+  valor: number;
+  criado_em: string;
+};
+
 export default function CriticalBar({ onVerInbox }: CriticalBarProps) {
-  const criticals = DECISIONS_MOCK.filter((d) => d.status === "critical");
+  const [criticals, setCriticals] = useState<CriticalItem[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function carregar() {
+      const [aprovacoes, alertas] = await Promise.all([
+        supabase
+          .from("hub_aprovacoes")
+          .select("id, descricao, valor_envolvido, criado_em")
+          .eq("status", "pendente")
+          .order("criado_em", { ascending: false })
+          .limit(10),
+        supabase
+          .from("hub_alertas")
+          .select("id, titulo, dados, criado_em")
+          .eq("resolvido", false)
+          .eq("tipo", "critico")
+          .order("criado_em", { ascending: false })
+          .limit(10),
+      ]);
+
+      if (!mounted) return;
+
+      const aprovacaoItems = (aprovacoes.data || []).map((item) => ({
+        id: `aprovacao:${item.id}`,
+        titulo: item.descricao || "Aprovação pendente",
+        valor: Number(item.valor_envolvido) || 0,
+        criado_em: item.criado_em,
+      }));
+
+      const alertaItems = (alertas.data || []).map((item) => {
+        const dados = (item.dados || {}) as Record<string, unknown>;
+        return {
+          id: `alerta:${item.id}`,
+          titulo: item.titulo || "Alerta crítico",
+          valor: Number(dados.valor_envolvido || dados.valor_estimado || dados.receita_em_risco) || 0,
+          criado_em: item.criado_em,
+        };
+      });
+
+      setCriticals([...aprovacaoItems, ...alertaItems]);
+    }
+
+    carregar();
+    const channel = supabase
+      .channel("critical-bar")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_aprovacoes" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_alertas" }, carregar)
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   if (criticals.length === 0) return null;
 
-  const topDecision = [...criticals].sort((a, b) => b.prioridade - a.prioridade)[0];
-  const totalRisco = REVENUE_AT_RISK.total;
+  const topDecision = [...criticals].sort((a, b) => b.valor - a.valor)[0];
+  const totalRisco = criticals.reduce((total, item) => total + item.valor, 0);
 
   return (
     <div style={{
@@ -31,7 +95,7 @@ export default function CriticalBar({ onVerInbox }: CriticalBarProps) {
             {criticals.length} crítico{criticals.length > 1 ? "s" : ""}
           </strong>
           {" "}exigem ação —{" "}
-          <strong>R${(totalRisco / 1000).toFixed(0)}k</strong>
+          <strong>{totalRisco > 0 ? `R${(totalRisco / 1000).toFixed(0)}k` : "valor a revisar"}</strong>
           {" "}em risco — Próxima: {topDecision.titulo}
         </span>
       </div>

@@ -2,7 +2,17 @@
 
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { Clock, MessageSquare, Zap, Webhook } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import {
+  CONHECIMENTO_SECAO_ORDER,
+  CONHECIMENTO_TITULO_INSERT,
+} from "@/lib/hub/conhecimento-secoes";
+import {
+  MODO_OPERACAO_DESCRICAO,
+  MODO_OPERACAO_LABEL,
+  type ModoOperacaoAgente,
+} from "@/lib/hub/agente-modo-operacao";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -74,6 +84,12 @@ const EIXOS = [
 ];
 
 const SECOES_CONHECIMENTO = [
+  {
+    id: "fluxo_sdr",
+    label: "Núcleo POP / fluxo operacional",
+    placeholder:
+      "## 1. Objetivo\n(O que este modelo deve cumprir neste canal: informar, qualificar, registar, encaminhar, resolver 1ª linha — conforme o cargo.)\n\n## 2. Escopo\n- Tipos de pedido ou tema que trata\n- O que fica fora da responsabilidade do modelo\n\n## 3. Triagem ou classificação\n| Tipo | Quando |\n|------|--------|\n| … | … |\n\n## 4. Perguntas ou dados obrigatórios\n1. …\n2. …\n\n## 5. Critérios (ex.: prioridade, caso encerrado vs precisa de humano)\n- …\n\n## 6. Encaminhamento, próximos passos e SLA\n- …\n\n## 7. Escalação para humano\n- …",
+  },
   { id: "empresa", label: "Sobre o negócio", placeholder: "Quem somos, missão, diferenciais, proposta de valor, histórico..." },
   { id: "servicos", label: "Serviços", placeholder: "Detalhes de cada serviço, faixas de preço, prazos médios, garantias..." },
   { id: "atendimento", label: "Como atender", placeholder: "Fluxo de atendimento, perguntas que deve fazer, tom de voz, condução do lead..." },
@@ -81,8 +97,6 @@ const SECOES_CONHECIMENTO = [
   { id: "objeccoes", label: "Objeções comuns", placeholder: "Objeções frequentes e como responder. Ex: 'tá caro', 'vou pensar'..." },
   { id: "exemplos", label: "Exemplos de atendimento", placeholder: "Exemplos de boas conversas, casos reais, respostas modelo..." },
 ];
-
-const AVATAR_MAX_BYTES = 512 * 1024;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -94,17 +108,12 @@ function gerarPersonalidade(valores: number[]): string {
 }
 
 function montarPrompt(conhecimento: Record<string, string>): string {
-  const labels: Record<string, string> = {
-    empresa: "Sobre o negócio",
-    servicos: "Serviços",
-    atendimento: "Como atender",
-    proibicoes: "Nunca fazer",
-    objeccoes: "Objeções comuns",
-    exemplos: "Exemplos de atendimento",
-  };
-  return Object.entries(conhecimento)
-    .filter(([, v]) => v.trim())
-    .map(([k, v]) => `## ${labels[k] || k}\n\n${v}`)
+  return CONHECIMENTO_SECAO_ORDER.map((id) => {
+    const v = (conhecimento[id] || "").trim();
+    if (!v) return null;
+    return `## ${CONHECIMENTO_TITULO_INSERT[id]}\n\n${v}`;
+  })
+    .filter((b): b is string => b != null)
     .join("\n\n");
 }
 
@@ -120,6 +129,21 @@ export type Cargo = {
   [key: string]: unknown;
 };
 
+type HubCicloPickListItem = {
+  id: string;
+  nome: string;
+  agente_slug: string;
+  tipo: string;
+  ativo: boolean;
+};
+
+function hubCicloTipoLabel(tipo: string): string {
+  if (tipo === "continuo") return "contínuo";
+  if (tipo === "programado") return "programado";
+  if (tipo === "gatilho") return "gatilho";
+  return tipo;
+}
+
 export type AgenteNovoWizardProps = {
   variant: "page" | "drawer";
   onClose?: () => void;
@@ -128,17 +152,14 @@ export type AgenteNovoWizardProps = {
 
 export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWizardProps) {
   const router = useRouter();
-  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [passo, setPasso] = useState(1);
   const [cargoSelecionado, setCargoSelecionado] = useState<Cargo | null>(null);
   const [nome, setNome] = useState("");
   const [mercados, setMercados] = useState<string[]>([]);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [avatarDragOver, setAvatarDragOver] = useState(false);
-  const [erroAvatar, setErroAvatar] = useState("");
   const [valores, setValores] = useState<number[]>([3, 3, 3, 3, 3]);
   const [conhecimento, setConhecimento] = useState<Record<string, string>>({
+    fluxo_sdr: "",
     empresa: "",
     servicos: "",
     atendimento: "",
@@ -156,9 +177,59 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [filtroSegmento, setFiltroSegmento] = useState<string>("");
   const [filtroEspecialidade, setFiltroEspecialidade] = useState<string>("");
 
-  const [abaConhecimento, setAbaConhecimento] = useState("empresa");
+  const [abaConhecimento, setAbaConhecimento] = useState("fluxo_sdr");
+  const [gerandoIaConhecimento, setGerandoIaConhecimento] = useState<string | null>(null);
+  const [erroIaConhecimento, setErroIaConhecimento] = useState("");
+
+  /** Atendimento WhatsApp vs operações internas (cron/ciclos). */
+  const [modoOperacao, setModoOperacao] = useState<ModoOperacaoAgente>("canal_whatsapp");
+  /** Onde/quando opera: gravado como hub_ciclos_ia (tipo gatilho / continuo / programado). */
+  const [modoExecucao, setModoExecucao] = useState<"interacao" | "tempo_real" | "agenda">(
+    "interacao"
+  );
+  const [agendaIntervalMin, setAgendaIntervalMin] = useState<15 | 60 | 360 | 1440>(60);
+
+  /** `provisionar`: cria linha padrão + opcional vincular mais; `somente_vincular`: só atualiza slugs em hub_ciclos_ia. */
+  const [hubCicloEstrategia, setHubCicloEstrategia] = useState<"provisionar" | "somente_vincular">(
+    "provisionar"
+  );
+  const [hubCiclosLista, setHubCiclosLista] = useState<HubCicloPickListItem[]>([]);
+  const [hubCiclosCarregando, setHubCiclosCarregando] = useState(false);
+  const [hubCiclosVincularIds, setHubCiclosVincularIds] = useState<string[]>([]);
+  const hubCiclosLoadRef = useRef(false);
 
   const [erroCargos, setErroCargos] = useState(false);
+
+  useEffect(() => {
+    if (passo !== 5) {
+      hubCiclosLoadRef.current = false;
+      return;
+    }
+    if (hubCiclosLoadRef.current) return;
+    hubCiclosLoadRef.current = true;
+    setHubCiclosCarregando(true);
+    fetch("/api/hub/ciclos", { headers: internalApiHeaders() })
+      .then((r) => r.json())
+      .then((d: { ciclos?: unknown[] }) => {
+        const raw = Array.isArray(d?.ciclos) ? d.ciclos : [];
+        setHubCiclosLista(
+          raw
+            .map((c) => {
+              const o = c as Record<string, unknown>;
+              return {
+                id: String(o.id ?? ""),
+                nome: String(o.nome ?? ""),
+                agente_slug: String(o.agente_slug ?? ""),
+                tipo: String(o.tipo ?? ""),
+                ativo: o.ativo !== false,
+              };
+            })
+            .filter((c) => c.id.length > 0)
+        );
+      })
+      .catch(() => setHubCiclosLista([]))
+      .finally(() => setHubCiclosCarregando(false));
+  }, [passo]);
 
   const carregarCargos = useCallback(() => {
     setCarregando(true);
@@ -199,6 +270,12 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     setMercados((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
   }
 
+  function toggleHubCicloVincular(id: string) {
+    setHubCiclosVincularIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
   function setValor(i: number, v: number) {
     setValores((prev) => {
       const n = [...prev];
@@ -207,28 +284,58 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     });
   }
 
-  function aplicarArquivoAvatar(file: File | undefined) {
-    setErroAvatar("");
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setErroAvatar("Use uma imagem (PNG, JPG, WebP…).");
-      return;
-    }
-    if (file.size > AVATAR_MAX_BYTES) {
-      setErroAvatar("Imagem muito grande (máx. 512 KB).");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      setAvatarUrl(result || null);
-    };
-    reader.readAsDataURL(file);
-  }
-
   function handleBackClick() {
     if (variant === "drawer" && onClose) onClose();
     else router.back();
+  }
+
+  async function gerarSecaoComIa(secaoId: string) {
+    if (!cargoSelecionado || !nome.trim()) {
+      setErroIaConhecimento("Preencha o nome do agente (passo Identidade) e selecione um cargo.");
+      return;
+    }
+    setErroIaConhecimento("");
+    setGerandoIaConhecimento(secaoId);
+    try {
+      const cargoPayload = {
+        slug: cargoSelecionado.slug,
+        titulo: cargoSelecionado.titulo,
+        segmento: cargoSelecionado.segmento ?? null,
+        nivel: cargoSelecionado.nivel ?? null,
+        especialidade: cargoSelecionado.especialidade ?? null,
+        descricao_curta:
+          typeof cargoSelecionado.descricao_curta === "string"
+            ? cargoSelecionado.descricao_curta
+            : null,
+        descricao:
+          typeof cargoSelecionado.descricao === "string" ? cargoSelecionado.descricao : null,
+      };
+      const res = await fetch("/api/hub/agentes/sugerir-conhecimento", {
+        method: "POST",
+        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          secao: secaoId,
+          nome_agente: nome.trim(),
+          cargo: cargoPayload,
+          mercados,
+          texto_atual: conhecimento[secaoId] || "",
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { texto?: string; error?: string };
+      if (!res.ok) {
+        setErroIaConhecimento(data.error || "Falha ao gerar texto.");
+        return;
+      }
+      if (!data.texto?.trim()) {
+        setErroIaConhecimento("Resposta vazia do servidor.");
+        return;
+      }
+      setConhecimento((prev) => ({ ...prev, [secaoId]: data.texto!.trim() }));
+    } catch {
+      setErroIaConhecimento("Falha na requisição.");
+    } finally {
+      setGerandoIaConhecimento(null);
+    }
   }
 
   async function criarAgente() {
@@ -236,27 +343,54 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     setCriando(true);
     setErro("");
     try {
+      if (hubCicloEstrategia === "somente_vincular" && hubCiclosVincularIds.length === 0) {
+        setErro("Selecione pelo menos um ciclo da Central para associar a este agente.");
+        setCriando(false);
+        return;
+      }
+
       const payload: Record<string, unknown> = {
         cargo_slug: cargoSelecionado.slug,
         nome,
         prefixo_mercado: mercados.join(","),
         personalidade: gerarPersonalidade(valores),
         system_prompt_base: montarPrompt(conhecimento),
-        bio: conhecimento.empresa.slice(0, 200),
+        conhecimento_secoes: conhecimento,
+        bio: (conhecimento.empresa?.trim() || conhecimento.fluxo_sdr?.trim() || "").slice(0, 200),
         horario_inicio: "08:00",
         horario_fim: "22:00",
-        dias_semana: [0, 1, 2, 3, 4, 5, 6],
       };
-      if (avatarUrl) payload.avatar_url = avatarUrl;
 
+      if (hubCicloEstrategia === "somente_vincular") {
+        payload.omit_hub_ciclo_padrao = true;
+        payload.ciclos_vincular_ids = hubCiclosVincularIds;
+      } else {
+        payload.modo_operacao = modoOperacao;
+        payload.ciclo_execucao =
+          modoOperacao === "canal_whatsapp" ? "interacao" : modoExecucao;
+        payload.ciclo_intervalo_minutos =
+          modoExecucao === "agenda" ? agendaIntervalMin : undefined;
+        if (hubCiclosVincularIds.length > 0) {
+          payload.ciclos_vincular_ids = hubCiclosVincularIds;
+        }
+      }
       const res = await fetch("/api/hub/agentes", {
         method: "POST",
         headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { agente_slug?: string };
+        const data = (await res.json().catch(() => ({}))) as {
+          agente_slug?: string;
+          ciclo_aviso?: string;
+          ciclo_erro?: string;
+        };
         const slug = data.agente_slug;
+        if (data.ciclo_erro) {
+          console.error("[CRM] Agent criado mas ciclo padrão falhou:", data.ciclo_erro);
+        } else if (data.ciclo_aviso) {
+          console.warn("[CRM]", data.ciclo_aviso);
+        }
         if (slug && onCreated) onCreated({ agente_slug: slug });
         if (variant === "drawer" && onClose) onClose();
         else router.push("/crm/agentes");
@@ -480,7 +614,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 Qual é o cargo deste agente?
               </h2>
               <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 20px" }}>
-                O cargo determina nível, modelo de IA e configurações padrão.
+                O cargo define nível e regras; a inferência usa <strong style={{ color: "#8b949e" }}>Mistral</strong> (Agno) via{" "}
+                <code style={{ fontSize: 11 }}>MISTRAL_MODEL</code> no servidor.
               </p>
 
               {carregando ? (
@@ -648,7 +783,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Identidade do agente
                 </h2>
                 <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
-                  Campos fixos do cargo, nome e avatar opcional.
+                  Campos fixos do cargo, nome e mercados.
                 </p>
               </div>
 
@@ -656,7 +791,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 12px" }}>
                   Fixo do cargo 🔒
                 </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>
                       Nível
@@ -680,115 +815,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       <span style={{ color: "#8b949e", fontSize: 13 }}>—</span>
                     )}
                   </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>
-                      Modelo padrão
-                    </label>
-                    <span style={{ color: "#8b949e", fontSize: 13 }}>
-                      {(cargoSelecionado.modelo_padrao as string) || "—"}
-                    </span>
-                  </div>
+                  <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.5 }}>
+                    Inferência: <strong style={{ color: "#8b949e" }}>Mistral</strong> (Agno). Modelo efectivo em{" "}
+                    <code style={{ fontSize: 11 }}>MISTRAL_MODEL</code> no servidor — sem escolha por agente.
+                  </p>
                 </div>
-              </div>
-
-              <div>
-                <label
-                  style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}
-                >
-                  Avatar <span style={{ color: "#8b949e", fontWeight: 400 }}>(opcional)</span>
-                </label>
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => aplicarArquivoAvatar(e.target.files?.[0])}
-                />
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      avatarInputRef.current?.click();
-                    }
-                  }}
-                  onDragEnter={(e) => {
-                    e.preventDefault();
-                    setAvatarDragOver(true);
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setAvatarDragOver(true);
-                  }}
-                  onDragLeave={() => setAvatarDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setAvatarDragOver(false);
-                    aplicarArquivoAvatar(e.dataTransfer.files?.[0]);
-                  }}
-                  onClick={() => avatarInputRef.current?.click()}
-                  style={{
-                    border: `2px dashed ${avatarDragOver ? "#c9a24a" : "#30363d"}`,
-                    borderRadius: 12,
-                    padding: 20,
-                    textAlign: "center",
-                    cursor: "pointer",
-                    background: avatarDragOver ? "#c9a24a14" : "#161b22",
-                    transition: "border-color 150ms, background 150ms",
-                  }}
-                >
-                  {avatarUrl ? (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={avatarUrl}
-                        alt="Pré-visualização"
-                        style={{
-                          width: 96,
-                          height: 96,
-                          borderRadius: "50%",
-                          objectFit: "cover",
-                          border: "2px solid #30363d",
-                        }}
-                      />
-                      <span style={{ color: "#8b949e", fontSize: 12 }}>
-                        Clique ou arraste para trocar ·{" "}
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            setAvatarUrl(null);
-                            setErroAvatar("");
-                            if (avatarInputRef.current) avatarInputRef.current.value = "";
-                          }}
-                          onKeyDown={(ev) => {
-                            if (ev.key === "Enter" || ev.key === " ") {
-                              ev.preventDefault();
-                              ev.stopPropagation();
-                              setAvatarUrl(null);
-                              setErroAvatar("");
-                            }
-                          }}
-                          style={{ color: "#c9a24a", cursor: "pointer" }}
-                        >
-                          remover
-                        </span>
-                      </span>
-                    </div>
-                  ) : (
-                    <>
-                      <p style={{ color: "#e6edf3", fontSize: 13, fontWeight: 600, margin: "0 0 6px" }}>
-                        Arraste uma imagem aqui
-                      </p>
-                      <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>ou clique para escolher (máx. 512 KB)</p>
-                    </>
-                  )}
-                </div>
-                {erroAvatar && (
-                  <p style={{ color: "#ef4444", fontSize: 12, marginTop: 8 }}>{erroAvatar}</p>
-                )}
               </div>
 
               <div>
@@ -909,7 +940,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Conhecimento
                 </h2>
                 <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
-                  Preencha as seções que desejar — o agente usará estas informações.
+                  Preencha as secções que desejar — o agente usará estas informações. A primeira aba é um
+                  esqueleto POP genérico (objetivo, triagem, escalação); adapte ao cargo, não só vendas.
                 </p>
               </div>
 
@@ -921,7 +953,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     <button
                       type="button"
                       key={s.id}
-                      onClick={() => setAbaConhecimento(s.id)}
+                      onClick={() => {
+                        setAbaConhecimento(s.id);
+                        setErroIaConhecimento("");
+                      }}
                       style={{
                         padding: "6px 14px",
                         borderRadius: 20,
@@ -955,11 +990,63 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
               {SECOES_CONHECIMENTO.filter((s) => s.id === abaConhecimento).map((s) => (
                 <div key={s.id}>
-                  <label
-                    style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      marginBottom: 8,
+                    }}
                   >
-                    {s.label}
-                  </label>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", margin: 0 }}>
+                      {s.label}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => gerarSecaoComIa(s.id)}
+                      disabled={
+                        !!gerandoIaConhecimento ||
+                        !cargoSelecionado ||
+                        !nome.trim()
+                      }
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor:
+                          gerandoIaConhecimento || !cargoSelecionado || !nome.trim()
+                            ? "not-allowed"
+                            : "pointer",
+                        border: "1px solid #238636",
+                        background:
+                          gerandoIaConhecimento || !cargoSelecionado || !nome.trim()
+                            ? "#21262d"
+                            : "#23863633",
+                        color:
+                          gerandoIaConhecimento || !cargoSelecionado || !nome.trim()
+                            ? "#484f58"
+                            : "#3fb950",
+                        opacity:
+                          gerandoIaConhecimento || !cargoSelecionado || !nome.trim() ? 0.7 : 1,
+                        whiteSpace: "nowrap",
+                      }}
+                      title={
+                        !nome.trim()
+                          ? "Indique o nome do agente no passo Identidade."
+                          : "Gera esta secção com IA (contexto: cargo selecionado + nome agente)."
+                      }
+                    >
+                      {gerandoIaConhecimento === s.id
+                        ? "A gerar…"
+                        : "✨ Gerar com IA"}
+                    </button>
+                  </div>
+                  {erroIaConhecimento && abaConhecimento === s.id && (
+                    <p style={{ color: "#f85149", fontSize: 12, margin: "0 0 8px" }}>{erroIaConhecimento}</p>
+                  )}
                   <textarea
                     value={conhecimento[s.id] || ""}
                     onChange={(e) => setConhecimento((prev) => ({ ...prev, [s.id]: e.target.value }))}
@@ -1040,7 +1127,6 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 {[
                   { label: "Nome", value: nome || "—" },
                   { label: "Mercados", value: mercados.join(", ") || "—" },
-                  { label: "Avatar", value: avatarUrl ? "Imagem definida" : "—" },
                 ].map((row) => (
                   <div
                     key={row.label}
@@ -1058,22 +1144,341 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 ))}
               </div>
 
-              {avatarUrl && (
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={avatarUrl}
-                    alt=""
-                    style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: "50%",
-                      objectFit: "cover",
-                      border: "2px solid #30363d",
-                    }}
-                  />
+              <div
+                style={{
+                  background: "#161b22",
+                  border: "1px solid #30363d",
+                  borderRadius: 12,
+                  padding: 16,
+                }}
+              >
+                <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>
+                  QUANDO O AGENTE ATUA
+                </p>
+                <p style={{ color: "#6e7781", fontSize: 12, margin: "0 0 14px", lineHeight: 1.5 }}>
+                  Defina primeiro o <strong style={{ color: "#aebccf" }}>tipo de operação</strong>. Agentes de
+                  atendimento respondem no WhatsApp (webhook UAZAPI); agentes internos usam ciclos e cron no
+                  hub.
+                </p>
+
+                <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
+                  TIPO DE OPERAÇÃO
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                  {(
+                    [
+                      {
+                        id: "canal_whatsapp" as const,
+                        Icon: MessageSquare,
+                        titulo: MODO_OPERACAO_LABEL.canal_whatsapp,
+                        texto: MODO_OPERACAO_DESCRICAO.canal_whatsapp,
+                      },
+                      {
+                        id: "jobs_internos" as const,
+                        Icon: Zap,
+                        titulo: MODO_OPERACAO_LABEL.jobs_internos,
+                        texto: MODO_OPERACAO_DESCRICAO.jobs_internos,
+                      },
+                    ] as const
+                  ).map((opt) => {
+                    const Ico = opt.Icon;
+                    const ativo = modoOperacao === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setModoOperacao(opt.id);
+                          if (opt.id === "canal_whatsapp") setModoExecucao("interacao");
+                          else if (modoExecucao === "interacao") setModoExecucao("agenda");
+                        }}
+                        style={{
+                          display: "flex",
+                          gap: 12,
+                          alignItems: "flex-start",
+                          textAlign: "left",
+                          padding: "12px 14px",
+                          borderRadius: 10,
+                          border: `1px solid ${ativo ? "#c9a24a88" : "#30363d"}`,
+                          background: ativo ? "#c9a24a18" : "#0d1117",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Ico
+                          size={20}
+                          color={ativo ? "#c9a24a" : "#6e7781"}
+                          strokeWidth={2}
+                          aria-hidden
+                        />
+                        <span>
+                          <span
+                            style={{
+                              display: "block",
+                              color: "#e6edf3",
+                              fontWeight: 700,
+                              fontSize: 13,
+                              marginBottom: 4,
+                            }}
+                          >
+                            {opt.titulo}
+                          </span>
+                          <span style={{ color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                            {opt.texto}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+
+                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                  {(
+                    [
+                      { id: "provisionar" as const, label: "Criar ciclo do assistente" },
+                      { id: "somente_vincular" as const, label: "Só associar existentes" },
+                    ] as const
+                  ).map((opt) => {
+                    const at = hubCicloEstrategia === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setHubCicloEstrategia(opt.id)}
+                        style={{
+                          flex: "1 1 140px",
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          border: `1px solid ${at ? "#c9a24a" : "#30363d"}`,
+                          background: at ? "#c9a24a22" : "#0d1117",
+                          color: at ? "#c9a24a" : "#8b949e",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {hubCicloEstrategia === "somente_vincular" ? (
+                  <p style={{ color: "#c9a24a", fontSize: 11, margin: "0 0 12px", lineHeight: 1.5 }}>
+                    Os ciclos escolhidos passam a usar o <strong>slug do novo agente</strong> e deixam de
+                    contar para o agente anterior nesta tabela.
+                  </p>
+                ) : null}
+
+                {hubCicloEstrategia === "provisionar" ? (
+                  <>
+                    {modoOperacao === "canal_whatsapp" ? (
+                      <p
+                        style={{
+                          color: "#8b949e",
+                          fontSize: 12,
+                          margin: "0 0 12px",
+                          lineHeight: 1.5,
+                          padding: "12px 14px",
+                          borderRadius: 10,
+                          border: "1px solid #30363d",
+                          background: "#0d1117",
+                        }}
+                      >
+                        Será criado um ciclo <strong style={{ color: "#c9a24a" }}>gatilho</strong> (sob
+                        interação). A conversa ao vivo é acionada pelo webhook UAZAPI — não precisa de cron
+                        para cada mensagem.
+                      </p>
+                    ) : null}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {(
+                        [
+                          ...(modoOperacao === "canal_whatsapp"
+                            ? ([
+                                {
+                                  id: "interacao" as const,
+                                  Icon: Webhook,
+                                  titulo: "Sob interação (WhatsApp)",
+                                  texto:
+                                    "Responde quando o cliente envia mensagem — padrão para atendimento no canal.",
+                                },
+                              ] as const)
+                            : ([
+                                {
+                                  id: "tempo_real" as const,
+                                  Icon: Zap,
+                                  titulo: "Automático contínuo",
+                                  texto:
+                                    "Motor interno / relatórios — ciclo contínuo no hub (dispatch só trata programado).",
+                                },
+                                {
+                                  id: "agenda" as const,
+                                  Icon: Clock,
+                                  titulo: "Agenda fixa",
+                                  texto:
+                                    "Ciclo programado (em pausa) com intervalo abaixo; configure dispatch e ative.",
+                                },
+                              ] as const)),
+                        ] as const
+                      ).map((opt) => {
+                        const Ico = opt.Icon;
+                        const ativo = modoExecucao === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setModoExecucao(opt.id)}
+                            style={{
+                              display: "flex",
+                              gap: 12,
+                              alignItems: "flex-start",
+                              textAlign: "left",
+                              padding: "12px 14px",
+                              borderRadius: 10,
+                              border: `1px solid ${ativo ? "#23863688" : "#30363d"}`,
+                              background: ativo ? "#23863622" : "#0d1117",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Ico
+                              size={20}
+                              color={ativo ? "#3fb950" : "#6e7781"}
+                              strokeWidth={2}
+                              aria-hidden
+                            />
+                            <span>
+                              <span
+                                style={{
+                                  display: "block",
+                                  color: "#e6edf3",
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  marginBottom: 4,
+                                }}
+                              >
+                                {opt.titulo}
+                              </span>
+                              <span style={{ color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                                {opt.texto}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {modoExecucao === "agenda" ? (
+                      <div style={{ marginTop: 14 }}>
+                        <label
+                          htmlFor="ciclo-intervalo-agenda"
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: "#8b949e",
+                            display: "block",
+                            marginBottom: 8,
+                          }}
+                        >
+                          REPETIR A CADA (minutos)
+                        </label>
+                        <select
+                          id="ciclo-intervalo-agenda"
+                          value={agendaIntervalMin}
+                          onChange={(e) =>
+                            setAgendaIntervalMin(Number(e.target.value) as 15 | 60 | 360 | 1440)
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: 8,
+                            background: "#0d1117",
+                            border: "1px solid #30363d",
+                            color: "#e6edf3",
+                            fontSize: 13,
+                          }}
+                        >
+                          <option value={15}>15 minutos</option>
+                          <option value={60}>1 hora</option>
+                          <option value={360}>6 horas</option>
+                          <option value={1440}>≈ 1 vez por dia</option>
+                        </select>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+
+                <div style={{ marginTop: hubCicloEstrategia === "provisionar" ? 16 : 0 }}>
+                  <p
+                    style={{
+                      color: "#8b949e",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      margin: "0 0 8px",
+                    }}
+                  >
+                    {hubCicloEstrategia === "somente_vincular"
+                      ? "SELECIONAR CICLOS"
+                      : "VINCULAR CICLOS EXISTENTES (OPCIONAL)"}
+                  </p>
+                  {hubCiclosCarregando ? (
+                    <p style={{ color: "#6e7781", fontSize: 12, margin: 0 }}>A carregar ciclos…</p>
+                  ) : hubCiclosLista.length === 0 ? (
+                    <p style={{ color: "#6e7781", fontSize: 12, margin: 0 }}>
+                      Nenhum ciclo em hub_ciclos_ia. Crie-os em CRM → Ciclos IA.
+                    </p>
+                  ) : (
+                    <div
+                      style={{
+                        maxHeight: 220,
+                        overflowY: "auto",
+                        borderRadius: 10,
+                        border: "1px solid #30363d",
+                        background: "#0d1117",
+                      }}
+                    >
+                      {hubCiclosLista.map((c) => {
+                        const marcado = hubCiclosVincularIds.includes(c.id);
+                        return (
+                          <label
+                            key={c.id}
+                            style={{
+                              display: "flex",
+                              gap: 10,
+                              alignItems: "flex-start",
+                              padding: "10px 12px",
+                              borderBottom: "1px solid #21262d",
+                              cursor: "pointer",
+                              margin: 0,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={marcado}
+                              onChange={() => toggleHubCicloVincular(c.id)}
+                              style={{ marginTop: 3 }}
+                            />
+                            <span style={{ minWidth: 0 }}>
+                              <span
+                                style={{
+                                  display: "block",
+                                  color: "#e6edf3",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {c.nome || "—"}
+                              </span>
+                              <span style={{ color: "#8b949e", fontSize: 11, lineHeight: 1.45 }}>
+                                {c.agente_slug} · {hubCicloTipoLabel(c.tipo)}
+                                {!c.ativo ? " · inativo" : ""}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
                 <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>PERSONALIDADE</p>

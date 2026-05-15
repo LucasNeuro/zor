@@ -208,6 +208,7 @@ async function resolveAtendenteCicloId(ciclo: string): Promise<string | undefine
 
 export async function GET(request: NextRequest) {
   const ciclo = request.nextUrl.searchParams.get("ciclo") || "followup";
+  const hubCicloId = request.nextUrl.searchParams.get("hub_ciclo_id");
 
   if (!cronRequestAuthorized(request)) {
     return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
@@ -215,22 +216,40 @@ export async function GET(request: NextRequest) {
 
   const inicio = Date.now();
 
-  const cicloId = await resolveAtendenteCicloId(ciclo);
-  const cicloConfig = cicloId ? { id: cicloId } : null;
-
+  let cicloConfig: { id: string } | null = null;
+  let agenteSlugLog = "atendente";
   let followupRuntime = parseFollowupFromCicloConfiguracoes(undefined);
-  if (ciclo === "followup" && cicloId) {
-    const { data: cicloRow } = await supabase
+
+  if (hubCicloId) {
+    const { data: row } = await supabase
       .from("hub_ciclos_ia")
-      .select("configuracoes")
-      .eq("id", cicloId)
+      .select("id, agente_slug, configuracoes")
+      .eq("id", hubCicloId)
       .maybeSingle();
-    followupRuntime = parseFollowupFromCicloConfiguracoes(cicloRow?.configuracoes);
+    if (!row?.id) {
+      return NextResponse.json({ erro: "hub_ciclo_id inválido" }, { status: 404 });
+    }
+    cicloConfig = { id: row.id };
+    agenteSlugLog = String(row.agente_slug || "atendente");
+    if (ciclo === "followup") {
+      followupRuntime = parseFollowupFromCicloConfiguracoes(row.configuracoes);
+    }
+  } else {
+    const cicloId = await resolveAtendenteCicloId(ciclo);
+    cicloConfig = cicloId ? { id: cicloId } : null;
+    if (ciclo === "followup" && cicloConfig?.id) {
+      const { data: cicloRow } = await supabase
+        .from("hub_ciclos_ia")
+        .select("configuracoes")
+        .eq("id", cicloConfig.id)
+        .maybeSingle();
+      followupRuntime = parseFollowupFromCicloConfiguracoes(cicloRow?.configuracoes);
+    }
   }
 
   const logRes = await supabase.from("hub_ciclos_log").insert({
     ciclo_id: cicloConfig?.id ?? null,
-    agente_slug: "atendente",
+    agente_slug: agenteSlugLog,
     status: "rodando",
   }).select("id").single();
 

@@ -23,8 +23,7 @@ function timingSafeStringEqual(a: string, b: string): boolean {
 export function webhookAutenticado(request: NextRequest, rawBody: string, secret: string): boolean {
   const sig =
     request.headers.get("x-hub-signature-256") ||
-    request.headers.get("x-signature") ||
-    request.headers.get("x-evolution-signature");
+    request.headers.get("x-signature");
 
   if (sig) {
     const expectedHex = createHmac("sha256", secret).update(rawBody).digest("hex");
@@ -55,7 +54,7 @@ export function webhookAutenticado(request: NextRequest, rawBody: string, secret
   return false;
 }
 
-const IA_ATIVA = process.env.ANTHROPIC_API_KEY ? true : false;
+const IA_ATIVA = Boolean(process.env.MISTRAL_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY?.trim());
 
 function db() {
   return createClient(
@@ -375,7 +374,7 @@ export async function POST(request: NextRequest) {
       if (!warnedMissingWebhookSecret) {
         warnedMissingWebhookSecret = true;
         console.warn(
-          "[WEBHOOK] WEBHOOK_SECRET não definido — webhook aceita qualquer origem. Defina WEBHOOK_SECRET e alinhe Evolution/UAZAPI (header ou HMAC). Em urgência local: WEBHOOK_SKIP_SIGNATURE_VERIFY=true"
+          "[WEBHOOK] WEBHOOK_SECRET não definido — webhook aceita qualquer origem. Defina WEBHOOK_SECRET e alinhe UAZAPI (header ou HMAC). Em urgência local: WEBHOOK_SKIP_SIGNATURE_VERIFY=true"
         );
       }
     }
@@ -582,7 +581,7 @@ export async function POST(request: NextRequest) {
 
           if (!resultado.precisaAprovacao) {
             const slugEfetivo = resultado.agenteSlug || agenteSlug;
-            const modeloUsado = resultado.modelo || "claude-haiku-4-5";
+            const modeloUsado = resultado.modelo || "mistral-small-latest";
             const respostaTexto = resultado.resposta;
             const _obsTokens =
               (resultado.tokens?.entrada ?? 0) + (resultado.tokens?.saida ?? 0);
@@ -702,7 +701,7 @@ export async function POST(request: NextRequest) {
         leadId: lead.id,
         telefone,
         agenteSlug: agente?.agente_slug as string | undefined,
-        motivo: IA_ATIVA ? "agente_nao_encontrado" : "anthropic_api_key_ausente",
+        motivo: IA_ATIVA ? "agente_nao_encontrado" : "ia_api_key_ausente",
         mensagemOriginal: mensagemFinal,
       });
     }

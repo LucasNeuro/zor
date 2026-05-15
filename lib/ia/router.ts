@@ -9,6 +9,7 @@ import {
   type CanalAutonomia,
   type HubAutonomiaMatrizRow,
 } from "./autonomia-matriz";
+import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 
 function supabase() {
   return createClient(
@@ -270,9 +271,16 @@ function calcularScore(
 function selecionarModelo(agente: Record<string, unknown>, demanda: Demanda): string {
   const valor = demanda.valorEstimado || 0;
 
-  if (valor > 100000) return agente.modelo_alto_valor as string || "claude-opus-4-5";
-  if (valor > 20000) return agente.modelo_critico as string || "claude-sonnet-4-5";
-  return agente.modelo_padrao as string || "claude-haiku-4-5";
+  if (valor > 100000) {
+    const m = (agente.modelo_alto_valor as string)?.trim();
+    return m || HUB_MODELO_SENTINEL;
+  }
+  if (valor > 20000) {
+    const m = (agente.modelo_critico as string)?.trim();
+    return m || HUB_MODELO_SENTINEL;
+  }
+  const m = (agente.modelo_padrao as string)?.trim();
+  return m || HUB_MODELO_SENTINEL;
 }
 
 // ── ESCALADOR UNIVERSAL ───────────────────────────────────────

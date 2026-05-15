@@ -13,7 +13,7 @@ export default function DashboardPage() {
     { label: "Aprovações pendentes", valor: m.aprovacoesPendentes, cor: m.aprovacoesPendentes > 0 ? "#b3261e" : "#003b26", rota: "/crm/aprovacoes" },
     { label: "Conversas ativas", valor: m.conversasAtivas, cor: "#003b26", rota: "/crm/atendimento" },
     { label: "Leads hoje", valor: m.leadsHoje, cor: "#003b26", rota: "/crm/leads" },
-    { label: "Agentes IA ativos", valor: m.agentesAtivos, cor: "#003b26", rota: "/crm/agentes" },
+    { label: "Modelos IA ativos", valor: m.agentesAtivos, cor: "#003b26", rota: "/crm/agentes" },
     {
       label: "Receita potencial",
       valor: m.receitaPotencial > 0 ? `R$${(m.receitaPotencial / 1000).toFixed(0)}k` : "R$0",

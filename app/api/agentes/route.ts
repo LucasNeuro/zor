@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  modeloAltoValorForHubInsert,
+  modeloCriticoForHubInsert,
+  modeloPadraoForHubInsert,
+} from "@/lib/ia/hub-model-defaults";
 
 function db() {
   return createClient(
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     if (cargoReal) {
       body.nivel = cargoReal.nivel;
-      body.modelo_padrao = cargoReal.modelo_padrao;
+      body.modelo_padrao = modeloPadraoForHubInsert(cargoReal.modelo_padrao as string | undefined);
     }
   }
 
@@ -83,6 +88,16 @@ export async function POST(request: NextRequest) {
 
   const nivelNum = nivel as number;
 
+  const mp = modeloPadraoForHubInsert(modelo_padrao as string | undefined);
+  const mc =
+    nivelNum <= 3 ? modeloCriticoForHubInsert(undefined) : modeloPadraoForHubInsert(modelo_padrao as string | undefined);
+  const mav =
+    nivelNum <= 2
+      ? modeloAltoValorForHubInsert(undefined)
+      : nivelNum <= 3
+        ? modeloCriticoForHubInsert(undefined)
+        : modeloPadraoForHubInsert(modelo_padrao as string | undefined);
+
   const { data: agente, error } = await supabase
     .from("hub_agente_identidade")
     .insert({
@@ -91,9 +106,9 @@ export async function POST(request: NextRequest) {
       cargo,
       area,
       nivel: nivelNum,
-      modelo_padrao: (modelo_padrao as string) || "claude-haiku-4-5-20251001",
-      modelo_critico: nivelNum <= 3 ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
-      modelo_alto_valor: nivelNum <= 2 ? "claude-opus-4-7" : "claude-sonnet-4-6",
+      modelo_padrao: mp,
+      modelo_critico: mc,
+      modelo_alto_valor: mav,
       system_prompt_base,
       pode_fazer: (pode_fazer as string[]) || [],
       nao_pode_fazer: (nao_pode_fazer as string[]) || [],
@@ -145,7 +160,7 @@ export async function POST(request: NextRequest) {
   try {
     await supabase.from("hub_agente_configuracao").insert({
       agente_slug,
-      modelo_ia: (modelo_padrao as string) || "claude-haiku-4-5-20251001",
+      modelo_ia: mp,
       temperatura: 0.7,
       max_tokens: 1024,
       tom: "profissional",

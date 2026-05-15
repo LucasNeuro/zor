@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS hub_propostas (
 CREATE TABLE IF NOT EXISTS hub_agente_conhecimento (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agente_slug TEXT NOT NULL,
-  secao TEXT NOT NULL CHECK (secao IN ('empresa','servicos','atendimento','proibicoes','exemplos','objeccoes')),
+  secao TEXT NOT NULL CHECK (secao IN ('empresa','servicos','atendimento','proibicoes','exemplos','objeccoes','fluxo_sdr')),
   titulo TEXT NOT NULL,
   conteudo TEXT NOT NULL,
   ordem INTEGER DEFAULT 0,

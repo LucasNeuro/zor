@@ -1,6 +1,106 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextRequest, NextResponse } from "next/server";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse, after } from "next/server";
+import { runPlaybookPipeline } from "@/lib/playbook/orchestrate";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+import { validateAndNormalizeCicloConfiguracoes } from "@/lib/hub-ciclos-configuracoes";
+import {
+  modeloAltoValorForHubInsert,
+  modeloCriticoForHubInsert,
+  modeloPadraoForHubInsert,
+} from "@/lib/ia/hub-model-defaults";
+import {
+  CONHECIMENTO_TITULO_INSERT,
+  isConhecimentoSecaoId,
+  ordemConhecimentoSecao,
+} from "@/lib/hub/conhecimento-secoes";
+import {
+  cicloExecucaoPadraoFromModoOperacao,
+  isCicloExecucaoPadrao,
+  isModoOperacaoAgente,
+  modoOperacaoFromCicloExecucao,
+  type CicloExecucaoPadrao,
+  type ModoOperacaoAgente,
+} from "@/lib/hub/agente-modo-operacao";
+
+const CICLO_EXECUCAO_OPCOES = ["interacao", "tempo_real", "agenda"] as const;
+type CicloExecucaoCliente = (typeof CICLO_EXECUCAO_OPCOES)[number];
+
+function normCicloExecucao(v: unknown): CicloExecucaoCliente | null {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  if ((CICLO_EXECUCAO_OPCOES as readonly string[]).includes(s)) return s as CicloExecucaoCliente;
+  return null;
+}
+
+async function provisionHubCicloPadrao(
+  supabase: SupabaseClient,
+  agenteSlug: string,
+  nomeAgente: string,
+  modo: CicloExecucaoCliente,
+  agendaIntervalMinutes: number
+): Promise<{ aviso?: string; erro?: string }> {
+  const rotulo = nomeAgente.trim().slice(0, 80) || agenteSlug;
+  let nomeLinha = "Operação do agente";
+  let tipo: string;
+  let intervalo: number | null = null;
+  let ativo = true;
+  const baseCfg: Record<string, unknown> = {};
+
+  if (modo === "interacao") {
+    nomeLinha = "Sob interação";
+    tipo = "gatilho";
+    ativo = true;
+    baseCfg.ciclo_origem_provisionamento = "wizard_agente_v1";
+  } else if (modo === "tempo_real") {
+    nomeLinha = "Tempo real (canal)";
+    tipo = "continuo";
+    ativo = true;
+    baseCfg.ciclo_origem_provisionamento = "wizard_agente_v1";
+  } else {
+    nomeLinha = "Cadência na agenda";
+    tipo = "programado";
+    intervalo = agendaIntervalMinutes;
+    ativo = false;
+    baseCfg.ciclo_origem_provisionamento = "wizard_agente_v1";
+    baseCfg.dispatch_pendente = true;
+    baseCfg.dica =
+      "Defina configuracoes.dispatch { api: diretor|gerente|atendente, ciclo: <chave do runner> } antes de ativar.";
+  }
+
+  const descricao =
+    modo === "interacao"
+      ? "Dispara com interação no canal (mensagem do utilizador / webhook)."
+      : modo === "tempo_real"
+        ? "Atrelado ao motor em tempo real (sem ciclo cron dedicado)."
+        : `Cadência definida ao criar o agente (≈ cada ${intervalo} min após dispatch e ativação).`;
+
+  const parsedCfg = validateAndNormalizeCicloConfiguracoes(baseCfg);
+  if (!parsedCfg.ok) {
+    return { erro: parsedCfg.error };
+  }
+
+  const row = {
+    agente_slug: agenteSlug,
+    nome: nomeLinha,
+    descricao: `${descricao} — Agente «${rotulo}»`,
+    tipo,
+    cron_expressao: null,
+    intervalo_minutos: intervalo,
+    ativo,
+    configuracoes: parsedCfg.value,
+  };
+
+  const { error } = await supabase.from("hub_ciclos_ia").insert(row as Record<string, unknown>);
+  if (error) return { erro: error.message };
+
+  const aviso =
+    modo === "agenda"
+      ? "Criámos uma linha em hub_ciclos_ia tipo programado em pausa: configure configuracoes.dispatch e ative antes de o dispatcher usar este ciclo para este agente."
+      : modo === "tempo_real"
+        ? "Ciclo contínuo registado só para operações no CRM; o cron /api/cron/dispatch-ciclos só trata tipo programado."
+        : undefined;
+
+  return { aviso };
+}
 
 function db() {
   return createClient(
@@ -19,7 +119,16 @@ function slugify(s: string) {
 
 function isTenantColumnMissing(message?: string): boolean {
   if (!message) return false;
-  return message.includes("hub_agente_identidade.tenant_id does not exist");
+  const m = message.toLowerCase();
+  if (!m.includes("tenant_id") || !m.includes("hub_agente_identidade")) {
+    return false;
+  }
+  // Postgres: "column ... does not exist"; PostgREST: "schema cache"
+  return (
+    m.includes("does not exist") ||
+    m.includes("schema cache") ||
+    m.includes("could not find")
+  );
 }
 
 export async function GET(request: NextRequest) {
@@ -185,9 +294,9 @@ export async function POST(request: NextRequest) {
     tom_voz: (tom_voz && String(tom_voz).trim()) || "profissional e cordial",
     estilo_comunicacao: (estilo_comunicacao && String(estilo_comunicacao).trim()) || "Direto",
     system_prompt_base: promptBase,
-    modelo_padrao: (cat.modelo_padrao as string) || "claude-haiku-4-5-20251001",
-    modelo_critico: (cat.modelo_critico as string) || "claude-sonnet-4-6",
-    modelo_alto_valor: (cat.modelo_alto_valor as string) || "claude-opus-4-7",
+    modelo_padrao: modeloPadraoForHubInsert(cat.modelo_padrao as string | undefined),
+    modelo_critico: modeloCriticoForHubInsert(cat.modelo_critico as string | undefined),
+    modelo_alto_valor: modeloAltoValorForHubInsert(cat.modelo_alto_valor as string | undefined),
     pode_fazer: podeFazer,
     nao_pode_fazer: naoPode,
     sempre_dizer: [],
@@ -200,6 +309,30 @@ export async function POST(request: NextRequest) {
     ativo: true,
     tenant_id: tenantId || defaultTenantId(),
   };
+
+  const ciclo_modoCliente = normCicloExecucao(body.ciclo_execucao);
+  const modoOperacaoBody = isModoOperacaoAgente(body.modo_operacao)
+    ? (body.modo_operacao as ModoOperacaoAgente)
+    : ciclo_modoCliente != null
+      ? modoOperacaoFromCicloExecucao(ciclo_modoCliente)
+      : null;
+  const cicloExecPadrao: CicloExecucaoPadrao | null =
+    ciclo_modoCliente ??
+    (modoOperacaoBody != null ? cicloExecucaoPadraoFromModoOperacao(modoOperacaoBody) : null);
+  if (modoOperacaoBody != null) {
+    row.modo_operacao = modoOperacaoBody;
+  }
+  if (cicloExecPadrao != null) {
+    row.ciclo_execucao_padrao = cicloExecPadrao;
+  } else if (isCicloExecucaoPadrao(body.ciclo_execucao_padrao)) {
+    row.ciclo_execucao_padrao = body.ciclo_execucao_padrao;
+    if (modoOperacaoBody == null) {
+      row.modo_operacao = modoOperacaoFromCicloExecucao(body.ciclo_execucao_padrao);
+    }
+  }
+  let agendaMinutes = Number.parseInt(String(body.ciclo_intervalo_minutos ?? ""), 10);
+  if (!Number.isFinite(agendaMinutes) || agendaMinutes <= 0) agendaMinutes = 60;
+  if (agendaMinutes > 10080) agendaMinutes = 10080;
 
   const avatarTrim = avatar_url != null ? String(avatar_url).trim() : "";
   if (avatarTrim.length > 600_000) {
@@ -228,5 +361,92 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data, { status: 201 });
+  const created = data as { agente_slug: string };
+
+  const rawConhecimento = body.conhecimento_secoes;
+  if (rawConhecimento && typeof rawConhecimento === "object" && !Array.isArray(rawConhecimento)) {
+    const rows: Array<Record<string, unknown>> = [];
+    for (const [key, val] of Object.entries(rawConhecimento as Record<string, unknown>)) {
+      if (!isConhecimentoSecaoId(key)) continue;
+      const conteudo = String(val ?? "").trim();
+      if (!conteudo) continue;
+      rows.push({
+        agente_slug: created.agente_slug,
+        secao: key,
+        titulo: CONHECIMENTO_TITULO_INSERT[key],
+        conteudo,
+        ordem: ordemConhecimentoSecao(key),
+        ativo: true,
+      });
+    }
+    if (rows.length > 0) {
+      const { error: kcErr } = await supabase.from("hub_agente_conhecimento").insert(rows);
+      if (kcErr) {
+        console.error(
+          "[crm] hub_agente_conhecimento ao criar agente:",
+          created.agente_slug,
+          kcErr.message
+        );
+      }
+    }
+  }
+
+  after(async () => {
+    try {
+      const out = await runPlaybookPipeline(supabase, created.agente_slug);
+      if (!out.ok) {
+        console.error("[playbook] pós-criação agente:", created.agente_slug, out.error);
+      }
+    } catch (e) {
+      console.error("[playbook] pós-criação agente (exceção):", created.agente_slug, e);
+    }
+  });
+
+  let ciclo_aviso: string | undefined;
+  let ciclo_erro: string | undefined;
+
+  const rawVincular = body.ciclos_vincular_ids;
+  const ciclosVincular =
+    Array.isArray(rawVincular)
+      ? rawVincular
+          .map((x) => (typeof x === "string" ? x.trim() : ""))
+          .filter((id) => id.length > 0)
+      : [];
+
+  if (ciclo_modoCliente != null && body.omit_hub_ciclo_padrao !== true) {
+    const out = await provisionHubCicloPadrao(
+      supabase,
+      created.agente_slug,
+      String(body.nome || "").trim() || created.agente_slug,
+      ciclo_modoCliente,
+      agendaMinutes
+    );
+    ciclo_aviso = out.aviso;
+    ciclo_erro = out.erro;
+    if (ciclo_erro) console.error("[crm] ciclo provisionado após criar agente:", created.agente_slug, ciclo_erro);
+    if (ciclo_aviso) console.info("[crm] ciclo nota:", created.agente_slug, ciclo_aviso);
+  }
+
+  if (ciclosVincular.length > 0) {
+    const { error: vErr } = await supabase
+      .from("hub_ciclos_ia")
+      .update({ agente_slug: created.agente_slug })
+      .in("id", ciclosVincular);
+    if (vErr) {
+      ciclo_erro = ciclo_erro ? `${ciclo_erro}; ${vErr.message}` : vErr.message;
+      console.error("[crm] falha ao vincular ciclos ao agente:", created.agente_slug, vErr.message);
+    } else {
+      const msg = `${ciclosVincular.length} ciclo(s) em hub_ciclos_ia passaram a usar o slug deste agente.`;
+      ciclo_aviso = ciclo_aviso ? `${ciclo_aviso} ${msg}` : msg;
+    }
+  }
+
+  return NextResponse.json(
+    {
+      ...data,
+      ...(ciclo_aviso ? { ciclo_aviso } : {}),
+      ...(ciclo_erro ? { ciclo_erro } : {}),
+    },
+    { status: 201 }
+  );
 }

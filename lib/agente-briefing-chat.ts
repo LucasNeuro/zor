@@ -1,5 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { completarChatPreferindoMistral } from "@/lib/ia/llm-completion";
+import { construirPrompt } from "@/lib/ia/prompt-builder";
 
 const MAX_SNAPSHOT_ACOES = 35;
 const MAX_SNAPSHOT_CICLO_LOG = 60;
@@ -12,6 +13,15 @@ Regras absolutas:
 - Cite nomes de leads quando aparecerem nos dados (contexto interno autorizado).
 - Seja objetivo e útil para operação: status, últimos erros, o que revisar em Ciclos IA / logs.
 `;
+
+/** Pré-texto para o modo que espelha o system prompt de produção (prompt-builder), sem snapshot operacional. */
+export const SIMULACAO_CANAL_PREAMBLE = `### MODO SIMULAÇÃO DE CANAL (teste no CRM Obra10)
+Responda como faria ao **cliente ou lead** no canal ao vivo, seguindo **estritamente** as camadas de identidade, conhecimento e regras que vêm abaixo (equivalente ao que a engine usa).
+- Não diga que está em briefing interno, revisão operacional ou "somente leitura de logs".
+- Não afirme ter gravado no CRM, enviado WhatsApp ou executado ferramentas — é conversa simulada.
+- Mantenha tom, limites e playbook como em produção.`;
+
+export type BriefingModoSessao = "briefing_interno" | "simulacao_canal";
 
 export type BriefingMensagemLinha = {
   papel: "user" | "assistant";
@@ -136,6 +146,10 @@ function calcularCustoBrl(modelo: string, input: number, output: number): { brl:
   const outM = output / 1_000_000;
   let usd = 0;
   const m = modelo.toLowerCase();
+  if (m.includes("mistral") || m.includes("mixtral") || m.includes("ministral")) {
+    usd = inM * 0.2 + outM * 0.6;
+    return { usd, brl: usd * 5.5 };
+  }
   if (m.includes("haiku")) usd = inM * 1 + outM * 5;
   else if (m.includes("sonnet")) usd = inM * 3 + outM * 15;
   else if (m.includes("opus")) usd = inM * 15 + outM * 75;
@@ -153,9 +167,6 @@ export async function executarBriefingReply(params: {
   historico: BriefingMensagemLinha[];
   mensagemUsuario: string;
 }): Promise<{ texto: string; modelo: string; tokens_input: number; tokens_output: number; custo_brl: number }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY não configurada");
-
   const identity = [
     `Identidade do agente (para tom de voz): nome=${params.agenteNome}, slug=${params.agenteSlug}`,
     params.cargo ? `Cargo: ${params.cargo}` : null,
@@ -174,18 +185,60 @@ export async function executarBriefingReply(params: {
   }
   mensagens.push({ role: "user", content: params.mensagemUsuario });
 
-  const anthropic = new Anthropic({ apiKey });
-  const resposta = await anthropic.messages.create({
-    model: params.modelo,
-    max_tokens: 2048,
-    system,
-    messages: mensagens,
+  const out = await completarChatPreferindoMistral({
+    systemPrompt: system,
+    mensagens,
+    modeloFromDb: params.modelo,
+    maxTokens: 2048,
   });
+  if (!out.ok) throw new Error(out.erro);
 
-  const texto =
-    resposta.content[0]?.type === "text" ? resposta.content[0].text : "";
-  const tokens_input = resposta.usage.input_tokens;
-  const tokens_output = resposta.usage.output_tokens;
-  const { brl } = calcularCustoBrl(params.modelo, tokens_input, tokens_output);
-  return { texto, modelo: params.modelo, tokens_input, tokens_output, custo_brl: brl };
+  const { brl } = calcularCustoBrl(out.modeloLog, out.tokensEntrada, out.tokensSaida);
+  return {
+    texto: out.texto,
+    modelo: out.modeloLog,
+    tokens_input: out.tokensEntrada,
+    tokens_output: out.tokensSaida,
+    custo_brl: brl,
+  };
+}
+
+/** Mesma pilha textual que produção (`construirPrompt`), sem dados de hub_ciclos_log / ações. */
+export async function executarSimulacaoCanalReply(params: {
+  agenteSlug: string;
+  historico: BriefingMensagemLinha[];
+  mensagemUsuario: string;
+}): Promise<{ texto: string; modelo: string; tokens_input: number; tokens_output: number; custo_brl: number }> {
+  const pc = await construirPrompt({ agenteSlug: params.agenteSlug });
+  if (!pc) {
+    throw new Error(
+      "Não foi possível montar o prompt do agente. Verifique se o modelo está ativo em hub_agente_identidade."
+    );
+  }
+
+  const system = `${SIMULACAO_CANAL_PREAMBLE}\n\n${pc.systemPrompt}`;
+
+  const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const m of params.historico) {
+    if (m.papel === "user") mensagens.push({ role: "user", content: m.conteudo });
+    else mensagens.push({ role: "assistant", content: m.conteudo });
+  }
+  mensagens.push({ role: "user", content: params.mensagemUsuario });
+
+  const out = await completarChatPreferindoMistral({
+    systemPrompt: system,
+    mensagens,
+    modeloFromDb: pc.modelo,
+    maxTokens: 2048,
+  });
+  if (!out.ok) throw new Error(out.erro);
+
+  const { brl } = calcularCustoBrl(out.modeloLog, out.tokensEntrada, out.tokensSaida);
+  return {
+    texto: out.texto,
+    modelo: out.modeloLog,
+    tokens_input: out.tokensEntrada,
+    tokens_output: out.tokensSaida,
+    custo_brl: brl,
+  };
 }

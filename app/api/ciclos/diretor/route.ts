@@ -181,35 +181,54 @@ function statusUltimoDiretor(ciclo: string, resultado: unknown): "sucesso" | "se
   return "sem_acao";
 }
 
-async function registrarExecucaoDiretor(ciclo: string, statusExec: string, resultado: unknown) {
+async function registrarExecucaoDiretor(
+  ciclo: string,
+  statusExec: string,
+  resultado: unknown,
+  hubCicloId?: string | null
+) {
+  let cfg: { id: string; total_execucoes: number | null; agente_slug: string } | null = null;
+
+  if (hubCicloId) {
+    const { data } = await supabase
+      .from("hub_ciclos_ia")
+      .select("id, total_execucoes, agente_slug")
+      .eq("id", hubCicloId)
+      .maybeSingle();
+    if (data?.id) cfg = data;
+  }
+
   const map = CICLO_NOME_FRAG[ciclo];
-  if (!map) return;
 
-  let { data: cfg } = await supabase
-    .from("hub_ciclos_ia")
-    .select("id, total_execucoes")
-    .eq("agente_slug", map.slug)
-    .ilike("nome", `%${map.frag}%`)
-    .maybeSingle();
+  if (!cfg && map) {
+    let { data } = await supabase
+      .from("hub_ciclos_ia")
+      .select("id, total_execucoes, agente_slug")
+      .eq("agente_slug", map.slug)
+      .ilike("nome", `%${map.frag}%`)
+      .maybeSingle();
 
-  if (!cfg && ciclo === "trafego") {
-    const alt = await supabase
-      .from("hub_ciclos_ia")
-      .select("id, total_execucoes")
-      .eq("agente_slug", map.slug)
-      .ilike("nome", "%trafego%")
-      .maybeSingle();
-    cfg = alt.data;
+    if (!data && ciclo === "trafego") {
+      const alt = await supabase
+        .from("hub_ciclos_ia")
+        .select("id, total_execucoes, agente_slug")
+        .eq("agente_slug", map.slug)
+        .ilike("nome", "%trafego%")
+        .maybeSingle();
+      data = alt.data;
+    }
+    if (!data && ciclo === "analise_manha") {
+      const alt = await supabase
+        .from("hub_ciclos_ia")
+        .select("id, total_execucoes, agente_slug")
+        .eq("agente_slug", map.slug)
+        .ilike("nome", "%manh%")
+        .maybeSingle();
+      data = alt.data;
+    }
+    cfg = data ?? null;
   }
-  if (!cfg && ciclo === "analise_manha") {
-    const alt = await supabase
-      .from("hub_ciclos_ia")
-      .select("id, total_execucoes")
-      .eq("agente_slug", map.slug)
-      .ilike("nome", "%manh%")
-      .maybeSingle();
-    cfg = alt.data;
-  }
+
   if (!cfg?.id) return;
 
   const alertasGer =
@@ -219,7 +238,7 @@ async function registrarExecucaoDiretor(ciclo: string, statusExec: string, resul
 
   await supabase.from("hub_ciclos_log").insert({
     ciclo_id: cfg.id,
-    agente_slug: map.slug,
+    agente_slug: cfg.agente_slug,
     status: statusExec,
     finalizado_em: new Date().toISOString(),
     acoes_tomadas: [],
@@ -238,6 +257,7 @@ async function registrarExecucaoDiretor(ciclo: string, statusExec: string, resul
 
 export async function GET(request: NextRequest) {
   const ciclo = request.nextUrl.searchParams.get("ciclo") || "trafego";
+  const hubCicloId = request.nextUrl.searchParams.get("hub_ciclo_id");
   if (!cronRequestAuthorized(request)) {
     return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   }
@@ -250,7 +270,7 @@ export async function GET(request: NextRequest) {
     else resultado = {};
 
     const statusExec = statusUltimoDiretor(ciclo, resultado);
-    await registrarExecucaoDiretor(ciclo, statusExec, resultado);
+    await registrarExecucaoDiretor(ciclo, statusExec, resultado, hubCicloId);
 
     void Promise.all([
       medirKPIs(AG_TRAFEGO).catch(() => undefined),

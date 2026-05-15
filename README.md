@@ -6,7 +6,7 @@ Plataforma Next.js (App Router) + Supabase para CRM, agentes IA, parceiros e aut
 
 - Node.js 20+
 - Conta Supabase (URL + anon key + **service role** para rotas server-side)
-- (Opcional) Anthropic API, Evolution API, Windsor.ai — conforme features ativas
+- (Opcional) Anthropic API, UAZAPI (WhatsApp), Windsor.ai — conforme features ativas
 
 ## Desenvolvimento local
 
@@ -28,12 +28,13 @@ Abra [http://localhost:3001](http://localhost:3001).
 | `NEXT_PUBLIC_SUPABASE_URL` | Cliente Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Cliente/browser |
 | `SUPABASE_SERVICE_ROLE_KEY` | APIs server (`/api/*`, webhooks) — **não** expor no cliente |
-| `NEXT_PUBLIC_APP_URL` | URLs absolutas (WhatsApp, links) |
+| `NEXT_PUBLIC_APP_URL` | URLs absolutas (WhatsApp, links); em produção o dispatch (`/api/cron/dispatch-ciclos`) usa esta origem nos pedidos internos a `/api/ciclos/*` |
+| `DISPATCH_CICLOS_URL` | (Opcional no Cron Job / scheduler) URL completa para `GET /api/cron/dispatch-ciclos`; se vazio, ver `.env.example` e `scripts/render-dispatch-ciclos.sh` (`NEXT_PUBLIC_APP_URL` + caminho) |
 | `CRON_SECRET` | Protege ciclos (`/api/ciclos/*`) e geração de link do portal parceiro em produção |
 | `PORTAL_HMAC_SECRET` | (Opcional) Assinatura do link `/parceiro/dashboard`; padrão: `CRON_SECRET` |
 | `ANTHROPIC_API_KEY` | Respostas IA |
-| `EVOLUTION_API_URL` / `EVOLUTION_API_KEY` | Envio WhatsApp |
-| `WEBHOOK_HMAC_SECRET` | Validação HMAC do webhook Evolution — ver [`docs/EVOLUTION_SETUP.md`](docs/EVOLUTION_SETUP.md) |
+| `UAZAPI_BASE_URL` / `UAZAPI_INSTANCE_TOKEN` | Envio e instância WhatsApp (UAZAPI) |
+| `WEBHOOK_SECRET` | Validação do webhook UAZAPI (HMAC ou header) — ver [`docs/UAZAPI_SETUP.md`](docs/UAZAPI_SETUP.md) |
 | `WINDSOR_API_KEY` | Ciclo de tráfego (métricas de campanha) |
 | `INTERNAL_API_KEY` | Chave para rotas `/api/*` quando não há sessão CRM (crons, scripts, alguns `fetch` do cliente) |
 | `NEXT_PUBLIC_INTERNAL_API_KEY` | Mesmo valor exposto ao browser — usado em `lib/internal-api-headers.ts` |
@@ -75,11 +76,42 @@ Após aplicar `20260509120000_*.sql`, rode em ordem:
 
 **Claim JWT:** no Supabase Auth, inclua `tenant_id` no JWT (template de claims) para utilizadores `authenticated` de tenants não padrão. O papel `anon` continua restrito ao tenant Obra10 legado nas políticas piloto.
 
-## Crons (Vercel)
+## Agendamento dos ciclos IA (qualquer hospedeiro)
 
-Definidos em `vercel.json`: gerente (relatório matinal), diretor (análises, tráfego), atendente (follow-up, SLA), KPIs horários (`/api/ml/ciclo?acao=kpis`). Em produção a Vercel envia o header `x-vercel-cron: 1`, aceito por `lib/cron-auth.ts`.
+As rotas **`/api/ciclos/*`** e **`/api/ml/ciclo`** são HTTP normais; o **agendamento** é que tem de existir no teu deploy.
 
-Chamadas manuais ou CI: `Authorization: Bearer <CRON_SECRET>` ou query/header `secret`.
+- **Só na Vercel:** o ficheiro [`vercel.json`](vercel.json) declara *Cron Jobs* que chamam essas URLs. O header `x-vercel-cron: 1` é aceite por [`lib/cron-auth.ts`](lib/cron-auth.ts) em produção.
+- **Render (recomendado — um só agendamento):** Blueprint em [`render.yaml`](render.yaml) ([documentação Blueprint](https://render.com/docs/infrastructure-as-code)): *web service* `escritorio-virtual` + *Cron Job* `dispatch-ciclos-cron` (Docker mínimo com `curl`, agenda exemplo **`*/5 * * * *`** UTC). O cron corre [`scripts/render-dispatch-ciclos.sh`](scripts/render-dispatch-ciclos.sh) com **`Authorization: Bearer`** igual ao **`CRON_SECRET`** do web service (`fromService` no Blueprint). Variáveis do web service devem seguir [`.env.example`](.env.example) (no mínimo Supabase + **`NEXT_PUBLIC_APP_URL`** + **`CRON_SECRET`**). Opcional no cron (painel): **`DISPATCH_CICLOS_URL`** — URL completa para `/api/cron/dispatch-ciclos`; se omitires, usa **`NEXT_PUBLIC_APP_URL`** herdada + caminho (ver script).
+- **VPS, Docker, etc. sem Blueprint:** o `vercel.json` **não corre**. Usa **`crontab`** + `curl`, ou um scheduler externo.
+- **Um único tick (recomendado em escala):** agenda **só** `GET` ou `POST` **`/api/cron/dispatch-ciclos`** a cada **1–5 min** (com `Authorization: Bearer $CRON_SECRET`). Esse endpoint lê `hub_ciclos_ia` (`tipo=programado`, `ativo`, `cron_expressao` / `intervalo_minutos`) e chama internamente `/api/ciclos/{diretor|gerente|atendente}?ciclo=...&hub_ciclo_id=...` só quando o ciclo está “devido”. O servidor usa **`NEXT_PUBLIC_APP_URL`** como origem desses `fetch` internos ([`app/api/cron/dispatch-ciclos/route.ts`](app/api/cron/dispatch-ciclos/route.ts)). Podes acrescentar quantos ciclos e agentes quiseres na tabela; **agentes novos** devem ter `configuracoes.dispatch` `{ "api": "diretor"|"gerente"|"atendente", "ciclo": "<chave já implementada>" }` ou um `agente_slug` / `nome` alinhado aos heurísticos em `lib/ciclos-dispatch.ts`. Query opcional: `dry_run=1` (só JSON, sem executar). Em desenvolvimento, `dry_run` também evita `fetch` quando não há URL base.
+
+### Render só Cron Job (fallback manual no Dashboard)
+
+Se o *web service* já existir e quiseres apenas o agendamento:
+
+1. Cria um **[Cron Job](https://render.com/docs/cronjobs)** no mesmo repositório (runtime **Docker**).
+2. **Dockerfile:** aponta para [`scripts/Dockerfile.dispatch-ciclos-cron`](scripts/Dockerfile.dispatch-ciclos-cron) com **Docker build context** em **`scripts`** (como no [`render.yaml`](render.yaml)).
+3. **Schedule:** por exemplo `*/5 * * * *` (UTC).
+4. **Command:** `/bin/sh /app/render-dispatch-ciclos.sh` (equivale ao `dockerCommand` do Blueprint).
+5. **Environment:** **`CRON_SECRET`** (igual ao da app em produção) e **`NEXT_PUBLIC_APP_URL`** **ou** **`DISPATCH_CICLOS_URL`** (URL completa do endpoint); ver [`.env.example`](.env.example).
+
+Notas de plano: Cron Jobs na Render não usam instância **free** (mínimo pago/prorrateado); o Blueprint pode atualizar serviços existentes com o mesmo `name` ([referência](https://render.com/docs/blueprint-spec)).
+
+Em **produção** (`NODE_ENV=production`), sem Vercel, cada chamada tem de levar **`CRON_SECRET`**: `Authorization: Bearer <CRON_SECRET>`, ou header `x-cron-secret`, ou query `?secret=` (ver `cronRequestAuthorized`). Em desenvolvimento local o auth do cron está relaxado.
+
+**Referência de rotas e horários** (espelha o que está em `vercel.json`; ajusta o *host* para `NEXT_PUBLIC_APP_URL`):
+
+| Caminho | Schedule (UTC típico no repo) |
+|--------|-------------------------------|
+| `/api/ciclos/gerente?ciclo=relatorio_manha` | `0 8 * * *` |
+| `/api/ciclos/diretor?ciclo=analise_manha` | `0 7 * * *` |
+| `/api/ciclos/diretor?ciclo=analise_noite` | `0 19 * * *` |
+| `/api/ciclos/diretor?ciclo=trafego` | `0 */6 * * *` |
+| `/api/ciclos/atendente?ciclo=followup` | `*/30 * * * *` |
+| `/api/ciclos/atendente?ciclo=sla` | `*/15 * * * *` |
+| `/api/ml/ciclo?acao=kpis` | `5 * * * *` |
+
+Exemplo (VPS): `curl -s -H "Authorization: Bearer $CRON_SECRET" "https://seu-dominio/api/ciclos/diretor?ciclo=analise_manha"`
 
 ### Link do portal do parceiro
 
@@ -108,7 +140,7 @@ Workflow GitHub Actions: `.github/workflows/supabase-backup.yml`. Configure o se
 
 Tudo em [`docs/`](docs/) — ver índice em [`docs/README.md`](docs/README.md).
 
-Inclui: documento mestre (duas variantes em Markdown), Evolution/Railway, manifest, relatórios, status, fases, backlog, schema de contexto e checklists.
+Inclui: documento mestre (duas variantes em Markdown), UAZAPI/WhatsApp, manifest, relatórios, status, fases, backlog, schema de contexto e checklists.
 
 **Cursor Agent:** skills do projeto em [`.cursor/skills/`](.cursor/skills/) (design, dashboards, marketing, agentes IA) — ver [`.cursor/skills/README.md`](.cursor/skills/README.md).
 

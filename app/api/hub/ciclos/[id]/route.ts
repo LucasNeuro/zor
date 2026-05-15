@@ -123,15 +123,20 @@ export async function DELETE(
   const { id } = await params;
   const supabase = db();
 
-  const { data: existing, error: checkError } = await supabase
-    .from("hub_ciclos_ia")
-    .select("id")
-    .eq("id", id)
-    .maybeSingle();
-  if (checkError) return NextResponse.json({ error: checkError.message }, { status: 500 });
-  if (!existing) return NextResponse.json({ error: "Ciclo não encontrado" }, { status: 404 });
+  const { data: rpcRaw, error: rpcErr } = await supabase.rpc("hub_delete_ciclo_cascade", {
+    p_ciclo_id: id,
+  });
 
-  const { error } = await supabase.from("hub_ciclos_ia").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (rpcErr) {
+    return NextResponse.json({ error: rpcErr.message }, { status: 500 });
+  }
+
+  const payload = rpcRaw as { ok?: boolean; error?: string } | null;
+  if (!payload?.ok) {
+    const msg = typeof payload?.error === "string" ? payload.error : "Falha ao excluir ciclo.";
+    const status = msg.includes("não encontrado") ? 404 : 500;
+    return NextResponse.json({ error: msg }, { status });
+  }
+
   return NextResponse.json({ ok: true });
 }

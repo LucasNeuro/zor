@@ -9,16 +9,34 @@ import {
   followupCompatibilidadeAvisos,
   type HubFollowupConfigLite,
 } from "@/lib/hub-ciclos-configuracoes";
+import { buildCronUtc, parseCronAgendaUi } from "@/lib/cron-agenda-ui";
+import {
+  agenteEhSomenteCanalWhatsapp,
+  MODO_OPERACAO_LABEL,
+  resolveModoOperacaoAgente,
+  type ModoOperacaoAgente,
+} from "@/lib/hub/agente-modo-operacao";
 import {
   CRM_ENTITY_GRID,
-  crmAvatarGlow,
-  crmBtnDesativar,
-  crmBtnExecutar,
-  crmFooterStatusPill,
   crmGlassCardSurface,
 } from "@/lib/crm-glass-card";
 import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
-import { Bell, ScrollText, Zap } from "lucide-react";
+import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
+import {
+  Bell,
+  ChevronRight,
+  Clock,
+  Pencil,
+  Play,
+  Power,
+  RotateCcw,
+  ScrollText,
+  Sparkles,
+  Trash2,
+  Webhook,
+  Zap,
+} from "lucide-react";
 
 interface Ciclo {
   id: string;
@@ -57,6 +75,46 @@ function proximaExecucao(cron?: string): string {
   return cron;
 }
 
+const CRON_DIAS_SEMANA: { dow: number; abbr: string }[] = [
+  { dow: 0, abbr: "Dom" },
+  { dow: 1, abbr: "Seg" },
+  { dow: 2, abbr: "Ter" },
+  { dow: 3, abbr: "Qua" },
+  { dow: 4, abbr: "Qui" },
+  { dow: 5, abbr: "Sex" },
+  { dow: 6, abbr: "Sáb" },
+];
+
+function resumoAgendamentoParaIa(opts: {
+  fTipo: CicloTipo;
+  fIntervalo: string;
+  fCron: string;
+  cronEditorLivre: boolean;
+  cronMin: number;
+  cronHr: number;
+  cronDias: number[];
+}): string {
+  if (opts.fTipo === "continuo") {
+    return `Contínuo; intervalo mínimo ${opts.fIntervalo.trim() || "?"} minutos entre execuções.`;
+  }
+  if (opts.fTipo === "gatilho") {
+    return "Gatilho — só corre quando fila, webhook ou botão Executar dispara.";
+  }
+  if (opts.fTipo === "programado") {
+    if (opts.cronEditorLivre) {
+      return `Cron (UTC): ${opts.fCron.trim() || "(vazio)"}; intervalo mín. ${opts.fIntervalo.trim() || "?"} min.`;
+    }
+    const dias =
+      opts.cronDias.length === 7
+        ? "todos os dias"
+        : opts.cronDias
+            .map((d) => CRON_DIAS_SEMANA.find((x) => x.dow === d)?.abbr || d)
+            .join(", ");
+    return `UTC ${String(opts.cronHr).padStart(2, "0")}:${String(opts.cronMin).padStart(2, "0")}; ${dias}; intervalo mín. ${opts.fIntervalo.trim() || "?"} min.`;
+  }
+  return "";
+}
+
 function tempoRelativo(d?: string): string {
   if (!d) return "nunca";
   const diff = (Date.now() - new Date(d).getTime()) / 60000;
@@ -67,10 +125,17 @@ function tempoRelativo(d?: string): string {
 }
 
 const TIPO_COR: Record<string, string> = {
-  continuo: "#003b26",
+  /** Verde legível no fundo escuro (antes #003b26 parecia “apagado”). */
+  continuo: "#4ade80",
   programado: "#c9a24a",
   gatilho: "#8b949e",
 };
+
+function cicloTipoIcon(tipo: string) {
+  if (tipo === "gatilho") return Webhook;
+  if (tipo === "continuo") return Zap;
+  return Clock;
+}
 
 function slugParaApiCiclos(agenteSlug: string): string {
   if (agenteSlug === "diretor" || agenteSlug === "diretor_geral_ia" || agenteSlug === "diretor_operacoes") return "diretor";
@@ -79,20 +144,24 @@ function slugParaApiCiclos(agenteSlug: string): string {
 }
 
 const STATUS_COR: Record<string, string> = {
-  sucesso: "#003b26",
+  sucesso: "#4ade80",
   sem_acao: "#8b949e",
   erro: "#b3261e",
   rodando: "#c9a24a",
   nunca_executado: "#484f58",
 };
 
-function iniciais(nome: string): string {
-  return (nome || "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() || "")
-    .join("");
+/** Indica se o ciclo provavelmente usa o job de follow-up WhatsApp (nome ou configuracoes.dispatch). */
+function cicloPareceFollowupWhatsApp(nome: string, cfg: Record<string, unknown>): boolean {
+  if (/\bfollow|\bfup\b|followup|recupera|reengage|remarketing/i.test(nome)) return true;
+  const d = cfg.dispatch;
+  if (d && typeof d === "object" && !Array.isArray(d)) {
+    const o = d as Record<string, unknown>;
+    if (String(o.api ?? "").toLowerCase() === "atendente" && String(o.ciclo ?? "").toLowerCase() === "followup") {
+      return true;
+    }
+  }
+  return false;
 }
 
 export default function CiclosPage() {
@@ -109,28 +178,47 @@ export default function CiclosPage() {
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [executando, setExecutando] = useState<string | null>(null);
   const [alternandoCicloId, setAlternandoCicloId] = useState<string | null>(null);
+  const [excluindoCicloId, setExcluindoCicloId] = useState<string | null>(null);
+  const [erroListaCiclos, setErroListaCiclos] = useState<string | null>(null);
+  const [dialogExcluirCiclo, setDialogExcluirCiclo] = useState<{ id: string; nome: string } | null>(null);
+  const [dialogLimparCiclo, setDialogLimparCiclo] = useState<{ id: string; nome: string } | null>(null);
+  const [cicloDialogBusy, setCicloDialogBusy] = useState(false);
+  const [limpandoCicloId, setLimpandoCicloId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>("create");
   const [selectedCicloId, setSelectedCicloId] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [erroDrawer, setErroDrawer] = useState<string | null>(null);
   const [fAgenteSlug, setFAgenteSlug] = useState("");
   const [fNome, setFNome] = useState("");
   const [fDescricao, setFDescricao] = useState("");
   const [fTipo, setFTipo] = useState<CicloTipo>("programado");
   const [fCron, setFCron] = useState("");
+  const [cronEditorLivre, setCronEditorLivre] = useState(false);
+  const [cronMin, setCronMin] = useState(0);
+  const [cronHr, setCronHr] = useState(7);
+  const [cronDias, setCronDias] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [sugestaoIaLoading, setSugestaoIaLoading] = useState<null | "descricao" | "followup">(null);
   const [fIntervalo, setFIntervalo] = useState("");
   const [fAtivo, setFAtivo] = useState(true);
   /** Chaves além de follow-up preservadas ao salvar (sem exibir JSON). */
   const [extraConfig, setExtraConfig] = useState<Record<string, unknown>>({});
   const [fHorasFollowup, setFHorasFollowup] = useState("2, 24, 48");
   const [fArquivarAposDias, setFArquivarAposDias] = useState("7");
+  /** Mostrar bloco de follow-up mesmo quando o nome/config não sugerem follow-up. */
+  const [followupAvancadoForcado, setFollowupAvancadoForcado] = useState(false);
+  /** Follow-up avançado: fechado por defeito para não sobrecarregar o formulário. */
+  const [followupDetailsAberto, setFollowupDetailsAberto] = useState(false);
+  /** Agendamento (modo, intervalo, cron): aberto por defeito. */
+  const [agendaDetailsAberto, setAgendaDetailsAberto] = useState(true);
   const [followupHubRows, setFollowupHubRows] = useState<HubFollowupConfigLite[]>([]);
   const [followupHubLoading, setFollowupHubLoading] = useState(false);
   const [followupHubError, setFollowupHubError] = useState<string | null>(null);
   const [previewMercado, setPreviewMercado] = useState("geral");
+  const [agentesHub, setAgentesHub] = useState<
+    Array<{ agente_slug: string; modo_operacao?: unknown; ciclo_execucao_padrao?: unknown }>
+  >([]);
 
   function aplicarConfigNoForm(cfg: Record<string, unknown> | undefined) {
     const c = cfg && typeof cfg === "object" && !Array.isArray(cfg) ? cfg : {};
@@ -189,10 +277,11 @@ export default function CiclosPage() {
   }, [ciclosTodos, modoLista, busca]);
 
   const carregar = useCallback(async () => {
-    const [cRes, l, a] = await Promise.all([
+    const [cRes, l, a, agRes] = await Promise.all([
       fetch("/api/hub/ciclos", { headers: internalApiHeaders() }),
       fetch("/api/hub/ciclos-log?limit=20", { headers: internalApiHeaders() }),
       fetch("/api/hub/alertas?resolvido=false&limit=30", { headers: internalApiHeaders() }),
+      fetch("/api/hub/agentes?todos=true", { headers: internalApiHeaders() }),
     ]);
 
     if (cRes.ok) {
@@ -200,6 +289,12 @@ export default function CiclosPage() {
       setCiclosTodos(Array.isArray(cJson.ciclos) ? cJson.ciclos : []);
     } else {
       setCiclosTodos([]);
+    }
+    if (agRes.ok) {
+      const agJson = (await agRes.json()) as unknown;
+      setAgentesHub(Array.isArray(agJson) ? (agJson as typeof agentesHub) : []);
+    } else {
+      setAgentesHub([]);
     }
     if (l.ok) {
       const j = await l.json() as { logs?: Record<string, unknown>[] };
@@ -269,6 +364,11 @@ export default function CiclosPage() {
   }, [drawerOpen, drawerSubTab]);
 
   useEffect(() => {
+    if (fTipo !== "programado" || cronEditorLivre) return;
+    setFCron(buildCronUtc(cronMin, cronHr, cronDias));
+  }, [fTipo, cronEditorLivre, cronMin, cronHr, cronDias]);
+
+  useEffect(() => {
     if (followupHubRows.length === 0) return;
     setPreviewMercado((prev) => {
       const mercados = [...new Set(followupHubRows.map((r) => r.mercado))];
@@ -306,6 +406,47 @@ export default function CiclosPage() {
     [mergePreviewLinhas, horasListaPreview, fIntervalo, fCron]
   );
 
+  const followupHeuristica = useMemo(
+    () => cicloPareceFollowupWhatsApp(fNome, extraConfig),
+    [fNome, extraConfig]
+  );
+  const mostrarBlocoFollowup = followupAvancadoForcado || followupHeuristica;
+
+  const modoOperacaoDrawer = useMemo((): ModoOperacaoAgente | null => {
+    const slug = fAgenteSlug.trim();
+    if (!slug) return null;
+    const row = agentesHub.find((a) => a.agente_slug === slug);
+    const ciclosDoAgente = ciclosTodos.filter((c) => c.agente_slug === slug);
+    return resolveModoOperacaoAgente(row, ciclosDoAgente);
+  }, [fAgenteSlug, agentesHub, ciclosTodos]);
+
+  const agenteSomenteCanalWa = agenteEhSomenteCanalWhatsapp(modoOperacaoDrawer);
+  const esconderAgendamentoCron =
+    agenteSomenteCanalWa && drawerSubTab === "dados" && !mostrarBlocoFollowup;
+
+  useEffect(() => {
+    if (!drawerOpen || drawerMode !== "create" || !agenteSomenteCanalWa || mostrarBlocoFollowup) return;
+    if (fTipo !== "gatilho") setFTipo("gatilho");
+  }, [drawerOpen, drawerMode, agenteSomenteCanalWa, mostrarBlocoFollowup, fTipo]);
+
+  const minMergeHorasDisparo = useMemo(() => {
+    if (mergePreviewLinhas.length === 0) return null;
+    return Math.min(...mergePreviewLinhas.map((p) => p.mergeHoras));
+  }, [mergePreviewLinhas]);
+
+  useEffect(() => {
+    if (!drawerOpen) setFollowupAvancadoForcado(false);
+  }, [drawerOpen]);
+
+  function aplicarIntervaloNaoMaiorQueMenorMerge() {
+    if (minMergeHorasDisparo == null || minMergeHorasDisparo <= 0) return;
+    const capMin = minMergeHorasDisparo * 60;
+    const cur = Number.parseInt(String(fIntervalo).trim(), 10);
+    const next =
+      Number.isFinite(cur) && cur > 0 ? Math.min(cur, capMin) : capMin;
+    setFIntervalo(String(Math.max(1, Math.trunc(next))));
+  }
+
   function preencherHorasDoHubNoForm() {
     const base = buildFollowupMergePreview(followupHubRows, previewMercado, null);
     if (base.length === 0) return;
@@ -341,6 +482,72 @@ export default function CiclosPage() {
     }
   }
 
+  function limparAgendamentoCiclo(ciclo: Ciclo, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDialogLimparCiclo({ id: ciclo.id, nome: ciclo.nome });
+  }
+
+  function excluirCicloDoCard(ciclo: Ciclo, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDialogExcluirCiclo({ id: ciclo.id, nome: ciclo.nome });
+  }
+
+  async function confirmarLimparAgendamentoCiclo() {
+    const d = dialogLimparCiclo;
+    if (!d) return;
+    setCicloDialogBusy(true);
+    setErroListaCiclos(null);
+    setLimpandoCicloId(d.id);
+    try {
+      const res = await fetch(`/api/hub/ciclos/${encodeURIComponent(d.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+        body: JSON.stringify({ cron_expressao: "", intervalo_minutos: null }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setErroListaCiclos(json.error || `Erro ${res.status} ao limpar agendamento.`);
+        return;
+      }
+      setDialogLimparCiclo(null);
+      await carregar();
+    } finally {
+      setCicloDialogBusy(false);
+      setLimpandoCicloId(null);
+    }
+  }
+
+  async function confirmarExcluirCicloModal() {
+    const d = dialogExcluirCiclo;
+    if (!d) return;
+    setCicloDialogBusy(true);
+    setErroListaCiclos(null);
+    setErroDrawer(null);
+    setExcluindoCicloId(d.id);
+    try {
+      const res = await fetch(`/api/hub/ciclos/${encodeURIComponent(d.id)}`, {
+        method: "DELETE",
+        headers: internalApiHeaders(),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        const msg = json.error || `Erro ${res.status} ao excluir.`;
+        setErroListaCiclos(msg);
+        setErroDrawer(msg);
+        return;
+      }
+      setDialogExcluirCiclo(null);
+      if (selectedCicloId === d.id) {
+        setDrawerOpen(false);
+        setSelectedCicloId(null);
+      }
+      await carregar();
+    } finally {
+      setCicloDialogBusy(false);
+      setExcluindoCicloId(null);
+    }
+  }
+
   async function executarAgora(ciclo: Ciclo) {
     setExecutando(ciclo.id);
     const agente = slugParaApiCiclos(ciclo.agente_slug);
@@ -354,9 +561,12 @@ export default function CiclosPage() {
       : "followup";
 
     try {
-      await fetch(`/api/ciclos/${agente}?ciclo=${nomeCiclo}&secret=obra10plus_cron_2026`, {
+      await fetch(
+        `/api/ciclos/${agente}?ciclo=${nomeCiclo}&hub_ciclo_id=${encodeURIComponent(ciclo.id)}&secret=obra10plus_cron_2026`,
+        {
         headers: internalApiHeaders(),
-      });
+        }
+      );
     } catch (e) { console.error(e); }
 
     await carregarLogsEAlertas();
@@ -373,6 +583,93 @@ export default function CiclosPage() {
     carregar();
   }
 
+  function toggleCronDia(dow: number) {
+    setCronDias((prev) => {
+      const s = new Set(prev);
+      if (s.has(dow)) {
+        s.delete(dow);
+        if (s.size === 0) s.add(dow);
+      } else {
+        s.add(dow);
+      }
+      return [...s].sort((a, b) => a - b);
+    });
+  }
+
+  async function sugerirDescricaoComIa() {
+    if (!fNome.trim() || !fAgenteSlug.trim()) {
+      setErroDrawer("Preencha nome e agente slug para gerar a descrição.");
+      return;
+    }
+    setErroDrawer(null);
+    setSugestaoIaLoading("descricao");
+    try {
+      const res = await fetch("/api/hub/ciclos/sugerir-ia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+        body: JSON.stringify({
+          acao: "descricao",
+          nome: fNome.trim(),
+          agente_slug: fAgenteSlug.trim(),
+          tipo_ciclo: fTipo,
+          cron_resumo: resumoAgendamentoParaIa({
+            fTipo,
+            fIntervalo,
+            fCron,
+            cronEditorLivre,
+            cronMin,
+            cronHr,
+            cronDias,
+          }),
+          texto_atual: fDescricao.trim() || undefined,
+        }),
+      });
+      const j = (await res.json()) as { texto?: string; error?: string };
+      if (!res.ok) throw new Error(j.error || "Falha ao gerar.");
+      if (!j.texto?.trim()) throw new Error("Resposta vazia.");
+      setFDescricao(j.texto.trim());
+    } catch (e) {
+      setErroDrawer(e instanceof Error ? e.message : "Erro ao gerar descrição.");
+    } finally {
+      setSugestaoIaLoading(null);
+    }
+  }
+
+  async function sugerirFollowupComIa() {
+    if (!fNome.trim() || !fAgenteSlug.trim()) {
+      setErroDrawer("Preencha nome e agente slug.");
+      return;
+    }
+    setErroDrawer(null);
+    setSugestaoIaLoading("followup");
+    try {
+      const res = await fetch("/api/hub/ciclos/sugerir-ia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+        body: JSON.stringify({
+          acao: "followup",
+          nome: fNome.trim(),
+          agente_slug: fAgenteSlug.trim(),
+          descricao: fDescricao.trim() || undefined,
+        }),
+      });
+      const j = (await res.json()) as {
+        horas_followup?: string;
+        arquivar_apos_dias?: number;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(j.error || "Falha ao sugerir follow-up.");
+      if (typeof j.horas_followup === "string") setFHorasFollowup(j.horas_followup);
+      if (typeof j.arquivar_apos_dias === "number") {
+        setFArquivarAposDias(String(j.arquivar_apos_dias));
+      }
+    } catch (e) {
+      setErroDrawer(e instanceof Error ? e.message : "Erro ao sugerir follow-up.");
+    } finally {
+      setSugestaoIaLoading(null);
+    }
+  }
+
   function resetForm() {
     setSelectedCicloId(null);
     setFAgenteSlug("");
@@ -380,11 +677,19 @@ export default function CiclosPage() {
     setFDescricao("");
     setFTipo("programado");
     setFCron("");
+    setCronEditorLivre(false);
+    setCronMin(0);
+    setCronHr(7);
+    setCronDias([1, 2, 3, 4, 5]);
+    setSugestaoIaLoading(null);
     setFIntervalo("");
     setFAtivo(true);
     aplicarConfigNoForm({});
     setErroDrawer(null);
     setFormLoading(false);
+    setFollowupAvancadoForcado(false);
+    setFollowupDetailsAberto(false);
+    setAgendaDetailsAberto(true);
   }
 
   function abrirNovoCiclo() {
@@ -414,7 +719,22 @@ export default function CiclosPage() {
       setFNome(ciclo.nome || "");
       setFDescricao(ciclo.descricao || "");
       setFTipo((ciclo.tipo as CicloTipo) || "programado");
-      setFCron(ciclo.cron_expressao || "");
+      const rawCron = (ciclo.cron_expressao || "").trim();
+      setFCron(rawCron);
+      const parsed = rawCron ? parseCronAgendaUi(rawCron) : null;
+      if (parsed) {
+        setCronMin(parsed.minute);
+        setCronHr(parsed.hour);
+        setCronDias(parsed.daysOfWeek);
+        setCronEditorLivre(false);
+      } else if (rawCron) {
+        setCronEditorLivre(true);
+      } else {
+        setCronEditorLivre(false);
+        setCronMin(0);
+        setCronHr(7);
+        setCronDias([1, 2, 3, 4, 5]);
+      }
       setFIntervalo(ciclo.intervalo_minutos != null ? String(ciclo.intervalo_minutos) : "");
       setFAtivo(ciclo.ativo !== false);
       aplicarConfigNoForm(ciclo.configuracoes as Record<string, unknown> | undefined);
@@ -434,12 +754,14 @@ export default function CiclosPage() {
     setErroDrawer(null);
     try {
       const configuracoes = montarConfiguracoesPayload();
+      const tipoSalvar =
+        esconderAgendamentoCron ? ("gatilho" as const) : fTipo;
       const payload = {
         agente_slug: fAgenteSlug.trim(),
         nome: fNome.trim(),
         descricao: fDescricao.trim(),
-        tipo: fTipo,
-        cron_expressao: fCron.trim(),
+        tipo: tipoSalvar,
+        cron_expressao: tipoSalvar === "gatilho" ? "" : fCron.trim(),
         intervalo_minutos: fIntervalo.trim() ? Number.parseInt(fIntervalo, 10) : null,
         ativo: fAtivo,
         configuracoes,
@@ -467,26 +789,9 @@ export default function CiclosPage() {
     }
   }
 
-  async function excluirCiclo() {
+  function pedirExcluirCicloNoDrawer() {
     if (!selectedCicloId) return;
-    setDeleting(true);
-    setErroDrawer(null);
-    try {
-      const res = await fetch(`/api/hub/ciclos/${encodeURIComponent(selectedCicloId)}`, {
-        method: "DELETE",
-        headers: internalApiHeaders(),
-      });
-      const json = await res.json() as { error?: string };
-      if (!res.ok) {
-        throw new Error(json.error || "Falha ao excluir ciclo.");
-      }
-      setDrawerOpen(false);
-      await carregar();
-    } catch (e) {
-      setErroDrawer(e instanceof Error ? e.message : "Falha ao excluir.");
-    } finally {
-      setDeleting(false);
-    }
+    setDialogExcluirCiclo({ id: selectedCicloId, nome: fNome.trim() || "Ciclo" });
   }
 
   useEffect(() => {
@@ -600,6 +905,43 @@ export default function CiclosPage() {
               </div>
             </div>
 
+            {erroListaCiclos && (
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderStyle: "solid",
+                  borderColor: "rgba(179, 38, 30, 0.45)",
+                  background: "rgba(179, 38, 30, 0.12)",
+                  color: "#ffb4ab",
+                  fontSize: 13,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: 12,
+                }}
+              >
+                <span style={{ lineHeight: 1.45 }}>{erroListaCiclos}</span>
+                <button
+                  type="button"
+                  onClick={() => setErroListaCiclos(null)}
+                  style={{
+                    flexShrink: 0,
+                    background: "transparent",
+                    border: "none",
+                    color: "#ffb4ab",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
+
             {ciclosTodos.length === 0 && (
               <p style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
                 Nenhum ciclo cadastrado
@@ -618,6 +960,10 @@ export default function CiclosPage() {
                   const stCor = STATUS_COR[st] || "#8b949e";
                   const ativo = c.ativo !== false;
                   const selecionado = drawerOpen && selectedCicloId === c.id;
+                  const execProgress =
+                    c.total_execucoes > 0
+                      ? Math.min(0.92, 0.18 + Math.min(c.total_execucoes, 9) * 0.08)
+                      : null;
 
                   return (
                     <div
@@ -637,7 +983,14 @@ export default function CiclosPage() {
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={crmAvatarGlow(tipoCor)}>{iniciais(c.nome)}</div>
+                        <CrmBotRingAvatar
+                          pixelSize={44}
+                          accent={tipoCor}
+                          Icon={cicloTipoIcon(c.tipo)}
+                          progress={execProgress}
+                          pulse={!c.ultimo_ciclo}
+                          dim={!ativo}
+                        />
                         <div style={{ minWidth: 0 }}>
                           <p
                             style={{
@@ -696,25 +1049,34 @@ export default function CiclosPage() {
                         <span style={{ color: stCor }}>{st.replace(/_/g, " ")}</span>
                       </div>
 
-                      <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
-                        Status:{" "}
-                        <strong style={{ color: ativo ? "#4ade80" : "#f87171", fontWeight: 700 }}>
-                          {ativo ? "Ativo" : "Inativo"}
-                        </strong>
-                      </p>
-
                       <div
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          width: "100%",
                           marginTop: "auto",
-                          gap: 10,
-                          paddingTop: 4,
+                          paddingTop: 10,
+                          borderTopWidth: 1,
+                          borderTopStyle: "solid",
+                          borderTopColor: "rgba(44, 56, 75, 0.85)",
+                          display: "flex",
+                          width: "100%",
+                          justifyContent: "flex-end",
+                          alignItems: "center",
+                          minHeight: 0,
                         }}
                       >
-                        <span style={crmFooterStatusPill(ativo)}>{ativo ? "Ativo" : "Inativo"}</span>
-                        <div style={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
+                        <div
+                          role="group"
+                          aria-label="Ações do ciclo"
+                          style={{
+                            display: "flex",
+                            borderRadius: 8,
+                            overflow: "hidden",
+                            borderStyle: "solid",
+                            borderWidth: 1,
+                            borderColor: "rgba(44, 56, 75, 0.95)",
+                            background: "#0f1620",
+                            flexShrink: 0,
+                          }}
+                        >
                           <button
                             type="button"
                             onClick={(e) => {
@@ -722,22 +1084,152 @@ export default function CiclosPage() {
                               void executarAgora(c);
                             }}
                             disabled={executando === c.id || !c.ativo}
-                            style={crmBtnExecutar(executando === c.id || !c.ativo)}
+                            title={c.ativo ? "Executar agora" : "Ative o ciclo para executar"}
+                            aria-label="Executar ciclo agora"
+                            style={{
+                              width: 32,
+                              height: 28,
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
+                              border: 0,
+                              boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
+                              cursor: executando === c.id || !c.ativo ? "not-allowed" : "pointer",
+                              opacity: executando === c.id || !c.ativo ? 0.45 : 1,
+                              background: c.ativo ? "rgba(34, 197, 94, 0.12)" : "rgba(72, 79, 88, 0.2)",
+                              color: c.ativo ? "#4ade80" : "#64748b",
+                            }}
                           >
-                            {executando === c.id ? "…" : "▶ Executar"}
+                            {executando === c.id ? (
+                              <span style={{ fontSize: 11, fontWeight: 700 }}>…</span>
+                            ) : (
+                              <Play size={13} strokeWidth={2.25} aria-hidden />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void abrirEditarCiclo(c.id);
+                            }}
+                            disabled={!!excluindoCicloId}
+                            title="Editar ciclo"
+                            aria-label="Editar ciclo"
+                            style={{
+                              width: 32,
+                              height: 28,
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
+                              border: 0,
+                              boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
+                              cursor: excluindoCicloId ? "not-allowed" : "pointer",
+                              opacity: excluindoCicloId ? 0.45 : 1,
+                              background: "rgba(30, 41, 59, 0.65)",
+                              color: "#c9a24a",
+                            }}
+                          >
+                            <Pencil size={13} strokeWidth={2.25} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => void limparAgendamentoCiclo(c, e)}
+                            disabled={limpandoCicloId === c.id || excluindoCicloId === c.id}
+                            title="Limpar cron e intervalo"
+                            aria-label="Limpar agendamento do ciclo"
+                            style={{
+                              width: 32,
+                              height: 28,
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
+                              border: 0,
+                              boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
+                              cursor:
+                                limpandoCicloId === c.id || excluindoCicloId === c.id ? "not-allowed" : "pointer",
+                              opacity: limpandoCicloId === c.id || excluindoCicloId === c.id ? 0.45 : 1,
+                              background: "rgba(201, 162, 74, 0.12)",
+                              color: "#d6b876",
+                            }}
+                          >
+                            {limpandoCicloId === c.id ? (
+                              <span style={{ fontSize: 11, fontWeight: 700 }}>…</span>
+                            ) : (
+                              <RotateCcw size={13} strokeWidth={2.25} aria-hidden />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void toggleCiclo(c.id, !ativo);
+                            }}
+                            disabled={alternandoCicloId === c.id || excluindoCicloId === c.id}
+                            title={ativo ? "Desativar ciclo" : "Ativar ciclo"}
+                            aria-label={ativo ? "Desativar ciclo" : "Ativar ciclo"}
+                            style={{
+                              width: 32,
+                              height: 28,
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
+                              border: 0,
+                              boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
+                              cursor:
+                                alternandoCicloId === c.id || excluindoCicloId === c.id
+                                  ? "not-allowed"
+                                  : "pointer",
+                              opacity: alternandoCicloId === c.id || excluindoCicloId === c.id ? 0.45 : 1,
+                              background: ativo ? "rgba(34, 197, 94, 0.1)" : "rgba(248, 113, 113, 0.08)",
+                              color: ativo ? "#4ade80" : "#f87171",
+                            }}
+                          >
+                            {alternandoCicloId === c.id ? (
+                              <span style={{ fontSize: 11, fontWeight: 700 }}>…</span>
+                            ) : (
+                              <Power size={13} strokeWidth={2.25} aria-hidden />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => void excluirCicloDoCard(c, e)}
+                            disabled={excluindoCicloId === c.id || alternandoCicloId === c.id}
+                            title="Excluir ciclo"
+                            aria-label="Excluir ciclo"
+                            style={{
+                              width: 32,
+                              height: 28,
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
+                              border: 0,
+                              boxShadow: "none",
+                              cursor:
+                                excluindoCicloId === c.id || alternandoCicloId === c.id
+                                  ? "not-allowed"
+                                  : "pointer",
+                              opacity: excluindoCicloId === c.id || alternandoCicloId === c.id ? 0.45 : 1,
+                              background: "rgba(127, 29, 29, 0.22)",
+                              color: "#fca5a5",
+                            }}
+                          >
+                            {excluindoCicloId === c.id ? (
+                              <span style={{ fontSize: 11, fontWeight: 700 }}>…</span>
+                            ) : (
+                              <Trash2 size={13} strokeWidth={2.25} aria-hidden />
+                            )}
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void toggleCiclo(c.id, !ativo);
-                          }}
-                          disabled={alternandoCicloId === c.id}
-                          style={crmBtnDesativar(alternandoCicloId === c.id)}
-                        >
-                          {alternandoCicloId === c.id ? "…" : `⏻ ${ativo ? "Desativar" : "Ativar"}`}
-                        </button>
                       </div>
                     </div>
                   );
@@ -851,15 +1343,21 @@ export default function CiclosPage() {
             ) : (
               <>
                 {drawerMode === "edit" && selectedCicloId && (
-                  <div className="flex gap-2 mb-4">
-                    {(["dados", "timeline"] as const).map((tab) => (
+                  <div
+                    className="mb-4 flex w-full overflow-hidden rounded-lg"
+                    style={{ border: "1px solid #30363d" }}
+                  >
+                    {(["dados", "timeline"] as const).map((tab, i) => (
                       <button
                         key={tab}
                         type="button"
                         onClick={() => setDrawerSubTab(tab)}
-                        className="text-xs font-bold px-3 py-2 rounded-lg"
+                        className="min-h-[36px] flex-1 text-xs font-bold px-3 py-2"
                         style={{
-                          border: "1px solid #30363d",
+                          margin: 0,
+                          borderRadius: 0,
+                          border: "none",
+                          borderLeft: i > 0 ? "1px solid #30363d" : "none",
                           background: drawerSubTab === tab ? "#1b2532" : "#161b22",
                           color: drawerSubTab === tab ? "#c9a24a" : "#8b949e",
                           cursor: "pointer",
@@ -958,6 +1456,18 @@ export default function CiclosPage() {
                     placeholder="ex.: gerente_atendimento"
                   />
                 </label>
+                {agenteSomenteCanalWa && (
+                  <p
+                    className="text-xs m-0 rounded-lg p-3 leading-relaxed"
+                    style={{ background: "#1b2532", border: "1px solid #30363d", color: "#8b949e" }}
+                  >
+                    Agente <strong style={{ color: "#c9a24a" }}>{MODO_OPERACAO_LABEL.canal_whatsapp}</strong>
+                    : a conversa ao vivo é pelo webhook UAZAPI. Use ciclo{" "}
+                    <strong style={{ color: "#e6edf3" }}>gatilho</strong> para registo no hub; agendamento cron
+                    só faz sentido para <strong style={{ color: "#c9a24a" }}>follow-up</strong> (nome ou dispatch
+                    atendente/followup).
+                  </p>
+                )}
                 <label className="block">
                   <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Nome</span>
                   <input
@@ -968,7 +1478,31 @@ export default function CiclosPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Descrição</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <span className="text-xs block" style={{ color: "#8b949e" }}>
+                      Descrição
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void sugerirDescricaoComIa()}
+                      disabled={sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold rounded-md px-2 py-1"
+                      style={{
+                        background: "#21262d",
+                        color: "#c9a24a",
+                        border: "1px solid #30363d",
+                        cursor:
+                          sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity: sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim() ? 0.5 : 1,
+                      }}
+                      title="Gera texto com IA (Mistral ou Anthropic conforme .env)."
+                    >
+                      <Sparkles size={14} aria-hidden />
+                      {sugestaoIaLoading === "descricao" ? "A gerar…" : "Gerar com IA"}
+                    </button>
+                  </div>
                   <textarea
                     value={fDescricao}
                     onChange={(e) => setFDescricao(e.target.value)}
@@ -977,50 +1511,384 @@ export default function CiclosPage() {
                     style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
                   />
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                {esconderAgendamentoCron ? (
+                  <div
+                    className="rounded-lg p-3 space-y-2"
+                    style={{ background: "#161b22", border: "1px solid #30363d" }}
+                  >
+                    <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>
+                      Canal WhatsApp — sem agendamento cron
+                    </p>
+                    <p className="text-xs m-0 leading-relaxed" style={{ color: "#8b949e" }}>
+                      Este agente atua sob <strong style={{ color: "#e6edf3" }}>interação</strong> (mensagens
+                      UAZAPI). O tipo do ciclo fica em <strong style={{ color: "#e6edf3" }}>gatilho</strong> para
+                      documentação no hub. Para cadências de follow-up programadas, use um nome com «follow» ou
+                      configure <code style={{ color: "#8b949e" }}>dispatch.atendente/followup</code> e abra os
+                      parâmetros de follow-up abaixo.
+                    </p>
+                  </div>
+                ) : (
+                <details
+                  open={agendaDetailsAberto}
+                  onToggle={(e) => setAgendaDetailsAberto(e.currentTarget.open)}
+                  className="rounded-lg"
+                  style={{ background: "#161b22", border: "1px solid #30363d" }}
+                >
+                  <summary
+                    className="cursor-pointer list-none flex items-center gap-2 p-3 select-none outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#161b22] focus-visible:ring-[#c9a24a66]"
+                    style={{ color: "#c9a24a" }}
+                    aria-expanded={agendaDetailsAberto}
+                  >
+                    <ChevronRight
+                      size={18}
+                      aria-hidden
+                      className="flex-shrink-0 transition-transform duration-200 ease-out"
+                      style={{
+                        color: "#c9a24a",
+                        transform: agendaDetailsAberto ? "rotate(90deg)" : "rotate(0deg)",
+                      }}
+                    />
+                    <span className="text-xs font-bold">
+                      Agendamento — quando o job / cron aciona o agente
+                    </span>
+                  </summary>
+                  <div className="space-y-3 px-3 pb-3">
+                  <p className="text-xs m-0 leading-relaxed" style={{ color: "#484f58" }}>
+                    O runner lê <code style={{ color: "#8b949e" }}>hub_ciclos_ia</code> (ex.:{" "}
+                    <code style={{ color: "#8b949e" }}>/api/cron/dispatch-ciclos</code>
+                    ). Escolha o modo abaixo; os campos técnicos são gerados em função dele.
+                  </p>
+                  <div className="grid gap-2">
+                    {(
+                      [
+                        {
+                          id: "continuo" as const,
+                          title: "Automático contínuo",
+                          sub: "Dispatch repete enquanto o ciclo estiver ativo (use intervalo em minutos).",
+                          Icon: Zap,
+                        },
+                        {
+                          id: "programado" as const,
+                          title: "Horário fixo ou recorrente",
+                          sub: "Cron (ex. 07h, a cada 6h) + intervalo mínimo opcional.",
+                          Icon: Clock,
+                        },
+                        {
+                          id: "gatilho" as const,
+                          title: "Gatilho / interação",
+                          sub: "Só corre quando algo externo pede (fila, webhook, botão Executar).",
+                          Icon: Webhook,
+                        },
+                      ] as const
+                    ).map((opt) => {
+                      const Icon = opt.Icon;
+                      const sel = fTipo === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setFTipo(opt.id);
+                            if (opt.id === "gatilho") setFCron("");
+                            if (opt.id === "continuo" && !fIntervalo.trim()) setFIntervalo("15");
+                            if (opt.id === "programado" && !fIntervalo.trim()) setFIntervalo("360");
+                            if (opt.id === "programado") setCronEditorLivre(false);
+                          }}
+                          className="w-full text-left rounded-lg p-3 transition-colors"
+                          style={{
+                            border: sel ? "1px solid rgba(201, 162, 74, 0.55)" : "1px solid #30363d",
+                            background: sel ? "#1b2532" : "#0d1117",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span
+                              className="mt-0.5 inline-flex rounded-md p-1"
+                              style={{ background: sel ? "#c9a24a22" : "#21262d", color: sel ? "#c9a24a" : "#8b949e" }}
+                            >
+                              <Icon size={16} aria-hidden />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-bold" style={{ color: "#e6edf3" }}>
+                                {opt.title}
+                              </span>
+                              <span className="block text-xs mt-0.5" style={{ color: "#8b949e" }}>
+                                {opt.sub}
+                              </span>
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                {(fTipo === "continuo" || fTipo === "programado") && (
                   <label className="block">
-                    <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Tipo</span>
-                    <select
-                      value={fTipo}
-                      onChange={(e) => setFTipo(e.target.value as CicloTipo)}
-                      className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
-                    >
-                      <option value="programado">programado</option>
-                      <option value="continuo">continuo</option>
-                      <option value="gatilho">gatilho</option>
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Intervalo (min)</span>
+                    <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>
+                      Intervalo mínimo (minutos)
+                    </span>
                     <input
                       value={fIntervalo}
                       onChange={(e) => setFIntervalo(e.target.value)}
                       className="w-full rounded-lg px-3 py-2 text-sm"
                       style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
-                      placeholder="ex.: 30"
+                      placeholder={fTipo === "continuo" ? "ex.: 15" : "ex.: 360"}
                     />
+                    <p className="text-xs mt-1 m-0" style={{ color: "#484f58" }}>
+                      Piso entre execuções que o dispatch respeita para este ciclo.
+                    </p>
                   </label>
-                </div>
-                <label className="block">
-                  <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Cron expressão</span>
-                  <input
-                    value={fCron}
-                    onChange={(e) => setFCron(e.target.value)}
-                    className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
-                    placeholder="ex.: */30 * * * *"
-                  />
-                  <p className="text-xs mt-1 m-0" style={{ color: "#484f58" }}>
-                    No Vercel, o horário real costuma vir do <strong style={{ color: "#8b949e", fontWeight: 600 }}>vercel.json</strong> (crons).
-                    Este campo documenta a intenção no banco; alinhe com o agendamento do projeto.
-                  </p>
-                </label>
+                )}
 
-                <div className="rounded-lg p-3 space-y-3" style={{ background: "#161b22", border: "1px solid #30363d" }}>
-                  <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>Parâmetros de follow-up (salvos no banco)</p>
+                {fTipo === "programado" && (
+                  <div
+                    className="rounded-lg p-3 space-y-3"
+                    style={{ background: "#161b22", border: "1px solid #30363d" }}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>
+                        Horário fixo (UTC) e dias da semana
+                      </p>
+                      <label className="flex items-center gap-2 text-xs m-0 cursor-pointer" style={{ color: "#8b949e" }}>
+                        <input
+                          type="checkbox"
+                          checked={cronEditorLivre}
+                          onChange={(e) => {
+                            const livre = e.target.checked;
+                            if (!livre) {
+                              const p = parseCronAgendaUi(fCron.trim());
+                              if (p) {
+                                setCronMin(p.minute);
+                                setCronHr(p.hour);
+                                setCronDias(p.daysOfWeek);
+                              }
+                            }
+                            setCronEditorLivre(livre);
+                          }}
+                        />
+                        Editar expressão cron manualmente
+                      </label>
+                    </div>
+                    {!cronEditorLivre ? (
+                      <>
+                        <div className="flex flex-wrap gap-3">
+                          <label className="m-0">
+                            <span className="text-xs block mb-1" style={{ color: "#8b949e" }}>
+                              Hora (0–23 UTC)
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={cronHr}
+                              onChange={(e) =>
+                                setCronHr(Math.min(23, Math.max(0, Number.parseInt(e.target.value, 10) || 0)))
+                              }
+                              className="w-24 rounded-lg px-3 py-2 text-sm"
+                              style={{ background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3" }}
+                            />
+                          </label>
+                          <label className="m-0">
+                            <span className="text-xs block mb-1" style={{ color: "#8b949e" }}>
+                              Minuto (0–59)
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={59}
+                              value={cronMin}
+                              onChange={(e) =>
+                                setCronMin(Math.min(59, Math.max(0, Number.parseInt(e.target.value, 10) || 0)))
+                              }
+                              className="w-24 rounded-lg px-3 py-2 text-sm"
+                              style={{ background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3" }}
+                            />
+                          </label>
+                        </div>
+                        <div>
+                          <span className="text-xs block mb-2" style={{ color: "#8b949e" }}>
+                            Dias em que corre (UTC)
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {CRON_DIAS_SEMANA.map(({ dow, abbr }) => {
+                              const on = cronDias.includes(dow);
+                              return (
+                                <button
+                                  key={dow}
+                                  type="button"
+                                  onClick={() => toggleCronDia(dow)}
+                                  className="text-xs font-bold rounded-md px-2.5 py-1.5"
+                                  style={{
+                                    border: on ? "1px solid #c9a24a" : "1px solid #30363d",
+                                    background: on ? "#c9a24a22" : "#0d1117",
+                                    color: on ? "#c9a24a" : "#8b949e",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {abbr}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.45 }}>
+                          O dispatch usa <strong style={{ color: "#8b949e" }}>UTC</strong>. Para 09:00 em Brasília
+                          (≈ UTC−3), indique por exemplo <strong style={{ color: "#8b949e" }}>12</strong> na hora
+                          UTC. Expressão gerada:{" "}
+                          <code style={{ color: "#c9a24a" }}>{buildCronUtc(cronMin, cronHr, cronDias)}</code>
+                        </p>
+                      </>
+                    ) : (
+                      <label className="block m-0">
+                        <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>
+                          Expressão cron (5 campos, UTC)
+                        </span>
+                        <input
+                          value={fCron}
+                          onChange={(e) => setFCron(e.target.value)}
+                          className="w-full rounded-lg px-3 py-2 text-sm font-mono"
+                          style={{ background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3" }}
+                          placeholder="ex.: 0 12 * * 1-5"
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {fTipo === "gatilho" && (
+                  <p className="text-xs m-0 rounded-lg p-3" style={{ background: "#0d1117", border: "1px solid #30363d", color: "#8b949e" }}>
+                    Este modo não agenda sozinho: use <strong style={{ color: "#c9a24a" }}>Executar</strong> no card ou ligue o ciclo a filas/webhooks na sua integração.
+                  </p>
+                )}
+                  </div>
+                </details>
+                )}
+                {!mostrarBlocoFollowup ? (
+                  <div
+                    className="rounded-lg p-3 space-y-2"
+                    style={{ background: "#161b22", border: "1px solid #30363d" }}
+                  >
+                    <p className="text-xs m-0" style={{ color: "#8b949e", lineHeight: 1.5 }}>
+                      <strong style={{ color: "#c9a24a" }}>Follow-up WhatsApp</strong> — horas por passo e
+                      pré-visualização do hub aplicam-se sobretudo a ciclos de atendimento (ex.: «follow» no nome ou{" "}
+                      <code style={{ color: "#8b949e" }}>dispatch</code>{" "}
+                      <code style={{ color: "#8b949e" }}>atendente</code> /{" "}
+                      <code style={{ color: "#8b949e" }}>followup</code>
+                      ). Para outros tipos de ciclo pode ignorar.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFollowupAvancadoForcado(true);
+                        setFollowupDetailsAberto(true);
+                      }}
+                      className="text-xs font-bold px-2.5 py-1.5 rounded-md"
+                      style={{
+                        background: "#21262d",
+                        color: "#c9a24a",
+                        border: "1px solid #30363d",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Mostrar parâmetros de follow-up
+                    </button>
+                  </div>
+                ) : (
+                <details
+                  key={`adv-followup-${drawerMode}-${selectedCicloId ?? "novo"}`}
+                  className="rounded-lg"
+                  style={{ background: "#161b22", border: "1px solid #30363d" }}
+                  open={followupDetailsAberto}
+                  onToggle={(e) => setFollowupDetailsAberto(e.currentTarget.open)}
+                >
+                  <summary
+                    className="cursor-pointer list-none flex items-center gap-2 p-3 select-none outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#161b22] focus-visible:ring-[#c9a24a66]"
+                    style={{ color: "#c9a24a" }}
+                    aria-expanded={followupDetailsAberto}
+                  >
+                    <ChevronRight
+                      size={18}
+                      aria-hidden
+                      className="flex-shrink-0 transition-transform duration-200 ease-out"
+                      style={{
+                        color: "#c9a24a",
+                        transform: followupDetailsAberto ? "rotate(90deg)" : "rotate(0deg)",
+                      }}
+                    />
+                    <span className="text-xs font-bold">
+                      Avançado — follow-up WhatsApp / hub_followup_config
+                    </span>
+                  </summary>
+                  <div className="space-y-3 px-3 pb-3">
+                  {followupAvancadoForcado && !followupHeuristica && (
+                    <p
+                      className="text-xs m-0 rounded-md px-2 py-1.5"
+                      style={{
+                        background: "#21262d",
+                        border: "1px solid #30363d",
+                        color: "#8b949e",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Secção aberta manualmente — use só se este ciclo alimentar{" "}
+                      <code style={{ color: "#8b949e" }}>/api/ciclos/atendente?ciclo=followup</code> ou equivalente.
+                    </p>
+                  )}
+                  <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.45 }}>
+                    Valores gravados em <code style={{ color: "#8b949e" }}>configuracoes</code> (horas por passo e dias
+                    até arquivar); textos das mensagens vêm de <code style={{ color: "#8b949e" }}>hub_followup_config</code>.
+                  </p>
+                  <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>Parâmetros de follow-up</p>
                   <label className="block m-0">
-                    <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Horas para lembretes (lista, separadas por vírgula)</span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                      <span className="text-xs block" style={{ color: "#8b949e" }}>
+                        Horas para lembretes (lista, separadas por vírgula)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void sugerirFollowupComIa()}
+                        disabled={sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold rounded-md px-2 py-1"
+                        style={{
+                          background: "#21262d",
+                          color: "#c9a24a",
+                          border: "1px solid #30363d",
+                          cursor:
+                            sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim() ? 0.5 : 1,
+                        }}
+                      >
+                        <Sparkles size={14} aria-hidden />
+                        {sugestaoIaLoading === "followup" ? "A gerar…" : "Sugerir com IA"}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {(
+                        [
+                          { label: "2, 24, 48", v: "2, 24, 48" },
+                          { label: "1, 6, 24, 72", v: "1, 6, 24, 72" },
+                          { label: "4, 12, 48", v: "4, 12, 48" },
+                        ] as const
+                      ).map((p) => (
+                        <button
+                          key={p.v}
+                          type="button"
+                          onClick={() => setFHorasFollowup(p.v)}
+                          className="text-xs px-2 py-1 rounded"
+                          style={{
+                            background: "#0d1117",
+                            border: "1px solid #30363d",
+                            color: "#8b949e",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                     <input
                       value={fHorasFollowup}
                       onChange={(e) => setFHorasFollowup(e.target.value)}
@@ -1029,11 +1897,29 @@ export default function CiclosPage() {
                       placeholder="ex.: 2, 24, 48"
                     />
                     <span className="text-xs mt-1 block" style={{ color: "#484f58" }}>
-                      Ex.: horas após o último contato para planejar etapas de follow-up.
+                      Horas após o último contato por passo (quando a lista é válida no job).
                     </span>
                   </label>
                   <label className="block m-0">
                     <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Arquivar lead após quantos dias sem resposta</span>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {[7, 14, 21, 30].map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setFArquivarAposDias(String(d))}
+                          className="text-xs px-2 py-1 rounded"
+                          style={{
+                            background: "#0d1117",
+                            border: "1px solid #30363d",
+                            color: "#8b949e",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {d} dias
+                        </button>
+                      ))}
+                    </div>
                     <input
                       type="number"
                       min={1}
@@ -1125,6 +2011,23 @@ export default function CiclosPage() {
                             ))}
                           </ul>
                         )}
+                        {followupCompat.intervaloMaiorQueMenorMerge && minMergeHorasDisparo != null && (
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <button
+                              type="button"
+                              onClick={aplicarIntervaloNaoMaiorQueMenorMerge}
+                              className="text-xs font-bold px-2 py-1.5 rounded"
+                              style={{
+                                background: "#2d2419",
+                                color: "#c9a24a",
+                                border: "1px solid #634419",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Usar intervalo ≤ {minMergeHorasDisparo} h ({minMergeHorasDisparo * 60} min)
+                            </button>
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={preencherHorasDoHubNoForm}
@@ -1148,12 +2051,11 @@ export default function CiclosPage() {
                     </p>
                   )}
                   <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.45 }}>
-                    O job <code style={{ color: "#8b949e" }}>/api/ciclos/atendente?ciclo=followup</code> lê estes valores:
-                    as <strong style={{ color: "#8b949e", fontWeight: 600 }}>horas</strong> substituem a espera por passo (quando houver lista válida);
-                    os <strong style={{ color: "#8b949e", fontWeight: 600 }}>dias</strong> definem o arquivamento após o passo 3 sem resposta.
-                    O texto de cada mensagem continua vindo de <code style={{ color: "#8b949e" }}>hub_followup_config</code> por mercado e passo.
+                    O texto de cada mensagem continua a vir de <code style={{ color: "#8b949e" }}>hub_followup_config</code> por mercado e passo.
                   </p>
-                </div>
+                  </div>
+                </details>
+                )}
                 <label className="inline-flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -1169,18 +2071,25 @@ export default function CiclosPage() {
                   <div>
                     {drawerMode === "edit" && (
                       <button
-                        onClick={() => void excluirCiclo()}
-                        disabled={deleting || saving}
+                        onClick={() => pedirExcluirCicloNoDrawer()}
+                        disabled={
+                          saving ||
+                          (cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId)
+                        }
                         className="px-3 py-2 rounded text-sm"
                         style={{ background: "#2d1517", color: "#ffb4ab", border: "1px solid #b3261e55" }}
                       >
-                        {deleting ? "Excluindo..." : "Excluir ciclo"}
+                        {cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId
+                          ? "Excluindo..."
+                          : "Excluir ciclo"}
                       </button>
                     )}
                   </div>
                   <button
                     onClick={() => void salvarCiclo()}
-                    disabled={saving || deleting}
+                    disabled={
+                      saving || (cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId)
+                    }
                     className="px-3 py-2 rounded text-sm font-semibold"
                     style={{ background: "#003b26", color: "#c9a24a", border: "1px solid #0f5132" }}
                   >
@@ -1194,6 +2103,42 @@ export default function CiclosPage() {
           </aside>
         </div>
       )}
+
+      <CrmConfirmDialog
+        open={dialogExcluirCiclo !== null}
+        title="Excluir ciclo em cascata?"
+        danger
+        confirmLabel="Excluir definitivamente"
+        cancelLabel="Cancelar"
+        loading={cicloDialogBusy}
+        onCancel={() => !cicloDialogBusy && setDialogExcluirCiclo(null)}
+        onConfirm={() => void confirmarExcluirCicloModal()}
+      >
+        <p style={{ margin: "0 0 10px" }}>
+          O ciclo <strong style={{ color: "#e6edf3" }}>«{dialogExcluirCiclo?.nome}»</strong> será removido de{" "}
+          <code style={{ color: "#c9a24a" }}>hub_ciclos_ia</code> juntamente com as linhas de execução associadas em{" "}
+          <code style={{ color: "#c9a24a" }}>hub_ciclos_log</code> (mesma transação no servidor, com autorização de
+          exclusão).
+        </p>
+        <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>Não é possível desfazer.</p>
+      </CrmConfirmDialog>
+
+      <CrmConfirmDialog
+        open={dialogLimparCiclo !== null}
+        title="Limpar agendamento do ciclo?"
+        danger={false}
+        confirmLabel="Limpar cron e intervalo"
+        cancelLabel="Cancelar"
+        loading={cicloDialogBusy}
+        onCancel={() => !cicloDialogBusy && setDialogLimparCiclo(null)}
+        onConfirm={() => void confirmarLimparAgendamentoCiclo()}
+      >
+        <p style={{ margin: 0 }}>
+          Para <strong style={{ color: "#e6edf3" }}>«{dialogLimparCiclo?.nome}»</strong> vamos anular{" "}
+          <code style={{ color: "#c9a24a" }}>cron_expressao</code> e <code style={{ color: "#c9a24a" }}>intervalo_minutos</code>.
+          O ciclo continua cadastrado; pode voltar a editar o agendamento quando quiser.
+        </p>
+      </CrmConfirmDialog>
     </>
   );
 }

@@ -109,39 +109,56 @@ function statusGerente(ciclo: string, resultado: unknown): "sucesso" | "sem_acao
   return "sem_acao";
 }
 
-/** Atualiza hub_ciclos_ia + hub_ciclos_log (Vercel cron chama estes endpoints — antes não incrementava total_execucoes). */
-async function registrarExecucaoGerente(ciclo: string, statusExec: "sucesso" | "sem_acao", resultado: unknown) {
-  const frags =
-    ciclo === "relatorio_manha"
-      ? ["%Relatório%Matinal%", "%Relatorio%Matinal%", "%Matinal%", "%Relatório matinal%", "%relatorio%matinal%"]
-      : ["%Supervis%", "%supervis%"];
+/** Atualiza hub_ciclos_ia + hub_ciclos_log (cron externo ou dispatcher). */
+async function registrarExecucaoGerente(
+  ciclo: string,
+  statusExec: "sucesso" | "sem_acao",
+  resultado: unknown,
+  hubCicloId?: string | null
+) {
+  let cfg: { id: string; total_execucoes: number | null; agente_slug: string } | null = null;
 
-  let cfg: { id: string; total_execucoes: number | null } | null = null;
-  for (const frag of frags) {
+  if (hubCicloId) {
     const { data } = await supabase
       .from("hub_ciclos_ia")
-      .select("id, total_execucoes")
-      .eq("agente_slug", "gerente_atendimento")
-      .eq("tipo", "programado")
-      .ilike("nome", frag)
+      .select("id, total_execucoes, agente_slug")
+      .eq("id", hubCicloId)
       .maybeSingle();
-    if (data?.id) {
-      cfg = data;
-      break;
-    }
+    if (data?.id) cfg = data;
   }
 
-  if (!cfg?.id) {
-    const { data: rows } = await supabase
-      .from("hub_ciclos_ia")
-      .select("id, nome, total_execucoes")
-      .eq("agente_slug", "gerente_atendimento")
-      .eq("tipo", "programado");
-    const pick =
+  if (!cfg) {
+    const frags =
       ciclo === "relatorio_manha"
-        ? rows?.find((x) => /relat|matinal/i.test(String(x.nome ?? "")))
-        : rows?.find((x) => /supervis/i.test(String(x.nome ?? "")));
-    if (pick?.id) cfg = pick;
+        ? ["%Relatório%Matinal%", "%Relatorio%Matinal%", "%Matinal%", "%Relatório matinal%", "%relatorio%matinal%"]
+        : ["%Supervis%", "%supervis%"];
+
+    for (const frag of frags) {
+      const { data } = await supabase
+        .from("hub_ciclos_ia")
+        .select("id, total_execucoes, agente_slug")
+        .eq("agente_slug", "gerente_atendimento")
+        .eq("tipo", "programado")
+        .ilike("nome", frag)
+        .maybeSingle();
+      if (data?.id) {
+        cfg = data;
+        break;
+      }
+    }
+
+    if (!cfg?.id) {
+      const { data: rows } = await supabase
+        .from("hub_ciclos_ia")
+        .select("id, nome, total_execucoes, agente_slug")
+        .eq("agente_slug", "gerente_atendimento")
+        .eq("tipo", "programado");
+      const pick =
+        ciclo === "relatorio_manha"
+          ? rows?.find((x) => /relat|matinal/i.test(String(x.nome ?? "")))
+          : rows?.find((x) => /supervis/i.test(String(x.nome ?? "")));
+      if (pick?.id) cfg = pick;
+    }
   }
 
   if (!cfg?.id) return;
@@ -153,7 +170,7 @@ async function registrarExecucaoGerente(ciclo: string, statusExec: "sucesso" | "
 
   await supabase.from("hub_ciclos_log").insert({
     ciclo_id: cfg.id,
-    agente_slug: "gerente_atendimento",
+    agente_slug: cfg.agente_slug,
     status: statusExec,
     finalizado_em: new Date().toISOString(),
     acoes_tomadas: [],
@@ -172,6 +189,7 @@ async function registrarExecucaoGerente(ciclo: string, statusExec: "sucesso" | "
 
 export async function GET(request: NextRequest) {
   const ciclo = request.nextUrl.searchParams.get("ciclo") || "relatorio_manha";
+  const hubCicloId = request.nextUrl.searchParams.get("hub_ciclo_id");
 
   if (!cronRequestAuthorized(request)) {
     return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
@@ -184,7 +202,7 @@ export async function GET(request: NextRequest) {
     else resultado = {};
 
     const statusExec = statusGerente(ciclo, resultado);
-    await registrarExecucaoGerente(ciclo, statusExec, resultado);
+    await registrarExecucaoGerente(ciclo, statusExec, resultado, hubCicloId);
 
     return NextResponse.json({ ok: true, ciclo, resultado });
   } catch (erro) {

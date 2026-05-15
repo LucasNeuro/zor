@@ -48,9 +48,9 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
   }
   if (third && seg === "agentes") {
     if (third === "novo") {
-      return { title: "Novo Agente IA" };
+      return { title: "Novo modelo IA" };
     }
-    return { title: "Agente IA" };
+    return { title: "Modelo IA" };
   }
 
   const map: Record<string, CrmHeaderDefault> = {
@@ -72,7 +72,11 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
       title: "Conteúdo & Copy",
       subtitle: "Central de criação de conteúdo — em desenvolvimento",
     },
-    agentes: { title: "Agentes IA" },
+    agentes: { title: "Modelos IA", subtitle: "Assistentes e templates por agente" },
+    "agentes-reais": {
+      title: "Workflows",
+      subtitle: "Orquestração de fluxos com modelos IA e ciclos — em preparação",
+    },
     ciclos: { title: "Central de Ciclos IA" },
     contatos: {
       title: "Contatos de Notificação",

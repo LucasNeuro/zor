@@ -12,8 +12,10 @@ import {
   Briefcase,
   MessageSquare,
   ClipboardCheck,
-  Bot,
   LineChart,
+  LayoutTemplate,
+  Workflow,
+  GitBranch,
   Handshake,
   ClipboardList,
   Zap,
@@ -89,14 +91,18 @@ const NAV_GROUPS: { id: string; label: string; sectionIcon: LucideIcon; items: N
   },
   {
     id: "automacao",
-    label: "Automação",
-    sectionIcon: Bot,
+    label: "AI — Funcionários",
+    sectionIcon: Workflow,
     items: [
       {
         href: "/crm/agentes",
-        label: "Agentes",
-        icon: Bot,
-        extra: { href: "/crm/agentes/novo", label: "Novo Agente" },
+        label: "Modelos",
+        icon: LayoutTemplate,
+      },
+      {
+        href: "/crm/agentes-reais",
+        label: "Workflows",
+        icon: GitBranch,
       },
       { href: "/crm/ciclos", label: "Ciclos IA", icon: Zap },
     ],
@@ -118,7 +124,9 @@ function NavIcon({ Icon, expanded }: { Icon: LucideIcon; expanded: boolean }) {
 }
 
 function isNavActive(pathname: string, href: string): boolean {
-  return href === "/crm" ? pathname === "/crm" : pathname.startsWith(href);
+  if (href === "/crm") return pathname === "/crm";
+  if (pathname === href) return true;
+  return pathname.startsWith(`${href}/`);
 }
 
 function findGroupIdForPath(pathname: string): string {

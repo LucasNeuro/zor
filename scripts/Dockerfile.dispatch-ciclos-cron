@@ -1,0 +1,17 @@
+# Minimal image for Render Cron Job: GET /api/cron/dispatch-ciclos with Bearer auth.
+# Build context: ./scripts (see render.yaml dockerContext).
+
+FROM curlimages/curl:8.11.1
+
+# Base image ENTRYPOINT wraps CLI args as curl; clear so Render can run our script.
+ENTRYPOINT []
+
+WORKDIR /app
+COPY render-dispatch-ciclos.sh /app/render-dispatch-ciclos.sh
+
+USER root
+RUN chmod +x /app/render-dispatch-ciclos.sh \
+  && chown curl_user:curl_group /app/render-dispatch-ciclos.sh
+
+USER curl_user
+CMD ["/bin/sh", "/app/render-dispatch-ciclos.sh"]

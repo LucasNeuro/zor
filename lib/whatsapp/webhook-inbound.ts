@@ -1,5 +1,5 @@
 /**
- * Normaliza payloads Evolution (messages.upsert) e UAZAPI (event message/messages → data tipo Message).
+ * Normaliza payloads UAZAPI (event message/messages → data tipo Message).
  */
 
 export type NormalizedWhatsappInbound = {
@@ -22,55 +22,6 @@ export type WhatsappWebhookParseResult =
 
 function stripJidToDigits(jid: string): string {
   return jid.replace("@s.whatsapp.net", "").replace("@g.us", "").replace("@lid", "").replace(/\D/g, "");
-}
-
-function parseEvolution(body: Record<string, unknown>): WhatsappWebhookParseResult | null {
-  if (body.event !== "messages.upsert") return null;
-  const data = body.data as Record<string, unknown> | undefined;
-  if (!data) return { kind: "ignored", status: "no_data" };
-
-  const msg = data.message as Record<string, unknown> | undefined;
-  const key = data.key as Record<string, unknown> | undefined;
-  const fromMe = (key?.fromMe as boolean) || false;
-  const remoteJid = (key?.remoteJid as string) || "";
-  const telefone = stripJidToDigits(remoteJid);
-  const pushName = (data.pushName as string) || "";
-  const messageId = (key?.id as string) || "";
-  const tsRaw = data.messageTimestamp as number | undefined;
-  const timestamp = tsRaw ? new Date(tsRaw * 1000).toISOString() : new Date().toISOString();
-
-  const imageMsg = msg?.imageMessage as Record<string, unknown> | undefined;
-  const videoMsg = msg?.videoMessage as Record<string, unknown> | undefined;
-  const tipoMidia = imageMsg ? "imagem" : videoMsg ? "video" : msg?.audioMessage ? "audio" : msg?.documentMessage ? "documento" : "texto";
-
-  const texto =
-    (msg?.conversation as string) ||
-    ((msg?.extendedTextMessage as Record<string, unknown>)?.text as string) ||
-    (imageMsg?.caption as string) ||
-    (videoMsg?.caption as string) ||
-    "";
-
-  if (fromMe) return { kind: "ignored", status: "outgoing_ignored" };
-  if (!telefone || remoteJid.endsWith("@g.us")) return { kind: "ignored", status: "group_ignored" };
-  if (!texto && tipoMidia === "texto") return { kind: "ignored", status: "empty_message" };
-
-  const mensagemFinal = texto || `[${tipoMidia} recebido]`;
-
-  return {
-    kind: "ok",
-    value: {
-      telefone,
-      pushName,
-      messageId,
-      timestamp,
-      fromMe,
-      isGroup: remoteJid.endsWith("@g.us"),
-      tipoMidia,
-      texto,
-      mensagemFinal,
-      instance: body.instance as string | undefined,
-    },
-  };
 }
 
 function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult | null {
@@ -145,8 +96,6 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
 }
 
 export function parseWhatsappWebhookBody(body: Record<string, unknown>): WhatsappWebhookParseResult {
-  const evo = parseEvolution(body);
-  if (evo) return evo;
   const u = parseUazapi(body);
   if (u) return u;
   return { kind: "unknown_event", event: (body.event as string) || (body.type as string) };

@@ -12,7 +12,7 @@ Checklist alinhado ao documento mestre e ao plano de execução. Atualizar datas
 
 - [ ] `ANTHROPIC_API_KEY` na Vercel (produção) e teste com lead real no WhatsApp.
 - [ ] `CRON_SECRET` definido; crons da Vercel executam (header `x-vercel-cron` ou Bearer).
-- [ ] Webhook Evolution: HMAC / segredo alinhado a `app/api/whatsapp/webhook/route.ts` e [`EVOLUTION_SETUP.md`](EVOLUTION_SETUP.md) (teste positivo e rejeição sem assinatura).
+- [ ] Webhook UAZAPI: HMAC / segredo alinhado a `app/api/whatsapp/webhook/route.ts` e [`UAZAPI_SETUP.md`](UAZAPI_SETUP.md) (teste positivo e rejeição sem assinatura).
 - Path unificado `POST /api/whatsapp/webhook` já está no repositório (sem checklist separado de roteamento antigo).
 - [ ] `PORTAL_HMAC_SECRET` ou reutilização de `CRON_SECRET` para links do portal parceiro documentada no `README.md`.
 

@@ -6,7 +6,7 @@ Use antes de liberar parceiros e fornecedores reais.
 
 - [ ] Jornada parceiro: cadastro/convite → homologação de módulos → painel restrito (`/parceiro/dashboard` com link assinado).
 - [ ] Jornada fornecedor: protótipo de cotação (`/fornecedor/cotacao`) com roadmap de persistência acordado.
-- [ ] WhatsApp: mensagem → lead → resposta IA em tempo aceitável (saída do motor `processarMensagem` em `@/lib/ia/engine`); validação HMAC / `WEBHOOK_SECRET` ativa em produção ([`EVOLUTION_SETUP.md`](EVOLUTION_SETUP.md)).
+- [ ] WhatsApp: mensagem → lead → resposta IA em tempo aceitável (saída do motor `processarMensagem` em `@/lib/ia/engine`); validação HMAC / `WEBHOOK_SECRET` ativa em produção ([`UAZAPI_SETUP.md`](UAZAPI_SETUP.md)).
 - [ ] Ciclos IA: `hub_ciclos_ia` com `total_execucoes` subindo nos jobs agendados (Vercel crons).
 - [ ] KPIs: `hub_kpis_resultados` populados (cron horário `?acao=kpis` + metas em `hub_kpis_metas`).
 - [ ] Aprovações: fluxo na Central (`/crm/aprovacoes`) sem mocks bloqueantes.

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { AgenteBriefingDrawer } from "@/components/crm/AgenteBriefingChatPanel";
+import { INFERENCIA_IA_CRM_COPIA } from "@/lib/ia/hub-model-defaults";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -560,7 +561,7 @@ export default function AgentePage() {
               color: "#d6b976", fontSize: 12, fontWeight: 700, cursor: "pointer",
             }}
           >
-            Briefing IA
+            AI — Funcionários
           </button>
           <button
             onClick={() => { setShowArquivar(true); setMotivoArquivamento(""); }}
@@ -594,7 +595,7 @@ export default function AgentePage() {
             borderRadius: 8, padding: "10px 16px", marginBottom: 16,
           }}>
             <p style={{ color: "#c9a24a", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-              Cargo, segmento, nível e modelo são imutáveis após criação — protegidos por trigger no banco.
+              Cargo, segmento, nível e referência de modelo são imutáveis após criação — protegidos por trigger no banco. O ID efectivo da API segue <code style={{ fontSize: 11 }}>MISTRAL_MODEL</code> quando o registo usa o sentinel Mistral.
             </p>
           </div>
 
@@ -605,6 +606,7 @@ export default function AgentePage() {
             <h2 style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
               Configurações fixas
             </h2>
+            <p style={{ fontSize: 11, color: "#64748b", margin: "-4px 0 0", lineHeight: 1.45 }}>{INFERENCIA_IA_CRM_COPIA}</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
               <div>
                 <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>Cargo</label>
@@ -639,14 +641,6 @@ export default function AgentePage() {
                     <span>—</span>
                   )}
                 </div>
-              </div>
-              <div>
-                <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>Modelo padrão</label>
-                <input
-                  value={agente.modelo_padrao as string || "—"}
-                  disabled
-                  style={inputDisabledStyle}
-                />
               </div>
             </div>
           </div>

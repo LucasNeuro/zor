@@ -1,19 +1,16 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { CalendarClock, Webhook, X, Zap } from "lucide-react";
+import { Suspense, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
+import { ChevronRight, Clock, Power, Trash2, Webhook, X, Zap } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { AgenteNovoWizard } from "@/components/crm/AgenteNovoWizard";
-import {
-  CRM_ENTITY_GRID,
-  crmAvatarGlow,
-  crmBtnDesativar,
-  crmFooterStatusPill,
-  crmGlassCardSurface,
-} from "@/lib/crm-glass-card";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
+import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
+import { CRM_ENTITY_GRID, crmGlassCardSurface } from "@/lib/crm-glass-card";
 import { calcularSaudeAgente, SAUDE_CORES } from "@/lib/agente-saude";
+import { INFERENCIA_IA_CRM_COPIA } from "@/lib/ia/hub-model-defaults";
 
 const MERCADOS_FIXOS = ["IMB", "ARQ", "RFM", "MRC", "ENG", "SRV", "PRO", "FOR"];
 
@@ -83,13 +80,22 @@ function urlParaModo(modo: ListMode): string {
   return "/api/hub/agentes?ativo=true";
 }
 
-function iniciais(nome: string): string {
-  return (nome || "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() || "")
-    .join("");
+/** Resumo legível para cards (bio/playbook em Markdown). */
+function markdownPlainPreview(raw: string, maxLen: number): string {
+  let t = raw.trim();
+  if (!t) return "";
+  t = t.replace(/```[\s\S]*?```/g, " ");
+  t = t.replace(/^#{1,6}\s+/gm, "");
+  t = t.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/__([^_]+)__/g, "$1");
+  t = t.replace(/\*([^*]+)\*/g, "$1").replace(/_([^_]+)_/g, "$1");
+  t = t.replace(/`([^`]+)`/g, "$1");
+  t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  t = t.replace(/\s+/g, " ").trim();
+  if (t.length <= maxLen) return t;
+  const cut = t.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(" ");
+  const base = lastSpace > maxLen * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${base.trimEnd()}…`;
 }
 
 function formatarData(v?: string) {
@@ -108,6 +114,70 @@ function tempoOpRelativo(iso?: string | null): string {
   if (diff < 60) return `${Math.round(diff)}min`;
   if (diff < 1440) return `${Math.round(diff / 60)}h`;
   return `${Math.round(diff / 1440)}d`;
+}
+
+function SideoverFold({
+  title,
+  open,
+  onToggle,
+  children,
+  headerRight,
+  isFirst = false,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+  headerRight?: ReactNode;
+  isFirst?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        borderTop: isFirst ? "none" : "1px solid rgba(37, 48, 66, 0.95)",
+        marginTop: isFirst ? 0 : 6,
+        paddingTop: isFirst ? 0 : 6,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flex: "1 1 auto",
+            minWidth: 0,
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            padding: "6px 0",
+            color: "#c4d2e5",
+            fontSize: 12,
+            fontWeight: 700,
+            textAlign: "left",
+          }}
+        >
+          <ChevronRight
+            size={16}
+            strokeWidth={2}
+            aria-hidden
+            style={{
+              flexShrink: 0,
+              color: "#c9a24a",
+              transform: open ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease",
+            }}
+          />
+          <span>{title}</span>
+        </button>
+        {headerRight ? <div style={{ flexShrink: 0 }}>{headerRight}</div> : null}
+      </div>
+      {open ? <div style={{ marginTop: 8 }}>{children}</div> : null}
+    </div>
+  );
 }
 
 const TIPO_CICLO_OPERACAO: Record<string, { cor: string }> = {
@@ -170,103 +240,19 @@ function rotuloCadenciaCron(intervalMin: number | null, cron?: string | null, ti
   return t || "—";
 }
 
-function cicloOperacionalIcon(tipoKey: string) {
-  if (tipoKey === "programado") return CalendarClock;
-  if (tipoKey === "gatilho") return Webhook;
-  return Zap;
+function cicloTipoLabel(tipoKey: string): string {
+  const t = String(tipoKey || "").toLowerCase();
+  if (t === "programado") return "Programado";
+  if (t === "gatilho") return "Gatilho";
+  if (t === "continuo") return "Contínuo";
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Ciclo";
 }
 
-/** Indicador de tipo de ciclo + progresso na cadência (visual sóbrio, sem animação chamativa). */
-function CicloOperacionalAvatar({
-  tipoKey,
-  accent,
-  progress01,
-  ativo,
-  aguardandoPrimeira,
-  labelTimer,
-}: {
-  tipoKey: string;
-  accent: string;
-  progress01: number;
-  ativo: boolean;
-  aguardandoPrimeira: boolean;
-  labelTimer: string;
-}) {
-  const Icon = cicloOperacionalIcon(tipoKey);
-  const r = 24;
-  const cx = 29;
-  const cy = 29;
-  const circ = 2 * Math.PI * r;
-  const p = Math.min(1, Math.max(0, progress01));
-  const strokeShown = Math.max(circ * 0.08, circ * p);
-  const strokeHide = circ - strokeShown;
-  const dim = !ativo;
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 4,
-        flexShrink: 0,
-        width: 62,
-      }}
-    >
-      <div style={{ position: "relative", width: 58, height: 58 }}>
-        <svg width="58" height="58" viewBox="0 0 58 58" style={{ display: "block" }} aria-hidden>
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1e293b" strokeWidth="2.5" opacity={dim ? 0.45 : 1} />
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="none"
-            stroke={accent}
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeDasharray={`${strokeShown} ${strokeHide}`}
-            transform={`rotate(-90 ${cx} ${cy})`}
-            opacity={dim ? 0.35 : 0.95}
-            style={{ transition: "stroke-dasharray 0.65s ease, opacity 0.3s ease" }}
-          />
-          {ativo && aguardandoPrimeira ? (
-            <circle cx={cx} cy={cy} r={r + 2} fill="none" stroke={accent} strokeWidth="1" opacity={0.35} />
-          ) : null}
-        </svg>
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            width: 36,
-            height: 36,
-            borderRadius: "50%",
-            background: `linear-gradient(165deg, ${accent}26 0%, #0d1117 50%, #0d1117 100%)`,
-            border: `1px solid ${accent}55`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 0 0 1px #00000040 inset",
-          }}
-        >
-          <Icon size={18} color={dim ? "#64748b" : accent} strokeWidth={2} aria-hidden />
-        </div>
-      </div>
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 700,
-          color: dim ? "#475569" : "#7f90a8",
-          textAlign: "center",
-          lineHeight: 1.2,
-          maxWidth: 62,
-        }}
-      >
-        {labelTimer}
-      </span>
-    </div>
-  );
+function cicloRingIcon(tipoKey: string) {
+  const t = String(tipoKey || "").toLowerCase();
+  if (t === "gatilho") return Webhook;
+  if (t === "continuo") return Zap;
+  return Clock;
 }
 
 function matchesModo(agente: Pick<Agente, "ativo" | "arquivado_em">, modo: ListMode): boolean {
@@ -292,10 +278,13 @@ function AgentesView() {
   const [drawerNovoOpen, setDrawerNovoOpen] = useState(false);
   const [drawerCargosOpen, setDrawerCargosOpen] = useState(false);
   const [alternandoAtivoSlug, setAlternandoAtivoSlug] = useState<string | null>(null);
+  const [excluindoAgenteSlug, setExcluindoAgenteSlug] = useState<string | null>(null);
+  const [dialogExcluirAgente, setDialogExcluirAgente] = useState<Agente | null>(null);
   const [cargos, setCargos] = useState<CargoCatalogo[]>([]);
   const [carregandoCargos, setCarregandoCargos] = useState(false);
   const [erroCargos, setErroCargos] = useState<string | null>(null);
   const [alternandoCargoSlug, setAlternandoCargoSlug] = useState<string | null>(null);
+  const [cargosBulkLoading, setCargosBulkLoading] = useState(false);
   const [editandoCargoSlug, setEditandoCargoSlug] = useState<string | null>(null);
   const [cargoDraft, setCargoDraft] = useState<{ titulo: string; segmento: string; especialidade: string; descricao_curta: string }>({
     titulo: "",
@@ -331,8 +320,19 @@ function AgentesView() {
   const [editEstilo, setEditEstilo] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
   const [editAtivo, setEditAtivo] = useState(true);
+  /** Secções colapsáveis no painel lateral (modelo). */
+  const [drawerSecCiclosAberto, setDrawerSecCiclosAberto] = useState(true);
+  const [drawerSecAtividadeAberto, setDrawerSecAtividadeAberto] = useState(true);
+  const [drawerSecIdentidadeAberto, setDrawerSecIdentidadeAberto] = useState(true);
 
   const detalheAberto = !!selectedSlug;
+
+  useEffect(() => {
+    if (!selectedSlug) return;
+    setDrawerSecCiclosAberto(true);
+    setDrawerSecAtividadeAberto(true);
+    setDrawerSecIdentidadeAberto(true);
+  }, [selectedSlug]);
 
   const saudeAgente = useMemo(() => {
     if (!detailAgente || !operacao) return null;
@@ -537,6 +537,62 @@ function AgentesView() {
     }
   }
 
+  const cargosPorSegmento = useMemo(() => {
+    const m = new Map<string, CargoCatalogo[]>();
+    for (const c of cargos) {
+      const seg = String(c.segmento || "").trim() || "Outros";
+      const bucket = m.get(seg);
+      if (bucket) bucket.push(c);
+      else m.set(seg, [c]);
+    }
+    const keys = [...m.keys()].sort((a, b) => {
+      if (a === "Outros") return 1;
+      if (b === "Outros") return -1;
+      return a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+    });
+    return keys.map((k) => {
+      const list = [...(m.get(k) || [])];
+      list.sort((a, b) =>
+        String(a.titulo || a.slug).localeCompare(String(b.titulo || b.slug), "pt-BR", { sensitivity: "base" })
+      );
+      return [k, list] as const;
+    });
+  }, [cargos]);
+
+  async function definirTodosCargosAtivos(ativoAlvo: boolean) {
+    if (cargos.length === 0) return;
+    setCargosBulkLoading(true);
+    setErroCargos(null);
+    try {
+      const outcomes = await Promise.all(
+        cargos.map(async (c) => {
+          const slug = String(c.slug || "").trim();
+          if (!slug) return false;
+          const res = await fetch("/api/hub/cargos", {
+            method: "PATCH",
+            headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ slug, ativo: ativoAlvo }),
+          });
+          return res.ok;
+        })
+      );
+      const allOk = outcomes.every(Boolean);
+      if (allOk) {
+        setCargos((prev) => prev.map((c) => ({ ...c, ativo: ativoAlvo })));
+      } else {
+        setErroCargos("Não foi possível atualizar todos os cargos. Tente novamente.");
+        carregarCargos();
+      }
+    } catch (e) {
+      setErroCargos((e as Error)?.message || "Falha ao atualizar cargos em lote.");
+      carregarCargos();
+    } finally {
+      setCargosBulkLoading(false);
+    }
+  }
+
+  const cargosPainelBusy = carregandoCargos || cargosBulkLoading || alternandoCargoSlug !== null;
+
   useEffect(() => {
     carregarAgentes();
   }, [carregarAgentes]);
@@ -691,6 +747,38 @@ function AgentesView() {
       if (detailAgente?.agente_slug === agente.agente_slug) setEditAtivo(proximo);
     } finally {
       setAlternandoAtivoSlug(null);
+    }
+  }
+
+  function pedirExcluirAgente(agente: Agente, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDialogExcluirAgente(agente);
+  }
+
+  async function confirmarExcluirAgente() {
+    const agente = dialogExcluirAgente;
+    if (!agente) return;
+    setExcluindoAgenteSlug(agente.agente_slug);
+    setErroLista(null);
+    try {
+      const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agente.agente_slug)}`, {
+        method: "DELETE",
+        headers: internalApiHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErroLista(typeof data?.error === "string" ? data.error : `Erro ${res.status} ao excluir.`);
+        return;
+      }
+      setDialogExcluirAgente(null);
+      setAgentes((prev) => prev.filter((a) => a.agente_slug !== agente.agente_slug));
+      if (selectedSlug === agente.agente_slug) {
+        setSelectedSlug(null);
+        setDetailAgente(null);
+        setDetailErro(null);
+      }
+    } finally {
+      setExcluindoAgenteSlug(null);
     }
   }
 
@@ -863,7 +951,7 @@ function AgentesView() {
               const selecionado = selectedSlug === agente.agente_slug;
               const bio =
                 typeof agente.bio === "string" && agente.bio.trim()
-                  ? agente.bio.trim().slice(0, 140) + (agente.bio.trim().length > 140 ? "…" : "")
+                  ? markdownPlainPreview(agente.bio, 220)
                   : null;
 
               return (
@@ -888,14 +976,13 @@ function AgentesView() {
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={crmAvatarGlow(segCor)}>
-                      {avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      ) : (
-                        iniciais(agente.nome)
-                      )}
-                    </div>
+                    <CrmBotRingAvatar
+                      accent="#22c55e"
+                      imageUrl={avatarUrl}
+                      pixelSize={48}
+                      progress={0.35}
+                      dim={!ativo}
+                    />
                     <div style={{ minWidth: 0 }}>
                       <p
                         style={{
@@ -928,10 +1015,14 @@ function AgentesView() {
                   <p
                     style={{
                       fontSize: 12,
-                      color: "#cbd5e1",
+                      color: "#94a3b8",
                       margin: 0,
-                      lineHeight: 1.45,
-                      minHeight: 36,
+                      lineHeight: 1.5,
+                      minHeight: 54,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
                     }}
                   >
                     {bio || "—"}
@@ -954,48 +1045,129 @@ function AgentesView() {
                     {(modoLista === "arquivados" || modoLista === "todos") && agente.arquivado_em ? " · Arquivado" : ""}
                   </p>
 
-                  <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
-                    Status:{" "}
-                    <strong
-                      style={{
-                        color: agente.arquivado_em ? "#c4b5fd" : ativo ? "#4ade80" : "#f87171",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {agente.arquivado_em ? "Arquivado" : ativo ? "Ativo" : "Inativo"}
-                    </strong>
-                  </p>
-
                   <div
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      width: "100%",
                       marginTop: "auto",
-                      gap: 10,
-                      paddingTop: 4,
+                      paddingTop: 10,
+                      borderTopWidth: 1,
+                      borderTopStyle: "solid",
+                      borderTopColor: "rgba(44, 56, 75, 0.85)",
+                      display: "flex",
+                      width: "100%",
+                      justifyContent: "flex-end",
+                      alignItems: "center",
+                      minHeight: 0,
                     }}
                   >
-                    <span
-                      style={
-                        agente.arquivado_em
-                          ? { ...crmFooterStatusPill(false), background: "#6d28d9" }
-                          : crmFooterStatusPill(ativo)
-                      }
+                    <div
+                      role="group"
+                      aria-label="Ações do agente"
+                      style={{
+                        display: "flex",
+                        borderRadius: 8,
+                        overflow: "hidden",
+                        borderStyle: "solid",
+                        borderWidth: 1,
+                        borderColor: "rgba(44, 56, 75, 0.95)",
+                        background: "#0f1620",
+                        flexShrink: 0,
+                      }}
                     >
-                      {agente.arquivado_em ? "Arquivado" : ativo ? "Ativo" : "Inativo"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => alternarAtivo(agente, e)}
-                      disabled={!!agente.arquivado_em || alternandoAtivoSlug === agente.agente_slug}
-                      style={crmBtnDesativar(!!agente.arquivado_em || alternandoAtivoSlug === agente.agente_slug)}
-                    >
-                      {alternandoAtivoSlug === agente.agente_slug
-                        ? "…"
-                        : `⏻ ${ativo ? "Desativar" : "Ativar"}`}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => alternarAtivo(agente, e)}
+                        disabled={
+                          !!agente.arquivado_em ||
+                          alternandoAtivoSlug === agente.agente_slug ||
+                          excluindoAgenteSlug === agente.agente_slug
+                        }
+                        title={
+                          agente.arquivado_em
+                            ? "Arquivado — não pode alterar estado"
+                            : ativo
+                              ? "Desativar agente"
+                              : "Ativar agente"
+                        }
+                        aria-label={
+                          agente.arquivado_em
+                            ? "Agente arquivado"
+                            : ativo
+                              ? "Desativar agente"
+                              : "Ativar agente"
+                        }
+                        style={{
+                          width: 34,
+                          height: 30,
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 0,
+                          border: 0,
+                          boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
+                          cursor:
+                            !!agente.arquivado_em ||
+                            alternandoAtivoSlug === agente.agente_slug ||
+                            excluindoAgenteSlug === agente.agente_slug
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            !!agente.arquivado_em ||
+                            alternandoAtivoSlug === agente.agente_slug ||
+                            excluindoAgenteSlug === agente.agente_slug
+                              ? 0.45
+                              : 1,
+                          background: agente.arquivado_em
+                            ? "rgba(109, 40, 217, 0.12)"
+                            : ativo
+                              ? "rgba(34, 197, 94, 0.1)"
+                              : "rgba(248, 113, 113, 0.08)",
+                          color: agente.arquivado_em ? "#c4b5fd" : ativo ? "#4ade80" : "#f87171",
+                        }}
+                      >
+                        {alternandoAtivoSlug === agente.agente_slug ? (
+                          <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1 }}>…</span>
+                        ) : (
+                          <Power size={14} strokeWidth={2.25} aria-hidden />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => pedirExcluirAgente(agente, e)}
+                        disabled={
+                          excluindoAgenteSlug === agente.agente_slug || alternandoAtivoSlug === agente.agente_slug
+                        }
+                        title="Excluir agente e dados associados"
+                        aria-label="Excluir agente e dados associados"
+                        style={{
+                          width: 34,
+                          height: 30,
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 0,
+                          border: 0,
+                          boxShadow: "none",
+                          cursor:
+                            excluindoAgenteSlug === agente.agente_slug || alternandoAtivoSlug === agente.agente_slug
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            excluindoAgenteSlug === agente.agente_slug || alternandoAtivoSlug === agente.agente_slug
+                              ? 0.45
+                              : 1,
+                          background: "rgba(127, 29, 29, 0.22)",
+                          color: "#fca5a5",
+                        }}
+                      >
+                        {excluindoAgenteSlug === agente.agente_slug ? (
+                          <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1 }}>…</span>
+                        ) : (
+                          <Trash2 size={14} strokeWidth={2.25} aria-hidden />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1074,6 +1246,47 @@ function AgentesView() {
               <p style={{ margin: "8px 0 0", color: "#8092a9", fontSize: 12 }}>
                 Controle quais cargos ficam disponíveis no cadastro de novos agentes.
               </p>
+              {!carregandoCargos && cargos.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => definirTodosCargosAtivos(true)}
+                    disabled={cargosPainelBusy}
+                    style={{
+                      border: "1px solid #22c55e55",
+                      background: cargosPainelBusy ? "#1a2e22" : "#22c55e18",
+                      color: cargosPainelBusy ? "#647d6b" : "#22c55e",
+                      borderRadius: 8,
+                      padding: "7px 12px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: cargosPainelBusy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Ativar todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => definirTodosCargosAtivos(false)}
+                    disabled={cargosPainelBusy}
+                    style={{
+                      border: "1px solid #ef444455",
+                      background: cargosPainelBusy ? "#2e1a1a" : "#ef444418",
+                      color: cargosPainelBusy ? "#7a6565" : "#ef4444",
+                      borderRadius: 8,
+                      padding: "7px 12px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: cargosPainelBusy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Desativar todos
+                  </button>
+                  {cargosBulkLoading && (
+                    <span style={{ fontSize: 11, color: "#7a8ca3" }}>Aplicando em todos os cargos…</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
@@ -1087,9 +1300,28 @@ function AgentesView() {
               ) : cargos.length === 0 ? (
                 <p style={{ color: "#8b949e", fontSize: 13 }}>Nenhum cargo encontrado.</p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {cargos.map((cargo) => {
-                    const ativo = cargo.ativo !== false;
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {cargosPorSegmento.map(([segmentoLabel, lista], secIdx) => {
+                    const corBarra = SEGMENTO_COR[segmentoLabel] || "#64748b";
+                    return (
+                      <div key={segmentoLabel} style={{ marginTop: secIdx === 0 ? 0 : 20 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 10,
+                            paddingBottom: 6,
+                            borderBottom: "1px solid #243042",
+                          }}
+                        >
+                          <span style={{ width: 3, minWidth: 3, height: 16, borderRadius: 2, background: corBarra }} />
+                          <span style={{ fontSize: 12, fontWeight: 800, color: "#b8c5d6", letterSpacing: 0.4 }}>{segmentoLabel}</span>
+                          <span style={{ fontSize: 11, color: "#5c6b80" }}>({lista.length})</span>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {lista.map((cargo) => {
+                      const ativo = cargo.ativo !== false;
                     const slug = String(cargo.slug || "");
                     const emEdicao = editandoCargoSlug === slug;
                     return (
@@ -1122,15 +1354,16 @@ function AgentesView() {
                               <button
                                 type="button"
                                 onClick={() => iniciarEdicaoCargo(cargo)}
+                                disabled={cargosBulkLoading}
                                 style={{
                                   border: "1px solid #334155",
                                   background: "#1e293b",
-                                  color: "#94a3b8",
+                                  color: cargosBulkLoading ? "#556273" : "#94a3b8",
                                   borderRadius: 8,
                                   padding: "6px 9px",
                                   fontSize: 11,
                                   fontWeight: 700,
-                                  cursor: "pointer",
+                                  cursor: cargosBulkLoading ? "not-allowed" : "pointer",
                                 }}
                               >
                                 Editar
@@ -1138,7 +1371,7 @@ function AgentesView() {
                               <button
                                 type="button"
                                 onClick={() => alternarCargoAtivo(cargo)}
-                                disabled={alternandoCargoSlug === slug}
+                                disabled={cargosBulkLoading || alternandoCargoSlug === slug}
                                 style={{
                                   border: `1px solid ${ativo ? "#ef444455" : "#22c55e55"}`,
                                   background: ativo ? "#ef444420" : "#22c55e20",
@@ -1147,7 +1380,7 @@ function AgentesView() {
                                   padding: "6px 10px",
                                   fontSize: 11,
                                   fontWeight: 700,
-                                  cursor: alternandoCargoSlug === slug ? "wait" : "pointer",
+                                  cursor: cargosBulkLoading || alternandoCargoSlug === slug ? "wait" : "pointer",
                                 }}
                               >
                                 {alternandoCargoSlug === slug ? "..." : ativo ? "Desativar" : "Ativar"}
@@ -1205,6 +1438,10 @@ function AgentesView() {
                         )}
                       </div>
                     );
+                          })}
+                        </div>
+                      </div>
+                    );
                   })}
                 </div>
               )}
@@ -1240,7 +1477,7 @@ function AgentesView() {
             <div style={{ borderBottom: "1px solid #2d394b", padding: 16, background: "linear-gradient(180deg,#121a26 0%, #101722 100%)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                 <div>
-                  <p style={{ margin: 0, color: "#8ea1ba", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>AGENTE</p>
+                  <p style={{ margin: 0, color: "#8ea1ba", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>MODELO</p>
                   <h3 style={{ margin: "3px 0 0", color: "#e6edf3", fontSize: 17 }}>
                     {detailAgente?.nome || selectedSlug}
                   </h3>
@@ -1282,8 +1519,17 @@ function AgentesView() {
                   </button>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                {(["editar", "logs"] as const).map((tab) => {
+              <div
+                style={{
+                  display: "inline-flex",
+                  width: "100%",
+                  overflow: "hidden",
+                  borderRadius: 8,
+                  border: "1px solid #344256",
+                  marginTop: 12,
+                }}
+              >
+                {(["editar", "logs"] as const).map((tab, i) => {
                   const sel = detailTab === tab;
                   return (
                     <button
@@ -1291,17 +1537,21 @@ function AgentesView() {
                       type="button"
                       onClick={() => setDetailTab(tab)}
                       style={{
-                        border: `1px solid ${sel ? "#c9a24a66" : "#344256"}`,
+                        margin: 0,
+                        flex: 1,
+                        minHeight: 36,
+                        borderRadius: 0,
+                        border: "none",
+                        borderLeft: i > 0 ? "1px solid #344256" : "none",
                         background: sel ? "#c9a24a1f" : "#16202d",
                         color: sel ? "#d6b976" : "#9fb0c6",
                         padding: "8px 12px",
-                        borderRadius: 8,
                         fontWeight: 700,
                         fontSize: 12,
                         cursor: "pointer",
                       }}
                     >
-                      {tab === "editar" ? "Editar agente" : "Logs timeline"}
+                      {tab === "editar" ? "Editar modelo" : "Logs timeline"}
                     </button>
                   );
                 })}
@@ -1310,13 +1560,13 @@ function AgentesView() {
 
             <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
               {detailLoading ? (
-                <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando dados do agente...</p>
+                <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando dados do modelo...</p>
               ) : detailErro ? (
                 <div style={{ color: "#f87171", background: "#3a1518", border: "1px solid #7f1d1d", borderRadius: 8, padding: 10, fontSize: 13 }}>
                   {detailErro}
                 </div>
               ) : !detailAgente ? (
-                <p style={{ color: "#8b949e", fontSize: 13 }}>Agente não encontrado.</p>
+                <p style={{ color: "#8b949e", fontSize: 13 }}>Modelo não encontrado.</p>
               ) : detailTab === "editar" ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {operacaoErro && (
@@ -1334,74 +1584,56 @@ function AgentesView() {
                     </div>
                   )}
                   {operacao && !operacaoLoading && (
-                    <div style={{ background: "#141d29", border: "1px solid #2c384b", borderRadius: 10, padding: 12 }}>
-                      <p style={{ color: "#8ea1ba", fontSize: 11, margin: "0 0 10px", fontWeight: 700 }}>
-                        Visão operacional
-                      </p>
-                      <div
-                        style={{
-                          margin: "0 0 12px",
-                          padding: "10px 12px",
-                          borderRadius: 8,
-                          border: "1px solid #2c384b",
-                          background: "#0f1620",
-                        }}
-                      >
-                        <p style={{ margin: "0 0 6px", color: "#94a3b8", fontSize: 10, fontWeight: 700, letterSpacing: 0.4 }}>
-                          Origem dos dados neste painel
+                    <div
+                      style={{
+                        background: "#141d29",
+                        border: "1px solid #2c384b",
+                        borderRadius: 12,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(37, 48, 66, 0.9)" }}>
+                        <p style={{ color: "#8ea1ba", fontSize: 11, margin: 0, fontWeight: 700 }}>Visão operacional</p>
+                        <p style={{ margin: "8px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.5 }}>
+                          {saudeAgente === "ok" && "Execuções e ações recentes dentro do esperado."}
+                          {saudeAgente === "degradado" &&
+                            "Há erro recente nas execuções de ciclo, várias falhas seguidas, última corrida muito antiga ou silêncio prolongado (ciclos ativos sem log e sem prompt recente). Revise Ciclos IA e o fluxo WhatsApp/cron."}
+                          {saudeAgente === "parado" && "Modelo inativo ou arquivado — não há operação esperada."}
+                          {!saudeAgente && "—"}
                         </p>
-                        <ul style={{ margin: 0, paddingLeft: 18, color: "#7f90a8", fontSize: 10, lineHeight: 1.55 }}>
-                          <li>
-                            <strong style={{ color: "#aebccf" }}>hub_ciclos_ia</strong> — ciclos ligados ao agente (cadência, totais,
-                            último status)
-                          </li>
-                          <li>
-                            <strong style={{ color: "#aebccf" }}>hub_ciclos_log</strong> — histórico de execuções de ciclos
-                            (até 150 linhas)
-                          </li>
-                          <li>
-                            <strong style={{ color: "#aebccf" }}>hub_acoes_ia</strong> — ações da IA (ex.: qualificação, eventos
-                            após webhook)
-                          </li>
-                          <li>
-                            <strong style={{ color: "#aebccf" }}>hub_prompt_logs</strong> — carimbo da última resposta modelo
-                            (métrica de atividade)
-                          </li>
-                        </ul>
+                        {operacao.ultimo_prompt_em && (
+                          <p style={{ margin: "8px 0 0", color: "#7f90a8", fontSize: 11 }}>
+                            Última resposta IA registrada: {tempoOpRelativo(operacao.ultimo_prompt_em)} atrás
+                          </p>
+                        )}
                       </div>
-                      <p style={{ margin: "0 0 10px", color: "#9cb0c9", fontSize: 11, lineHeight: 1.5 }}>
-                        {saudeAgente === "ok" && "Execuções e ações recentes dentro do esperado."}
-                        {saudeAgente === "degradado" &&
-                          "Há erro recente nas execuções de ciclo, várias falhas seguidas, última corrida muito antiga ou silêncio prolongado (ciclos ativos sem log e sem prompt recente). Revise Ciclos IA e o fluxo WhatsApp/cron."}
-                        {saudeAgente === "parado" && "Agente inativo ou arquivado — não há operação esperada."}
-                        {!saudeAgente && "—"}
-                      </p>
-                      {operacao.ultimo_prompt_em && (
-                        <p style={{ margin: "0 0 10px", color: "#7f90a8", fontSize: 11 }}>
-                          Última resposta IA registrada: {tempoOpRelativo(operacao.ultimo_prompt_em)} atrás
-                        </p>
-                      )}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-                        <span style={{ color: "#c4d2e5", fontSize: 12, fontWeight: 700 }}>Ciclos atribuídos</span>
-                        <button
-                          type="button"
-                          onClick={() => selectedSlug && router.push(`/crm/ciclos?q=${encodeURIComponent(selectedSlug)}`)}
-                          style={{
-                            border: "1px solid rgba(201, 162, 74, 0.35)",
-                            background: "rgba(201, 162, 74, 0.08)",
-                            color: "#d6b976",
-                            borderRadius: 6,
-                            padding: "6px 12px",
-                            fontSize: 11,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
+                      <div style={{ padding: "6px 14px 12px" }}>
+                        <SideoverFold
+                          isFirst
+                          title={`Ciclos atribuídos (${operacao.ciclos.length})`}
+                          open={drawerSecCiclosAberto}
+                          onToggle={() => setDrawerSecCiclosAberto((o) => !o)}
+                          headerRight={
+                            <button
+                              type="button"
+                              onClick={() => selectedSlug && router.push(`/crm/ciclos?q=${encodeURIComponent(selectedSlug)}`)}
+                              style={{
+                                border: "1px solid rgba(201, 162, 74, 0.35)",
+                                background: "rgba(201, 162, 74, 0.08)",
+                                color: "#d6b976",
+                                borderRadius: 6,
+                                padding: "6px 12px",
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Ciclos IA
+                            </button>
+                          }
                         >
-                          Ciclos IA
-                        </button>
-                      </div>
-                      {operacao.ciclos.length === 0 ? (
-                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12 }}>Nenhum ciclo vinculado a este agente.</p>
+                          {operacao.ciclos.length === 0 ? (
+                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12 }}>Nenhum ciclo vinculado a este modelo.</p>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           {operacao.ciclos.map((c) => {
@@ -1444,25 +1676,59 @@ function AgentesView() {
                                 key={String(row.id || row.nome)}
                                 style={{
                                   display: "flex",
-                                  gap: 14,
-                                  alignItems: "stretch",
-                                  background: "#101822",
-                                  border: "1px solid #253042",
-                                  borderRadius: 10,
-                                  padding: "10px 12px",
+                                  flexDirection: "column",
+                                  background: "linear-gradient(165deg, rgba(22, 30, 44, 0.95) 0%, rgba(12, 17, 24, 0.98) 100%)",
+                                  border: "1px solid rgba(56, 74, 102, 0.55)",
+                                  borderRadius: 14,
+                                  overflow: "hidden",
+                                  boxShadow: "0 8px 28px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255,255,255,0.03) inset",
                                 }}
                               >
-                                <CicloOperacionalAvatar
-                                  tipoKey={tipoKey || "continuo"}
-                                  accent={metaTipo.cor}
-                                  progress01={prog}
-                                  ativo={row.ativo !== false}
-                                  aguardandoPrimeira={!temExecucao && row.ativo !== false}
-                                  labelTimer={labelTimer}
-                                />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                                    <strong style={{ color: "#e6edf3", fontSize: 13 }}>{String(row.nome || "—")}</strong>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 14,
+                                    alignItems: "flex-start",
+                                    padding: "14px 14px 12px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      alignItems: "center",
+                                      gap: 4,
+                                      flexShrink: 0,
+                                      width: 62,
+                                    }}
+                                  >
+                                    <CrmBotRingAvatar
+                                      accent={metaTipo.cor}
+                                      progress={prog}
+                                      fallbackProgress={tipoKey === "gatilho" ? 0.22 : tipoKey === "continuo" ? 0.2 : 0.28}
+                                      pixelSize={58}
+                                      Icon={cicloRingIcon(tipoKey)}
+                                      dim={row.ativo === false}
+                                      pulse={!temExecucao && row.ativo !== false}
+                                    />
+                                    <span
+                                      style={{
+                                        fontSize: 9,
+                                        fontWeight: 700,
+                                        color: row.ativo === false ? "#475569" : "#7f90a8",
+                                        textAlign: "center",
+                                        lineHeight: 1.2,
+                                        maxWidth: 62,
+                                      }}
+                                    >
+                                      {labelTimer}
+                                    </span>
+                                  </div>
+                                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                    <strong style={{ color: "#e6edf3", fontSize: 14, letterSpacing: "-0.02em" }}>
+                                      {String(row.nome || "—")}
+                                    </strong>
                                     <span
                                       style={{
                                         fontSize: 10,
@@ -1494,7 +1760,7 @@ function AgentesView() {
                                     style={{
                                       display: "grid",
                                       gridTemplateColumns: "auto 1fr",
-                                      gap: "4px 14px",
+                                      gap: "6px 16px",
                                       fontSize: 11,
                                       color: "#94a3b8",
                                       lineHeight: 1.45,
@@ -1522,10 +1788,72 @@ function AgentesView() {
                                       </>
                                     ) : null}
                                   </div>
+                                </div>
+                              </div>
+                                <div
+                                  style={{
+                                    borderTop: "1px solid rgba(37, 48, 66, 0.95)",
+                                    padding: "11px 14px 12px",
+                                    background: "rgba(6, 10, 16, 0.72)",
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: 10,
+                                  }}
+                                >
+                                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 4,
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        color: metaTipo.cor,
+                                        padding: "4px 8px",
+                                        borderRadius: 6,
+                                        background: `${metaTipo.cor}14`,
+                                        border: `1px solid ${metaTipo.cor}33`,
+                                      }}
+                                    >
+                                      {tipoKey === "gatilho" ? (
+                                        <Webhook size={11} strokeWidth={2.2} aria-hidden />
+                                      ) : tipoKey === "continuo" ? (
+                                        <Zap size={11} strokeWidth={2.2} aria-hidden />
+                                      ) : (
+                                        <Clock size={11} strokeWidth={2.2} aria-hidden />
+                                      )}
+                                      {cicloTipoLabel(tipoKey)}
+                                    </span>
+                                    <span style={{ color: "#5c6d82", fontSize: 10, fontWeight: 600 }}>·</span>
+                                    <span style={{ color: "#8ea1ba", fontSize: 10, fontWeight: 600 }}>{cadencia}</span>
+                                  </div>
+                                  <span
+                                    style={{
+                                      color: "#64748b",
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      maxWidth: 220,
+                                      textAlign: "right",
+                                    }}
+                                  >
+                                    {labelTimer}
+                                  </span>
                                   {row.descricao && String(row.descricao).trim() ? (
-                                    <p style={{ margin: "8px 0 0", fontSize: 10, color: "#64748b", lineHeight: 1.4 }}>
-                                      {String(row.descricao).trim().slice(0, 120)}
-                                      {String(row.descricao).trim().length > 120 ? "…" : ""}
+                                    <p
+                                      style={{
+                                        width: "100%",
+                                        margin: 0,
+                                        fontSize: 10,
+                                        color: "#566778",
+                                        lineHeight: 1.45,
+                                        borderTop: "1px solid rgba(37, 48, 66, 0.45)",
+                                        paddingTop: 10,
+                                      }}
+                                    >
+                                      {String(row.descricao).trim().slice(0, 140)}
+                                      {String(row.descricao).trim().length > 140 ? "…" : ""}
                                     </p>
                                   ) : null}
                                 </div>
@@ -1534,8 +1862,13 @@ function AgentesView() {
                           })}
                         </div>
                       )}
-
-                      <p style={{ color: "#c4d2e5", fontSize: 12, fontWeight: 700, margin: "14px 0 8px" }}>Últimas ações (IA)</p>
+                        </SideoverFold>
+                        <SideoverFold
+                          title="Atividade recente"
+                          open={drawerSecAtividadeAberto}
+                          onToggle={() => setDrawerSecAtividadeAberto((o) => !o)}
+                        >
+                      <p style={{ color: "#94a3b8", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>Últimas ações (IA)</p>
                       {operacao.acoes.length === 0 ? (
                         <p style={{ margin: 0, color: "#7f90a8", fontSize: 12 }}>
                           Nenhuma ação recente. Ações aparecem quando a IA registra eventos (base{" "}
@@ -1579,12 +1912,14 @@ function AgentesView() {
                         </div>
                       )}
 
-                      <p style={{ color: "#c4d2e5", fontSize: 12, fontWeight: 700, margin: "14px 0 4px" }}>
+                      <div style={{ borderTop: "1px solid rgba(37, 48, 66, 0.85)", marginTop: 12, paddingTop: 12 }} />
+
+                      <p style={{ margin: "0 0 4px", color: "#94a3b8", fontSize: 11, fontWeight: 700 }}>
                         Execuções de ciclo
                       </p>
                       <p style={{ margin: "0 0 8px", color: "#64748b", fontSize: 10 }}>
                         Últimas execuções em{" "}
-                        <code style={{ fontSize: 10 }}>hub_ciclos_log</code> para este agente (amostra; não substitui relatório
+                        <code style={{ fontSize: 10 }}>hub_ciclos_log</code> para este modelo (amostra; não substitui relatório
                         completo).
                       </p>
                       {operacao.execucoes_ciclo.length === 0 ? (
@@ -1679,18 +2014,31 @@ function AgentesView() {
                           </div>
                         </div>
                       )}
+                        </SideoverFold>
+                      </div>
                     </div>
                   )}
 
-                  <div style={{ background: "#141d29", border: "1px solid #2c384b", borderRadius: 10, padding: 12 }}>
-                    <p style={{ color: "#8ea1ba", fontSize: 11, margin: "0 0 8px", fontWeight: 700 }}>
-                      Identidade · hub_agente_identidade
-                    </p>
+                  <div
+                    style={{
+                      background: "#141d29",
+                      border: "1px solid #2c384b",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div style={{ padding: "6px 14px 12px" }}>
+                      <SideoverFold
+                        isFirst
+                        title="Cadastro do modelo (leitura) · hub_agente_identidade"
+                        open={drawerSecIdentidadeAberto}
+                        onToggle={() => setDrawerSecIdentidadeAberto((o) => !o)}
+                      >
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 8,
+                        gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
+                        gap: 10,
                       }}
                     >
                       {(
@@ -1700,7 +2048,7 @@ function AgentesView() {
                           { k: "Área", v: detailAgente.area },
                           { k: "Segmento", v: detailAgente.segmento },
                           { k: "Nível", v: detailAgente.nivel != null ? String(detailAgente.nivel) : "—" },
-                          { k: "Modelo padrão", v: detailAgente.modelo_padrao },
+                          { k: "Inferência IA", v: INFERENCIA_IA_CRM_COPIA },
                           {
                             k: "Mercados (prefixo)",
                             v: detailAgente.prefixo_mercado || "—",
@@ -1738,8 +2086,13 @@ function AgentesView() {
                         </div>
                       ))}
                     </div>
+                      </SideoverFold>
+                    </div>
                   </div>
 
+                  <p style={{ color: "#64748b", fontSize: 10, fontWeight: 700, margin: "4px 0 0", letterSpacing: 0.3 }}>
+                    Edição
+                  </p>
                   <div>
                     <label style={{ color: "#d7e3f4", fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>Nome</label>
                     <input value={editNome} onChange={(e) => setEditNome(e.target.value)} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#e6edf3", borderRadius: 8, padding: "9px 11px", fontSize: 13 }} />
@@ -1861,6 +2214,25 @@ function AgentesView() {
           </aside>
         </>
       )}
+
+      <CrmConfirmDialog
+        open={dialogExcluirAgente !== null}
+        title="Excluir agente em cascata?"
+        danger
+        confirmLabel="Excluir definitivamente"
+        cancelLabel="Cancelar"
+        loading={excluindoAgenteSlug !== null}
+        onCancel={() => !excluindoAgenteSlug && setDialogExcluirAgente(null)}
+        onConfirm={() => void confirmarExcluirAgente()}
+      >
+        <p style={{ margin: "0 0 10px" }}>
+          O agente <strong style={{ color: "#e6edf3" }}>«{dialogExcluirAgente?.nome}»</strong> (
+          <code style={{ color: "#c9a24a" }}>{dialogExcluirAgente?.agente_slug}</code>) será removido com todos os
+          dados ligados no Hub: identidade, conhecimento, <strong style={{ color: "#e6edf3" }}>ciclos IA</strong>, logs
+          e filas associadas, além do playbook no Storage quando existir.
+        </p>
+        <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>Esta operação não pode ser desfeita.</p>
+      </CrmConfirmDialog>
     </>
   );
 }

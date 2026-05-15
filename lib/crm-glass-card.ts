@@ -13,9 +13,11 @@ export function crmGlassCardSurface(selecionado: boolean): CSSProperties {
     backdropFilter: "blur(14px)",
     WebkitBackdropFilter: "blur(14px)",
     borderRadius: 16,
-    border: selecionado
-      ? "1px solid rgba(147, 197, 253, 0.5)"
-      : "1px solid rgba(96, 165, 250, 0.22)",
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: selecionado
+      ? "rgba(147, 197, 253, 0.5)"
+      : "rgba(96, 165, 250, 0.22)",
     boxShadow: selecionado
       ? "0 0 28px rgba(59, 130, 246, 0.2), 0 12px 40px rgba(0, 0, 0, 0.4)"
       : "0 0 20px rgba(59, 130, 246, 0.1), 0 8px 28px rgba(0, 0, 0, 0.3)",

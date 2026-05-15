@@ -1,0 +1,60 @@
+# Render Blueprint — https://render.com/docs/infrastructure-as-code
+#
+# --- Web service (`escritorio-virtual`) env (mirror `.env.example`; never commit secrets) ---
+# Required for this app on Render:
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   SUPABASE_SERVICE_ROLE_KEY
+#   NEXT_PUBLIC_APP_URL          — public origin (HTTPS); dispatch route uses it for internal fetch to /api/ciclos/*
+#   CRON_SECRET                   — Bearer token for /api/cron/dispatch-ciclos (see lib/cron-auth.ts)
+# Add other keys from `.env.example` as needed (INTERNAL_API_KEY, WhatsApp, etc.).
+#
+# --- Cron Job (`dispatch-ciclos-cron`) ---
+# Minimal Docker image (`curl`) runs `scripts/render-dispatch-ciclos.sh` every schedule tick (UTC).
+# Inherits CRON_SECRET + NEXT_PUBLIC_APP_URL from the web service via `fromService`.
+# Optional override on the cron service (Dashboard): DISPATCH_CICLOS_URL — full URL including
+# `/api/cron/dispatch-ciclos` (otherwise NEXT_PUBLIC_APP_URL from the web service is enough).
+#
+# Limits: Cron Jobs require a paid instance type on Render (not `free`). Blueprint-managed Cron Jobs
+# are supported; adjust `region` / service `name` to match your workspace.
+
+services:
+  - type: web
+    name: escritorio-virtual
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+  - type: cron
+    name: dispatch-ciclos-cron
+    runtime: docker
+    plan: starter
+    schedule: "*/5 * * * *"
+    dockerfilePath: ./scripts/Dockerfile.dispatch-ciclos-cron
+    dockerContext: ./scripts
+    dockerCommand: /bin/sh /app/render-dispatch-ciclos.sh
+    envVars:
+      - key: CRON_SECRET
+        fromService:
+          type: web
+          name: escritorio-virtual
+          envVarKey: CRON_SECRET
+      - key: NEXT_PUBLIC_APP_URL
+        fromService:
+          type: web
+          name: escritorio-virtual
+          envVarKey: NEXT_PUBLIC_APP_URL

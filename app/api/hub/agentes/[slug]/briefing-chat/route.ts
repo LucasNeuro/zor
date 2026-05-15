@@ -2,8 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import {
   executarBriefingReply,
+  executarSimulacaoCanalReply,
   montarSnapshotOperacionalReadOnly,
   type BriefingMensagemLinha,
+  type BriefingModoSessao,
 } from "@/lib/agente-briefing-chat";
 
 function db() {
@@ -13,9 +15,15 @@ function db() {
   );
 }
 
-const MODELO_FALLBACK = "claude-sonnet-4-20250514";
+const MODELO_FALLBACK = "mistral";
 const MAX_HISTORICO_MENSAGENS = 48;
 const MAX_MENSAGEM_LEN = 12_000;
+
+function normalizarModoBriefing(v: unknown): BriefingModoSessao {
+  const s = String(v ?? "").trim();
+  if (s === "simulacao_canal") return "simulacao_canal";
+  return "briefing_interno";
+}
 
 export async function GET(
   req: NextRequest,
@@ -88,19 +96,26 @@ export async function POST(
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY não configurada" }, { status: 503 });
+  const temMistral = Boolean(process.env.MISTRAL_API_KEY?.trim());
+  const temAnthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  if (!temMistral && !temAnthropic) {
+    return NextResponse.json(
+      { error: "Nenhum provedor IA configurado (MISTRAL_API_KEY ou ANTHROPIC_API_KEY)." },
+      { status: 503 }
+    );
   }
 
   const { slug: raw } = await params;
   const slug = decodeURIComponent(raw);
 
-  let body: { sessao_id?: string | null; mensagem?: string };
+  let body: { sessao_id?: string | null; mensagem?: string; modo?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
+
+  const modo = normalizarModoBriefing(body.modo);
 
   const textoUser = String(body.mensagem ?? "").trim();
   if (!textoUser || textoUser.length > MAX_MENSAGEM_LEN) {
@@ -127,7 +142,7 @@ export async function POST(
   if (!sessaoId) {
     const { data: nova, error: nErr } = await supabase
       .from("hub_crm_agente_briefing_sessao")
-      .insert({ agente_slug: slug, titulo: null })
+      .insert({ agente_slug: slug, titulo: null, modo })
       .select("id")
       .single();
     if (nErr || !nova) {
@@ -137,19 +152,29 @@ export async function POST(
   } else {
     const { data: ses, error: vErr } = await supabase
       .from("hub_crm_agente_briefing_sessao")
-      .select("id")
+      .select("id, modo")
       .eq("id", sessaoId)
       .eq("agente_slug", slug)
       .maybeSingle();
     if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
     if (!ses) return NextResponse.json({ error: "Sessão inválida" }, { status: 400 });
+    const modoSessao = (ses as { modo?: string }).modo ?? "briefing_interno";
+    if (modoSessao !== modo) {
+      return NextResponse.json(
+        {
+          error:
+            "Esta conversa foi iniciada noutro modo. Ajuste o modo no painel AI — Funcionários ou feche e abra de novo.",
+        },
+        { status: 409 }
+      );
+    }
   }
 
   const { error: uErr } = await supabase.from("hub_crm_agente_briefing_mensagem").insert({
     sessao_id: sessaoId,
     papel: "user",
     conteudo: textoUser,
-    metadata: {},
+    metadata: { modo },
   });
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
 
@@ -171,25 +196,32 @@ export async function POST(
 
   const historicoParaModelo = historico.slice(0, -1);
 
-  const snapshot = await montarSnapshotOperacionalReadOnly(
-    supabase,
-    slug,
-    String(agente.nome || slug)
-  );
-
   let resultado;
   try {
-    resultado = await executarBriefingReply({
-      modelo,
-      agenteNome: String(agente.nome || slug),
-      agenteSlug: slug,
-      cargo: typeof agente.cargo === "string" ? agente.cargo : undefined,
-      promptBaseTrecho:
-        typeof agente.system_prompt_base === "string" ? agente.system_prompt_base : undefined,
-      snapshot,
-      historico: historicoParaModelo,
-      mensagemUsuario: textoUser,
-    });
+    if (modo === "simulacao_canal") {
+      resultado = await executarSimulacaoCanalReply({
+        agenteSlug: slug,
+        historico: historicoParaModelo,
+        mensagemUsuario: textoUser,
+      });
+    } else {
+      const snapshot = await montarSnapshotOperacionalReadOnly(
+        supabase,
+        slug,
+        String(agente.nome || slug)
+      );
+      resultado = await executarBriefingReply({
+        modelo,
+        agenteNome: String(agente.nome || slug),
+        agenteSlug: slug,
+        cargo: typeof agente.cargo === "string" ? agente.cargo : undefined,
+        promptBaseTrecho:
+          typeof agente.system_prompt_base === "string" ? agente.system_prompt_base : undefined,
+        snapshot,
+        historico: historicoParaModelo,
+        mensagemUsuario: textoUser,
+      });
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao gerar resposta";
     return NextResponse.json({ error: msg }, { status: 502 });
@@ -204,6 +236,7 @@ export async function POST(
       tokens_input: resultado.tokens_input,
       tokens_output: resultado.tokens_output,
       custo_brl: resultado.custo_brl,
+      modo,
     },
   });
   if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
@@ -224,6 +257,7 @@ export async function POST(
 
   return NextResponse.json({
     sessao_id: sessaoId,
+    modo,
     mensagens: mensagens || [],
     ultima_resposta_meta: {
       modelo: resultado.modelo,

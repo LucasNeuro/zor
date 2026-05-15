@@ -285,7 +285,7 @@ function AtendimentoContent() {
         },
         body: JSON.stringify({ leadId: leadSel.id, texto: msg }),
       });
-      const json: { error?: string; evolutionSkipped?: boolean; whatsappSkipped?: boolean } = await res
+      const json: { error?: string; whatsappSkipped?: boolean } = await res
         .json()
         .catch(() => ({}));
       if (!res.ok) {
@@ -298,10 +298,10 @@ function AtendimentoContent() {
         setSendStrip({ kind: "error", text: errText });
         return;
       }
-      if (json.evolutionSkipped || json.whatsappSkipped) {
+      if (json.whatsappSkipped) {
         setSendStrip({
           kind: "info",
-          text: "Mensagem registada no CRM e no histórico do chat. Nada foi enviado ao WhatsApp (dry-run ou provedor não configurado). Configure UAZAPI_BASE_URL + UAZAPI_INSTANCE_TOKEN ou EVOLUTION_API_URL + EVOLUTION_API_KEY no .env.",
+          text: "Mensagem registada no CRM e no histórico do chat. Nada foi enviado ao WhatsApp (dry-run ou provedor não configurado). Configure UAZAPI_BASE_URL + UAZAPI_INSTANCE_TOKEN no .env.",
         });
       } else {
         setSendStrip({ kind: "success", text: "Mensagem enviada." });

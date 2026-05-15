@@ -1,0 +1,60 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { PLAYBOOK_BUCKET, playbookObjectPath } from "@/lib/playbook/persist";
+
+function ignorable(msg: string): boolean {
+  return /does not exist|schema cache/i.test(msg);
+}
+
+type RpcDeleteAgenteResult = { ok?: boolean; error?: string };
+
+/** Apaga satélites do agente + identidade via RPC (transacão com app.delete_authorized). Playbook no Storage após sucesso. */
+export async function deleteAgenteHubCompleto(
+  supabase: SupabaseClient,
+  slug: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: ident, error: identErr } = await supabase
+    .from("hub_agente_identidade")
+    .select("id, agente_slug, tenant_id, playbook_object_path")
+    .eq("agente_slug", slug)
+    .maybeSingle();
+
+  if (identErr && !ignorable(identErr.message)) {
+    return { ok: false, error: identErr.message };
+  }
+  if (!ident) {
+    return { ok: false, error: "Agente não encontrado" };
+  }
+
+  const tenantId = ident.tenant_id != null ? String(ident.tenant_id) : null;
+
+  const paths = new Set<string>();
+  if (ident.playbook_object_path) paths.add(String(ident.playbook_object_path).trim());
+  paths.add(playbookObjectPath(tenantId, slug));
+  paths.add(playbookObjectPath(null, slug));
+
+  const { data: rpcRaw, error: rpcErr } = await supabase.rpc("hub_delete_agente_cascade", {
+    p_agente_slug: slug,
+  });
+
+  if (rpcErr) {
+    return { ok: false, error: rpcErr.message };
+  }
+
+  const rpcData = rpcRaw as RpcDeleteAgenteResult | null;
+  if (!rpcData || rpcData.ok !== true) {
+    return {
+      ok: false,
+      error: typeof rpcData?.error === "string" ? rpcData.error : "Falha ao apagar agente no banco.",
+    };
+  }
+
+  for (const p of paths) {
+    if (!p) continue;
+    const { error: stErr } = await supabase.storage.from(PLAYBOOK_BUCKET).remove([p]);
+    if (stErr && !ignorable(stErr.message)) {
+      console.warn("[agente-delete] storage", p, stErr.message);
+    }
+  }
+
+  return { ok: true };
+}

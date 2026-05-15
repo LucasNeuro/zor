@@ -14,13 +14,9 @@ function onlyDigits(s: string): string {
   return s.replace(/\D/g, "");
 }
 
-/** Em `next dev` ou com EVOLUTION_DRY_RUN / WHATSAPP_DRY_RUN=1, grava no CRM sem chamar o WhatsApp. */
+/** Em `next dev` ou com WHATSAPP_DRY_RUN=1, grava no CRM sem chamar o WhatsApp. */
 function allowWhatsappDryRun(): boolean {
-  return (
-    process.env.NODE_ENV === "development" ||
-    process.env.EVOLUTION_DRY_RUN === "1" ||
-    process.env.WHATSAPP_DRY_RUN === "1"
-  );
+  return process.env.NODE_ENV === "development" || process.env.WHATSAPP_DRY_RUN === "1";
 }
 
 export async function POST(request: NextRequest) {
@@ -72,8 +68,7 @@ export async function POST(request: NextRequest) {
       if (!allowWhatsappDryRun()) {
         return NextResponse.json(
           {
-            error:
-              "WhatsApp não configurado: defina UAZAPI_BASE_URL + UAZAPI_INSTANCE_TOKEN ou EVOLUTION_API_URL + EVOLUTION_API_KEY",
+            error: "WhatsApp não configurado: defina UAZAPI_BASE_URL + UAZAPI_INSTANCE_TOKEN",
           },
           { status: 502 }
         );
@@ -146,9 +141,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      evolutionSkipped: sendSkipped,
       whatsappSkipped: sendSkipped,
-      evolution: sendInfo,
       whatsapp: sendInfo,
     });
   } catch (e: unknown) {

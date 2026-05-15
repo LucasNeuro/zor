@@ -8,7 +8,8 @@
     "dev:insecure-tls": "node scripts/dev-insecure-tls.cjs",
     "build": "next build",
     "start": "next start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:playbook": "node scripts/smoke-agent-playbook.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

@@ -65,6 +65,24 @@ export function validateAndNormalizeCicloConfiguracoes(
     out.arquivar_apos_dias = Math.trunc(d);
   }
 
+  if ("dispatch" in out && out.dispatch != null) {
+    const d = out.dispatch;
+    if (typeof d !== "object" || Array.isArray(d) || d === null) {
+      return { ok: false, error: "dispatch deve ser um objeto { api, ciclo }." };
+    }
+    const dr = d as Record<string, unknown>;
+    const api = String(dr.api || "").trim();
+    const ciclo = String(dr.ciclo || "").trim();
+    const allowed = ["diretor", "gerente", "atendente"];
+    if (!allowed.includes(api)) {
+      return { ok: false, error: `dispatch.api deve ser um de: ${allowed.join(", ")}.` };
+    }
+    if (!ciclo) {
+      return { ok: false, error: "dispatch.ciclo é obrigatório (chave do runner existente)." };
+    }
+    out.dispatch = { api, ciclo };
+  }
+
   return { ok: true, value: out };
 }
 

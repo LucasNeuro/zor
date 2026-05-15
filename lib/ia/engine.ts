@@ -2,13 +2,13 @@
 // ENGINE v2 — Motor de IA Universal
 // Integra: Router + Monitor + Aprovações + Storage
 // ============================================================
-import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { receberDemanda, escalarDemanda, verificarAutonomia, carregarAgentePorSlug, type Demanda } from "./router";
 import { criarAprovacao } from "./aprovacoes";
 import { salvarConversa } from "./storage";
 import { FLUXO_IMOBILIARIO, FLUXO_ARQUITETURA, MARI_CONFIG, identificarMercado, gerarSystemPromptCompleto } from "./agentes-config";
 import { construirPrompt } from "./prompt-builder";
+import { completarChatPreferindoMistral } from "./llm-completion";
 
 function supabase() {
   return createClient(
@@ -43,7 +43,7 @@ export interface ContextoMensagem {
   /** Se ativo no banco, usa este agente; caso contrário aplica o router. */
   agenteSlugHint?: string;
   tenantId?: string;
-  /** Ex.: WhatsApp usa `pendente_envio` para alinhar à Evolution/outros emissores. */
+  /** Ex.: WhatsApp usa `pendente_envio` para alinhar ao envio UAZAPI após resposta da IA. */
   statusFilaSaida?: string;
 }
 
@@ -147,11 +147,6 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     }
 
     // ETAPA 7: Chama a IA
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return { sucesso: false, erro: "ANTHROPIC_API_KEY não configurada" };
-
-    const anthropic = new Anthropic({ apiKey });
-
     const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
 
     // Adiciona histórico recente
@@ -167,17 +162,21 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
 
     mensagens.push({ role: "user", content: ctx.mensagem });
 
-    const resposta = await anthropic.messages.create({
-      model: modelo,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: mensagens,
+    const out = await completarChatPreferindoMistral({
+      systemPrompt,
+      mensagens,
+      modeloFromDb: modelo,
+      maxTokens: 1024,
     });
+    if (!out.ok) {
+      return { sucesso: false, erro: out.erro };
+    }
 
-    const textoResposta = resposta.content[0].type === "text" ? resposta.content[0].text : "";
-    const tokensEntrada = resposta.usage.input_tokens;
-    const tokensSaida = resposta.usage.output_tokens;
-    const custo = calcularCusto(modelo, tokensEntrada, tokensSaida);
+    const textoResposta = out.texto;
+    const tokensEntrada = out.tokensEntrada;
+    const tokensSaida = out.tokensSaida;
+    const modeloLog = out.modeloLog;
+    const custo = calcularCusto(modeloLog, tokensEntrada, tokensSaida);
     const latencia = Date.now() - inicio;
 
     // ETAPA 8: Registra log (mesmo shape do webhook WhatsApp / CRM)
@@ -189,7 +188,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         system_prompt: systemPrompt,
         mensagem_usuario: ctx.mensagem,
         resposta_ia: textoResposta,
-        modelo_usado: modelo,
+        modelo_usado: modeloLog,
         tokens_input: tokensEntrada,
         tokens_output: tokensSaida,
         custo_estimado_brl: custo.brl,
@@ -209,7 +208,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       direcao: "saida",
       conteudo: textoResposta,
       status: statusSaida,
-      metadata: { logId: logData?.id, modelo, latencia, feito_por: "engine" },
+      metadata: { logId: logData?.id, modelo: modeloLog, latencia, feito_por: "engine" },
     };
     if (ctx.tenantId) filaSaida.tenant_id = ctx.tenantId;
 
@@ -232,7 +231,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       resposta: textoResposta,
       agenteSlug: agente.slug,
       agenteNome: agente.nome,
-      modelo,
+      modelo: modeloLog,
       tokens: { entrada: tokensEntrada, saida: tokensSaida },
       custo,
       latencia,
@@ -371,12 +370,29 @@ async function extrairESalvarMemorias(
 
 // ── CALCULAR CUSTO ────────────────────────────────────────────
 export function calcularCusto(modelo: string, tokensEntrada: number, tokensSaida: number): { usd: number; brl: number } {
+  const m = modelo.toLowerCase();
+  if (m.includes("mistral") || m.includes("mixtral") || m.includes("ministral")) {
+    const entrada = 0.00015;
+    const saida = 0.00045;
+    const usd =
+      (tokensEntrada / 1000) * entrada + (tokensSaida / 1000) * saida;
+    return { usd: parseFloat(usd.toFixed(6)), brl: parseFloat((usd * 5.75).toFixed(4)) };
+  }
   const taxas: Record<string, { entrada: number; saida: number }> = {
     "claude-haiku-4-5":  { entrada: 0.00025, saida: 0.00125 },
     "claude-sonnet-4-5": { entrada: 0.003,   saida: 0.015   },
     "claude-opus-4-5":   { entrada: 0.015,   saida: 0.075   },
+    "claude-haiku-4-5-20251001": { entrada: 0.00025, saida: 0.00125 },
+    "claude-sonnet-4-6": { entrada: 0.003, saida: 0.015 },
+    "claude-opus-4-7": { entrada: 0.015, saida: 0.075 },
   };
-  const taxa = taxas[modelo] || taxas["claude-haiku-4-5"];
+  const heur =
+    m.includes("opus")
+      ? taxas["claude-opus-4-5"]
+      : m.includes("sonnet")
+        ? taxas["claude-sonnet-4-5"]
+        : taxas["claude-haiku-4-5"];
+  const taxa = taxas[modelo] || heur;
   const usd = (tokensEntrada / 1000) * taxa.entrada + (tokensSaida / 1000) * taxa.saida;
   return { usd: parseFloat(usd.toFixed(6)), brl: parseFloat((usd * 5.75).toFixed(4)) };
 }
@@ -412,25 +428,23 @@ export async function processarDemandaInterna(demanda: Demanda & {
     }
 
     const systemPrompt = montarPromptCompleto(agente, [], agente.regras || []);
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return { sucesso: false, erro: "ANTHROPIC_API_KEY não configurada" };
 
-    const anthropic = new Anthropic({ apiKey });
-    const resposta = await anthropic.messages.create({
-      model: agente.modelo,
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: "user", content: `${demanda.titulo}\n\n${demanda.mensagem}` }],
+    const saida = await completarChatPreferindoMistral({
+      systemPrompt,
+      mensagens: [{ role: "user", content: `${demanda.titulo}\n\n${demanda.mensagem}` }],
+      modeloFromDb: agente.modelo,
+      maxTokens: 2048,
     });
+    if (!saida.ok) return { sucesso: false, erro: saida.erro };
 
-    const textoResposta = resposta.content[0].type === "text" ? resposta.content[0].text : "";
-    const custo = calcularCusto(agente.modelo, resposta.usage.input_tokens, resposta.usage.output_tokens);
+    const textoResposta = saida.texto;
+    const custo = calcularCusto(saida.modeloLog, saida.tokensEntrada, saida.tokensSaida);
 
     await db.from("hub_prompt_logs").insert({
       agente_slug: agente.slug,
-      modelo_usado: agente.modelo,
-      tokens_input: resposta.usage.input_tokens,
-      tokens_output: resposta.usage.output_tokens,
+      modelo_usado: saida.modeloLog,
+      tokens_input: saida.tokensEntrada,
+      tokens_output: saida.tokensSaida,
       custo_estimado_brl: custo.brl,
       mensagem_usuario: demanda.mensagem,
       resposta_ia: textoResposta,
@@ -456,8 +470,8 @@ export async function processarDemandaInterna(demanda: Demanda & {
       resposta: textoResposta,
       agenteSlug: agente.slug,
       agenteNome: agente.nome,
-      modelo: agente.modelo,
-      tokens: { entrada: resposta.usage.input_tokens, saida: resposta.usage.output_tokens },
+      modelo: saida.modeloLog,
+      tokens: { entrada: saida.tokensEntrada, saida: saida.tokensSaida },
       custo,
       latencia: Date.now() - inicio,
     };

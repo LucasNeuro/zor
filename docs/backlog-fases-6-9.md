@@ -4,7 +4,7 @@ Roadmap separado da meta de maio, conforme seção 13.3 do documento mestre. Cad
 
 | Épico | Dependências principais | Owner sugerido |
 |-------|-------------------------|----------------|
-| **Fase 6 — WhatsApp operário** (check-in, pedido de material) | Evolution estável, modelo de dados de obra/equipe | Frente B (produto/fluxo) |
+| **Fase 6 — WhatsApp operário** (check-in, pedido de material) | UAZAPI estável, modelo de dados de obra/equipe | Frente B (produto/fluxo) |
 | **Fase 6 — Cotação automática** | Fornecedores Fase 3 estável, fila/jobs | Frente A (plataforma) + B |
 | **Julho — Painel visual por obra** | Dados de obra normalizados, permissões | Frente B |
 | **Julho — Workflow imóvel → obra** | CRM imóveis/obras, regras de negócio | Frente B |

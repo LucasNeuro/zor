@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { runPlaybookPipeline } from "@/lib/playbook/orchestrate";
+import { deleteAgenteHubCompleto } from "@/lib/hub/delete-agente-completo";
 
 function db() {
   return createClient(
@@ -67,6 +69,8 @@ export async function PATCH(
     "system_prompt_base",
     "avatar_url",
     "ativo",
+    "modo_operacao",
+    "ciclo_execucao_padrao",
   ] as const;
 
   const patch: Record<string, unknown> = {};
@@ -119,5 +123,41 @@ export async function PATCH(
     return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
   }
 
+  const updated = data as { agente_slug: string };
+  const sb = supabase;
+  after(async () => {
+    try {
+      const out = await runPlaybookPipeline(sb, updated.agente_slug);
+      if (!out.ok) {
+        console.error("[playbook] pós-atualização agente:", updated.agente_slug, out.error);
+      }
+    } catch (e) {
+      console.error("[playbook] pós-atualização agente (exceção):", updated.agente_slug, e);
+    }
+  });
+
   return NextResponse.json(data);
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
+  }
+
+  const { slug: raw } = await params;
+  const slug = decodeURIComponent(raw);
+
+  const supabase = db();
+  const result = await deleteAgenteHubCompleto(supabase, slug);
+
+  if (!result.ok) {
+    const msg = result.error;
+    const is404 = msg.includes("não encontrado") || /not found/i.test(msg);
+    return NextResponse.json({ error: msg }, { status: is404 ? 404 : 500 });
+  }
+
+  return NextResponse.json({ ok: true, agente_slug: slug });
 }

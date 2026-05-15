@@ -3,6 +3,8 @@
 // Zero alucinação — IA só usa o que foi configurado
 // ============================================================
 import { createClient } from "@supabase/supabase-js";
+import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
+import { ordemConhecimentoSecao } from "@/lib/hub/conhecimento-secoes";
 
 function db() {
   return createClient(
@@ -54,8 +56,8 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     .select("*")
     .eq("agente_slug", params.agenteSlug)
     .eq("ativo", true)
-    .order("secao")
-    .order("ordem");
+    .order("ordem", { ascending: true })
+    .order("secao");
 
   // 4. Busca memórias do lead (top 5 mais relevantes)
   let memorias: Array<{ chave: string; valor: string }> = [];
@@ -104,6 +106,7 @@ ${personalidade?.descricao_comportamento || ""}`);
     }
 
     const secaoLabels: Record<string, string> = {
+      fluxo_sdr: "NÚCLEO OPERACIONAL (POP)",
       empresa: "SOBRE O NEGÓCIO",
       servicos: "SERVIÇOS E PRODUTOS",
       atendimento: "COMO ATENDER",
@@ -112,7 +115,11 @@ ${personalidade?.descricao_comportamento || ""}`);
       objeccoes: "COMO LIDAR COM OBJEÇÕES",
     };
 
-    for (const [secao, itens] of Object.entries(porSecao)) {
+    const secoesKeys = Object.keys(porSecao).sort(
+      (a, b) => ordemConhecimentoSecao(a) - ordemConhecimentoSecao(b) || a.localeCompare(b)
+    );
+    for (const secao of secoesKeys) {
+      const itens = porSecao[secao];
       const label = secaoLabels[secao] || secao.toUpperCase();
       const conteudo = itens.map(i => `[${i.titulo}]\n${i.conteudo}`).join("\n\n");
       secoes.push(`═══ ${label} ═══\n${conteudo}`);
@@ -186,16 +193,33 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
 }
 
 function selecionarModelo(agente: Record<string, unknown>, mercado?: string): string {
-  if (mercado === "imobiliario") return (agente.modelo_critico as string) || "claude-haiku-4-5-20251001";
-  return (agente.modelo_padrao as string) || "claude-haiku-4-5-20251001";
+  if (mercado === "imobiliario") {
+    const m = (agente.modelo_critico as string)?.trim();
+    return m || HUB_MODELO_SENTINEL;
+  }
+  const m = (agente.modelo_padrao as string)?.trim();
+  return m || HUB_MODELO_SENTINEL;
 }
 
 export function estimarCusto(tokensEntrada: number, modelo: string): number {
   const taxas: Record<string, number> = {
     "claude-haiku-4-5-20251001": 0.00025,
-    "claude-sonnet-4-6":         0.003,
-    "claude-opus-4-7":           0.015,
+    "claude-sonnet-4-6": 0.003,
+    "claude-opus-4-7": 0.015,
+    "mistral-small-latest": 0.0001,
+    "mistral-large-latest": 0.002,
   };
-  const taxa = taxas[modelo] || taxas["claude-haiku-4-5-20251001"];
+  const m = modelo.toLowerCase();
+  const heuristica =
+    m.includes("opus")
+      ? taxas["claude-opus-4-7"]
+      : m.includes("sonnet")
+        ? taxas["claude-sonnet-4-6"]
+        : m.includes("haiku")
+          ? taxas["claude-haiku-4-5-20251001"]
+          : m.includes("mistral") || m.includes("mixtral") || m.includes("ministral")
+            ? taxas["mistral-small-latest"]
+            : taxas["claude-haiku-4-5-20251001"];
+  const taxa = taxas[modelo] ?? heuristica;
   return parseFloat(((tokensEntrada / 1000) * taxa * 5.75).toFixed(4));
 }

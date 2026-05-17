@@ -25,6 +25,6 @@ UPDATE public.hub_leads_crm
 SET tenant_id = '00000000-0000-4000-8000-000000000001'::uuid
 WHERE tenant_id IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_hub_leads_crm_tenant ON public.hub_leads_crm (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_hub_leads_crm_tenant ON public.hub_leads_crm(tenant_id);
 
--- Após correr: Supabase Dashboard → Project Settings → API → Reload schema (se cache persistir).
+-- Após correr: no Dashboard Supabase → Project Settings → API → "Reload schema" se o erro de cache persistir.

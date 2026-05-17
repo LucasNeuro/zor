@@ -11,7 +11,7 @@
     "test": "vitest run",
     "smoke:playbook": "node scripts/smoke-agent-playbook.cjs",
     "checklist:hub": "node scripts/verify-hub-checklist.cjs",
-    "smoke:whatsapp": "node scripts/smoke-whatsapp-webhook.cjs"
+    "smoke:webhook": "node scripts/smoke-whatsapp-webhook.cjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.16",

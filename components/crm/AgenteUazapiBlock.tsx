@@ -103,6 +103,7 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
   const [qrcode, setQrcode] = useState<string | null>(null);
   const [paircode, setPaircode] = useState<string | null>(null);
   const [statusTempoReal, setStatusTempoReal] = useState<VerificacaoTempoReal | null>(null);
+  const [webhookAviso, setWebhookAviso] = useState<string | null>(null);
   const [ultimaVerificacaoAt, setUltimaVerificacaoAt] = useState<string | null>(null);
   const [ultimaVerificacaoResultado, setUltimaVerificacaoResultado] = useState<"sucesso" | "erro" | null>(null);
   const [dialogExcluirUazapi, setDialogExcluirUazapi] = useState(false);
@@ -135,6 +136,7 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
     ) => {
       if (!opts?.silent) {
         setErr(null);
+        setWebhookAviso(null);
         setLoading(action);
       }
       try {
@@ -203,6 +205,17 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
         }
         setUltimaVerificacaoAt(new Date().toISOString());
         setUltimaVerificacaoResultado("sucesso");
+        if (typeof data.webhook_warning === "string" && data.webhook_warning.trim()) {
+          setWebhookAviso(data.webhook_warning.trim());
+        } else if (
+          data.webhook_sync &&
+          typeof data.webhook_sync === "object" &&
+          (data.webhook_sync as { instance?: boolean }).instance === true
+        ) {
+          setWebhookAviso(
+            "Webhook UAZAPI sincronizado (URL com segredo, filtros wasSentByApi + isGroupYes). Envie uma mensagem de teste."
+          );
+        }
         const prevStatus = (snapshot.uazapi_connection_status || "").toLowerCase();
         const deveSincronizarPai =
           !opts?.silent ||
@@ -430,12 +443,34 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
                 CONFIGURAÇÃO
               </p>
               <p style={{ margin: "8px 0 0", color: "#8b949e", fontSize: 12, lineHeight: 1.55 }}>
-                Webhook global na UAZAPI:{" "}
-                <code style={{ fontSize: 11, color: "#79c0ff" }}>/api/whatsapp/webhook</code>. QR expirado?{" "}
-                <strong style={{ color: "#c9d1d9" }}>Desligar sessão</strong> e peça QR de novo, ou telefone com DDI para
-                código de pareamento.
+                Webhook (global + instância):{" "}
+                <code style={{ fontSize: 11, color: "#79c0ff" }}>/api/whatsapp/webhook?wh=…</code>. Use{" "}
+                <strong style={{ color: "#c9d1d9" }}>Actualizar estado</strong> ou{" "}
+                <strong style={{ color: "#c9d1d9" }}>Sincronizar webhook</strong> para alinhar o painel UAZAPI.
+              </p>
+              <p style={{ margin: "8px 0 0", color: "#e6c06a", fontSize: 11, lineHeight: 1.5 }}>
+                Em <strong>Excluir eventos</strong>, use <code style={{ color: "#79c0ff" }}>wasSentByApi</code> e{" "}
+                <code style={{ color: "#79c0ff" }}>isGroupYes</code>.{" "}
+                <strong>Não use wasNotSentByApi</strong> — bloqueia mensagens dos clientes e o Render não recebe POST.
               </p>
             </div>
+
+            {webhookAviso ? (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #238636",
+                  background: "#23863618",
+                  marginBottom: 16,
+                  fontSize: 12,
+                  color: "#7ee787",
+                  lineHeight: 1.5,
+                }}
+              >
+                {webhookAviso}
+              </div>
+            ) : null}
 
             {err ? (
               <div
@@ -502,6 +537,16 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
               >
                 {loading === "status" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
                 Actualizar estado
+              </button>
+
+              <button
+                type="button"
+                disabled={acoesOff || !temInstancia}
+                style={btnBase(acoesOff || !temInstancia)}
+                onClick={() => postAction("sync_webhook")}
+              >
+                {loading === "sync_webhook" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                Sincronizar webhook
               </button>
 
               <button

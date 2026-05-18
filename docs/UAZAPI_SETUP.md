@@ -26,9 +26,10 @@ WHATSAPP_VERIFY_TOKEN=opcional_meta_style_get
 
 ## Webhook (mensagens recebidas)
 
-1. No painel UAZAPI, configure o webhook para:
-   - **URL:** `https://<teu-dominio>/api/whatsapp/webhook`
-   - **Eventos:** mensagens recebidas (`message` / `messages`).
+1. No painel UAZAPI (webhook global ou por instância):
+   - **URL:** `https://<teu-dominio>/api/whatsapp/webhook?wh=<WEBHOOK_SECRET>` (o CRM sincroniza ao clicar **Actualizar estado** / **Sincronizar webhook**).
+   - **Eventos:** `messages` (e opcionalmente `connection`).
+   - **Excluir:** `wasSentByApi` + `isGroupYes` — **nunca** `wasNotSentByApi` (bloqueia mensagens dos clientes).
 2. Em produção, defina `WEBHOOK_SECRET` no Render/Vercel. O Next aceita:
    - Query na URL (`?wh=<segredo>`) — **recomendado**; sincronizado automaticamente ao conectar o agente.
    - Header customizado (`WEBHOOK_SECRET_HEADER`, default `x-webhook-secret`) com o mesmo valor.

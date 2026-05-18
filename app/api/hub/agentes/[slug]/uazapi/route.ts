@@ -10,7 +10,10 @@ import {
   pickInstanceFromResponse,
   statusFromPayloadUazapi,
 } from "@/lib/whatsapp/uazapi-instance-status";
-import { buildPublicWebhookUrl } from "@/lib/whatsapp/webhook-auth";
+import {
+  formatWebhookSyncWarnings,
+  syncWebhooksUazapi,
+} from "@/lib/whatsapp/uazapi-webhook-sync";
 
 function jsonErroUazapi(out: {
   error: string;
@@ -33,51 +36,6 @@ function db() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-function pickPublicAppOrigin(request: NextRequest): string | null {
-  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  const candidate = envUrl && envUrl.length > 0 ? envUrl : request.nextUrl.origin;
-  if (!candidate) return null;
-
-  try {
-    const u = new URL(candidate);
-    const h = u.hostname.toLowerCase();
-    if (h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0") return null;
-    u.pathname = "";
-    u.search = "";
-    u.hash = "";
-    return u.toString().replace(/\/+$/, "");
-  } catch {
-    return null;
-  }
-}
-
-async function syncWebhookDaInstancia(
-  request: NextRequest,
-  instanceToken: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const origin = pickPublicAppOrigin(request);
-  if (!origin) {
-    return { ok: false, error: "NEXT_PUBLIC_APP_URL ausente/inválido para webhook público" };
-  }
-
-  const webhookUrl = buildPublicWebhookUrl(origin, process.env.WEBHOOK_SECRET);
-  const out = await uazapiFetchJson<Record<string, unknown>>("/webhook", {
-    method: "POST",
-    instanceToken,
-    body: {
-      enabled: true,
-      url: webhookUrl,
-      events: ["messages", "connection"],
-      excludeMessages: ["wasSentByApi", "isGroupYes"],
-      addUrlEvents: false,
-      addUrlTypesMessages: false,
-    },
-  });
-
-  if (!out.ok) return { ok: false, error: out.error };
-  return { ok: true };
 }
 
 export async function POST(
@@ -239,16 +197,19 @@ export async function POST(
         uazapi_connection_status: st,
       });
 
-      const webhookSync = await syncWebhookDaInstancia(request, token);
+      const webhookSync = await syncWebhooksUazapi(request, token);
+      const webhookWarning = formatWebhookSyncWarnings(webhookSync);
 
       return NextResponse.json({
         ok: true,
         action: "create",
         uazapi_instance_id: id,
         uazapi_connection_status: st,
-        ...(webhookSync.ok
-          ? {}
-          : { webhook_warning: `Instância criada, mas webhook não sincronizado: ${webhookSync.error}` }),
+        webhook_sync: {
+          instance: webhookSync.instance.ok,
+          global: webhookSync.global.ok || webhookSync.global.skipped === true,
+        },
+        ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
       });
     }
 
@@ -275,7 +236,8 @@ export async function POST(
 
       const st = statusFromPayloadUazapi(out.data);
       await persistUazapi({ uazapi_connection_status: st });
-      const webhookSync = await syncWebhookDaInstancia(request, tokenInst);
+      const webhookSync = await syncWebhooksUazapi(request, tokenInst);
+      const webhookWarning = formatWebhookSyncWarnings(webhookSync);
 
       const qrRaw = extrairQrcodeDePayloadUazapi(out.data);
       const qrcode = qrRaw ? normalizarSrcImagemQrUazapi(qrRaw) : undefined;
@@ -286,9 +248,11 @@ export async function POST(
         uazapi_connection_status: st,
         ...(qrcode ? { qrcode } : {}),
         ...(paircode ? { paircode } : {}),
-        ...(webhookSync.ok
-          ? {}
-          : { webhook_warning: `Conectado, mas webhook não sincronizado: ${webhookSync.error}` }),
+        webhook_sync: {
+          instance: webhookSync.instance.ok,
+          global: webhookSync.global.ok || webhookSync.global.skipped === true,
+        },
+        ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
       });
     }
 
@@ -305,6 +269,13 @@ export async function POST(
       const st = statusFromPayloadUazapi(out.data);
       await persistUazapi({ uazapi_connection_status: st });
 
+      let webhookWarning: string | undefined;
+      let webhookSync: Awaited<ReturnType<typeof syncWebhooksUazapi>> | undefined;
+      if (st === "connected") {
+        webhookSync = await syncWebhooksUazapi(request, tokenInst);
+        webhookWarning = formatWebhookSyncWarnings(webhookSync);
+      }
+
       const inst = pickInstanceFromResponse(out.data);
       const qrRaw = extrairQrcodeDePayloadUazapi(out.data);
       const qrcode = qrRaw ? normalizarSrcImagemQrUazapi(qrRaw) : undefined;
@@ -316,6 +287,35 @@ export async function POST(
         ...(qrcode ? { qrcode } : {}),
         ...(paircode ? { paircode } : {}),
         profileName: typeof inst?.profileName === "string" ? inst.profileName : undefined,
+        ...(webhookSync
+          ? {
+              webhook_sync: {
+                instance: webhookSync.instance.ok,
+                global: webhookSync.global.ok || webhookSync.global.skipped === true,
+              },
+            }
+          : {}),
+        ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
+      });
+    }
+
+    if (action === "sync_webhook") {
+      const webhookSync = await syncWebhooksUazapi(request, tokenInst);
+      const webhookWarning = formatWebhookSyncWarnings(webhookSync);
+      if (!webhookSync.instance.ok && !webhookSync.global.ok) {
+        return NextResponse.json(
+          { error: webhookWarning || "Falha ao sincronizar webhooks", webhook_sync: webhookSync },
+          { status: 502 }
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        action: "sync_webhook",
+        webhook_sync: {
+          instance: webhookSync.instance.ok,
+          global: webhookSync.global.ok || webhookSync.global.skipped === true,
+        },
+        ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
       });
     }
 

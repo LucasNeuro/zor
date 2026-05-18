@@ -177,9 +177,18 @@ function emptyForm(): CargoFormFields {
 }
 
 function rowToForm(row: CargoRow): CargoFormFields {
-  const lines = (key: string) => {
-    const v = row[key];
-    if (Array.isArray(v)) return v.map((x) => String(x)).join("\n");
+  const lines = (...keys: string[]) => {
+    for (const key of keys) {
+      const v = row[key];
+      if (Array.isArray(v)) return v.map((x) => String(x)).join("\n");
+      if (typeof v === "string" && v.trim()) {
+        return v
+          .split(/\n|,/)
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .join("\n");
+      }
+    }
     return "";
   };
   return {
@@ -195,8 +204,8 @@ function rowToForm(row: CargoRow): CargoFormFields {
     modelo_critico: String(row.modelo_critico ?? "mistral"),
     modelo_alto_valor: String(row.modelo_alto_valor ?? "mistral"),
     supervisor_slug: row.supervisor_slug != null ? String(row.supervisor_slug) : "",
-    pode_fazer_padrao: lines("pode_fazer_padrao"),
-    nao_pode_fazer_padrao: lines("nao_pode_fazer_padrao"),
+    pode_fazer_padrao: lines("pode_fazer_padrao", "pode_fazer"),
+    nao_pode_fazer_padrao: lines("nao_pode_fazer_padrao", "nao_pode_fazer"),
     prompt_template: String(row.prompt_template ?? ""),
     descricao: String(row.descricao ?? ""),
     limite_autonomia_brl:
@@ -240,12 +249,34 @@ function mergeSugestao(prev: CargoFormFields, s: Record<string, unknown>): Cargo
   if (typeof s.limite_autonomia_brl === "number" && Number.isFinite(s.limite_autonomia_brl)) {
     next.limite_autonomia_brl = String(Math.max(0, s.limite_autonomia_brl));
   }
-  if (Array.isArray(s.pode_fazer_padrao)) {
-    next.pode_fazer_padrao = s.pode_fazer_padrao.map((x) => String(x)).join("\n");
-  }
-  if (Array.isArray(s.nao_pode_fazer_padrao)) {
-    next.nao_pode_fazer_padrao = s.nao_pode_fazer_padrao.map((x) => String(x)).join("\n");
-  }
+  const asLines = (value: unknown): string | null => {
+    if (Array.isArray(value)) {
+      return value
+        .map((x) => String(x).trim())
+        .filter(Boolean)
+        .join("\n");
+    }
+    if (typeof value === "string" && value.trim()) {
+      return value
+        .split(/\n|,/)
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .join("\n");
+    }
+    return null;
+  };
+  const pode =
+    asLines(s.pode_fazer_padrao) ??
+    asLines(s.pode_fazer) ??
+    asLines(s.capacidades) ??
+    null;
+  if (pode != null) next.pode_fazer_padrao = pode;
+  const naoPode =
+    asLines(s.nao_pode_fazer_padrao) ??
+    asLines(s.nao_pode_fazer) ??
+    asLines(s.restricoes) ??
+    null;
+  if (naoPode != null) next.nao_pode_fazer_padrao = naoPode;
   return next;
 }
 

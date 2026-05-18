@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { apagarStorageRagAgente } from "@/lib/hub/delete-agente-rag-storage";
 import { PLAYBOOK_BUCKET, playbookObjectPath } from "@/lib/playbook/persist";
 
 function ignorable(msg: string): boolean {
@@ -7,7 +8,7 @@ function ignorable(msg: string): boolean {
 
 type RpcDeleteAgenteResult = { ok?: boolean; error?: string };
 
-/** Apaga satélites do agente + identidade via RPC (transacão com app.delete_authorized). Playbook no Storage após sucesso. */
+/** Apaga satélites do agente + identidade via RPC; depois Storage (playbook + RAG). */
 export async function deleteAgenteHubCompleto(
   supabase: SupabaseClient,
   slug: string
@@ -26,6 +27,19 @@ export async function deleteAgenteHubCompleto(
   }
 
   const tenantId = ident.tenant_id != null ? String(ident.tenant_id) : null;
+
+  const ragPaths: string[] = [];
+  const { data: ragDocs } = await supabase
+    .from("hub_agente_rag_documentos")
+    .select("object_path")
+    .eq("agente_slug", slug);
+  if (Array.isArray(ragDocs)) {
+    for (const d of ragDocs) {
+      if (typeof d.object_path === "string" && d.object_path.trim()) {
+        ragPaths.push(d.object_path.trim());
+      }
+    }
+  }
 
   const paths = new Set<string>();
   if (ident.playbook_object_path) paths.add(String(ident.playbook_object_path).trim());
@@ -48,11 +62,13 @@ export async function deleteAgenteHubCompleto(
     };
   }
 
+  await apagarStorageRagAgente(supabase, slug, ragPaths);
+
   for (const p of paths) {
     if (!p) continue;
     const { error: stErr } = await supabase.storage.from(PLAYBOOK_BUCKET).remove([p]);
     if (stErr && !ignorable(stErr.message)) {
-      console.warn("[agente-delete] storage", p, stErr.message);
+      console.warn("[agente-delete] storage playbook", p, stErr.message);
     }
   }
 

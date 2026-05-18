@@ -23,6 +23,13 @@ import {
 
 } from "@/lib/hub/agente-ferramentas-registry";
 import { isHubModeloIdDbCompatible } from "@/lib/ia/hub-model-defaults";
+import {
+  RAG_ACCEPT_ATTR,
+  RAG_EXEMPLO_MD_URL,
+  RAG_FORMATOS_RESUMO,
+  ragErroPdfSemTexto,
+  ragExtensaoAceita,
+} from "@/lib/hub/rag-formatos";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -110,14 +117,38 @@ const SECOES_CONHECIMENTO = [
     id: "fluxo_sdr",
     label: "Núcleo POP / fluxo operacional",
     placeholder:
-      "## 1. Objetivo\n(O que este modelo deve cumprir neste canal: informar, qualificar, registar, encaminhar, resolver 1ª linha — conforme o cargo.)\n\n## 2. Escopo\n- Tipos de pedido ou tema que trata\n- O que fica fora da responsabilidade do modelo\n\n## 3. Triagem ou classificação\n| Tipo | Quando |\n|------|--------|\n| … | … |\n\n## 4. Perguntas ou dados obrigatórios\n1. …\n2. …\n\n## 5. Critérios (ex.: prioridade, caso encerrado vs precisa de humano)\n- …\n\n## 6. Encaminhamento, próximos passos e SLA\n- …\n\n## 7. Escalação para humano\n- …",
+      "Molde de estrutura — adapte ao cargo escolhido (título, nível, especialidade); o texto final não é genérico.\n\n## 1. Objetivo\nUma linha: o que este agente cumpre neste canal para este papel.\n\n## 2. Escopo\nUma linha: o que trata | o que fica fora.\n\n## 3. Triagem ou classificação\nUma linha | Tipo | Quando | (preencha 3–6 linhas quando tiver casos reais).\n\n## 4. Dados ou perguntas obrigatórias\nUma linha → depois lista numerada concreta.\n\n## 5. Critérios\nUma linha: prioridade | quando encerrar vs encaminhar.\n\n## 6. Próximos passos e SLA\nUma linha.\n\n## 7. Escalação para humano\nUma linha: quando e como passar a uma pessoa.",
   },
-  { id: "empresa", label: "Sobre o negócio", placeholder: "Quem somos, missão, diferenciais, proposta de valor, histórico..." },
-  { id: "servicos", label: "Serviços", placeholder: "Detalhes de cada serviço, faixas de preço, prazos médios, garantias..." },
-  { id: "atendimento", label: "Como atender", placeholder: "Fluxo de atendimento, perguntas que deve fazer, tom de voz, condução do lead..." },
-  { id: "proibicoes", label: "Nunca fazer", placeholder: "O que nunca prometer, quando escalar para humano, temas proibidos..." },
-  { id: "objeccoes", label: "Objeções comuns", placeholder: "Objeções frequentes e como responder. Ex: 'tá caro', 'vou pensar'..." },
-  { id: "exemplos", label: "Exemplos de atendimento", placeholder: "Exemplos de boas conversas, casos reais, respostas modelo..." },
+  {
+    id: "empresa",
+    label: "Sobre o negócio",
+    placeholder: "## Quem somos / missão\nUma linha.\n\n## Diferenciais e valor\nBullets curtos ou uma linha.",
+  },
+  {
+    id: "servicos",
+    label: "Serviços",
+    placeholder: "Lista: serviço | para quem | prazo ou garantia se souber — senão [completar].",
+  },
+  {
+    id: "atendimento",
+    label: "Como atender",
+    placeholder: "Fluxo em poucos passos, perguntas-chave, tom, quando escalar — alinhado ao cargo.",
+  },
+  {
+    id: "proibicoes",
+    label: "Nunca fazer",
+    placeholder: "Bullets: o que não prometer nem fazer neste cargo (dados, preços, temas vedados…).",
+  },
+  {
+    id: "objeccoes",
+    label: "Objeções comuns",
+    placeholder: "Objeção → resposta curta de exemplo (5–8 pares).",
+  },
+  {
+    id: "exemplos",
+    label: "Exemplos de atendimento",
+    placeholder: "2–4 trechos: pergunta do cliente / resposta do agente (tonalidade do cargo).",
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -179,6 +210,77 @@ function hubCicloTipoLabel(tipo: string): string {
   if (tipo === "gatilho") return "gatilho";
   return tipo;
 }
+
+function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const RAG_DOCS_LIMIT = 3;
+
+function ragDocExt(nome: string): string {
+  const ext = nome.split(".").pop()?.trim().toUpperCase();
+  return ext && ext.length <= 5 ? ext : "DOC";
+}
+
+function ragFileKey(f: File): string {
+  return `${f.name}-${f.size}-${f.lastModified}`;
+}
+
+function RagErroAjuda({ mensagem }: { mensagem: string }) {
+  if (!mensagem.trim()) return null;
+  const pdf = ragErroPdfSemTexto(mensagem);
+  const formato = /formato não suportado|não indexável/i.test(mensagem);
+  if (!pdf && !formato) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        padding: "10px 12px",
+        borderRadius: 8,
+        border: "1px solid rgba(88,166,255,0.35)",
+        background: "rgba(88,166,255,0.08)",
+        color: "#adbac7",
+        fontSize: 12,
+        lineHeight: 1.55,
+      }}
+    >
+      {pdf ? (
+        <p style={{ margin: "0 0 8px" }}>
+          <strong style={{ color: "#58a6ff" }}>PDF sem texto seleccionável.</strong> Muitos PDFs criados com
+          &quot;Imprimir&quot; ou digitalizados não indexam. Use{" "}
+          <a
+            href={RAG_EXEMPLO_MD_URL}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#58a6ff", fontWeight: 700 }}
+          >
+            o ficheiro .md de exemplo
+          </a>{" "}
+          ou exporte o mesmo conteúdo em <strong style={{ color: "#e6edf3" }}>.docx</strong> /{" "}
+          <strong style={{ color: "#e6edf3" }}>.md</strong>.
+        </p>
+      ) : null}
+      {formato ? (
+        <p style={{ margin: pdf ? 0 : "0 0 8px" }}>
+          Formatos aceites: <strong style={{ color: "#e6edf3" }}>{RAG_FORMATOS_RESUMO}</strong>.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+type RagFilaStatus = "na_fila" | "preparado" | "processando" | "concluido" | "erro";
+
+type RagFilaItem = {
+  file: File;
+  status: RagFilaStatus;
+  mensagem?: string;
+};
 
 export type AgenteNovoWizardProps = {
   variant: "page" | "drawer";
@@ -250,6 +352,16 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [playbookGerando, setPlaybookGerando] = useState(false);
   const [playbookErro, setPlaybookErro] = useState("");
   const [playbookPublicUrl, setPlaybookPublicUrl] = useState<string | null>(null);
+  /** Escolhidos no passo Conhecimento; enviados e indexados logo após «Criar agente». */
+  const [ragPendentes, setRagPendentes] = useState<RagFilaItem[]>([]);
+  const [ragPendenteErro, setRagPendenteErro] = useState("");
+  const [ragPosCriacaoAviso, setRagPosCriacaoAviso] = useState("");
+  const [ragPreparando, setRagPreparando] = useState(false);
+  const [ragPreparados, setRagPreparados] = useState(false);
+  const [ragUploadTotal, setRagUploadTotal] = useState(0);
+  const [ragUploadDone, setRagUploadDone] = useState(0);
+  /** Passo Canal: PATCH do modo WhatsApp antes de acções UAZAPI. */
+  const [syncCanalLoading, setSyncCanalLoading] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -301,9 +413,23 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   }, [agenteSlugCriado]);
 
   useEffect(() => {
-    if (passo !== 8 || !agenteSlugCriado || modoOperacao !== "canal_whatsapp") return;
-    void refreshSnapshotUazapi();
-  }, [passo, agenteSlugCriado, modoOperacao, refreshSnapshotUazapi]);
+    if (passo !== 8 || !agenteSlugCriado) {
+      setSyncCanalLoading(false);
+      return;
+    }
+    let cancel = false;
+    setSyncCanalLoading(true);
+    void (async () => {
+      const ok = await sincronizarWizardNoAgente(agenteSlugCriado);
+      if (cancel) return;
+      setSyncCanalLoading(false);
+      if (!ok) return;
+      if (modoOperacao === "canal_whatsapp") await refreshSnapshotUazapi();
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [passo, agenteSlugCriado, modoOperacao, modoExecucao]);
 
   useEffect(() => {
     if (passo !== 7 || !agenteSlugCriado) return;
@@ -338,6 +464,140 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       cancel = true;
     };
   }, [passo, agenteSlugCriado]);
+
+  function adicionarRagPendente(file: File | null | undefined) {
+    if (!file) return;
+    if (!ragExtensaoAceita(file.name)) {
+      setRagPendenteErro(`Formato não suportado. Formatos aceites: ${RAG_FORMATOS_RESUMO}.`);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setRagPendenteErro("Arquivo maior que 5 MB.");
+      return;
+    }
+    if (ragPendentes.length >= RAG_DOCS_LIMIT) {
+      setRagPendenteErro(`Limite de ${RAG_DOCS_LIMIT} documentos. Remova um antes de adicionar outro.`);
+      return;
+    }
+    const key = ragFileKey(file);
+    if (ragPendentes.some((item) => ragFileKey(item.file) === key)) {
+      setRagPendenteErro("Este arquivo já está na lista.");
+      return;
+    }
+    setRagPendenteErro("");
+    setRagPreparados(false);
+    setRagUploadTotal(0);
+    setRagUploadDone(0);
+    setRagPendentes((prev) => [...prev, { file, status: "na_fila" }]);
+  }
+
+  function removerRagPendentePorIndice(i: number) {
+    setRagPendentes((prev) => prev.filter((_, idx) => idx !== i));
+    setRagPendenteErro("");
+    setRagPreparados(false);
+    setRagUploadTotal(0);
+    setRagUploadDone(0);
+  }
+
+  async function processarFilaRagNoAgente(slug: string): Promise<string[]> {
+    const pendentesSnapshot = [...ragPendentes];
+    if (pendentesSnapshot.length === 0) return [];
+
+    setRagPendentes(pendentesSnapshot.map((item) => ({ ...item, status: "preparado" })));
+    const falhas: string[] = [];
+    setRagUploadTotal(pendentesSnapshot.length);
+    setRagUploadDone(0);
+
+    for (let i = 0; i < pendentesSnapshot.length; i++) {
+      const file = pendentesSnapshot[i].file;
+      setRagPendentes((prev) =>
+        prev.map((item) =>
+          ragFileKey(item.file) === ragFileKey(file)
+            ? { ...item, status: "processando", mensagem: "A enviar e indexar..." }
+            : item
+        )
+      );
+
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const r = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/rag-documentos`, {
+          method: "POST",
+          headers: internalApiHeaders(),
+          body: form,
+        });
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        if (!r.ok) {
+          falhas.push(`${file.name}: ${d.error || `HTTP ${r.status}`}`);
+          setRagPendentes((prev) =>
+            prev.map((item) =>
+              ragFileKey(item.file) === ragFileKey(file)
+                ? { ...item, status: "erro", mensagem: d.error || `HTTP ${r.status}` }
+                : item
+            )
+          );
+        } else {
+          setRagPendentes((prev) =>
+            prev.map((item) =>
+              ragFileKey(item.file) === ragFileKey(file)
+                ? { ...item, status: "concluido", mensagem: "Processado com sucesso." }
+                : item
+            )
+          );
+        }
+      } catch {
+        falhas.push(`${file.name}: falha de rede`);
+        setRagPendentes((prev) =>
+          prev.map((item) =>
+            ragFileKey(item.file) === ragFileKey(file)
+              ? { ...item, status: "erro", mensagem: "Falha de rede." }
+              : item
+          )
+        );
+      }
+      setRagUploadDone(i + 1);
+    }
+
+    if (falhas.length === 0) {
+      setRagPosCriacaoAviso("Documentos RAG processados com sucesso.");
+    } else {
+      setRagPosCriacaoAviso(
+        falhas.length === pendentesSnapshot.length
+          ? `Documentos RAG: nenhum foi processado com sucesso. ${falhas.join(" · ")}`
+          : `Documentos RAG: processamento parcial. ${falhas.join(" · ")}`
+      );
+    }
+    return falhas;
+  }
+
+  async function prepararEmbeddingsFila() {
+    if (ragPendentes.length === 0) {
+      setRagPendenteErro("Adicione pelo menos 1 documento na fila.");
+      return;
+    }
+    setRagPreparando(true);
+    setRagPendenteErro("");
+    setRagPosCriacaoAviso("");
+    try {
+      if (!agenteSlugCriado) {
+        if (!cargoSelecionado || !nome.trim()) {
+          setRagPendenteErro("Preencha cargo e nome antes de processar embeddings.");
+          return;
+        }
+        setRagPreparados(true);
+        // Cria o agente e indexa, mas mantém o utilizador no passo actual (Revisão/Ferramentas vêm a seguir).
+        await criarAgente({ avancarPasso: false });
+        return;
+      }
+      setRagPendentes((prev) =>
+        prev.map((item) => ({ ...item, status: "preparado", mensagem: "Pronto para upload." }))
+      );
+      setRagPreparados(true);
+      await processarFilaRagNoAgente(agenteSlugCriado);
+    } finally {
+      setRagPreparando(false);
+    }
+  }
 
   async function gerarPlaybookNoStorage() {
     if (!agenteSlugCriado) return;
@@ -531,10 +791,42 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     }
   }
 
-  async function criarAgente() {
+  /** Grava no servidor o que o utilizador escolheu no wizard (modo, ciclos, conhecimento, ferramentas). */
+  async function sincronizarWizardNoAgente(slug: string): Promise<boolean> {
+    const cicloExecucaoPadrao =
+      modoOperacao === "canal_whatsapp" ? "interacao" : modoExecucao;
+    const syncRes = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}`, {
+      method: "PATCH",
+      headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome,
+        prefixo_mercado: mercados.join(","),
+        personalidade: gerarPersonalidade(valores),
+        system_prompt_base: montarPrompt(conhecimento),
+        modo_operacao: modoOperacao,
+        ciclo_execucao_padrao: cicloExecucaoPadrao,
+        motor_ferramentas_habilitado: motorFerramentasHub,
+        mistral_agent_sync_habilitado: mistralProvisionar,
+        uso_ferramentas_ia: usoFerramentasIa,
+      }),
+    });
+    if (!syncRes.ok) {
+      const pe = (await syncRes.json().catch(() => ({}))) as { error?: string };
+      setErro(
+        pe.error ||
+          "Não foi possível gravar a configuração do agente. Tente de novo ou abra a ficha do agente."
+      );
+      return false;
+    }
+    return true;
+  }
+
+  async function criarAgente(opts?: { avancarPasso?: boolean }) {
+    const avancarPasso = opts?.avancarPasso ?? true;
     if (!cargoSelecionado) return;
     setCriando(true);
     setErro("");
+    setRagPosCriacaoAviso("");
     try {
       if (hubCicloEstrategia === "somente_vincular" && hubCiclosVincularIds.length === 0) {
         setErro("Selecione pelo menos um ciclo da Central para associar a este agente.");
@@ -598,6 +890,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         }
 
         if (slug) {
+          await processarFilaRagNoAgente(slug);
           const noServidor = mergeUsoFerramentasComPadraoPreservandoCustom(data.uso_ferramentas_ia);
           const noWizard = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentasIa);
           const chaves = new Set([...Object.keys(noServidor), ...Object.keys(noWizard)]);
@@ -611,22 +904,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           const motorDiferente = motorFerramentasHub !== (data.motor_ferramentas_habilitado === true);
           const mistralDiferente = mistralProvisionar !== (data.mistral_agent_sync_habilitado === true);
           if (usoDiferente || motorDiferente || mistralDiferente) {
-            const syncRes = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}`, {
-              method: "PATCH",
-              headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
-              body: JSON.stringify({
-                motor_ferramentas_habilitado: motorFerramentasHub,
-                mistral_agent_sync_habilitado: mistralProvisionar,
-                uso_ferramentas_ia: usoFerramentasIa,
-              }),
-            });
-            if (!syncRes.ok) {
-              const pe = (await syncRes.json().catch(() => ({}))) as { error?: string };
-              setErro(
-                pe.error ||
-                  "Agente criado, mas as ferramentas não ficaram gravadas. Abra a ficha e guarde o bloco Mistral manualmente."
-              );
-            }
+            await sincronizarWizardNoAgente(slug);
           }
         }
 
@@ -634,7 +912,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         setAgenteSlugCriado(slug ?? null);
         setShowConfirm(false);
         if (slug) {
-          setPasso(modoOperacao === "canal_whatsapp" ? 8 : 7);
+          if (avancarPasso) setPasso(7);
         } else setErro("Agente criado mas a API não devolveu o slug.");
       } else {
         const data = (await res.json().catch(() => ({}))) as { erro?: string; error?: string };
@@ -707,9 +985,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               Confirmar criação
             </h2>
             <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 20px", lineHeight: 1.5 }}>
-              Confirmar criação do agente <strong style={{ color: "#e6edf3" }}>{nome}</strong>? Depois pode gerar o
-              playbook no Storage (passo Materiais) e, se escolheu WhatsApp, configurar a instância UAZAPI — abrimos esse
-              passo logo após criar.
+              Confirmar criação do agente <strong style={{ color: "#e6edf3" }}>{nome}</strong>? Em seguida passará por
+              Materiais (playbook) e, se aplicável, Canal (WhatsApp UAZAPI).
             </p>
             {erro && <p style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}>{erro}</p>}
             <div style={{ display: "flex", gap: 10 }}>
@@ -732,7 +1009,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               </button>
               <button
                 type="button"
-                onClick={criarAgente}
+                onClick={() => void criarAgente({ avancarPasso: true })}
                 disabled={criando}
                 style={{
                   flex: 1,
@@ -1205,8 +1482,12 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Conhecimento
                 </h2>
                 <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
-                  Preencha as secções que desejar — o agente usará estas informações. A primeira aba é um
-                  esqueleto POP genérico (objetivo, triagem, escalação); adapte ao cargo, não só vendas.
+                  Preencha as secções que desejar — o agente usará estas informações. Os textos de exemplo
+                  são <strong style={{ color: "#adbac7" }}>estrutura guia</strong>, não conteúdo final:
+                  use o <strong style={{ color: "#adbac7" }}>cargo</strong> que escolheu (título, nível,
+                  especialidade) e preencha por cima. &quot;Gerar com IA&quot; também ancora no cargo em
+                  JSON. Opcionalmente, anexe até {RAG_DOCS_LIMIT} documentos abaixo para RAG (processados ao
+                  clicar em «Criar agente» no passo Ferramentas).
                 </p>
               </div>
 
@@ -1309,6 +1590,20 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         : "✨ Gerar com IA"}
                     </button>
                   </div>
+                  {s.id === "fluxo_sdr" && (
+                    <p
+                      style={{
+                        color: "#8b949e",
+                        fontSize: 12,
+                        margin: "0 0 8px",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <strong style={{ color: "#adbac7" }}>Adaptar ao cargo:</strong> cada bloco abaixo é
+                      só guia de estrutura. Substitua por regras reais do papel (suporte, operações,
+                      comercial, etc.) — não deixe texto que serviria para qualquer função.
+                    </p>
+                  )}
                   {erroIaConhecimento && abaConhecimento === s.id && (
                     <p style={{ color: "#f85149", fontSize: 12, margin: "0 0 8px" }}>{erroIaConhecimento}</p>
                   )}
@@ -1333,6 +1628,268 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   />
                 </div>
               ))}
+
+              <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
+                      Documentos para RAG (embeddings)
+                    </p>
+                    <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 12px", lineHeight: 1.55 }}>
+                      Até <strong style={{ color: "#adbac7" }}>{RAG_DOCS_LIMIT} ficheiros</strong>. Primeiro ficam só
+                      no navegador; o envio ao servidor exige um agente criado. Pode indexar já com{" "}
+                      <strong style={{ color: "#adbac7" }}>Processar embeddings</strong> (cria o agente se ainda não
+                      existir, sem saltar etapas) ou deixar na fila e concluir no passo{" "}
+                      <strong style={{ color: "#adbac7" }}>Ferramentas</strong>. Formatos:{" "}
+                      <strong style={{ color: "#adbac7" }}>{RAG_FORMATOS_RESUMO}</strong>.
+                    </p>
+                  </div>
+                  <span
+                    style={{
+                      color: ragPendentes.length >= RAG_DOCS_LIMIT ? "#f0b429" : "#8b949e",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {ragPendentes.length}/{RAG_DOCS_LIMIT}
+                  </span>
+                </div>
+
+                <label
+                  style={{
+                    display: "block",
+                    border: "1px dashed #3d444d",
+                    borderRadius: 10,
+                    padding: "14px 12px",
+                    cursor: ragPendentes.length >= RAG_DOCS_LIMIT ? "not-allowed" : "pointer",
+                    color: ragPendentes.length >= RAG_DOCS_LIMIT ? "#6e7781" : "#58a6ff",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    textAlign: "center",
+                    background: "#0d1117",
+                    opacity: ragPendentes.length >= RAG_DOCS_LIMIT ? 0.7 : 1,
+                  }}
+                >
+                  {ragPendentes.length >= RAG_DOCS_LIMIT
+                    ? "Limite de documentos atingido"
+                    : "Adicionar documento à fila"}
+                  <input
+                    type="file"
+                    accept={RAG_ACCEPT_ATTR}
+                    disabled={ragPendentes.length >= RAG_DOCS_LIMIT}
+                    onChange={(e) => {
+                      const file = e.currentTarget.files?.[0] ?? null;
+                      e.currentTarget.value = "";
+                      adicionarRagPendente(file);
+                    }}
+                    style={{ display: "none" }}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => void prepararEmbeddingsFila()}
+                  disabled={ragPreparando || ragPendentes.length === 0}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    border: "1px solid #30363d",
+                    background: ragPreparando ? "#21262d" : "#0b5ed722",
+                    color: ragPreparando ? "#8b949e" : "#58a6ff",
+                    cursor: ragPreparando || ragPendentes.length === 0 ? "not-allowed" : "pointer",
+                    opacity: ragPreparando || ragPendentes.length === 0 ? 0.7 : 1,
+                  }}
+                >
+                  {ragPreparando
+                    ? "A enviar e indexar..."
+                    : ragPreparados
+                      ? "Reprocessar embeddings"
+                      : "Processar embeddings agora"}
+                </button>
+
+                {ragPendenteErro ? (
+                  <p style={{ color: "#f85149", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>{ragPendenteErro}</p>
+                ) : null}
+                <RagErroAjuda mensagem={ragPendenteErro} />
+
+                {agenteSlugCriado ? (
+                  <p
+                    style={{
+                      color: "#3fb950",
+                      fontSize: 12,
+                      margin: "10px 0 0",
+                      lineHeight: 1.5,
+                      background: "rgba(63,185,80,0.08)",
+                      border: "1px solid rgba(63,185,80,0.35)",
+                      borderRadius: 8,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    Agente <strong style={{ color: "#e6edf3" }}>{agenteSlugCriado}</strong> criado. Use{" "}
+                    <strong style={{ color: "#e6edf3" }}>Próximo</strong> para Revisão → Ferramentas → Materiais → Canal.
+                  </p>
+                ) : null}
+
+                {ragPendentes.length > 0 ? (
+                  <div style={{ marginTop: 10 }}>
+                    <div
+                      style={{
+                        width: "100%",
+                        height: 8,
+                        borderRadius: 999,
+                        background: "#21262d",
+                        border: "1px solid #30363d",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width:
+                            ragUploadTotal > 0
+                              ? `${Math.min(100, Math.round((ragUploadDone / Math.max(1, ragUploadTotal)) * 100))}%`
+                              : ragPreparados
+                                ? "35%"
+                                : "0%",
+                          height: "100%",
+                          background:
+                            ragUploadTotal > 0
+                              ? "linear-gradient(90deg, #238636 0%, #3fb950 100%)"
+                              : "linear-gradient(90deg, #1f6feb 0%, #58a6ff 100%)",
+                          transition: "width 180ms ease",
+                        }}
+                      />
+                    </div>
+                    <p style={{ color: "#8b949e", fontSize: 11, margin: "6px 0 0" }}>
+                      {ragUploadTotal > 0
+                        ? `Progresso do processamento: ${ragUploadDone}/${ragUploadTotal}`
+                        : ragPendentes.some((i) => i.status === "concluido")
+                          ? "Documentos indexados no servidor."
+                          : ragPendentes.every((i) => i.status === "na_fila")
+                            ? "Na fila local — clique em «Processar embeddings agora» ou conclua com «Criar agente»."
+                            : "Aguardando processamento."}
+                    </p>
+                  </div>
+                ) : null}
+
+                {ragPendentes.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+                    {ragPendentes.map((item, idx) => (
+                      <div
+                        key={ragFileKey(item.file)}
+                        style={{
+                          border: "1px solid #30363d",
+                          borderRadius: 12,
+                          padding: 12,
+                          background: "#0d1117",
+                          display: "grid",
+                          gridTemplateColumns: "44px 1fr auto",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 10,
+                            background: "#21262d",
+                            border: "1px solid #30363d",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#8b949e",
+                            fontSize: 10,
+                            fontWeight: 900,
+                          }}
+                        >
+                          {ragDocExt(item.file.name)}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <p
+                            style={{
+                              color: "#e6edf3",
+                              fontSize: 13,
+                              fontWeight: 800,
+                              margin: "0 0 4px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={item.file.name}
+                          >
+                            {item.file.name}
+                          </p>
+                          <p style={{ color: "#8b949e", fontSize: 11, margin: 0, lineHeight: 1.45 }}>
+                            {formatBytes(item.file.size)} ·{" "}
+                            <span
+                              style={{
+                                color:
+                                  item.status === "concluido"
+                                    ? "#3fb950"
+                                    : item.status === "erro"
+                                      ? "#f85149"
+                                      : item.status === "processando"
+                                        ? "#58a6ff"
+                                        : item.status === "preparado"
+                                          ? "#c9a24a"
+                                          : "#8b949e",
+                              }}
+                            >
+                              {item.status === "concluido"
+                                ? "CONCLUÍDO"
+                                : item.status === "erro"
+                                  ? "ERRO"
+                                  : item.status === "processando"
+                                    ? "PROCESSANDO"
+                                    : item.status === "preparado"
+                                      ? "PREPARADO"
+                                      : "NA FILA"}
+                            </span>
+                            {item.status === "na_fila"
+                              ? " — ainda só no navegador"
+                              : item.status === "preparado"
+                                ? " — pronto para envio"
+                                : ""}
+                          </p>
+                          {item.mensagem ? (
+                            <p style={{ color: "#8b949e", fontSize: 11, margin: "4px 0 0", lineHeight: 1.4 }}>
+                              {item.mensagem}
+                            </p>
+                          ) : null}
+                          {item.status === "erro" && item.mensagem ? (
+                            <RagErroAjuda mensagem={item.mensagem} />
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removerRagPendentePorIndice(idx)}
+                          style={{
+                            border: "1px solid #30363d",
+                            background: "transparent",
+                            color: "#f85149",
+                            borderRadius: 8,
+                            padding: "6px 10px",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ color: "#6e7781", fontSize: 12, margin: "12px 0 0" }}>
+                    Nenhum documento na fila. Isto é opcional — o conhecimento por secções acima continua a valer.
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -1380,10 +1937,29 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 </p>
               )}
 
+              {agenteSlugCriado ? (
+                <p style={{ color: "#3fb950", fontSize: 12, margin: "0 0 10px", lineHeight: 1.5 }}>
+                  Agente <strong style={{ color: "#e6edf3" }}>{agenteSlugCriado}</strong> já foi criado (ex.: ao
+                  processar documentos RAG). Grave as ferramentas abaixo e continue para Materiais e Canal.
+                </p>
+              ) : null}
+
               <button
                 type="button"
-                onClick={() => setShowConfirm(true)}
-                disabled={!cargoSelecionado || !nome.trim()}
+                onClick={() => {
+                  if (agenteSlugCriado) {
+                    void (async () => {
+                      setCriando(true);
+                      setErro("");
+                      const ok = await sincronizarWizardNoAgente(agenteSlugCriado);
+                      setCriando(false);
+                      if (ok) setPasso(7);
+                    })();
+                    return;
+                  }
+                  setShowConfirm(true);
+                }}
+                disabled={!cargoSelecionado || !nome.trim() || criando}
                 style={{
                   padding: "14px 0",
                   borderRadius: 10,
@@ -1392,11 +1968,15 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   background: "#003b26",
                   border: "none",
                   color: "#c9a24a",
-                  cursor: !cargoSelecionado || !nome.trim() ? "not-allowed" : "pointer",
-                  opacity: !cargoSelecionado || !nome.trim() ? 0.4 : 1,
+                  cursor: !cargoSelecionado || !nome.trim() || criando ? "not-allowed" : "pointer",
+                  opacity: !cargoSelecionado || !nome.trim() || criando ? 0.4 : 1,
                 }}
               >
-                Criar agente
+                {criando
+                  ? "A gravar…"
+                  : agenteSlugCriado
+                    ? "Continuar → Materiais"
+                    : "Criar agente"}
               </button>
             </div>
           )}
@@ -1411,6 +1991,19 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Confira identidade, conhecimento e como o copiloto opera (canal e ciclos). Depois configure as ferramentas
                   e crie o agente.
                 </p>
+                {ragPendentes.some((i) => i.status === "na_fila" || i.status === "preparado") ? (
+                  <p style={{ color: "#c9a24a", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
+                    Documentos RAG pendentes:{" "}
+                    <strong style={{ color: "#e6edf3" }}>
+                      {ragPendentes.filter((i) => i.status !== "concluido").length}
+                    </strong>{" "}
+                    (serão indexados ao confirmar a criação do agente, se ainda não processou no passo Conhecimento).
+                  </p>
+                ) : ragPendentes.some((i) => i.status === "concluido") ? (
+                  <p style={{ color: "#3fb950", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
+                    Documentos RAG já indexados nesta sessão.
+                  </p>
+                ) : null}
               </div>
 
               {cargoSelecionado && (
@@ -2042,6 +2635,26 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               >
                 {playbookGerando ? "A gerar playbook…" : "Gerar playbook no Storage"}
               </button>
+
+              {ragPosCriacaoAviso ? (
+                <div>
+                  <p
+                    style={{
+                      color: "#f0b429",
+                      fontSize: 12,
+                      margin: 0,
+                      lineHeight: 1.55,
+                      background: "rgba(240,180,41,0.1)",
+                      border: "1px solid rgba(240,180,41,0.35)",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                    }}
+                  >
+                    {ragPosCriacaoAviso}
+                  </p>
+                  <RagErroAjuda mensagem={ragPosCriacaoAviso} />
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -2057,6 +2670,26 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     : "Este agente está em modo copiloto interno (jobs por ciclo). Não há WhatsApp neste fluxo — pode concluir e gerir ciclos na Central ou na ficha do agente."}
                 </p>
               </div>
+
+              {ragPosCriacaoAviso ? (
+                <div>
+                  <p
+                    style={{
+                      color: "#f0b429",
+                      fontSize: 12,
+                      margin: 0,
+                      lineHeight: 1.55,
+                      background: "rgba(240,180,41,0.1)",
+                      border: "1px solid rgba(240,180,41,0.35)",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                    }}
+                  >
+                    {ragPosCriacaoAviso}
+                  </p>
+                  <RagErroAjuda mensagem={ragPosCriacaoAviso} />
+                </div>
+              ) : null}
 
               {modoOperacao === "canal_whatsapp" && hubCicloEstrategia === "somente_vincular" ? (
                 <div
@@ -2079,18 +2712,26 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               ) : null}
 
               {modoOperacao === "canal_whatsapp" ? (
-                <AgenteUazapiBlock
-                  agenteSlug={agenteSlugCriado}
-                  snapshot={
-                    uazapiSnap ?? {
-                      uazapi_instance_id: null,
-                      uazapi_instance_name: null,
-                      uazapi_connection_status: null,
-                      uazapi_has_instance_token: false,
+                <>
+                  {syncCanalLoading ? (
+                    <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 10px", lineHeight: 1.5 }}>
+                      A gravar modo WhatsApp e configuração no agente…
+                    </p>
+                  ) : null}
+                  <AgenteUazapiBlock
+                    agenteSlug={agenteSlugCriado}
+                    bloqueado={syncCanalLoading}
+                    snapshot={
+                      uazapiSnap ?? {
+                        uazapi_instance_id: null,
+                        uazapi_instance_name: null,
+                        uazapi_connection_status: null,
+                        uazapi_has_instance_token: false,
+                      }
                     }
-                  }
-                  onRefresh={() => refreshSnapshotUazapi()}
-                />
+                    onRefresh={() => refreshSnapshotUazapi()}
+                  />
+                </>
               ) : (
                 <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
                   <p style={{ color: "#8b949e", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
@@ -2103,7 +2744,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           )}
 
           <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
-            {passo > 1 && !(agenteSlugCriado && passo === 7) && (
+            {passo > 1 && (
               <button
                 type="button"
                 onClick={() => setPasso((p) => p - 1)}

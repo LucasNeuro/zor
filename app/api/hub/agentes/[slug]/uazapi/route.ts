@@ -15,11 +15,15 @@ function jsonErroUazapi(out: {
   error: string;
   data: unknown;
   request?: { origin: string; pathname: string };
+  uazapi_connection_status?: string;
+  uazapi_auth_failed?: boolean;
 }) {
   return {
     error: out.error,
     uazapi: out.data,
     ...(out.request ? { uazapi_request: out.request } : {}),
+    ...(out.uazapi_connection_status ? { uazapi_connection_status: out.uazapi_connection_status } : {}),
+    ...(out.uazapi_auth_failed ? { uazapi_auth_failed: true } : {}),
   };
 }
 
@@ -126,8 +130,62 @@ export async function POST(
   };
 
   async function persistUazapi(patch: Record<string, unknown>) {
-    const { error } = await supabase.from("hub_agente_identidade").update(patch).eq("agente_slug", slug);
+    const full = { ...patch, uazapi_snapshot_at: new Date().toISOString() };
+    let { error } = await supabase.from("hub_agente_identidade").update(full).eq("agente_slug", slug);
+    if (error?.message?.includes("uazapi_snapshot_at")) {
+      ({ error } = await supabase.from("hub_agente_identidade").update(patch).eq("agente_slug", slug));
+    }
     if (error) throw new Error(error.message);
+  }
+
+  type UazapiErrOut = {
+    ok: false;
+    status: number;
+    data: unknown;
+    error: string;
+    request?: { origin: string; pathname: string };
+  };
+
+  function uazapiAuthFalhou(out: UazapiErrOut): boolean {
+    if (out.status === 401 || out.status === 403) return true;
+    const payloadTxt =
+      typeof out.data === "string"
+        ? out.data
+        : out.data && typeof out.data === "object"
+          ? JSON.stringify(out.data)
+          : "";
+    const msg = `${out.error} ${payloadTxt}`.toLowerCase();
+    return (
+      msg.includes("invalid token") ||
+      msg.includes("token invalid") ||
+      msg.includes("unauthorized") ||
+      msg.includes("forbidden") ||
+      msg.includes("not authorized")
+    );
+  }
+
+  async function responderErroUazapi(action: string, out: UazapiErrOut) {
+    let hintedStatus: string | undefined;
+    const authFailed = uazapiAuthFalhou(out);
+    if (
+      authFailed &&
+      (action === "status" || action === "connect" || action === "disconnect" || action === "delete_remote")
+    ) {
+      hintedStatus = "disconnected";
+      try {
+        await persistUazapi({ uazapi_connection_status: "disconnected" });
+      } catch {
+        // mantém retorno de erro original mesmo se falhar persistência local
+      }
+    }
+    return NextResponse.json(
+      jsonErroUazapi({
+        ...out,
+        ...(hintedStatus ? { uazapi_connection_status: hintedStatus } : {}),
+        ...(authFailed ? { uazapi_auth_failed: true } : {}),
+      }),
+      { status: 502 }
+    );
   }
 
   try {
@@ -153,7 +211,7 @@ export async function POST(
       });
 
       if (!out.ok) {
-        return NextResponse.json(jsonErroUazapi(out), { status: 502 });
+        return responderErroUazapi(action, out);
       }
 
       const data = out.data as Record<string, unknown>;
@@ -211,7 +269,7 @@ export async function POST(
       });
 
       if (!out.ok) {
-        return NextResponse.json(jsonErroUazapi(out), { status: 502 });
+        return responderErroUazapi(action, out);
       }
 
       const st = statusFromPayloadUazapi(out.data);
@@ -240,7 +298,7 @@ export async function POST(
       });
 
       if (!out.ok) {
-        return NextResponse.json(jsonErroUazapi(out), { status: 502 });
+        return responderErroUazapi(action, out);
       }
 
       const st = statusFromPayloadUazapi(out.data);
@@ -267,7 +325,7 @@ export async function POST(
       });
 
       if (!out.ok) {
-        return NextResponse.json(jsonErroUazapi(out), { status: 502 });
+        return responderErroUazapi(action, out);
       }
 
       const st = statusFromPayloadUazapi(out.data);
@@ -283,7 +341,7 @@ export async function POST(
       });
 
       if (!out.ok) {
-        return NextResponse.json(jsonErroUazapi(out), { status: 502 });
+        return responderErroUazapi(action, out);
       }
 
       await persistUazapi({

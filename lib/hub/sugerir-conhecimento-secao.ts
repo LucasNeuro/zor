@@ -24,19 +24,19 @@ const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
 
 const INSTRUCAO_POR_SECAO: Record<SecaoConhecimentoId, string> = {
   fluxo_sdr:
-    "Gere o bloco **Núcleo operacional (POP)** alinhado ao **cargo e segmento** do JSON (não assumir vendas nem SDR: pode ser suporte, operações, onboarding, comercial, etc.). Incluir: (1) objetivo em 2–4 linhas; (2) escopo em lista; (3) triagem ou classificação (tabela Markdown `| Tipo | Quando |`, 3–6 linhas); (4) perguntas ou dados obrigatórios numerados; (5) critérios de prioridade ou quando encerrar vs encaminhar; (6) próximos passos / SLAs se fizer sentido; (7) escalação humana. Use vocabulário adequado ao cargo. Sem emojis. Tom operacional.",
+    "POP/núcleo operacional: objetivo (2–4 linhas), escopo em lista, triagem (`| Tipo | Quando |`, 3–6 linhas), dados obrigatórios numerados, critérios encerrar/encaminhar, próximos passos/SLA se couber, escalação humana. Não presumir só vendas/SDR. Sem emojis.",
   empresa:
-    "Gere o bloco **Sobre o negócio**: quem somos, missão, diferenciais, proposta de valor, histórico resumido. Use `##` para subtítulos curtos. Tom profissional em português (Brasil).",
+    "Sobre o negócio: quem somos, missão, diferenciais, valor. Subtítulos `##`, português (Brasil) profissional.",
   servicos:
-    "Gere o bloco **Serviços**: lista clara do que a empresa oferece, para quem, entregáveis típicos. Se não souber detalhes, use marcadores genéricos alinhados ao cargo e sugira `[completar com oferta real]`. Markdown com `##` e listas.",
+    "Serviços: oferta, para quem, entregáveis; onde faltar detalhe use `[completar]` alinhado ao cargo. `##` + listas.",
   atendimento:
-    "Gere o bloco **Como atender**: fluxo de primeiro contacto, perguntas a fazer, como qualificar, quando escalar para humano, SLA sugeridamente razoável. Alinhado ao cargo (ex.: SDR vs suporte). Markdown.",
+    "Como atender: primeiro contacto, perguntas, qualificação, escalação, SLA razoável. Markdown.",
   proibicoes:
-    "Gere o bloco **Nunca fazer**: proibições claras (promessas, preços sem validação, dados pessoais, concorrentes, etc.). Lista objetiva; adequar ao risco do cargo.",
+    "Nunca fazer: lista objetiva (promessas, dados, preços sem validação, etc.), adequada ao risco do cargo.",
   objeccoes:
-    "Gere o bloco **Objeções comuns**: 5–8 objeções típicas e respostas curtas de exemplo, em tom do cargo.",
+    "Objeções comuns: 5–8 pares (objeção + resposta curta) no tom do cargo.",
   exemplos:
-    "Gere o bloco **Exemplos de atendimento**: 2–4 diálogos curtos (cliente + agente) ou mensagens modelo em Markdown; realistas para o segmento e cargo.",
+    "Exemplos: 2–4 diálogos ou mensagens modelo, realistas para segmento e cargo.",
 };
 
 function unwrapMarkdownFences(s: string): string {
@@ -97,6 +97,8 @@ ${cargoJson}
 ## Tarefa
 ${instrucaoSecao}
 ${refinamento}
+
+**Âncora do cargo (obrigatório):** Sempre que fizer sentido, **usa literalmente** do JSON acima os valores de \`titulo\`, \`nivel\`, \`especialidade\` e \`segmento\` (e \`descricao_curta\` / \`descricao\` quando úteis) — nomeia o papel e o contexto; evita texto genérico que poderia servir a qualquer função. O conteúdo final vem desse cargo, não de um molde fixo.
 
 **Regras:** Saída só em português (Brasil). Não invente CNPJ, jurisdição nem preços fixos; use placeholders quando necessário. Não mencione que é IA. Sem preâmbulo nem fecho meta — apenas o conteúdo da secção.`;
 }

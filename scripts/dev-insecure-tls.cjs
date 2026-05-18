@@ -13,7 +13,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 const { spawn } = require("child_process");
 const child = spawn(
   process.execPath,
-  [require.resolve("next/dist/bin/next"), "dev", "-p", process.env.PORT || "3001"],
+  [require.resolve("next/dist/bin/next"), "dev", "--webpack", "-p", process.env.PORT || "3001"],
   { stdio: "inherit", env: process.env, cwd: require("path").join(__dirname, "..") }
 );
 child.on("exit", (code) => process.exit(code ?? 0));

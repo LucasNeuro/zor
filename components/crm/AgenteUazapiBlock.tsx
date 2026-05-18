@@ -26,6 +26,8 @@ export type AgenteUazapiBlockProps = {
   agenteSlug: string;
   snapshot: AgenteUazapiSnapshot;
   onRefresh: () => Promise<void> | void;
+  /** Enquanto o wizard grava modo_operacao no servidor (evita 409 na criação). */
+  bloqueado?: boolean;
 };
 
 function badgeCor(status?: string | null): { bg: string; fg: string; bar: string } {
@@ -36,6 +38,26 @@ function badgeCor(status?: string | null): { bg: string; fg: string; bar: string
 }
 
 type ErroCtx = { titulo: string; detalhes: string[] };
+type VerificacaoTempoReal = {
+  status: "connected" | "connecting" | "disconnected";
+  fonte: "uazapi" | "erro";
+  authFailed?: boolean;
+};
+
+function formatarDataHoraPtBr(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
 
 function montarErroDoCorpo(data: Record<string, unknown>, status: number): ErroCtx {
   const titulo =
@@ -73,21 +95,35 @@ async function lerCorpoApi(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
-export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUazapiBlockProps) {
+export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado = false }: AgenteUazapiBlockProps) {
   const [phonePair, setPhonePair] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [err, setErr] = useState<ErroCtx | null>(null);
   const [qrcode, setQrcode] = useState<string | null>(null);
   const [paircode, setPaircode] = useState<string | null>(null);
+  const [statusTempoReal, setStatusTempoReal] = useState<VerificacaoTempoReal | null>(null);
+  const [ultimaVerificacaoAt, setUltimaVerificacaoAt] = useState<string | null>(null);
+  const [ultimaVerificacaoResultado, setUltimaVerificacaoResultado] = useState<"sucesso" | "erro" | null>(null);
 
-  const status = snapshot.uazapi_connection_status || "—";
+  const statusExibido = statusTempoReal?.status ?? snapshot.uazapi_connection_status ?? "—";
   const temInstancia = Boolean(snapshot.uazapi_instance_id?.trim());
-  const badge = badgeCor(snapshot.uazapi_connection_status);
+  const badge = badgeCor(statusExibido);
+  const acoesOff = loading !== null || bloqueado;
 
   const rotuloEstado = useMemo(() => {
-    if (temInstancia) return String(status).toUpperCase();
+    if (statusTempoReal?.authFailed) return "TOKEN INVÁLIDO";
+    if (temInstancia) return String(statusExibido).toUpperCase();
     return "SEM INSTÂNCIA";
-  }, [temInstancia, status]);
+  }, [temInstancia, statusExibido, statusTempoReal]);
+
+  useEffect(() => {
+    setStatusTempoReal(null);
+    setUltimaVerificacaoAt(null);
+    setUltimaVerificacaoResultado(null);
+  }, [snapshot.uazapi_instance_id, snapshot.uazapi_connection_status]);
+
+  const onRefreshRef = useRef(onRefresh);
+  onRefreshRef.current = onRefresh;
 
   const postAction = useCallback(
     async (
@@ -107,6 +143,24 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
         });
         const data = await lerCorpoApi(res);
         if (!res.ok) {
+          setUltimaVerificacaoAt(new Date().toISOString());
+          setUltimaVerificacaoResultado("erro");
+          const hintedStatus =
+            typeof data.uazapi_connection_status === "string" ? data.uazapi_connection_status.toLowerCase() : "";
+          const hintedStatusNorm =
+            hintedStatus === "connected" || hintedStatus === "connecting" || hintedStatus === "disconnected"
+              ? hintedStatus
+              : null;
+          const authFailed = data.uazapi_auth_failed === true;
+          if (hintedStatusNorm) {
+            setStatusTempoReal({
+              status: hintedStatusNorm,
+              fonte: "erro",
+              ...(authFailed ? { authFailed: true } : {}),
+            });
+          } else if (authFailed && temInstancia) {
+            setStatusTempoReal({ status: "disconnected", fonte: "erro", authFailed: true });
+          }
           if (!opts?.silent) {
             setErr(montarErroDoCorpo(data, res.status));
             if (action === "connect" || action === "status") {
@@ -134,7 +188,26 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
           setQrcode(null);
           setPaircode(null);
         }
-        await onRefresh();
+        const nextStatusRaw =
+          typeof data.uazapi_connection_status === "string" ? data.uazapi_connection_status.toLowerCase() : "";
+        if (
+          nextStatusRaw === "connected" ||
+          nextStatusRaw === "connecting" ||
+          nextStatusRaw === "disconnected"
+        ) {
+          setStatusTempoReal({ status: nextStatusRaw, fonte: "uazapi" });
+        } else {
+          setStatusTempoReal(null);
+        }
+        setUltimaVerificacaoAt(new Date().toISOString());
+        setUltimaVerificacaoResultado("sucesso");
+        const prevStatus = (snapshot.uazapi_connection_status || "").toLowerCase();
+        const deveSincronizarPai =
+          !opts?.silent ||
+          (nextStatusRaw === "connected" && prevStatus !== "connected");
+        if (deveSincronizarPai) {
+          await onRefreshRef.current();
+        }
         return data;
       } catch {
         if (!opts?.silent) {
@@ -148,8 +221,11 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
         if (!opts?.silent) setLoading(null);
       }
     },
-    [agenteSlug, onRefresh]
+    [agenteSlug, snapshot.uazapi_connection_status, temInstancia]
   );
+
+  const postActionRef = useRef(postAction);
+  postActionRef.current = postAction;
 
   const syncPollRef = useRef(0);
   useEffect(() => {
@@ -157,7 +233,7 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
     const s = (snapshot.uazapi_connection_status || "").toLowerCase();
     if (s === "connected") return;
 
-    void postAction("status", undefined, { silent: true });
+    void postActionRef.current("status", undefined, { silent: true });
 
     if (s !== "connecting") return;
 
@@ -165,14 +241,14 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
     const gen = syncPollRef.current;
     const id = window.setInterval(() => {
       if (gen !== syncPollRef.current) return;
-      void postAction("status", undefined, { silent: true });
+      void postActionRef.current("status", undefined, { silent: true });
     }, 6000);
 
     return () => {
       syncPollRef.current += 1;
       window.clearInterval(id);
     };
-  }, [temInstancia, snapshot.uazapi_instance_id, snapshot.uazapi_connection_status, postAction]);
+  }, [temInstancia, snapshot.uazapi_instance_id, snapshot.uazapi_connection_status]);
 
   const btnBase = (disabled: boolean, primario?: boolean): CSSProperties =>
     ({
@@ -301,6 +377,26 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
                 >
                   {rotuloEstado}
                 </span>
+                {ultimaVerificacaoAt ? (
+                  <span
+                    title={`Última verificação em tempo real: ${formatarDataHoraPtBr(ultimaVerificacaoAt)}`}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 999,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: 0.03,
+                      border: `1px solid ${
+                        ultimaVerificacaoResultado === "erro" ? "#f8514955" : "#1f6feb55"
+                      }`,
+                      background: ultimaVerificacaoResultado === "erro" ? "#f8514914" : "#1f6feb1a",
+                      color: ultimaVerificacaoResultado === "erro" ? "#ff7b72" : "#79c0ff",
+                    }}
+                  >
+                    {ultimaVerificacaoResultado === "erro" ? "Últ. verificação: erro" : "Últ. verificação: ok"} ·{" "}
+                    {formatarDataHoraPtBr(ultimaVerificacaoAt)}
+                  </span>
+                ) : null}
                 {temInstancia ? (
                   <div style={{ fontSize: 12, color: "#8b949e" }}>
                     <span style={{ display: "block", fontWeight: 600, color: "#aebccf", marginBottom: 2 }}>Instância</span>
@@ -378,8 +474,8 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
             >
               <button
                 type="button"
-                disabled={loading !== null || temInstancia}
-                style={btnBase(loading !== null || temInstancia, true)}
+                disabled={acoesOff || temInstancia}
+                style={btnBase(acoesOff || temInstancia, true)}
                 onClick={() => postAction("create")}
               >
                 {loading === "create" ? <Loader2 size={15} className="animate-spin" /> : <Smartphone size={15} />}
@@ -388,8 +484,8 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
 
               <button
                 type="button"
-                disabled={loading !== null || !temInstancia}
-                style={btnBase(loading !== null || !temInstancia)}
+                disabled={acoesOff || !temInstancia}
+                style={btnBase(acoesOff || !temInstancia)}
                 onClick={() => postAction("connect", phonePair.trim().length >= 10 ? { phone: phonePair } : {})}
               >
                 {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
@@ -408,8 +504,8 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
 
               <button
                 type="button"
-                disabled={loading !== null || !temInstancia}
-                style={btnBase(loading !== null || !temInstancia)}
+                disabled={acoesOff || !temInstancia}
+                style={btnBase(acoesOff || !temInstancia)}
                 onClick={() => postAction("disconnect")}
               >
                 {loading === "disconnect" ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}
@@ -418,11 +514,11 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh }: AgenteUaz
 
               <button
                 type="button"
-                disabled={loading !== null || !temInstancia}
+                disabled={acoesOff || !temInstancia}
                 style={{
-                  ...btnBase(loading !== null || !temInstancia),
+                  ...btnBase(acoesOff || !temInstancia),
                   borderColor: "#f8514966",
-                  color: loading !== null || !temInstancia ? "#484f58" : "#f85149",
+                  color: acoesOff || !temInstancia ? "#484f58" : "#f85149",
                   gridColumn: "1 / -1",
                 }}
                 onClick={() => {

@@ -78,6 +78,11 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
       subtitle: "Orquestração de fluxos internos com modelos IA, playbooks e ciclos",
     },
     ciclos: { title: "Central de Ciclos IA" },
+    canais: {
+      title: "Canais WhatsApp",
+      subtitle: "Instâncias UAZAPI conectadas aos agentes — operação e status",
+    },
+    ferramentas: { title: "Ferramentas IA", subtitle: "Catálogo e uso por modelo" },
     contatos: {
       title: "Contatos de Notificação",
       subtitle: "Quem recebe alertas de novos leads e aprovações",

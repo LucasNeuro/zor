@@ -22,6 +22,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { slugifyCargoSlug } from "@/lib/hub/cargo-slug";
 import {
@@ -404,6 +405,11 @@ export function CrmCargosCatalogDrawer({
   const [erro, setErro] = useState<string | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  type ConfirmExclusaoCargo =
+    | null
+    | { kind: "one"; slug: string; rotulo: string }
+    | { kind: "batch"; slugs: string[] };
+  const [confirmExclusaoCargo, setConfirmExclusaoCargo] = useState<ConfirmExclusaoCargo>(null);
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [sugerindo, setSugerindo] = useState(false);
   const [iaProgressPct, setIaProgressPct] = useState(0);
@@ -500,13 +506,6 @@ export function CrmCargosCatalogDrawer({
 
   async function eliminarPorSlug(slug: string, tituloOuSlugParaMsg: string) {
     const rotulo = tituloOuSlugParaMsg.trim() || slug;
-    if (
-      !window.confirm(
-        `Eliminar definitivamente o cargo «${rotulo}» (@${slug}) do catálogo?\n\nSe existirem agentes com este título, a operação será bloqueada.`
-      )
-    ) {
-      return;
-    }
     setBusySlug(slug);
     setErro(null);
     try {
@@ -535,18 +534,8 @@ export function CrmCargosCatalogDrawer({
     }
   }
 
-  async function eliminarSeleccionados() {
-    const slugs = [...selectedSlugs];
+  async function eliminarSeleccionados(slugs: string[]) {
     if (slugs.length === 0) return;
-    const amostra = slugs.slice(0, 10).join(", ");
-    const extra = slugs.length > 10 ? ` … (+${slugs.length - 10})` : "";
-    if (
-      !window.confirm(
-        `Eliminar ${slugs.length} cargo(s) do catálogo?\n\n${amostra}${extra}\n\nLinhas em uso por agentes não serão apagadas e aparecerão no relatório de erros.`
-      )
-    ) {
-      return;
-    }
     setBulkDeleting(true);
     setErro(null);
     try {
@@ -761,9 +750,13 @@ export function CrmCargosCatalogDrawer({
     }
   }
 
-  async function eliminar() {
+  function eliminar() {
     if (!focusSlug || criando) return;
-    await eliminarPorSlug(focusSlug, form.titulo.trim() || focusSlug);
+    setConfirmExclusaoCargo({
+      kind: "one",
+      slug: focusSlug,
+      rotulo: form.titulo.trim() || focusSlug,
+    });
   }
 
   async function sugerirComMistral() {
@@ -1038,7 +1031,11 @@ export function CrmCargosCatalogDrawer({
                       <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
                         <button
                           type="button"
-                          onClick={() => void eliminarSeleccionados()}
+                          onClick={() => {
+                            const slugs = [...selectedSlugs];
+                            if (slugs.length === 0) return;
+                            setConfirmExclusaoCargo({ kind: "batch", slugs });
+                          }}
                           disabled={painelBusy || selectedSlugs.size === 0}
                           title={
                             selectedSlugs.size > 0
@@ -1427,7 +1424,13 @@ export function CrmCargosCatalogDrawer({
                                 type="button"
                                 title={`Eliminar «${String(cargo.titulo || slug)}»`}
                                 aria-label={`Eliminar cargo ${slug}`}
-                                onClick={() => void eliminarPorSlug(slug, String(cargo.titulo || slug))}
+                                onClick={() =>
+                                  setConfirmExclusaoCargo({
+                                    kind: "one",
+                                    slug,
+                                    rotulo: String(cargo.titulo || slug),
+                                  })
+                                }
                                 disabled={painelBusy || bulkLoading || busySlug === slug || sugerindo}
                                 style={{
                                   display: "inline-flex",
@@ -1805,7 +1808,7 @@ export function CrmCargosCatalogDrawer({
                   {!criando && focusSlug ? (
                     <button
                       type="button"
-                      onClick={() => void eliminar()}
+                      onClick={eliminar}
                       disabled={painelBusy}
                       style={{
                         display: "inline-flex",
@@ -1831,6 +1834,77 @@ export function CrmCargosCatalogDrawer({
           </div>
         </div>
       </aside>
+
+      <CrmConfirmDialog
+        open={confirmExclusaoCargo?.kind === "one"}
+        title="Eliminar cargo do catálogo?"
+        danger
+        confirmLabel="Eliminar definitivamente"
+        cancelLabel="Cancelar"
+        loading={busySlug !== null && confirmExclusaoCargo?.kind === "one"}
+        onCancel={() => !busySlug && setConfirmExclusaoCargo(null)}
+        onConfirm={() => {
+          if (confirmExclusaoCargo?.kind !== "one") return;
+          const { slug, rotulo } = confirmExclusaoCargo;
+          setConfirmExclusaoCargo(null);
+          void eliminarPorSlug(slug, rotulo);
+        }}
+      >
+        {confirmExclusaoCargo?.kind === "one" ? (
+          <>
+            <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
+              O cargo <strong style={{ color: "#e6edf3" }}>«{confirmExclusaoCargo.rotulo}»</strong> (
+              <code style={{ color: "#c9a24a" }}>@{confirmExclusaoCargo.slug}</code>) será removido do catálogo.
+            </p>
+            <p style={{ margin: "10px 0 0", color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+              Se existirem agentes com este título, a operação será bloqueada.
+            </p>
+          </>
+        ) : null}
+      </CrmConfirmDialog>
+
+      <CrmConfirmDialog
+        open={confirmExclusaoCargo?.kind === "batch"}
+        title="Eliminar cargos seleccionados?"
+        danger
+        confirmLabel="Eliminar seleccionados"
+        cancelLabel="Cancelar"
+        loading={bulkDeleting}
+        onCancel={() => !bulkDeleting && setConfirmExclusaoCargo(null)}
+        onConfirm={() => {
+          if (confirmExclusaoCargo?.kind !== "batch") return;
+          const { slugs } = confirmExclusaoCargo;
+          setConfirmExclusaoCargo(null);
+          void eliminarSeleccionados(slugs);
+        }}
+      >
+        {confirmExclusaoCargo?.kind === "batch" ? (
+          <>
+            <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
+              Serão eliminados <strong style={{ color: "#e6edf3" }}>{confirmExclusaoCargo.slugs.length}</strong>{" "}
+              cargo(s) do catálogo.
+            </p>
+            <p
+              style={{
+                margin: "10px 0 0",
+                color: "#8b949e",
+                fontSize: 11,
+                lineHeight: 1.45,
+                fontFamily: "ui-monospace, monospace",
+                wordBreak: "break-all",
+              }}
+            >
+              {confirmExclusaoCargo.slugs.slice(0, 10).join(", ")}
+              {confirmExclusaoCargo.slugs.length > 10
+                ? ` … (+${confirmExclusaoCargo.slugs.length - 10})`
+                : ""}
+            </p>
+            <p style={{ margin: "10px 0 0", color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+              Linhas em uso por agentes não serão apagadas e aparecerão no relatório de erros.
+            </p>
+          </>
+        ) : null}
+      </CrmConfirmDialog>
     </>
   );
 }

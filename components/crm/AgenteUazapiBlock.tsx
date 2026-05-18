@@ -12,6 +12,7 @@ import {
   Trash2,
   Unplug,
 } from "lucide-react";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { normalizarSrcImagemQrUazapi } from "@/lib/whatsapp/qr-uazapi";
 
@@ -104,6 +105,7 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
   const [statusTempoReal, setStatusTempoReal] = useState<VerificacaoTempoReal | null>(null);
   const [ultimaVerificacaoAt, setUltimaVerificacaoAt] = useState<string | null>(null);
   const [ultimaVerificacaoResultado, setUltimaVerificacaoResultado] = useState<"sucesso" | "erro" | null>(null);
+  const [dialogExcluirUazapi, setDialogExcluirUazapi] = useState(false);
 
   const statusExibido = statusTempoReal?.status ?? snapshot.uazapi_connection_status ?? "—";
   const temInstancia = Boolean(snapshot.uazapi_instance_id?.trim());
@@ -521,14 +523,7 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
                   color: acoesOff || !temInstancia ? "#484f58" : "#f85149",
                   gridColumn: "1 / -1",
                 }}
-                onClick={() => {
-                  if (
-                    typeof window !== "undefined" &&
-                    !window.confirm("Eliminar instância na UAZAPI e limpar ligação no Hub?")
-                  )
-                    return;
-                  postAction("delete_remote");
-                }}
+                onClick={() => setDialogExcluirUazapi(true)}
               >
                 {loading === "delete_remote" ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                 Eliminar na UAZAPI
@@ -592,6 +587,28 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
           ) : null}
         </div>
       </div>
+
+      <CrmConfirmDialog
+        open={dialogExcluirUazapi}
+        title="Eliminar instância na UAZAPI?"
+        danger
+        confirmLabel="Eliminar definitivamente"
+        cancelLabel="Cancelar"
+        loading={loading === "delete_remote"}
+        onCancel={() => !loading && setDialogExcluirUazapi(false)}
+        onConfirm={() => {
+          setDialogExcluirUazapi(false);
+          void postAction("delete_remote");
+        }}
+      >
+        <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
+          A instância WhatsApp será removida no painel UAZAPI e a ligação deste agente no Hub será limpa. Pode criar
+          uma nova instância depois com <strong style={{ color: "#e6edf3" }}>Criar instância</strong>.
+        </p>
+        <p style={{ margin: "10px 0 0", color: "#b3261e", fontWeight: 600, fontSize: 12 }}>
+          Esta operação não pode ser desfeita na UAZAPI.
+        </p>
+      </CrmConfirmDialog>
     </div>
   );
 }

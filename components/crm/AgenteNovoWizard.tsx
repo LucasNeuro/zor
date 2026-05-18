@@ -13,6 +13,7 @@ import {
   MODO_OPERACAO_LABEL,
   type ModoOperacaoAgente,
 } from "@/lib/hub/agente-modo-operacao";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import { AgenteFerramentasIaBlock, type CatalogoFerramentaCustomLite } from "@/components/crm/AgenteFerramentasIaBlock";
 import {
   AgenteUazapiBlock,
@@ -292,6 +293,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const router = useRouter();
 
   const [passo, setPasso] = useState(1);
+  const [dialogFecharAssistente, setDialogFecharAssistente] = useState(false);
   const [cargoSelecionado, setCargoSelecionado] = useState<Cargo | null>(null);
   const [nome, setNome] = useState("");
   const [mercados, setMercados] = useState<string[]>([]);
@@ -728,18 +730,17 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     });
   }
 
-  function handleBackClick() {
-    if (agenteSlugCriado && passo >= 7) {
-      if (
-        !window.confirm(
-          "Fechar o assistente? O agente já foi criado — pode ligar o WhatsApp e gerar playbook mais tarde na ficha."
-        )
-      ) {
-        return;
-      }
-    }
+  function fecharAssistente() {
     if (variant === "drawer" && onClose) onClose();
     else router.back();
+  }
+
+  function handleBackClick() {
+    if (agenteSlugCriado && passo >= 7) {
+      setDialogFecharAssistente(true);
+      return;
+    }
+    fecharAssistente();
   }
 
   async function gerarSecaoComIa(secaoId: string) {
@@ -2829,6 +2830,23 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           </div>
         </div>
       </div>
+
+      <CrmConfirmDialog
+        open={dialogFecharAssistente}
+        title="Fechar o assistente?"
+        confirmLabel="Fechar"
+        cancelLabel="Continuar no assistente"
+        onCancel={() => setDialogFecharAssistente(false)}
+        onConfirm={() => {
+          setDialogFecharAssistente(false);
+          fecharAssistente();
+        }}
+      >
+        <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
+          O agente já foi criado. Pode ligar o WhatsApp, gerar playbook e ajustar o canal mais tarde na ficha do
+          modelo.
+        </p>
+      </CrmConfirmDialog>
     </div>
   );
 }

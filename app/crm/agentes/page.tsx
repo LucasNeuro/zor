@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
-import { ChevronRight, Clock, MessageCircle, Power, Trash2, Webhook, X, Zap } from "lucide-react";
+import { Activity, ChevronRight, Clock, MessageCircle, Power, Trash2, Webhook, X, Zap } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
@@ -338,6 +338,69 @@ function AgentesView() {
       ultimoPromptEm: operacao.ultimo_prompt_em,
     });
   }, [detailAgente, operacao]);
+
+  type AtividadeRecenteItem = {
+    id: string;
+    kind: "acao" | "ciclo";
+    titulo: string;
+    detalhe: string;
+    quando: string | null;
+    accent: string;
+    Icon: typeof Zap;
+  };
+
+  const atividadeRecente = useMemo((): AtividadeRecenteItem[] => {
+    if (!operacao) return [];
+    const items: AtividadeRecenteItem[] = [];
+    for (let i = 0; i < operacao.acoes.length; i++) {
+      const row = operacao.acoes[i] as {
+        id?: string;
+        tipo?: string;
+        descricao?: string;
+        sucesso?: boolean;
+        criado_em?: string;
+      };
+      const ok = row.sucesso !== false;
+      items.push({
+        id: `acao-${row.id ?? i}`,
+        kind: "acao",
+        titulo: String(row.tipo || "Ação da IA"),
+        detalhe: String(row.descricao || "").trim() || "Evento registado pelo motor.",
+        quando: row.criado_em ?? null,
+        accent: ok ? "#22c55e" : "#f87171",
+        Icon: Zap,
+      });
+    }
+    for (let i = 0; i < operacao.execucoes_ciclo.length; i++) {
+      const row = operacao.execucoes_ciclo[i] as {
+        id?: string;
+        status?: string;
+        erro?: string;
+        iniciado_em?: string;
+      };
+      const st = String(row.status || "—");
+      const stCor =
+        st === "erro" ? "#f87171" : st === "sucesso" ? "#86efac" : st === "sem_acao" ? "#94a3b8" : "#c9a24a";
+      items.push({
+        id: `ciclo-${row.id ?? i}`,
+        kind: "ciclo",
+        titulo: `Tarefa automática · ${st}`,
+        detalhe: row.erro
+          ? String(row.erro).slice(0, 180)
+          : "Corrida de ciclo ligada a este modelo.",
+        quando: row.iniciado_em ?? null,
+        accent: stCor,
+        Icon: Clock,
+      });
+    }
+    return items
+      .sort((a, b) => {
+        const ta = a.quando ? new Date(a.quando).getTime() : 0;
+        const tb = b.quando ? new Date(b.quando).getTime() : 0;
+        return tb - ta;
+      })
+      .slice(0, 12);
+  }, [operacao]);
 
   const carregarAgentes = useCallback(() => {
     setErroLista(null);
@@ -1147,15 +1210,14 @@ function AgentesView() {
                       Visão operacional: {operacaoErro}
                     </div>
                   )}
-                  {operacao && !operacaoLoading && (
-                    <div
-                      style={{
-                        background: "#141d29",
-                        border: "1px solid #2c384b",
-                        borderRadius: 12,
-                        overflow: "hidden",
-                      }}
-                    >
+                  <div
+                    style={{
+                      background: "#141d29",
+                      border: "1px solid #2c384b",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                    }}
+                  >
                       <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(37, 48, 66, 0.9)" }}>
                         <p style={{ color: "#8ea1ba", fontSize: 11, margin: 0, fontWeight: 700 }}>Visão operacional</p>
                         <p style={{ margin: "8px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.5 }}>
@@ -1165,13 +1227,18 @@ function AgentesView() {
                           {saudeAgente === "parado" && "Modelo inativo ou arquivado — não há operação esperada."}
                           {!saudeAgente && "—"}
                         </p>
-                        {operacao.ultimo_prompt_em && (
+                        {operacao?.ultimo_prompt_em && (
                           <p style={{ margin: "8px 0 0", color: "#7f90a8", fontSize: 11 }}>
                             Última resposta IA registrada: {tempoOpRelativo(operacao.ultimo_prompt_em)} atrás
                           </p>
                         )}
                       </div>
                       <div style={{ padding: "6px 14px 12px" }}>
+                        {operacaoLoading && (
+                          <p style={{ margin: "0 0 10px", color: "#7f90a8", fontSize: 12 }}>A carregar métricas operacionais…</p>
+                        )}
+                        {operacao && !operacaoLoading && (
+                          <>
                         <SideoverFold
                           isFirst
                           title={`Ciclos atribuídos (${operacao.ciclos.length})`}
@@ -1428,166 +1495,70 @@ function AgentesView() {
                       )}
                         </SideoverFold>
                         <SideoverFold
-                          title="Atividade do modelo"
+                          title={`Atividade recente${atividadeRecente.length > 0 ? ` (${atividadeRecente.length})` : ""}`}
                           open={drawerSecAtividadeAberto}
                           onToggle={() => setDrawerSecAtividadeAberto((o) => !o)}
                         >
-                      <p style={{ color: "#94a3b8", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
-                        Registos da IA
-                      </p>
-                      {operacao.acoes.length === 0 ? (
-                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12, lineHeight: 1.5 }}>
-                          Ainda não há registos visíveis. Quando o copiloto ou rotinas automáticas criarem eventos (por exemplo após WhatsApp ou tarefas internas), aparecem aqui em lista breve.
-                        </p>
+                      {atividadeRecente.length === 0 ? (
+                        <AgenteSideoverEntityCard
+                          accent="#94a3b8"
+                          progress={null}
+                          fallbackProgress={0.2}
+                          Icon={Activity}
+                          avatarCaption="Sem eventos"
+                          footer={
+                            <p style={{ margin: 0, color: "#64748b", fontSize: 10, lineHeight: 1.45 }}>
+                              Ações da IA e corridas de ciclos aparecem aqui após WhatsApp, copiloto ou tarefas em{" "}
+                              <strong style={{ color: "#aebccf" }}>Ciclos IA</strong>. Conversas com clientes estão na
+                              linha do tempo abaixo.
+                            </p>
+                          }
+                        >
+                          <strong style={{ color: "#e6edf3", fontSize: 13, fontWeight: 800 }}>Nada registado ainda</strong>
+                          <p style={{ margin: "6px 0 0", color: "#7f90a8", fontSize: 11, lineHeight: 1.45 }}>
+                            Normal antes da primeira mensagem no canal ou da primeira execução agendada.
+                          </p>
+                        </AgenteSideoverEntityCard>
                       ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {operacao.acoes.map((a, i) => {
-                            const row = a as {
-                              id?: string;
-                              tipo?: string;
-                              descricao?: string;
-                              sucesso?: boolean;
-                              criado_em?: string;
-                              lead_id?: string;
-                            };
-                            return (
-                              <div
-                                key={String(row.id || i)}
-                                style={{
-                                  borderLeft: `3px solid ${row.sucesso !== false ? "#15803d" : "#b91c1c"}`,
-                                  padding: "8px 10px",
-                                  background: "#101822",
-                                  borderRadius: 6,
-                                }}
-                              >
-                                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                                  <strong style={{ color: "#d7e3f4", fontSize: 11 }}>{String(row.tipo || "ação")}</strong>
-                                  <span style={{ color: "#7f90a8", fontSize: 10 }}>{tempoOpRelativo(row.criado_em)}</span>
-                                </div>
-                                <p style={{ margin: "6px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.45 }}>
-                                  {String(row.descricao || "").slice(0, 200)}
-                                  {(row.descricao as string)?.length > 200 ? "…" : ""}
-                                </p>
-                                {row.lead_id && (
-                                  <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 10 }}>
-                                    Referência do cliente no CRM
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <div style={{ borderTop: "1px solid rgba(37, 48, 66, 0.85)", marginTop: 12, paddingTop: 12 }} />
-
-                      <p style={{ margin: "0 0 4px", color: "#94a3b8", fontSize: 11, fontWeight: 700 }}>
-                        Tarefas automáticas (ciclos)
-                      </p>
-                      <p style={{ margin: "0 0 8px", color: "#64748b", fontSize: 11, lineHeight: 1.45 }}>
-                        Mostram-se aqui as últimas corridas dos ciclos ligados a este modelo (amostra para acompanhamento rápido).
-                      </p>
-                      {operacao.execucoes_ciclo.length === 0 ? (
-                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12, lineHeight: 1.5 }}>
-                          Ainda não há corridas registadas — é normal antes da primeira execução agendada ou antes da primeira mensagem no canal, conforme configuraste em <strong style={{ color: "#aebccf" }}>Ciclos IA</strong>.
-                        </p>
-                      ) : (
-                        <div style={{ position: "relative", paddingLeft: 14 }}>
-                          <div
-                            style={{
-                              position: "absolute",
-                              left: 3,
-                              top: 6,
-                              bottom: 6,
-                              width: 2,
-                              borderRadius: 2,
-                              background: "linear-gradient(180deg, #c9a24a55 0%, #2d394b 100%)",
-                            }}
-                          />
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            {operacao.execucoes_ciclo.map((ex, i) => {
-                              const row = ex as {
-                                id?: string;
-                                status?: string;
-                                erro?: string;
-                                iniciado_em?: string;
-                                custo_brl?: number;
-                                tokens_usados?: number;
-                              };
-                              const st = String(row.status || "—");
-                              const stCor =
-                                st === "erro"
-                                  ? "#f87171"
-                                  : st === "sucesso"
-                                    ? "#86efac"
-                                    : st === "sem_acao"
-                                      ? "#94a3b8"
-                                      : "#c9a24a";
-                              const iso = row.iniciado_em;
-                              const abs = iso && !Number.isNaN(new Date(String(iso)).getTime()) ? formatarData(String(iso)) : null;
-                              const rel = tempoOpRelativo(iso ?? null);
-                              return (
-                                <div
-                                  key={String(row.id || i)}
-                                  style={{
-                                    position: "relative",
-                                    paddingLeft: 12,
-                                    fontSize: 11,
-                                    background: "#101822",
-                                    borderRadius: 8,
-                                    padding: "8px 10px 8px 14px",
-                                    border: "1px solid #253042",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      position: "absolute",
-                                      left: -10,
-                                      top: 12,
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: "50%",
-                                      background: stCor,
-                                      boxShadow: `0 0 0 2px #0d1117`,
-                                    }}
-                                  />
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "baseline" }}>
-                                    <span style={{ color: stCor, fontWeight: 700 }}>{st}</span>
-                                    {abs ? (
-                                      <time dateTime={String(iso)} style={{ color: "#c8d4e6", fontWeight: 600 }}>
-                                        {abs}
-                                      </time>
-                                    ) : null}
-                                    <span style={{ color: "#7f90a8" }}>{rel !== "—" ? `${rel} atrás` : "—"}</span>
-                                    {row.tokens_usados != null && (
-                                      <span style={{ color: "#64748b" }}>{row.tokens_usados} tok</span>
-                                    )}
-                                    {row.custo_brl != null && (
-                                      <span style={{ color: "#64748b" }}>R$ {Number(row.custo_brl).toFixed(4)}</span>
-                                    )}
-                                  </div>
-                                  {row.erro && (
-                                    <p style={{ margin: "6px 0 0", color: "#f87171", fontSize: 10, lineHeight: 1.35 }}>
-                                      {String(row.erro).slice(0, 160)}
-                                      {String(row.erro).length > 160 ? "…" : ""}
-                                    </p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {atividadeRecente.map((ev) => (
+                            <AgenteSideoverEntityCard
+                              key={ev.id}
+                              accent={ev.accent}
+                              progress={null}
+                              fallbackProgress={0.4}
+                              Icon={ev.Icon}
+                              avatarCaption={
+                                ev.quando
+                                  ? tempoOpRelativo(ev.quando) !== "—"
+                                    ? `${tempoOpRelativo(ev.quando)} atrás`
+                                    : formatarData(ev.quando)
+                                  : "—"
+                              }
+                              footer={
+                                <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
+                                  {ev.kind === "ciclo" ? "Ciclo automático" : "Ação interna / ferramenta"}
+                                </span>
+                              }
+                            >
+                              <strong style={{ color: "#e6edf3", fontSize: 12, fontWeight: 800 }}>{ev.titulo}</strong>
+                              <p style={{ margin: "6px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.45 }}>
+                                {ev.detalhe.length > 200 ? `${ev.detalhe.slice(0, 200)}…` : ev.detalhe}
+                              </p>
+                            </AgenteSideoverEntityCard>
+                          ))}
                         </div>
                       )}
                         </SideoverFold>
-                      </div>
-                    </div>
-                  )}
+                          </>
+                        )}
 
-                  <SideoverFold
-                    title="Identidade fixa do modelo"
-                    open={drawerSecIdentidadeAberto}
-                    onToggle={() => setDrawerSecIdentidadeAberto((o) => !o)}
-                  >
+                        <SideoverFold
+                          isFirst={!operacao || operacaoLoading}
+                          title="Identidade fixa do modelo"
+                          open={drawerSecIdentidadeAberto}
+                          onToggle={() => setDrawerSecIdentidadeAberto((o) => !o)}
+                        >
                     {(() => {
                       const estadoLabel = detailAgente.arquivado_em
                         ? "Arquivado"
@@ -1637,13 +1608,13 @@ function AgentesView() {
                         </AgenteSideoverEntityCard>
                       );
                     })()}
-                  </SideoverFold>
+                        </SideoverFold>
 
-                  <SideoverFold
-                    title={`Linha do tempo de conversas${logs.length > 0 ? ` (${logs.length})` : ""}`}
-                    open={drawerSecConversasAberto}
-                    onToggle={() => setDrawerSecConversasAberto((o) => !o)}
-                  >
+                        <SideoverFold
+                          title={`Linha do tempo de conversas${logs.length > 0 ? ` (${logs.length})` : ""}`}
+                          open={drawerSecConversasAberto}
+                          onToggle={() => setDrawerSecConversasAberto((o) => !o)}
+                        >
                     {logsErro && (
                       <div style={{ color: "#f87171", background: "#3a1518", border: "1px solid #7f1d1d", borderRadius: 8, padding: 10, fontSize: 12, marginBottom: 10 }}>
                         {logsErro}
@@ -1700,7 +1671,9 @@ function AgentesView() {
                         })}
                       </div>
                     )}
-                  </SideoverFold>
+                        </SideoverFold>
+                      </div>
+                  </div>
 
                   <p style={{ color: "#64748b", fontSize: 10, fontWeight: 700, margin: "4px 0 0", letterSpacing: 0.3 }}>
                     Dados editáveis neste painel

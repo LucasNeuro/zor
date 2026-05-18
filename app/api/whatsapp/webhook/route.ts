@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 import { identificarMercado, identificarIntencao } from "@/lib/ia/agentes-config";
-import { defaultTenantId } from "@/lib/tenant-default";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
 import { normalizeWebhookInstanceId, parseWhatsappWebhookBody } from "@/lib/whatsapp/webhook-inbound";
+import { webhookSecretQueryParam } from "@/lib/whatsapp/webhook-auth";
+import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 
 let warnedMissingWebhookSecret = false;
 
@@ -51,6 +52,10 @@ export function webhookAutenticado(request: NextRequest, rawBody: string, secret
       return true;
     }
   }
+
+  const qp = webhookSecretQueryParam().toLowerCase();
+  const fromQuery = request.nextUrl.searchParams.get(qp)?.trim();
+  if (fromQuery && timingSafeStringEqual(fromQuery, secret)) return true;
 
   return false;
 }
@@ -122,14 +127,16 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
     .maybeSingle();
 
   if (leadExistente) {
-    await supabase
-      .from("hub_leads_crm")
-      .update({
-        atualizado_em: new Date().toISOString(),
-        pessoa_id: pessoa?.id ?? leadExistente.pessoa_id,
-        tenant_id: leadExistente.tenant_id || defaultTenantId(),
-      })
-      .eq("id", leadExistente.id);
+    const leadUpdate = {
+      atualizado_em: new Date().toISOString(),
+      pessoa_id: pessoa?.id ?? leadExistente.pessoa_id,
+      tenant_id: leadExistente.tenant_id || defaultTenantId(),
+    };
+    let upd = await supabase.from("hub_leads_crm").update(leadUpdate).eq("id", leadExistente.id);
+    if (upd.error && isMissingPgColumn(upd.error, "tenant_id")) {
+      const { tenant_id: _t, ...semTenant } = leadUpdate;
+      upd = await supabase.from("hub_leads_crm").update(semTenant).eq("id", leadExistente.id);
+    }
 
     await supabase.from("hub_memorias_lead").insert({
       lead_id: leadExistente.id,
@@ -331,7 +338,7 @@ async function enviarFallbackIA(params: {
   const mensagem = "Recebi sua mensagem e já encaminhei para revisão do time. Retornaremos em breve por aqui.";
 
   try {
-    await params.supabase.from("hub_fila_mensagens").insert({
+    const filaRow = {
       lead_id: params.leadId,
       agente_id: params.agenteSlug || "sdr",
       canal: "whatsapp",
@@ -340,7 +347,12 @@ async function enviarFallbackIA(params: {
       status: "fallback_enviado",
       tenant_id: defaultTenantId(),
       metadata: { feito_por: "fallback_ia", motivo: params.motivo },
-    });
+    };
+    let filaIns = await params.supabase.from("hub_fila_mensagens").insert(filaRow);
+    if (filaIns.error && isMissingPgColumn(filaIns.error, "tenant_id")) {
+      const { tenant_id: _t, ...semTenant } = filaRow;
+      filaIns = await params.supabase.from("hub_fila_mensagens").insert(semTenant);
+    }
   } catch (e) {
     console.error("[WEBHOOK][FALLBACK] Erro ao gravar fila:", e);
   }
@@ -466,12 +478,18 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (!parceiroExistente) {
-        const { data: novoParceiro } = await supabase.from("hub_parceiros").insert({
+        const parceiroRow = {
           nome: pushName || `Parceiro ${telLimpo.slice(-4)}`,
           telefone: telLimpo,
           status: "captacao",
           tenant_id: defaultTenantId(),
-        }).select("id").single();
+        };
+        let parIns = await supabase.from("hub_parceiros").insert(parceiroRow).select("id").single();
+        if (parIns.error && isMissingPgColumn(parIns.error, "tenant_id")) {
+          const { tenant_id: _t, ...semTenant } = parceiroRow;
+          parIns = await supabase.from("hub_parceiros").insert(semTenant).select("id").single();
+        }
+        const { data: novoParceiro } = parIns;
 
         if (novoParceiro) {
           await supabase.from("hub_parceiros_captacao").insert({
@@ -523,7 +541,7 @@ export async function POST(request: NextRequest) {
     }
 
     // TABELA 3: hub_fila_mensagens
-    await supabase.from("hub_fila_mensagens").insert({
+    const filaEntrada = {
       lead_id: lead.id,
       agente_id: agenteResponsavelLead,
       canal: "whatsapp",
@@ -541,7 +559,12 @@ export async function POST(request: NextRequest) {
         isNovo,
         tipoMidia,
       },
-    });
+    };
+    let filaRes = await supabase.from("hub_fila_mensagens").insert(filaEntrada);
+    if (filaRes.error && isMissingPgColumn(filaRes.error, "tenant_id")) {
+      const { tenant_id: _t, ...semTenant } = filaEntrada;
+      filaRes = await supabase.from("hub_fila_mensagens").insert(semTenant);
+    }
 
     // TABELA 4: hub_acoes_ia
     const agente =

@@ -10,6 +10,7 @@ import {
   pickInstanceFromResponse,
   statusFromPayloadUazapi,
 } from "@/lib/whatsapp/uazapi-instance-status";
+import { buildPublicWebhookUrl } from "@/lib/whatsapp/webhook-auth";
 
 function jsonErroUazapi(out: {
   error: string;
@@ -61,7 +62,7 @@ async function syncWebhookDaInstancia(
     return { ok: false, error: "NEXT_PUBLIC_APP_URL ausente/inválido para webhook público" };
   }
 
-  const webhookUrl = `${origin}/api/whatsapp/webhook`;
+  const webhookUrl = buildPublicWebhookUrl(origin, process.env.WEBHOOK_SECRET);
   const out = await uazapiFetchJson<Record<string, unknown>>("/webhook", {
     method: "POST",
     instanceToken,

@@ -5,6 +5,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import { ordemConhecimentoSecao } from "@/lib/hub/conhecimento-secoes";
+import { buscarTrechosRag } from "@/lib/hub/rag";
 
 function db() {
   return createClient(
@@ -123,6 +124,26 @@ ${personalidade?.descricao_comportamento || ""}`);
       const label = secaoLabels[secao] || secao.toUpperCase();
       const conteudo = itens.map(i => `[${i.titulo}]\n${i.conteudo}`).join("\n\n");
       secoes.push(`═══ ${label} ═══\n${conteudo}`);
+    }
+  }
+
+  // CAMADA 2.5 — RAG do agente (documentos anexados no wizard)
+  if (params.mensagemAtual?.trim()) {
+    const trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, params.mensagemAtual, {
+      limit: 4,
+      threshold: 0.68,
+    });
+    if (trechosRag.length > 0) {
+      const ragTexto = trechosRag
+        .map((t, i) => {
+          const conteudo = t.conteudo.length > 1_200 ? `${t.conteudo.slice(0, 1_200)}...` : t.conteudo;
+          return `[Trecho ${i + 1} — ${t.nomeArquivo} — relevância ${t.similarity.toFixed(2)}]\n${conteudo}`;
+        })
+        .join("\n\n");
+      secoes.push(`═══ DOCUMENTOS DO AGENTE (RAG) ═══
+Use estes trechos quando forem relevantes para a pergunta atual. Se um trecho de documento conflitar com texto genérico de molde, priorize o documento; se não houver evidência suficiente, diga que vai verificar.
+
+${ragTexto}`);
     }
   }
 

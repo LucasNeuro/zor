@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
-import { ChevronRight, Clock, Power, Trash2, Webhook, X, Zap } from "lucide-react";
+import { Activity, ChevronRight, Clock, MessageCircle, Power, Trash2, Webhook, X, Zap } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
@@ -9,6 +9,7 @@ import { AgenteNovoWizard } from "@/components/crm/AgenteNovoWizard";
 import { CrmCargosCatalogDrawer } from "@/components/crm/CrmCargosCatalogDrawer";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
+import { AgenteSideoverEntityCard, AgenteSideoverInfoGrid } from "@/components/crm/AgenteSideoverCards";
 import { CRM_ENTITY_GRID, crmGlassCardSurface } from "@/lib/crm-glass-card";
 import { calcularSaudeAgente, SAUDE_CORES } from "@/lib/agente-saude";
 import { INFERENCIA_IA_CRM_COPIA } from "@/lib/ia/hub-model-defaults";
@@ -61,8 +62,6 @@ type AgenteLog = {
 };
 
 type ListMode = "todos" | "ativos" | "inativos" | "arquivados";
-type DetailTab = "editar" | "logs";
-
 function urlParaModo(modo: ListMode): string {
   if (modo === "todos") return "/api/hub/agentes?todos=true";
   if (modo === "arquivados") return "/api/hub/agentes?arquivados=somente";
@@ -176,6 +175,16 @@ const TIPO_CICLO_OPERACAO: Record<string, { cor: string }> = {
   gatilho: { cor: "#94a3b8" },
 };
 
+function accentAgente(segmento?: string | null): string {
+  return SEGMENTO_COR[segmento || ""] || "#c9a24a";
+}
+
+function progressoSaudeRing(saude: "ok" | "degradado" | "parado" | null): number {
+  if (saude === "ok") return 0.85;
+  if (saude === "degradado") return 0.45;
+  return 0.15;
+}
+
 function corUltimoCicloStatus(st?: string): string {
   const s = String(st || "").toLowerCase();
   if (s === "sucesso") return "#86efac";
@@ -272,7 +281,6 @@ function AgentesView() {
   const [dialogExcluirAgente, setDialogExcluirAgente] = useState<Agente | null>(null);
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<DetailTab>("editar");
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErro, setDetailErro] = useState<string | null>(null);
   const [detailAgente, setDetailAgente] = useState<Agente | null>(null);
@@ -302,6 +310,7 @@ function AgentesView() {
   const [drawerSecCiclosAberto, setDrawerSecCiclosAberto] = useState(true);
   const [drawerSecAtividadeAberto, setDrawerSecAtividadeAberto] = useState(true);
   const [drawerSecIdentidadeAberto, setDrawerSecIdentidadeAberto] = useState(true);
+  const [drawerSecConversasAberto, setDrawerSecConversasAberto] = useState(true);
 
   const detalheAberto = !!selectedSlug;
 
@@ -310,6 +319,7 @@ function AgentesView() {
     setDrawerSecCiclosAberto(true);
     setDrawerSecAtividadeAberto(true);
     setDrawerSecIdentidadeAberto(true);
+    setDrawerSecConversasAberto(true);
   }, [selectedSlug]);
 
   const saudeAgente = useMemo(() => {
@@ -328,6 +338,69 @@ function AgentesView() {
       ultimoPromptEm: operacao.ultimo_prompt_em,
     });
   }, [detailAgente, operacao]);
+
+  type AtividadeRecenteItem = {
+    id: string;
+    kind: "acao" | "ciclo";
+    titulo: string;
+    detalhe: string;
+    quando: string | null;
+    accent: string;
+    Icon: typeof Zap;
+  };
+
+  const atividadeRecente = useMemo((): AtividadeRecenteItem[] => {
+    if (!operacao) return [];
+    const items: AtividadeRecenteItem[] = [];
+    for (let i = 0; i < operacao.acoes.length; i++) {
+      const row = operacao.acoes[i] as {
+        id?: string;
+        tipo?: string;
+        descricao?: string;
+        sucesso?: boolean;
+        criado_em?: string;
+      };
+      const ok = row.sucesso !== false;
+      items.push({
+        id: `acao-${row.id ?? i}`,
+        kind: "acao",
+        titulo: String(row.tipo || "Ação da IA"),
+        detalhe: String(row.descricao || "").trim() || "Evento registado pelo motor.",
+        quando: row.criado_em ?? null,
+        accent: ok ? "#22c55e" : "#f87171",
+        Icon: Zap,
+      });
+    }
+    for (let i = 0; i < operacao.execucoes_ciclo.length; i++) {
+      const row = operacao.execucoes_ciclo[i] as {
+        id?: string;
+        status?: string;
+        erro?: string;
+        iniciado_em?: string;
+      };
+      const st = String(row.status || "—");
+      const stCor =
+        st === "erro" ? "#f87171" : st === "sucesso" ? "#86efac" : st === "sem_acao" ? "#94a3b8" : "#c9a24a";
+      items.push({
+        id: `ciclo-${row.id ?? i}`,
+        kind: "ciclo",
+        titulo: `Tarefa automática · ${st}`,
+        detalhe: row.erro
+          ? String(row.erro).slice(0, 180)
+          : "Corrida de ciclo ligada a este modelo.",
+        quando: row.iniciado_em ?? null,
+        accent: stCor,
+        Icon: Clock,
+      });
+    }
+    return items
+      .sort((a, b) => {
+        const ta = a.quando ? new Date(a.quando).getTime() : 0;
+        const tb = b.quando ? new Date(b.quando).getTime() : 0;
+        return tb - ta;
+      })
+      .slice(0, 12);
+  }, [operacao]);
 
   const carregarAgentes = useCallback(() => {
     setErroLista(null);
@@ -464,15 +537,8 @@ function AgentesView() {
     if (!selectedSlug) return;
     void carregarDetalhe(selectedSlug);
     void carregarOperacao(selectedSlug);
-    setLogs([]);
-    setLogsErro(null);
-  }, [selectedSlug, carregarDetalhe, carregarOperacao]);
-
-  useEffect(() => {
-    if (!selectedSlug || detailTab !== "logs") return;
-    if (logs.length > 0 || logsLoading) return;
     void carregarLogs(selectedSlug);
-  }, [selectedSlug, detailTab, logs.length, logsLoading, carregarLogs]);
+  }, [selectedSlug, carregarDetalhe, carregarOperacao, carregarLogs]);
 
   const counters = {
     todos: agentes.length,
@@ -793,13 +859,11 @@ function AgentesView() {
                   tabIndex={0}
                   onClick={() => {
                     setSelectedSlug(agente.agente_slug);
-                    setDetailTab("editar");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       setSelectedSlug(agente.agente_slug);
-                      setDetailTab("editar");
                     }
                   }}
                   style={{
@@ -1064,8 +1128,18 @@ function AgentesView() {
             }}
           >
             <div style={{ borderBottom: "1px solid #2d394b", padding: 16, background: "linear-gradient(180deg,#121a26 0%, #101722 100%)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
+                  <CrmBotRingAvatar
+                    accent={accentAgente(detailAgente?.segmento)}
+                    progress={progressoSaudeRing(saudeAgente)}
+                    fallbackProgress={0.35}
+                    pixelSize={52}
+                    imageUrl={detailAgente?.avatar_url}
+                    dim={detailAgente?.ativo === false || !!detailAgente?.arquivado_em}
+                    pulse={saudeAgente === "ok" && detailAgente?.ativo !== false}
+                  />
+                  <div style={{ minWidth: 0 }}>
                   <p style={{ margin: 0, color: "#8ea1ba", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>MODELO</p>
                   <h3 style={{ margin: "3px 0 0", color: "#e6edf3", fontSize: 17 }}>
                     {detailAgente?.nome || selectedSlug}
@@ -1089,6 +1163,7 @@ function AgentesView() {
                       <span style={{ fontSize: 11, color: "#7a8ca3" }}>Atualizando métricas…</span>
                     )}
                   </div>
+                  </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
@@ -1108,43 +1183,6 @@ function AgentesView() {
                   </button>
                 </div>
               </div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  width: "100%",
-                  overflow: "hidden",
-                  borderRadius: 8,
-                  border: "1px solid #344256",
-                  marginTop: 12,
-                }}
-              >
-                {(["editar", "logs"] as const).map((tab, i) => {
-                  const sel = detailTab === tab;
-                  return (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setDetailTab(tab)}
-                      style={{
-                        margin: 0,
-                        flex: 1,
-                        minHeight: 36,
-                        borderRadius: 0,
-                        border: "none",
-                        borderLeft: i > 0 ? "1px solid #344256" : "none",
-                        background: sel ? "#c9a24a1f" : "#16202d",
-                        color: sel ? "#d6b976" : "#9fb0c6",
-                        padding: "8px 12px",
-                        fontWeight: 700,
-                        fontSize: 12,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {tab === "editar" ? "Editar modelo" : "Histórico de prompts"}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
@@ -1156,7 +1194,7 @@ function AgentesView() {
                 </div>
               ) : !detailAgente ? (
                 <p style={{ color: "#8b949e", fontSize: 13 }}>Modelo não encontrado.</p>
-              ) : detailTab === "editar" ? (
+              ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {operacaoErro && (
                     <div
@@ -1172,15 +1210,14 @@ function AgentesView() {
                       Visão operacional: {operacaoErro}
                     </div>
                   )}
-                  {operacao && !operacaoLoading && (
-                    <div
-                      style={{
-                        background: "#141d29",
-                        border: "1px solid #2c384b",
-                        borderRadius: 12,
-                        overflow: "hidden",
-                      }}
-                    >
+                  <div
+                    style={{
+                      background: "#141d29",
+                      border: "1px solid #2c384b",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                    }}
+                  >
                       <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(37, 48, 66, 0.9)" }}>
                         <p style={{ color: "#8ea1ba", fontSize: 11, margin: 0, fontWeight: 700 }}>Visão operacional</p>
                         <p style={{ margin: "8px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.5 }}>
@@ -1190,13 +1227,18 @@ function AgentesView() {
                           {saudeAgente === "parado" && "Modelo inativo ou arquivado — não há operação esperada."}
                           {!saudeAgente && "—"}
                         </p>
-                        {operacao.ultimo_prompt_em && (
+                        {operacao?.ultimo_prompt_em && (
                           <p style={{ margin: "8px 0 0", color: "#7f90a8", fontSize: 11 }}>
                             Última resposta IA registrada: {tempoOpRelativo(operacao.ultimo_prompt_em)} atrás
                           </p>
                         )}
                       </div>
                       <div style={{ padding: "6px 14px 12px" }}>
+                        {operacaoLoading && (
+                          <p style={{ margin: "0 0 10px", color: "#7f90a8", fontSize: 12 }}>A carregar métricas operacionais…</p>
+                        )}
+                        {operacao && !operacaoLoading && (
+                          <>
                         <SideoverFold
                           isFirst
                           title={`Ciclos atribuídos (${operacao.ciclos.length})`}
@@ -1453,233 +1495,184 @@ function AgentesView() {
                       )}
                         </SideoverFold>
                         <SideoverFold
-                          title="Atividade do modelo"
+                          title={`Atividade recente${atividadeRecente.length > 0 ? ` (${atividadeRecente.length})` : ""}`}
                           open={drawerSecAtividadeAberto}
                           onToggle={() => setDrawerSecAtividadeAberto((o) => !o)}
                         >
-                      <p style={{ color: "#94a3b8", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
-                        Registos da IA
-                      </p>
-                      {operacao.acoes.length === 0 ? (
-                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12, lineHeight: 1.5 }}>
-                          Ainda não há registos visíveis. Quando o copiloto ou rotinas automáticas criarem eventos (por exemplo após WhatsApp ou tarefas internas), aparecem aqui em lista breve.
-                        </p>
+                      {atividadeRecente.length === 0 ? (
+                        <AgenteSideoverEntityCard
+                          accent="#94a3b8"
+                          progress={null}
+                          fallbackProgress={0.2}
+                          Icon={Activity}
+                          avatarCaption="Sem eventos"
+                          footer={
+                            <p style={{ margin: 0, color: "#64748b", fontSize: 10, lineHeight: 1.45 }}>
+                              Ações da IA e corridas de ciclos aparecem aqui após WhatsApp, copiloto ou tarefas em{" "}
+                              <strong style={{ color: "#aebccf" }}>Ciclos IA</strong>. Conversas com clientes estão na
+                              linha do tempo abaixo.
+                            </p>
+                          }
+                        >
+                          <strong style={{ color: "#e6edf3", fontSize: 13, fontWeight: 800 }}>Nada registado ainda</strong>
+                          <p style={{ margin: "6px 0 0", color: "#7f90a8", fontSize: 11, lineHeight: 1.45 }}>
+                            Normal antes da primeira mensagem no canal ou da primeira execução agendada.
+                          </p>
+                        </AgenteSideoverEntityCard>
                       ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {operacao.acoes.map((a, i) => {
-                            const row = a as {
-                              id?: string;
-                              tipo?: string;
-                              descricao?: string;
-                              sucesso?: boolean;
-                              criado_em?: string;
-                              lead_id?: string;
-                            };
-                            return (
-                              <div
-                                key={String(row.id || i)}
-                                style={{
-                                  borderLeft: `3px solid ${row.sucesso !== false ? "#15803d" : "#b91c1c"}`,
-                                  padding: "8px 10px",
-                                  background: "#101822",
-                                  borderRadius: 6,
-                                }}
-                              >
-                                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                                  <strong style={{ color: "#d7e3f4", fontSize: 11 }}>{String(row.tipo || "ação")}</strong>
-                                  <span style={{ color: "#7f90a8", fontSize: 10 }}>{tempoOpRelativo(row.criado_em)}</span>
-                                </div>
-                                <p style={{ margin: "6px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.45 }}>
-                                  {String(row.descricao || "").slice(0, 200)}
-                                  {(row.descricao as string)?.length > 200 ? "…" : ""}
-                                </p>
-                                {row.lead_id && (
-                                  <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 10 }}>
-                                    Referência do cliente no CRM
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <div style={{ borderTop: "1px solid rgba(37, 48, 66, 0.85)", marginTop: 12, paddingTop: 12 }} />
-
-                      <p style={{ margin: "0 0 4px", color: "#94a3b8", fontSize: 11, fontWeight: 700 }}>
-                        Tarefas automáticas (ciclos)
-                      </p>
-                      <p style={{ margin: "0 0 8px", color: "#64748b", fontSize: 11, lineHeight: 1.45 }}>
-                        Mostram-se aqui as últimas corridas dos ciclos ligados a este modelo (amostra para acompanhamento rápido).
-                      </p>
-                      {operacao.execucoes_ciclo.length === 0 ? (
-                        <p style={{ margin: 0, color: "#7f90a8", fontSize: 12, lineHeight: 1.5 }}>
-                          Ainda não há corridas registadas — é normal antes da primeira execução agendada ou antes da primeira mensagem no canal, conforme configuraste em <strong style={{ color: "#aebccf" }}>Ciclos IA</strong>.
-                        </p>
-                      ) : (
-                        <div style={{ position: "relative", paddingLeft: 14 }}>
-                          <div
-                            style={{
-                              position: "absolute",
-                              left: 3,
-                              top: 6,
-                              bottom: 6,
-                              width: 2,
-                              borderRadius: 2,
-                              background: "linear-gradient(180deg, #c9a24a55 0%, #2d394b 100%)",
-                            }}
-                          />
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            {operacao.execucoes_ciclo.map((ex, i) => {
-                              const row = ex as {
-                                id?: string;
-                                status?: string;
-                                erro?: string;
-                                iniciado_em?: string;
-                                custo_brl?: number;
-                                tokens_usados?: number;
-                              };
-                              const st = String(row.status || "—");
-                              const stCor =
-                                st === "erro"
-                                  ? "#f87171"
-                                  : st === "sucesso"
-                                    ? "#86efac"
-                                    : st === "sem_acao"
-                                      ? "#94a3b8"
-                                      : "#c9a24a";
-                              const iso = row.iniciado_em;
-                              const abs = iso && !Number.isNaN(new Date(String(iso)).getTime()) ? formatarData(String(iso)) : null;
-                              const rel = tempoOpRelativo(iso ?? null);
-                              return (
-                                <div
-                                  key={String(row.id || i)}
-                                  style={{
-                                    position: "relative",
-                                    paddingLeft: 12,
-                                    fontSize: 11,
-                                    background: "#101822",
-                                    borderRadius: 8,
-                                    padding: "8px 10px 8px 14px",
-                                    border: "1px solid #253042",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      position: "absolute",
-                                      left: -10,
-                                      top: 12,
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: "50%",
-                                      background: stCor,
-                                      boxShadow: `0 0 0 2px #0d1117`,
-                                    }}
-                                  />
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "baseline" }}>
-                                    <span style={{ color: stCor, fontWeight: 700 }}>{st}</span>
-                                    {abs ? (
-                                      <time dateTime={String(iso)} style={{ color: "#c8d4e6", fontWeight: 600 }}>
-                                        {abs}
-                                      </time>
-                                    ) : null}
-                                    <span style={{ color: "#7f90a8" }}>{rel !== "—" ? `${rel} atrás` : "—"}</span>
-                                    {row.tokens_usados != null && (
-                                      <span style={{ color: "#64748b" }}>{row.tokens_usados} tok</span>
-                                    )}
-                                    {row.custo_brl != null && (
-                                      <span style={{ color: "#64748b" }}>R$ {Number(row.custo_brl).toFixed(4)}</span>
-                                    )}
-                                  </div>
-                                  {row.erro && (
-                                    <p style={{ margin: "6px 0 0", color: "#f87171", fontSize: 10, lineHeight: 1.35 }}>
-                                      {String(row.erro).slice(0, 160)}
-                                      {String(row.erro).length > 160 ? "…" : ""}
-                                    </p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {atividadeRecente.map((ev) => (
+                            <AgenteSideoverEntityCard
+                              key={ev.id}
+                              accent={ev.accent}
+                              progress={null}
+                              fallbackProgress={0.4}
+                              Icon={ev.Icon}
+                              avatarCaption={
+                                ev.quando
+                                  ? tempoOpRelativo(ev.quando) !== "—"
+                                    ? `${tempoOpRelativo(ev.quando)} atrás`
+                                    : formatarData(ev.quando)
+                                  : "—"
+                              }
+                              footer={
+                                <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
+                                  {ev.kind === "ciclo" ? "Ciclo automático" : "Ação interna / ferramenta"}
+                                </span>
+                              }
+                            >
+                              <strong style={{ color: "#e6edf3", fontSize: 12, fontWeight: 800 }}>{ev.titulo}</strong>
+                              <p style={{ margin: "6px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.45 }}>
+                                {ev.detalhe.length > 200 ? `${ev.detalhe.slice(0, 200)}…` : ev.detalhe}
+                              </p>
+                            </AgenteSideoverEntityCard>
+                          ))}
                         </div>
                       )}
                         </SideoverFold>
-                      </div>
-                    </div>
-                  )}
+                          </>
+                        )}
 
-                  <div
-                    style={{
-                      background: "#141d29",
-                      border: "1px solid #2c384b",
-                      borderRadius: 12,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div style={{ padding: "6px 14px 12px" }}>
-                      <SideoverFold
-                        isFirst
-                        title="Identidade fixa do modelo"
-                        open={drawerSecIdentidadeAberto}
-                        onToggle={() => setDrawerSecIdentidadeAberto((o) => !o)}
-                      >
-                    <p style={{ margin: "0 0 12px", color: "#64748b", fontSize: 11, lineHeight: 1.5 }}>
-                      Estes campos vêm do cargo e da configuração inicial — só alteram por fluxos específicos (ex.: página completa do modelo). Úteis para conferência rápida.
-                    </p>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
-                        gap: 10,
-                      }}
-                    >
-                      {(
-                        [
-                          { k: "Identificador (slug)", v: detailAgente.agente_slug },
-                          { k: "Cargo no catálogo", v: detailAgente.cargo },
-                          { k: "Área", v: detailAgente.area },
-                          { k: "Segmento", v: detailAgente.segmento },
-                          { k: "Nível", v: detailAgente.nivel != null ? String(detailAgente.nivel) : "—" },
-                          { k: "Motor de IA (servidor)", v: INFERENCIA_IA_CRM_COPIA },
-                          {
-                            k: "Mercados",
-                            v: detailAgente.prefixo_mercado || "—",
-                          },
-                          {
-                            k: "Estado",
-                            v: detailAgente.arquivado_em
-                              ? "Arquivado"
-                              : detailAgente.ativo === false
-                                ? "Inativo"
-                                : "Ativo",
-                          },
-                        ] as { k: string; v: string | undefined }[]
-                      ).map((row) => (
-                        <div key={row.k} style={{ minWidth: 0 }}>
-                          <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "#64748b", marginBottom: 3 }}>
-                            {row.k}
-                          </label>
-                          <input
-                            value={String(row.v ?? "—")}
-                            readOnly
-                            title={String(row.v ?? "")}
-                            style={{
-                              width: "100%",
-                              background: "#0f1620",
-                              border: "1px solid #2e3948",
-                              color: "#c8d4e6",
-                              borderRadius: 8,
-                              padding: "7px 9px",
-                              fontSize: 11,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
+                        <SideoverFold
+                          isFirst={!operacao || operacaoLoading}
+                          title="Identidade fixa do modelo"
+                          open={drawerSecIdentidadeAberto}
+                          onToggle={() => setDrawerSecIdentidadeAberto((o) => !o)}
+                        >
+                    {(() => {
+                      const estadoLabel = detailAgente.arquivado_em
+                        ? "Arquivado"
+                        : detailAgente.ativo === false
+                          ? "Inativo"
+                          : "Ativo";
+                      return (
+                        <AgenteSideoverEntityCard
+                          accent={accentAgente(detailAgente.segmento)}
+                          imageUrl={detailAgente.avatar_url}
+                          progress={progressoSaudeRing(saudeAgente)}
+                          avatarCaption={estadoLabel}
+                          dim={detailAgente.ativo === false || !!detailAgente.arquivado_em}
+                          footer={
+                            <p style={{ margin: 0, color: "#64748b", fontSize: 10, lineHeight: 1.45 }}>
+                              Campos do cargo e da configuração inicial — alteram na página completa do modelo ou no assistente de criação.
+                            </p>
+                          }
+                        >
+                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                            <strong style={{ color: "#e6edf3", fontSize: 14, fontWeight: 800 }}>{detailAgente.nome}</strong>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: "3px 8px",
+                                borderRadius: 999,
+                                border: `1px solid ${detailAgente.ativo !== false && !detailAgente.arquivado_em ? "#22c55e55" : "#64748b55"}`,
+                                color: detailAgente.ativo !== false && !detailAgente.arquivado_em ? "#86efac" : "#94a3b8",
+                                background: detailAgente.ativo !== false && !detailAgente.arquivado_em ? "#22c55e14" : "#64748b14",
+                              }}
+                            >
+                              {estadoLabel}
+                            </span>
+                          </div>
+                          <AgenteSideoverInfoGrid
+                            rows={[
+                              { label: "Slug", value: detailAgente.agente_slug },
+                              { label: "Cargo", value: detailAgente.cargo || "—" },
+                              { label: "Área", value: detailAgente.area || "—" },
+                              { label: "Segmento", value: detailAgente.segmento || "—" },
+                              { label: "Nível", value: detailAgente.nivel != null ? String(detailAgente.nivel) : "—" },
+                              { label: "Mercados", value: detailAgente.prefixo_mercado || "—" },
+                              { label: "Motor IA", value: INFERENCIA_IA_CRM_COPIA },
+                            ]}
                           />
-                        </div>
-                      ))}
-                    </div>
-                      </SideoverFold>
-                    </div>
+                        </AgenteSideoverEntityCard>
+                      );
+                    })()}
+                        </SideoverFold>
+
+                        <SideoverFold
+                          title={`Linha do tempo de conversas${logs.length > 0 ? ` (${logs.length})` : ""}`}
+                          open={drawerSecConversasAberto}
+                          onToggle={() => setDrawerSecConversasAberto((o) => !o)}
+                        >
+                    {logsErro && (
+                      <div style={{ color: "#f87171", background: "#3a1518", border: "1px solid #7f1d1d", borderRadius: 8, padding: 10, fontSize: 12, marginBottom: 10 }}>
+                        {logsErro}
+                      </div>
+                    )}
+                    {logsLoading ? (
+                      <p style={{ margin: 0, color: "#7f90a8", fontSize: 12 }}>A carregar interações…</p>
+                    ) : logs.length === 0 ? (
+                      <p style={{ margin: 0, color: "#7f90a8", fontSize: 12, lineHeight: 1.5 }}>
+                        Quando o modelo responder no WhatsApp, no copiloto ou em tarefas internas, cada troca aparece aqui como linha do tempo — não é histórico técnico de prompts.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {logs.map((log, idx) => {
+                          const userMsg = String(log.mensagem_usuario || "").trim();
+                          const aiMsg = String(log.resposta_ia || "").trim();
+                          const preview = userMsg || aiMsg || "Interação sem texto registado.";
+                          return (
+                            <AgenteSideoverEntityCard
+                              key={String(log.id || idx)}
+                              accent="#3b82f6"
+                              progress={null}
+                              fallbackProgress={0.5}
+                              Icon={MessageCircle}
+                              avatarCaption={formatarData(String(log.criado_em || ""))}
+                              footer={
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 10, color: "#64748b" }}>
+                                  {log.tempo_resposta_ms != null && <span>{String(log.tempo_resposta_ms)} ms</span>}
+                                  {log.tokens_input != null && <span>in {String(log.tokens_input)} tok</span>}
+                                  {log.tokens_output != null && <span>out {String(log.tokens_output)} tok</span>}
+                                  {log.custo_estimado_brl != null && <span>R$ {Number(log.custo_estimado_brl).toFixed(4)}</span>}
+                                </div>
+                              }
+                            >
+                              <p style={{ margin: "0 0 6px", color: "#94a3b8", fontSize: 10, fontWeight: 700 }}>
+                                {String(log.modelo_usado || "Conversa")}
+                              </p>
+                              {userMsg ? (
+                                <p style={{ margin: "0 0 6px", color: "#c8d4e6", fontSize: 11, lineHeight: 1.45 }}>
+                                  <span style={{ color: "#64748b", fontWeight: 700 }}>Entrada · </span>
+                                  {userMsg.length > 180 ? `${userMsg.slice(0, 180)}…` : userMsg}
+                                </p>
+                              ) : null}
+                              {aiMsg ? (
+                                <p style={{ margin: 0, color: "#9cb0c9", fontSize: 11, lineHeight: 1.45 }}>
+                                  <span style={{ color: "#64748b", fontWeight: 700 }}>Resposta · </span>
+                                  {aiMsg.length > 180 ? `${aiMsg.slice(0, 180)}…` : aiMsg}
+                                </p>
+                              ) : (
+                                <p style={{ margin: 0, color: "#7f90a8", fontSize: 11 }}>{preview}</p>
+                              )}
+                            </AgenteSideoverEntityCard>
+                          );
+                        })}
+                      </div>
+                    )}
+                        </SideoverFold>
+                      </div>
                   </div>
 
                   <p style={{ color: "#64748b", fontSize: 10, fontWeight: 700, margin: "4px 0 0", letterSpacing: 0.3 }}>
@@ -1755,54 +1748,6 @@ function AgentesView() {
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div>
-                  {logsErro && (
-                    <div style={{ color: "#f87171", background: "#3a1518", border: "1px solid #7f1d1d", borderRadius: 8, padding: 10, fontSize: 13, marginBottom: 12 }}>
-                      {logsErro}
-                    </div>
-                  )}
-                  {logsLoading ? (
-                    <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando logs...</p>
-                  ) : logs.length === 0 ? (
-                    <p style={{ color: "#8b949e", fontSize: 13 }}>Nenhum log encontrado para este agente.</p>
-                  ) : (
-                    <div style={{ position: "relative", paddingLeft: 18 }}>
-                      <div style={{ position: "absolute", left: 5, top: 8, bottom: 8, width: 2, background: "#2f3d50" }} />
-                      {logs.map((log, idx) => (
-                        <div key={String(log.id || idx)} style={{ position: "relative", marginBottom: 14, padding: "10px 12px", borderRadius: 10, border: "1px solid #2d3a4d", background: "#131c28" }}>
-                          <span style={{ position: "absolute", left: -17, top: 16, width: 10, height: 10, borderRadius: "50%", background: "#c9a24a", boxShadow: "0 0 0 2px #101722" }} />
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6, alignItems: "baseline" }}>
-                            <strong style={{ color: "#d7e3f4", fontSize: 12 }}>{String(log.modelo_usado || "Modelo não informado")}</strong>
-                            <span style={{ color: "#7f90a8", fontSize: 11 }}>{formatarData(String(log.criado_em || ""))}</span>
-                          </div>
-                          <p style={{ margin: "0 0 6px", color: "#9cb0c9", fontSize: 12, lineHeight: 1.5 }}>
-                            <strong style={{ color: "#c4d2e5" }}>Usuário:</strong>{" "}
-                            {String(log.mensagem_usuario || "").slice(0, 220) || "Sem mensagem registrada."}
-                          </p>
-                          <p style={{ margin: 0, color: "#9cb0c9", fontSize: 12, lineHeight: 1.5 }}>
-                            <strong style={{ color: "#c4d2e5" }}>Resposta IA:</strong>{" "}
-                            {String(log.resposta_ia || "").slice(0, 220) || "Sem resposta registrada."}
-                          </p>
-                          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            {log.tempo_resposta_ms != null && (
-                              <span style={{ color: "#7f90a8", fontSize: 11 }}>Latência: {String(log.tempo_resposta_ms)} ms</span>
-                            )}
-                            {log.tokens_input != null && (
-                              <span style={{ color: "#7f90a8", fontSize: 11 }}>Input: {String(log.tokens_input)}</span>
-                            )}
-                            {log.tokens_output != null && (
-                              <span style={{ color: "#7f90a8", fontSize: 11 }}>Output: {String(log.tokens_output)}</span>
-                            )}
-                            {log.custo_estimado_brl != null && (
-                              <span style={{ color: "#7f90a8", fontSize: 11 }}>Custo: R$ {String(log.custo_estimado_brl)}</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               )}
             </div>
           </aside>
@@ -1822,8 +1767,9 @@ function AgentesView() {
         <p style={{ margin: "0 0 10px" }}>
           O agente <strong style={{ color: "#e6edf3" }}>«{dialogExcluirAgente?.nome}»</strong> (
           <code style={{ color: "#c9a24a" }}>{dialogExcluirAgente?.agente_slug}</code>) será removido com todos os
-          dados ligados no Hub: identidade, conhecimento, <strong style={{ color: "#e6edf3" }}>ciclos IA</strong>, logs
-          e filas associadas, além do playbook no Storage quando existir.
+          dados ligados no Hub: identidade, conhecimento, <strong style={{ color: "#e6edf3" }}>ciclos IA</strong>,
+          conversas e logs, documentos RAG (embeddings e ficheiros), filas WhatsApp, briefing interno e playbook no
+          Storage quando existir.
         </p>
         <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>Esta operação não pode ser desfeita.</p>
       </CrmConfirmDialog>

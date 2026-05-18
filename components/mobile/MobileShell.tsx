@@ -106,6 +106,7 @@ export default function MobileShell({ children }: Props) {
     if (pathname.startsWith("/crm/agentes/")) return "Modelo";
     if (pathname === "/crm/parceiros") return "Parceiros";
     if (pathname === "/crm/ciclos") return "Ciclos IA";
+    if (pathname === "/crm/canais") return "Canais";
     if (pathname === "/crm/ferramentas") return "Ferramentas IA";
     if (pathname === "/crm/kpis") return "KPIs";
     if (pathname.startsWith("/crm/pessoas")) return "Pessoas";

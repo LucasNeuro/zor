@@ -227,7 +227,10 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
     chatid.includes("@g.us");
 
   const senderJid = pickStr(data, "sender", "from", "sender_pn", "participant", "author");
-  const remoteJid = senderJid || chatid;
+  // Em alguns payloads novos o sender vem como @lid (ID interno),
+  // mas o chatid preserva o telefone real para resposta.
+  const senderIsLid = /@lid$/i.test(senderJid);
+  const remoteJid = !senderIsLid && senderJid ? senderJid : chatid || senderJid;
   const telefone = stripJidToDigits(remoteJid);
   const pushName = pickStr(data, "senderName", "pushName", "notifyName", "wa_contactName", "wa_name");
 

@@ -95,4 +95,23 @@ describe("parseWhatsappWebhookBody UAZAPI", () => {
     });
     expect(r.kind).toBe("unknown_event");
   });
+
+  it("prioriza chatid quando sender vem como @lid", () => {
+    const r = parseWhatsappWebhookBody({
+      event: "messages",
+      data: {
+        fromMe: false,
+        chatid: "5511970364763@s.whatsapp.net",
+        sender: "7249938374763@lid",
+        messageid: "lid-1",
+        messageTimestamp: 1_700_000_000,
+        text: "olá com lid",
+      },
+    });
+    expect(r.kind).toBe("ok");
+    if (r.kind === "ok") {
+      expect(r.value.telefone).toBe("5511970364763");
+      expect(r.value.mensagemFinal).toBe("olá com lid");
+    }
+  });
 });

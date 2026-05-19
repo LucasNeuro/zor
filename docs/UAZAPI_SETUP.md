@@ -6,7 +6,7 @@ O escritório virtual usa **apenas UAZAPI** para envio e receção de mensagens 
 
 1. **Supabase (antes do go-live):** aplicar migrações, em especial `20260605120000_ensure_hub_leads_crm_tenant.sql` (coluna `tenant_id` em `hub_leads_crm`). Depois: Dashboard → API → **Reload schema**.
 2. **Web service** (`render.yaml`): definir variáveis listadas no topo do ficheiro; `NEXT_PUBLIC_APP_URL` = `https://<seu-servico>.onrender.com` (sem barra final).
-3. **Após deploy:** abrir agente WhatsApp → **QR / pareamento** (sincroniza webhook para `NEXT_PUBLIC_APP_URL/api/whatsapp/webhook`).
+3. **Após deploy:** em cada agente WhatsApp, selecionar **cidade do proxy** (região do número) → **Guardar região** → **QR / pareamento** (sincroniza webhook). Valores ficam em `hub_agente_identidade` (migração `20260619100000_hub_agente_uazapi_proxy.sql`).
 4. **Segredo do webhook:** defina `WEBHOOK_SECRET` no Render. Ao parear/atualizar o agente, o app regista na UAZAPI a URL `…/api/whatsapp/webhook?wh=<segredo>` (o parâmetro `wh` vem de `WEBHOOK_SECRET_QUERY_PARAM`). Opcional: o mesmo valor no header `x-webhook-secret` no painel UAZAPI.
 5. **Teste:** `npm run smoke:webhook` (local) ou enviar mensagem real no WhatsApp e confirmar log `POST /api/whatsapp/webhook` no Render.
 

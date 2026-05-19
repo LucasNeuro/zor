@@ -408,6 +408,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         uazapi_connection_status:
           typeof d.uazapi_connection_status === "string" ? d.uazapi_connection_status : null,
         uazapi_has_instance_token: d.uazapi_has_instance_token === true,
+        uazapi_proxy_country:
+          typeof d.uazapi_proxy_country === "string" ? d.uazapi_proxy_country : null,
+        uazapi_proxy_state: typeof d.uazapi_proxy_state === "string" ? d.uazapi_proxy_state : null,
+        uazapi_proxy_city: typeof d.uazapi_proxy_city === "string" ? d.uazapi_proxy_city : null,
       });
     } catch {
       /* ignore */

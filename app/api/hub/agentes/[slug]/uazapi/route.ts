@@ -11,6 +11,15 @@ import {
   statusFromPayloadUazapi,
 } from "@/lib/whatsapp/uazapi-instance-status";
 import {
+  buildUazapiInstanceConnectBody,
+  mergeUazapiProxyFields,
+  persistPatchFromProxy,
+  proxyFromRequestBody,
+  proxyFromStoredRow,
+  uazapiProxyConfigured,
+  UAZAPI_PROXY_SETUP_HINT,
+} from "@/lib/whatsapp/uazapi-proxy-connect";
+import {
   formatWebhookSyncWarnings,
   syncWebhooksUazapi,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
@@ -49,7 +58,15 @@ export async function POST(
   const { slug: raw } = await params;
   const slug = decodeURIComponent(raw);
 
-  let body: { action?: string; phone?: string; browser?: string };
+  let body: {
+    action?: string;
+    phone?: string;
+    browser?: string;
+    search?: string;
+    proxy_managed_country?: string;
+    proxy_managed_state?: string;
+    proxy_managed_city?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -59,7 +76,7 @@ export async function POST(
   const action = String(body.action || "").trim().toLowerCase();
   if (!action) {
     return NextResponse.json(
-      { error: "Indique action: create | connect | status | disconnect | delete_remote" },
+      { error: "Indique action: create | connect | status | disconnect | delete_remote | save_proxy | list_proxy_cities" },
       { status: 400 }
     );
   }
@@ -68,7 +85,7 @@ export async function POST(
   const { data: agente, error: loadErr } = await supabase
     .from("hub_agente_identidade")
     .select(
-      "agente_slug, modo_operacao, uazapi_instance_id, uazapi_instance_token, uazapi_instance_name, uazapi_connection_status"
+      "agente_slug, modo_operacao, uazapi_instance_id, uazapi_instance_token, uazapi_instance_name, uazapi_connection_status, uazapi_proxy_country, uazapi_proxy_state, uazapi_proxy_city"
     )
     .eq("agente_slug", slug)
     .maybeSingle();
@@ -86,6 +103,9 @@ export async function POST(
     uazapi_instance_token?: string | null;
     uazapi_instance_name?: string | null;
     uazapi_connection_status?: string | null;
+    uazapi_proxy_country?: string | null;
+    uazapi_proxy_state?: string | null;
+    uazapi_proxy_city?: string | null;
   };
 
   async function persistUazapi(patch: Record<string, unknown>) {
@@ -213,16 +233,69 @@ export async function POST(
       });
     }
 
+    if (action === "save_proxy") {
+      const fromBody = proxyFromRequestBody(body);
+      if (!fromBody) {
+        return NextResponse.json(
+          { error: "Informe a cidade do proxy (proxy_managed_city)." },
+          { status: 400 }
+        );
+      }
+      await persistUazapi(persistPatchFromProxy(fromBody));
+      return NextResponse.json({
+        ok: true,
+        action: "save_proxy",
+        uazapi_proxy_country: fromBody.proxy_managed_country,
+        uazapi_proxy_state: fromBody.proxy_managed_state ?? null,
+        uazapi_proxy_city: fromBody.proxy_managed_city,
+      });
+    }
+
     const tokenInst = typeof row.uazapi_instance_token === "string" ? row.uazapi_instance_token.trim() : "";
+
+    if (action === "list_proxy_cities") {
+      const country = (body.proxy_managed_country || "br").trim().toLowerCase() || "br";
+      const stateQ =
+        typeof body.proxy_managed_state === "string" ? body.proxy_managed_state.trim().toLowerCase() : "";
+      const search = typeof body.search === "string" ? body.search.trim() : "";
+      const qs = new URLSearchParams({ country });
+      if (stateQ) qs.set("state", stateQ);
+      if (search) qs.set("search", search);
+
+      const out = await uazapiFetchJson<Record<string, unknown>>(
+        `/proxy-managed/cities?${qs.toString()}`,
+        {
+          method: "GET",
+          ...(tokenInst ? { instanceToken: tokenInst } : { admin: true }),
+        }
+      );
+      if (!out.ok) {
+        return responderErroUazapi(action, out);
+      }
+      const cities = Array.isArray((out.data as { cities?: unknown })?.cities)
+        ? (out.data as { cities: unknown[] }).cities
+        : [];
+      return NextResponse.json({ ok: true, action: "list_proxy_cities", country, cities });
+    }
+
     if (!tokenInst) {
       return NextResponse.json({ error: "Crie primeiro a instância UAZAPI para este agente." }, { status: 409 });
     }
 
     if (action === "connect") {
-      const browser = typeof body.browser === "string" ? body.browser : "auto";
-      const phoneRaw = typeof body.phone === "string" ? body.phone.replace(/\D/g, "") : "";
-      const payload: Record<string, unknown> = { browser };
-      if (phoneRaw.length >= 10) payload.phone = phoneRaw;
+      const fromBody = proxyFromRequestBody(body);
+      const stored = proxyFromStoredRow(row);
+      if (fromBody) {
+        await persistUazapi(persistPatchFromProxy(fromBody));
+        Object.assign(row, persistPatchFromProxy(fromBody));
+      }
+      const merged = mergeUazapiProxyFields({ body: fromBody, stored: proxyFromStoredRow(row) });
+      const payload = buildUazapiInstanceConnectBody({
+        browser: typeof body.browser === "string" ? body.browser : "auto",
+        phone: typeof body.phone === "string" ? body.phone : undefined,
+        proxy: merged,
+      });
+      const proxyWarning = uazapiProxyConfigured(merged) ? undefined : UAZAPI_PROXY_SETUP_HINT;
 
       const out = await uazapiFetchJson<Record<string, unknown>>("/instance/connect", {
         method: "POST",
@@ -253,6 +326,7 @@ export async function POST(
           global: webhookSync.global.ok || webhookSync.global.skipped === true,
         },
         ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
+        ...(proxyWarning ? { proxy_warning: proxyWarning } : {}),
       });
     }
 
@@ -350,6 +424,9 @@ export async function POST(
         uazapi_instance_token: null,
         uazapi_instance_name: null,
         uazapi_connection_status: null,
+        uazapi_proxy_country: null,
+        uazapi_proxy_state: null,
+        uazapi_proxy_city: null,
       });
 
       return NextResponse.json({ ok: true, action: "delete_remote" });

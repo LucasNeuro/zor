@@ -21,6 +21,15 @@ export type AgenteUazapiSnapshot = {
   uazapi_instance_name?: string | null;
   uazapi_connection_status?: string | null;
   uazapi_has_instance_token?: boolean;
+  uazapi_proxy_country?: string | null;
+  uazapi_proxy_state?: string | null;
+  uazapi_proxy_city?: string | null;
+};
+
+type CidadeProxyUazapi = {
+  value: string;
+  label: string;
+  state?: string;
 };
 
 export type AgenteUazapiBlockProps = {
@@ -98,6 +107,11 @@ async function lerCorpoApi(res: Response): Promise<Record<string, unknown>> {
 
 export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado = false }: AgenteUazapiBlockProps) {
   const [phonePair, setPhonePair] = useState("");
+  const [proxyCity, setProxyCity] = useState("");
+  const [proxyState, setProxyState] = useState("");
+  const [cidadesProxy, setCidadesProxy] = useState<CidadeProxyUazapi[]>([]);
+  const [cidadesProxyErro, setCidadesProxyErro] = useState<string | null>(null);
+  const [proxyAviso, setProxyAviso] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [err, setErr] = useState<ErroCtx | null>(null);
   const [qrcode, setQrcode] = useState<string | null>(null);
@@ -125,6 +139,64 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
     setUltimaVerificacaoResultado(null);
   }, [snapshot.uazapi_instance_id, snapshot.uazapi_connection_status]);
 
+  useEffect(() => {
+    setProxyCity(snapshot.uazapi_proxy_city?.trim() || "");
+    setProxyState(snapshot.uazapi_proxy_state?.trim() || "");
+  }, [snapshot.uazapi_proxy_city, snapshot.uazapi_proxy_state]);
+
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+          body: JSON.stringify({ action: "list_proxy_cities", proxy_managed_country: "br" }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          setCidadesProxyErro(typeof data.error === "string" ? data.error : "Não foi possível carregar cidades.");
+          return;
+        }
+        const raw = Array.isArray(data.cities) ? data.cities : [];
+        const parsed: CidadeProxyUazapi[] = [];
+        for (const c of raw) {
+          if (!c || typeof c !== "object") continue;
+          const o = c as Record<string, unknown>;
+          const value = typeof o.value === "string" ? o.value.trim() : "";
+          const label = typeof o.label === "string" ? o.label.trim() : value;
+          if (!value) continue;
+          parsed.push({
+            value,
+            label: label || value,
+            state: typeof o.state === "string" ? o.state.trim() : undefined,
+          });
+        }
+        parsed.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+        setCidadesProxy(parsed);
+        setCidadesProxyErro(null);
+      } catch {
+        if (!cancelled) setCidadesProxyErro("Falha de rede ao carregar cidades UAZAPI.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [agenteSlug]);
+
+  const proxyConnectExtra = useCallback((): Record<string, unknown> => {
+    const extra: Record<string, unknown> = { proxy_managed_country: "br" };
+    const city = proxyCity.trim().toLowerCase();
+    const state = proxyState.trim().toLowerCase();
+    if (city) {
+      extra.proxy_managed_city = city;
+      if (state) extra.proxy_managed_state = state;
+    }
+    return extra;
+  }, [proxyCity, proxyState]);
+
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
 
@@ -137,6 +209,7 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
       if (!opts?.silent) {
         setErr(null);
         setWebhookAviso(null);
+        setProxyAviso(null);
         setLoading(action);
       }
       try {
@@ -207,6 +280,9 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
         setUltimaVerificacaoResultado("sucesso");
         if (typeof data.webhook_warning === "string" && data.webhook_warning.trim()) {
           setWebhookAviso(data.webhook_warning.trim());
+        }
+        if (typeof data.proxy_warning === "string" && data.proxy_warning.trim()) {
+          setProxyAviso(data.proxy_warning.trim());
         } else if (
           data.webhook_sync &&
           typeof data.webhook_sync === "object" &&
@@ -453,7 +529,28 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
                 <code style={{ color: "#79c0ff" }}>isGroupYes</code>.{" "}
                 <strong>Não use wasNotSentByApi</strong> — bloqueia mensagens dos clientes e o Render não recebe POST.
               </p>
+              <p style={{ margin: "8px 0 0", color: "#79c0ff", fontSize: 11, lineHeight: 1.5 }}>
+                Cada agente tem a <strong>sua cidade de proxy</strong> (região do número). Guarde antes do QR. O{" "}
+                <code style={{ color: "#79c0ff" }}>WEBHOOK_SECRET</code> no Render protege o endpoint; é independente da cidade.
+              </p>
             </div>
+
+            {proxyAviso ? (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #bb800966",
+                  background: "#bb80091a",
+                  marginBottom: 16,
+                  fontSize: 12,
+                  color: "#e6c06a",
+                  lineHeight: 1.5,
+                }}
+              >
+                {proxyAviso}
+              </div>
+            ) : null}
 
             {webhookAviso ? (
               <div
@@ -523,7 +620,11 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
                 type="button"
                 disabled={acoesOff || !temInstancia}
                 style={btnBase(acoesOff || !temInstancia)}
-                onClick={() => postAction("connect", phonePair.trim().length >= 10 ? { phone: phonePair } : {})}
+                onClick={() => {
+                  const extra: Record<string, unknown> = { ...proxyConnectExtra() };
+                  if (phonePair.trim().length >= 10) extra.phone = phonePair.replace(/\D/g, "");
+                  postAction("connect", extra);
+                }}
               >
                 {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
                 QR / pareamento
@@ -575,25 +676,87 @@ export function AgenteUazapiBlock({ agenteSlug, snapshot, onRefresh, bloqueado =
               </button>
             </div>
 
-            <div>
-              <label style={{ display: "block", color: "#8b949e", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
-                Telefone (opcional, ex. 351912345678)
-              </label>
-              <input
-                value={phonePair}
-                onChange={(e) => setPhonePair(e.target.value)}
-                placeholder="Vazio = só QR"
-                style={{
-                  width: "100%",
-                  maxWidth: 320,
-                  padding: "10px 12px",
-                  borderRadius: 9,
-                  border: "1px solid #30363d",
-                  background: "#0d1117",
-                  color: "#e6edf3",
-                  fontSize: 13,
-                }}
-              />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                gap: 12,
+                marginBottom: 4,
+              }}
+            >
+              <div>
+                <label style={{ display: "block", color: "#8b949e", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
+                  Cidade do proxy (região do número — por agente)
+                </label>
+                <select
+                  value={proxyCity}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setProxyCity(v);
+                    const found = cidadesProxy.find((c) => c.value === v);
+                    if (found?.state) setProxyState(found.state);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 9,
+                    border: "1px solid #30363d",
+                    background: "#0d1117",
+                    color: "#e6edf3",
+                    fontSize: 13,
+                  }}
+                >
+                  <option value="">— Selecione a cidade —</option>
+                  {cidadesProxy.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                      {c.state ? ` (${c.state.toUpperCase()})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {cidadesProxyErro ? (
+                  <p style={{ margin: "6px 0 0", color: "#f85149", fontSize: 11 }}>{cidadesProxyErro}</p>
+                ) : null}
+                {proxyState ? (
+                  <p style={{ margin: "6px 0 0", color: "#6e7781", fontSize: 11 }}>
+                    Estado: <strong style={{ color: "#8b949e" }}>{proxyState.toUpperCase()}</strong>
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <button
+                  type="button"
+                  disabled={acoesOff || !proxyCity.trim()}
+                  style={btnBase(acoesOff || !proxyCity.trim())}
+                  onClick={() => postAction("save_proxy", proxyConnectExtra())}
+                >
+                  {loading === "save_proxy" ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <RefreshCw size={15} />
+                  )}
+                  Guardar região
+                </button>
+              </div>
+              <div>
+                <label style={{ display: "block", color: "#8b949e", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
+                  Telefone (opcional, pareamento por código)
+                </label>
+                <input
+                  value={phonePair}
+                  onChange={(e) => setPhonePair(e.target.value)}
+                  placeholder="Vazio = só QR"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 9,
+                    border: "1px solid #30363d",
+                    background: "#0d1117",
+                    color: "#e6edf3",
+                    fontSize: 13,
+                  }}
+                />
+              </div>
             </div>
 
             {paircode ? (

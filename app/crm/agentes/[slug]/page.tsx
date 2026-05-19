@@ -901,6 +901,12 @@ export default function AgentePage() {
                       ? agente.uazapi_connection_status
                       : null,
                   uazapi_has_instance_token: agente.uazapi_has_instance_token === true,
+                  uazapi_proxy_country:
+                    typeof agente.uazapi_proxy_country === "string" ? agente.uazapi_proxy_country : null,
+                  uazapi_proxy_state:
+                    typeof agente.uazapi_proxy_state === "string" ? agente.uazapi_proxy_state : null,
+                  uazapi_proxy_city:
+                    typeof agente.uazapi_proxy_city === "string" ? agente.uazapi_proxy_city : null,
                 }}
                 onRefresh={carregar}
               />

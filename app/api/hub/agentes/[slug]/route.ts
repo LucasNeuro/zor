@@ -50,7 +50,39 @@ export async function GET(
     return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(sanitizarAgenteHubParaCliente(data as Record<string, unknown>));
+  const out = { ...(data as Record<string, unknown>) };
+  const bio = typeof out.bio === "string" ? out.bio.trim() : "";
+  const spb = typeof out.system_prompt_base === "string" ? out.system_prompt_base.trim() : "";
+  if (!bio || !spb) {
+    const cargoTitulo = typeof out.cargo === "string" ? out.cargo.trim() : "";
+    if (cargoTitulo) {
+      const { data: cat } = await supabase
+        .from("hub_cargos_catalogo")
+        .select("descricao_curta,saudacao_cliente,prompt_template,descricao")
+        .eq("titulo", cargoTitulo)
+        .eq("ativo", true)
+        .limit(1)
+        .maybeSingle();
+      if (cat) {
+        const descCurta = typeof cat.descricao_curta === "string" ? cat.descricao_curta.trim() : "";
+        const saudacao = typeof cat.saudacao_cliente === "string" ? cat.saudacao_cliente.trim() : "";
+        const promptTemplate = typeof cat.prompt_template === "string" ? cat.prompt_template.trim() : "";
+        const descricao = typeof cat.descricao === "string" ? cat.descricao.trim() : "";
+        if (!out.bio || !String(out.bio).trim()) {
+          out.bio =
+            (descCurta || saudacao || `Atendimento orientado pelo cargo ${cargoTitulo}.`).slice(0, 200);
+        }
+        if (!out.system_prompt_base || !String(out.system_prompt_base).trim()) {
+          out.system_prompt_base =
+            promptTemplate ||
+            descricao ||
+            `Agente em atendimento externo. Use o cargo ${cargoTitulo} como guia interno de operação.`;
+        }
+      }
+    }
+  }
+
+  return NextResponse.json(sanitizarAgenteHubParaCliente(out));
 }
 
 export async function PATCH(

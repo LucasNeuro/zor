@@ -135,10 +135,17 @@ ${personalidade?.descricao_comportamento || ""}`);
 
   // CAMADA 2.5 — RAG do agente (documentos anexados no wizard)
   if (params.mensagemAtual?.trim()) {
-    const trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, params.mensagemAtual, {
+    let trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, params.mensagemAtual, {
       limit: 4,
       threshold: 0.68,
     });
+    // Fallback: em perguntas curtas/ambíguas, reduz threshold para não perder contexto útil.
+    if (trechosRag.length === 0) {
+      trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, params.mensagemAtual, {
+        limit: 3,
+        threshold: 0.56,
+      });
+    }
     if (trechosRag.length > 0) {
       const ragTexto = trechosRag
         .map((t, i) => {

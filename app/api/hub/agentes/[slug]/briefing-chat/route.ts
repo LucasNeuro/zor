@@ -18,6 +18,57 @@ function db() {
 const MODELO_FALLBACK = "mistral";
 const MAX_HISTORICO_MENSAGENS = 48;
 const MAX_MENSAGEM_LEN = 12_000;
+const BRIEFING_GET_CACHE_TTL_MS = 15_000;
+const BRIEFING_GET_CACHE_MAX = 150;
+
+const briefingGetCache = new Map<
+  string,
+  { expireAt: number; payload: Record<string, unknown> }
+>();
+
+function cacheKeyBriefingGet(slug: string, sessaoId: string | null): string {
+  return `${slug}::${sessaoId || "no-session"}`;
+}
+
+function cacheGetBriefingGet(slug: string, sessaoId: string | null): Record<string, unknown> | null {
+  const key = cacheKeyBriefingGet(slug, sessaoId);
+  const now = Date.now();
+  const hit = briefingGetCache.get(key);
+  if (!hit) return null;
+  if (hit.expireAt <= now) {
+    briefingGetCache.delete(key);
+    return null;
+  }
+  return hit.payload;
+}
+
+function cacheSetBriefingGet(slug: string, sessaoId: string | null, payload: Record<string, unknown>) {
+  if (briefingGetCache.size > BRIEFING_GET_CACHE_MAX) {
+    // remove entradas expiradas e depois a mais antiga (ordem de inserção).
+    const now = Date.now();
+    for (const [k, v] of briefingGetCache.entries()) {
+      if (v.expireAt <= now) briefingGetCache.delete(k);
+    }
+    if (briefingGetCache.size > BRIEFING_GET_CACHE_MAX) {
+      const firstKey = briefingGetCache.keys().next().value;
+      if (firstKey) briefingGetCache.delete(firstKey);
+    }
+  }
+  briefingGetCache.set(cacheKeyBriefingGet(slug, sessaoId), {
+    expireAt: Date.now() + BRIEFING_GET_CACHE_TTL_MS,
+    payload,
+  });
+}
+
+function cacheInvalidateBriefingGet(slug: string, sessaoId: string | null) {
+  const prefix = `${slug}::`;
+  for (const k of briefingGetCache.keys()) {
+    if (!k.startsWith(prefix)) continue;
+    if (!sessaoId || k === cacheKeyBriefingGet(slug, sessaoId) || k === cacheKeyBriefingGet(slug, null)) {
+      briefingGetCache.delete(k);
+    }
+  }
+}
 
 function normalizarModoBriefing(v: unknown): BriefingModoSessao {
   const s = String(v ?? "").trim();
@@ -36,6 +87,8 @@ export async function GET(
   const { slug: raw } = await params;
   const slug = decodeURIComponent(raw);
   const sessaoId = req.nextUrl.searchParams.get("sessao_id");
+  const cached = cacheGetBriefingGet(slug, sessaoId);
+  if (cached) return NextResponse.json(cached);
 
   const supabase = db();
 
@@ -80,13 +133,15 @@ export async function GET(
     mensagens = msgs || [];
   }
 
-  return NextResponse.json({
+  const payload = {
     agente_slug: agente.agente_slug,
     nome: agente.nome,
     sessoes: sessoes || [],
     mensagens,
     sessao_id_ativa: sessaoId || null,
-  });
+  };
+  cacheSetBriefingGet(slug, sessaoId, payload);
+  return NextResponse.json(payload);
 }
 
 export async function POST(
@@ -245,6 +300,7 @@ export async function POST(
     .from("hub_crm_agente_briefing_sessao")
     .update({ atualizado_em: new Date().toISOString() })
     .eq("id", sessaoId);
+  cacheInvalidateBriefingGet(slug, sessaoId);
 
   const { data: mensagens, error: mErr } = await supabase
     .from("hub_crm_agente_briefing_mensagem")
@@ -255,7 +311,7 @@ export async function POST(
 
   if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
 
-  return NextResponse.json({
+  const payload = {
     sessao_id: sessaoId,
     modo,
     mensagens: mensagens || [],
@@ -265,5 +321,7 @@ export async function POST(
       tokens_output: resultado.tokens_output,
       custo_brl: resultado.custo_brl,
     },
-  });
+  };
+  cacheSetBriefingGet(slug, sessaoId, payload);
+  return NextResponse.json(payload);
 }

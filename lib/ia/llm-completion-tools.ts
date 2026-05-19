@@ -11,6 +11,12 @@ import {
 
 const MAX_TOOL_ROUNDS = 6;
 
+type ToolCallExecLog = {
+  nome: string;
+  ok: boolean;
+  resultadoPreview: string;
+};
+
 export async function completarChatComFerramentasMistral(params: {
   systemPrompt: string;
   mensagens: Array<{ role: "user" | "assistant"; content: string }>;
@@ -19,7 +25,14 @@ export async function completarChatComFerramentasMistral(params: {
   maxTokens?: number;
   executarTool: (nome: string, argumentosSerializados: string) => Promise<string>;
 }): Promise<
-  | { ok: true; texto: string; tokensEntrada: number; tokensSaida: number; modeloLog: string }
+  | {
+      ok: true;
+      texto: string;
+      tokensEntrada: number;
+      tokensSaida: number;
+      modeloLog: string;
+      toolCallsExecutadas: ToolCallExecLog[];
+    }
   | { ok: false; erro: string }
 > {
   const mistralKey = process.env.MISTRAL_API_KEY?.trim();
@@ -40,8 +53,15 @@ export async function completarChatComFerramentasMistral(params: {
 
   let tokensEntrada = 0;
   let tokensSaida = 0;
+  const toolCallsExecutadas: ToolCallExecLog[] = [];
+  const nomesFerramentas = new Set(params.tools.map((t) => t.function.name));
+  const menuWhatsappAtivo = nomesFerramentas.has("hub_whatsapp_menu");
 
   let systemExtra = `\n\n═══ FERRAMENTAS ═══\nTem ferramentas para ler e actualizar o CRM desta conversa. Use hub_lead_resumo antes de afirmar estágio ou valores; use hub_atualizar_lead quando o cliente der dados novos (orçamento, interesse, follow-up); não invente factos não confirmados.`;
+  if (menuWhatsappAtivo) {
+    systemExtra +=
+      "\nQuando o cliente precisar escolher entre opções (menu, botões, lista, enquete, carrossel), chame hub_whatsapp_menu primeiro e só depois responda em texto curto para orientar a escolha.";
+  }
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const out = await mistralChatCompletionToolRound({
@@ -64,6 +84,7 @@ export async function completarChatComFerramentasMistral(params: {
         tokensEntrada,
         tokensSaida,
         modeloLog: mid,
+        toolCallsExecutadas,
       };
     }
 
@@ -85,6 +106,20 @@ export async function completarChatComFerramentasMistral(params: {
       const name = tc.function?.name ?? "";
       const argsStr = tc.function?.arguments ?? "{}";
       const result = await params.executarTool(name, typeof argsStr === "string" ? argsStr : "{}");
+      let parsed: Record<string, unknown> | null = null;
+      try {
+        parsed = JSON.parse(result) as Record<string, unknown>;
+      } catch {
+        parsed = null;
+      }
+      const ok =
+        parsed?.ok === true ||
+        (typeof parsed?.erro !== "string" && typeof parsed?.error !== "string");
+      const resultadoPreview =
+        typeof result === "string" && result.trim().length > 0
+          ? result.trim().slice(0, 240)
+          : "";
+      toolCallsExecutadas.push({ nome: name, ok, resultadoPreview });
       messages.push({
         role: "tool",
         name,

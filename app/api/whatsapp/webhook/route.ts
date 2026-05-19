@@ -16,7 +16,6 @@ import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook
 let warnedMissingWebhookSecret = false;
 const WEBHOOK_DEDUPE_TTL_MS = 2 * 60 * 1000;
 const webhookRecentKeys = new Map<string, number>();
-const WHATSAPP_MESSAGE_QUEUE = new Map<string, Promise<void>>();
 
 function limparDedupeExpirados(nowMs: number) {
   for (const [k, ts] of webhookRecentKeys.entries()) {
@@ -46,8 +45,8 @@ function timingSafeStringEqual(a: string, b: string): boolean {
   }
 }
 
-/** Verifica origem do webhook quando WEBHOOK_SECRET está definido (HMAC ou segredo em header/Bearer). Exportado apenas para testes. */
-export function webhookAutenticado(request: NextRequest, rawBody: string, secret: string): boolean {
+/** Verifica origem do webhook quando WEBHOOK_SECRET está definido (HMAC ou segredo em header/Bearer). */
+function webhookAutenticado(request: NextRequest, rawBody: string, secret: string): boolean {
   const sig =
     request.headers.get("x-hub-signature-256") ||
     request.headers.get("x-signature");
@@ -84,8 +83,6 @@ export function webhookAutenticado(request: NextRequest, rawBody: string, secret
 
   return false;
 }
-
-const IA_ATIVA = Boolean(process.env.MISTRAL_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY?.trim());
 
 function db() {
   return createClient(
@@ -151,17 +148,6 @@ async function enviarMensagemWhatsApp(
   };
 }
 
-function toolResultIndicaMenuEnviado(
-  toolCalls: Array<{ nome: string; ok: boolean; resultadoPreview?: string }> | undefined
-): boolean {
-  if (!Array.isArray(toolCalls) || toolCalls.length === 0) return false;
-  return toolCalls.some((t) => {
-    if (t.nome !== "hub_whatsapp_menu" || !t.ok) return false;
-    const prev = String(t.resultadoPreview || "");
-    return prev.includes('"ok":true') && (prev.includes("/send/menu") || prev.includes("/send/carousel"));
-  });
-}
-
 async function mensagemWebhookJaProcessada(
   supabase: ReturnType<typeof db>,
   opts: { messageId?: string | null; telefone: string }
@@ -170,13 +156,11 @@ async function mensagemWebhookJaProcessada(
   if (!mid) return false;
 
   const { data, error } = await supabase
-    .from("hub_fila_mensagens")
+    .from("hub_msg_jobs")
     .select("id")
     .eq("canal", "whatsapp")
-    .eq("direcao", "entrada")
-    .eq("status", "pendente")
-    .eq("metadata->>messageId", mid)
-    .eq("metadata->>telefone", opts.telefone)
+    .eq("message_id", mid)
+    .eq("telefone", opts.telefone)
     .limit(1);
 
   if (error) {
@@ -284,438 +268,41 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
   return { lead: novoLead, isNovo: true };
 }
 
-async function buscarAgente(mercado: string) {
-  const supabase = db();
-  const tenantId = defaultTenantId();
-
-  if (mercado === "imobiliario" || mercado === "arquitetura") {
-    let data: Record<string, unknown> | null = null;
-    {
-      const r = await supabase
-        .from("hub_agente_identidade")
-        .select("*")
-        .eq("agente_slug", "atendente")
-        .eq("tenant_id", tenantId)
-        .eq("ativo", true)
-        .is("arquivado_em", null)
-        .maybeSingle();
-      data = (r.data as Record<string, unknown> | null) ?? null;
-      if (!data && r.error?.message?.includes("tenant_id")) {
-        const fallback = await supabase
-          .from("hub_agente_identidade")
-          .select("*")
-          .eq("agente_slug", "atendente")
-          .eq("ativo", true)
-          .is("arquivado_em", null)
-          .maybeSingle();
-        data = (fallback.data as Record<string, unknown> | null) ?? null;
-      }
-    }
-    if (data) return data;
-  }
-
-  let agente: Record<string, unknown> | null = null;
-  let agenteErr: { message?: string } | null = null;
-  {
-    const r = await supabase
-      .from("hub_agente_identidade")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .eq("ativo", true)
-      .is("arquivado_em", null)
-      .ilike("prefixo_mercado", `%${mercado.toUpperCase().slice(0, 3)}%`)
-      .neq("agente_slug", "atendente")
-      .maybeSingle();
-    agente = (r.data as Record<string, unknown> | null) ?? null;
-    agenteErr = r.error as { message?: string } | null;
-  }
-
-  if (agenteErr?.message?.includes("tenant_id")) {
-    const r = await supabase
-      .from("hub_agente_identidade")
-      .select("*")
-      .eq("ativo", true)
-      .is("arquivado_em", null)
-      .ilike("prefixo_mercado", `%${mercado.toUpperCase().slice(0, 3)}%`)
-      .neq("agente_slug", "atendente")
-      .maybeSingle();
-    agente = (r.data as Record<string, unknown> | null) ?? null;
-  }
-
-  if (agente) return agente;
-
-  let sdr: Record<string, unknown> | null = null;
-  {
-    const r = await supabase
-      .from("hub_agente_identidade")
-      .select("*")
-      .eq("agente_slug", "sdr")
-      .eq("tenant_id", tenantId)
-      .eq("ativo", true)
-      .is("arquivado_em", null)
-      .maybeSingle();
-    sdr = (r.data as Record<string, unknown> | null) ?? null;
-    if (!sdr && r.error?.message?.includes("tenant_id")) {
-      const fallback = await supabase
-        .from("hub_agente_identidade")
-        .select("*")
-        .eq("agente_slug", "sdr")
-        .eq("ativo", true)
-        .is("arquivado_em", null)
-        .maybeSingle();
-      sdr = (fallback.data as Record<string, unknown> | null) ?? null;
-    }
-  }
-
-  return sdr;
-}
-
-async function buscarAgentePorSlug(supabase: ReturnType<typeof db>, slug: string) {
-  const tenantId = defaultTenantId();
-  let data: Record<string, unknown> | null = null;
-  {
-    const r = await supabase
-      .from("hub_agente_identidade")
-      .select("*")
-      .eq("agente_slug", slug)
-      .eq("tenant_id", tenantId)
-      .eq("ativo", true)
-      .is("arquivado_em", null)
-      .maybeSingle();
-    data = (r.data as Record<string, unknown> | null) ?? null;
-    if (!data && r.error?.message?.includes("tenant_id")) {
-      const fallback = await supabase
-        .from("hub_agente_identidade")
-        .select("*")
-        .eq("agente_slug", slug)
-        .eq("ativo", true)
-        .is("arquivado_em", null)
-        .maybeSingle();
-      data = (fallback.data as Record<string, unknown> | null) ?? null;
-    }
-  }
-  return data;
-}
-
-async function enviarFallbackIA(params: {
-  supabase: ReturnType<typeof db>;
+type EnqueueWhatsappJobInput = {
+  tenantId: string;
+  telefone: string;
   leadId: string;
-  telefone: string;
-  agenteSlug?: string;
-  motivo: string;
-  mensagemOriginal: string;
-  waSendOpts?: { instanceToken?: string | null };
-}) {
-  const mensagem = "Recebi sua mensagem e já encaminhei para revisão do time. Retornaremos em breve por aqui.";
+  agenteSlug: string;
+  messageId: string;
+  payload: Record<string, unknown>;
+};
 
-  try {
-    const filaRow = {
-      lead_id: params.leadId,
-      agente_id: params.agenteSlug || "sdr",
-      canal: "whatsapp",
-      direcao: "saida",
-      conteudo: mensagem,
-      status: "fallback_enviado",
-      tenant_id: defaultTenantId(),
-      metadata: { feito_por: "fallback_ia", motivo: params.motivo },
-    };
-    let filaIns = await params.supabase.from("hub_fila_mensagens").insert(filaRow);
-    if (filaIns.error && isMissingPgColumn(filaIns.error, "tenant_id")) {
-      const { tenant_id: _t, ...semTenant } = filaRow;
-      filaIns = await params.supabase.from("hub_fila_mensagens").insert(semTenant);
-    }
-  } catch (e) {
-    console.error("[WEBHOOK][FALLBACK] Erro ao gravar fila:", e);
-  }
+/**
+ * Enfileira no hub_msg_jobs para processamento assíncrono pelo worker.
+ * O processamento legado in-request foi removido da rota.
+ */
+async function enqueueWhatsappJob(
+  supabase: ReturnType<typeof db>,
+  input: EnqueueWhatsappJobInput
+): Promise<"accepted" | "duplicate"> {
+  const jobRow = {
+    tenant_id: input.tenantId,
+    canal: "whatsapp",
+    telefone: input.telefone,
+    lead_id: input.leadId,
+    agente_slug: input.agenteSlug,
+    message_id: input.messageId,
+    payload: input.payload,
+  };
 
-  try {
-    await params.supabase.from("hub_alertas").insert({
-      agente_slug: params.agenteSlug || "diretor_geral_ia",
-      tipo: "importante",
-      titulo: "Fallback IA acionado",
-      mensagem: `Lead ${params.telefone} recebeu resposta de fallback. Motivo: ${params.motivo}`,
-      lead_id: params.leadId,
-      dados: { mensagem_original: params.mensagemOriginal.slice(0, 200) },
-    });
-  } catch (e) {
-    console.error("[WEBHOOK][FALLBACK] Erro ao registrar alerta:", e);
-  }
+  const { data, error } = await supabase
+    .from("hub_msg_jobs")
+    .upsert(jobRow, { onConflict: "canal,message_id", ignoreDuplicates: true })
+    .select("id")
+    .maybeSingle();
 
-  await enviarMensagemWhatsApp(params.telefone, mensagem, params.waSendOpts);
-}
-
-async function processarMensagemInboundWhatsapp(params: {
-  supabase: ReturnType<typeof db>;
-  trace: ReturnType<typeof createWhatsappWebhookTrace>;
-  lead: Record<string, unknown>;
-  agente: Record<string, unknown> | null;
-  mensagemFinal: string;
-  telefone: string;
-  pushName: string;
-  messageId: string | null;
-  timestamp: string;
-  mercado: string;
-  instanceKey: string | null;
-  isNovo: boolean;
-  tipoMidia: string;
-  waSendOpts?: { instanceToken?: string | null };
-}) {
-  const { supabase, trace } = params;
-  const log = trace.log;
-  const lead = params.lead as { id: string; humano_responsavel?: string | null; agente_responsavel?: string | null };
-  const agente = params.agente;
-  const humanoResponsavelAtivo =
-    typeof lead.humano_responsavel === "string" && lead.humano_responsavel.trim().length > 0;
-
-  let agenteResponsavelLead =
-    typeof lead.agente_responsavel === "string" && lead.agente_responsavel.trim()
-      ? lead.agente_responsavel.trim()
-      : "sdr";
-
-  if (humanoResponsavelAtivo) {
-    log.info("wa.webhook.ia_skipped", { reason: "humano_responsavel_ativo" });
-    try {
-      await supabase.from("hub_atividades").insert({
-        lead_id: lead.id,
-        tipo: "mensagem",
-        descricao: `Mensagem recebida — humano (${lead.humano_responsavel?.trim()}) a atender — IA não acionada.`,
-        feito_por: "sistema",
-        feito_por_tipo: "ia",
-        metadata: { telefone: params.telefone, humano_responsavel: lead.humano_responsavel, skip_ia: true },
-      });
-    } catch (e) {
-      console.error("[WEBHOOK] Erro ao registrar atividade (humano responsável):", e);
-    }
-    return;
-  }
-
-  if (!(IA_ATIVA && agente)) {
-    const motivo = IA_ATIVA ? "agente_nao_encontrado" : "ia_api_key_ausente";
-    log.warn("wa.webhook.ia_skipped", { reason: motivo, ia_ativa: IA_ATIVA, tem_agente: Boolean(agente) });
-    await enviarFallbackIA({
-      supabase,
-      leadId: lead.id,
-      telefone: params.telefone,
-      agenteSlug: agente?.agente_slug as string | undefined,
-      motivo,
-      mensagemOriginal: params.mensagemFinal,
-      waSendOpts: params.waSendOpts,
-    });
-    log.info("wa.webhook.fallback_sent", { motivo });
-    return;
-  }
-
-  const agenteSlug = typeof agente.agente_slug === "string" ? agente.agente_slug : "sdr";
-  const iaStarted = Date.now();
-  log.info("wa.webhook.ia_start", { agente_slug: agenteSlug, lead_id: lead.id });
-
-  try {
-    const { processarMensagem } = await import("@/lib/ia/engine");
-    const resultado = await processarMensagem({
-      leadId: lead.id,
-      mensagem: params.mensagemFinal,
-      canal: "whatsapp",
-      telefone: params.telefone,
-      nome: params.pushName,
-      segmento: params.mercado,
-      agenteSlugHint: agenteSlug,
-      tenantId: defaultTenantId(),
-      statusFilaSaida: "pendente_envio",
-      metadata: {
-        telefone: params.telefone,
-        pushName: params.pushName,
-        messageId: params.messageId,
-        timestamp: params.timestamp,
-        mercado: params.mercado,
-        instance: params.instanceKey,
-        isNovo: params.isNovo,
-        tipoMidia: params.tipoMidia,
-      },
-    });
-
-    if (!resultado.sucesso || !resultado.resposta) {
-      log.warn("wa.webhook.ia_no_reply", {
-        agente_slug: agenteSlug,
-        motivo: resultado.erro || "engine_sem_resposta",
-        ia_duration_ms: Date.now() - iaStarted,
-      });
-      await enviarFallbackIA({
-        supabase,
-        leadId: lead.id,
-        telefone: params.telefone,
-        agenteSlug,
-        motivo: resultado.erro || "engine_sem_resposta",
-        mensagemOriginal: params.mensagemFinal,
-        waSendOpts: params.waSendOpts,
-      });
-      log.info("wa.webhook.fallback_sent", { motivo: resultado.erro || "engine_sem_resposta" });
-      return;
-    }
-
-    const menuJaEnviado = toolResultIndicaMenuEnviado(resultado.toolCallsExecutadas);
-    log.info("wa.webhook.ia_ok", {
-      agente_slug: resultado.agenteSlug || agenteSlug,
-      modelo: resultado.modelo || null,
-      ia_duration_ms: Date.now() - iaStarted,
-      precisa_aprovacao: Boolean(resultado.precisaAprovacao),
-      resposta_chars: resultado.resposta.length,
-      menu_ja_enviado: menuJaEnviado,
-      tool_calls: Array.isArray(resultado.toolCallsExecutadas)
-        ? resultado.toolCallsExecutadas.slice(0, 8).map((t) => ({
-            nome: t.nome,
-            ok: t.ok,
-          }))
-        : [],
-    });
-
-    if (resultado.agenteSlug && agenteResponsavelLead !== resultado.agenteSlug) {
-      await supabase.from("hub_leads_crm").update({ agente_responsavel: resultado.agenteSlug }).eq("id", lead.id);
-      agenteResponsavelLead = resultado.agenteSlug;
-    }
-
-    if (!menuJaEnviado) {
-      const sendOut = await enviarMensagemWhatsApp(params.telefone, resultado.resposta, params.waSendOpts);
-      const sendBodyPreview =
-        sendOut.body && typeof sendOut.body === "object"
-          ? JSON.stringify(sendOut.body).slice(0, 240)
-          : typeof sendOut.body === "string"
-            ? sendOut.body.slice(0, 240)
-            : null;
-      log.info("wa.webhook.send_text", {
-        ok: sendOut.ok,
-        provider: sendOut.provider,
-        send_status: sendOut.status,
-        send_error: sendOut.ok ? null : sendOut.error,
-        send_body_preview: sendBodyPreview,
-        telefone: trace.maskTelefone(params.telefone),
-      });
-    } else {
-      log.info("wa.webhook.send_text_skip", {
-        reason: "tool_hub_whatsapp_menu_already_sent",
-        telefone: trace.maskTelefone(params.telefone),
-      });
-    }
-
-    if (!resultado.precisaAprovacao) {
-      const slugEfetivo = resultado.agenteSlug || agenteSlug;
-      const modeloUsado = resultado.modelo || "mistral-small-latest";
-      const respostaTexto = resultado.resposta;
-      const _obsTokens = (resultado.tokens?.entrada ?? 0) + (resultado.tokens?.saida ?? 0);
-      const _obsCusto =
-        resultado.custo?.brl ??
-        parseFloat(((_obsTokens / 1000) * 0.00025 * 5.75).toFixed(4));
-
-      let _obsConversaId: string | null = null;
-      try {
-        const { data: _convExist } = await supabase
-          .from("hub_conversas")
-          .select("id")
-          .eq("lead_id", lead.id)
-          .eq("canal", "whatsapp")
-          .is("encerrada_em", null)
-          .maybeSingle();
-        if (_convExist) {
-          _obsConversaId = _convExist.id;
-          await supabase.from("hub_conversas").update({
-            ultima_mensagem_em: new Date().toISOString(),
-            ultima_mensagem_preview: respostaTexto.slice(0, 100),
-          }).eq("id", _obsConversaId);
-        } else {
-          const { data: _convNova } = await supabase.from("hub_conversas").insert({
-            lead_id: lead.id,
-            canal: "whatsapp",
-            status: "ativa",
-            ia_ativa: true,
-            ia_modelo: modeloUsado,
-            total_mensagens: 2,
-            ultima_mensagem_em: new Date().toISOString(),
-            ultima_mensagem_preview: respostaTexto.slice(0, 100),
-            aberta_em: new Date().toISOString(),
-          }).select("id").single();
-          if (_convNova) _obsConversaId = _convNova.id;
-        }
-      } catch (e) {
-        console.error("[OBS] hub_conversas:", e);
-      }
-
-      try {
-        if (_obsConversaId) {
-          await supabase.from("hub_mensagens").insert([
-            {
-              conversa_id: _obsConversaId,
-              lead_id: lead.id,
-              remetente: "lead",
-              tipo_conteudo: params.tipoMidia,
-              conteudo: params.mensagemFinal,
-              whatsapp_message_id: params.messageId,
-              enviada_em: params.timestamp,
-            },
-            {
-              conversa_id: _obsConversaId,
-              lead_id: lead.id,
-              remetente: "ia",
-              agente_id: slugEfetivo,
-              ia_modelo: modeloUsado,
-              tipo_conteudo: "texto",
-              conteudo: respostaTexto,
-              enviada_em: new Date().toISOString(),
-            },
-          ]);
-        }
-      } catch (e) {
-        console.error("[OBS] hub_mensagens:", e);
-      }
-
-      try {
-        const { data: _cicloRef } = await supabase
-          .from("hub_ciclos_ia")
-          .select("id")
-          .eq("agente_slug", slugEfetivo)
-          .maybeSingle();
-        await supabase.from("hub_ciclos_log").insert({
-          ciclo_id: _cicloRef?.id ?? null,
-          agente_slug: slugEfetivo,
-          status: "sucesso",
-          tokens_usados: _obsTokens,
-          custo_brl: _obsCusto,
-          acoes_tomadas: { acao: "respondeu", lead_id: lead.id, mercado: params.mercado, isNovo: params.isNovo },
-          iniciado_em: new Date().toISOString(),
-          finalizado_em: new Date().toISOString(),
-        });
-      } catch (e) {
-        console.error("[OBS] hub_ciclos_log:", e);
-      }
-
-      try {
-        const { data: _cicloCount } = await supabase
-          .from("hub_ciclos_ia")
-          .select("total_execucoes")
-          .eq("agente_slug", slugEfetivo)
-          .maybeSingle();
-        if (_cicloCount) {
-          await supabase.from("hub_ciclos_ia").update({
-            total_execucoes: (_cicloCount.total_execucoes || 0) + 1,
-            atualizado_em: new Date().toISOString(),
-          }).eq("agente_slug", slugEfetivo);
-        }
-      } catch (e) {
-        console.error("[OBS] hub_ciclos_ia:", e);
-      }
-    }
-  } catch (e) {
-    const errMsg = e instanceof Error ? e.message : "erro_ia_desconhecido";
-    log.error("wa.webhook.ia_error", { error: errMsg, ia_duration_ms: Date.now() - iaStarted });
-    await enviarFallbackIA({
-      supabase,
-      leadId: lead.id,
-      telefone: params.telefone,
-      agenteSlug,
-      motivo: errMsg,
-      mensagemOriginal: params.mensagemFinal,
-      waSendOpts: params.waSendOpts,
-    });
-    log.info("wa.webhook.fallback_sent", { motivo: errMsg });
-  }
+  if (error) throw error;
+  return data?.id ? "accepted" : "duplicate";
 }
 
 export async function GET(request: NextRequest) {
@@ -947,55 +534,11 @@ export async function POST(request: NextRequest) {
       await supabase.from("hub_leads_crm").update({ agente_responsavel: linhaWa.agenteSlug }).eq("id", lead.id);
     }
 
-    // TABELA 3: hub_fila_mensagens
-    const filaEntrada = {
-      lead_id: lead.id,
-      agente_id: agenteResponsavelLead,
-      canal: "whatsapp",
-      direcao: "entrada",
-      conteudo: mensagemFinal,
-      status: "pendente",
-      tenant_id: defaultTenantId(),
-      metadata: {
-        telefone,
-        pushName,
-        messageId,
-        timestamp,
-        mercado,
-        instance: instanceKey,
-        isNovo,
-        tipoMidia,
-      },
-    };
-    let filaRes = await supabase.from("hub_fila_mensagens").insert(filaEntrada);
-    if (filaRes.error && isMissingPgColumn(filaRes.error, "tenant_id")) {
-      const { tenant_id: _t, ...semTenant } = filaEntrada;
-      filaRes = await supabase.from("hub_fila_mensagens").insert(semTenant);
-    }
-
-    // TABELA 4: hub_acoes_ia
-    const agente =
-      linhaWa.kind === "agent_instance"
-        ? await buscarAgentePorSlug(supabase, linhaWa.agenteSlug)
-        : await buscarAgente(mercado);
-
-    await supabase.from("hub_acoes_ia").insert({
-      agente_slug: agente?.agente_slug || "sdr",
-      tipo: isNovo ? "novo_lead" : "lead_retornou",
-      descricao: `${isNovo ? "Novo lead" : "Lead retornou"} — mercado: ${mercado} — "${mensagemFinal.slice(0, 50)}"`,
-      lead_id: lead.id,
-      sucesso: true,
-      metadata: { telefone, mercado, isNovo, agente: agente?.agente_slug },
-    });
-
-    if (
-      agente &&
-      agente.agente_slug &&
-      linhaWa.kind !== "agent_instance" &&
-      agenteResponsavelLead !== agente.agente_slug
-    ) {
-      await supabase.from("hub_leads_crm").update({ agente_responsavel: agente.agente_slug }).eq("id", lead.id);
-      agenteResponsavelLead = agente.agente_slug as string;
+    const agenteSlugHint = linhaWa.kind === "agent_instance" ? linhaWa.agenteSlug : agenteResponsavelLead;
+    const messageIdParaFila = (messageId || "").trim();
+    if (!messageIdParaFila) {
+      log.warn("wa.webhook.message_missing_id", { telefone: trace.maskTelefone(telefone) });
+      return trace.json({ status: "ignored", reason: "missing_message_id" }, 200, "missing_message_id");
     }
 
     if (isNovo) {
@@ -1017,53 +560,52 @@ export async function POST(request: NextRequest) {
       } catch (e) { console.error("[WEBHOOK] Erro notificação:", e); }
     }
 
-    const queueKey = `${telefone}|${agenteResponsavelLead}`;
-    const prevRun = WHATSAPP_MESSAGE_QUEUE.get(queueKey) ?? Promise.resolve();
-    const thisRun = prevRun
-      .catch(() => {})
-      .then(async () => {
-        await processarMensagemInboundWhatsapp({
-          supabase,
-          trace,
-          lead,
-          agente,
-          mensagemFinal,
-          telefone,
-          pushName,
-          messageId,
-          timestamp,
-          mercado,
-          instanceKey: instanceKey ?? null,
-          isNovo,
-          tipoMidia,
-          waSendOpts,
-        });
-      })
-      .finally(() => {
-        if (WHATSAPP_MESSAGE_QUEUE.get(queueKey) === thisRun) {
-          WHATSAPP_MESSAGE_QUEUE.delete(queueKey);
-        }
-      });
-    WHATSAPP_MESSAGE_QUEUE.set(queueKey, thisRun);
+    const enqueuePayload = {
+      telefone,
+      pushName,
+      mercado,
+      instance: instanceKey ?? null,
+      tipoMidia,
+      mensagemFinal,
+      leadId: lead.id,
+      isNovo,
+      timestamp,
+      messageId: messageIdParaFila,
+      agenteSlugHint,
+      linhaKind: linhaWa.kind,
+      hasInstanceToken: Boolean(waSendOpts.instanceToken),
+    };
+
+    const enqueueStatus = await enqueueWhatsappJob(supabase, {
+      tenantId: defaultTenantId(),
+      telefone,
+      leadId: lead.id as string,
+      agenteSlug: agenteSlugHint,
+      messageId: messageIdParaFila,
+      payload: enqueuePayload,
+    });
+
+    log.info("wa.webhook.job_enqueued", {
+      enqueue_status: enqueueStatus,
+      lead_id: lead.id,
+      message_id: messageIdParaFila,
+      agente_slug_hint: agenteSlugHint,
+      mercado,
+      is_novo: isNovo,
+    });
 
     return trace.json(
       {
-        status: "accepted",
+        status: enqueueStatus,
         lead_id: lead.id,
         mercado,
-        agente: agente?.agente_slug,
+        agente_slug_hint: agenteSlugHint,
         isNovo,
-        tabelasSalvas: [
-          "hub_pessoas",
-          "hub_leads_crm",
-          "hub_memorias_lead",
-          "hub_fila_mensagens",
-          "hub_acoes_ia",
-          "hub_contatos_notificacao",
-        ],
+        queue: "hub_msg_jobs",
+        message_id: messageIdParaFila,
       },
       200,
-      "accepted_async"
+      enqueueStatus === "duplicate" ? "duplicate_accepted" : "accepted_async"
     );
   } catch (erro) {
     const errMsg = erro instanceof Error ? erro.message : "Erro desconhecido";

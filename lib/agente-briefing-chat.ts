@@ -168,6 +168,7 @@ export async function executarBriefingReply(params: {
   snapshot: string;
   historico: BriefingMensagemLinha[];
   mensagemUsuario: string;
+  memoriasAgenteBloco?: string;
 }): Promise<{ texto: string; modelo: string; tokens_input: number; tokens_output: number; custo_brl: number }> {
   const identity = [
     `Identidade do agente (para tom de voz): nome=${params.agenteNome}, slug=${params.agenteSlug}`,
@@ -177,7 +178,14 @@ export async function executarBriefingReply(params: {
     .filter(Boolean)
     .join("\n");
 
-  const system = `${BRIEFING_SYSTEM_PREAMBLE}\n\n${identity}\n\n${params.snapshot}`;
+  const system = [
+    BRIEFING_SYSTEM_PREAMBLE,
+    identity,
+    params.memoriasAgenteBloco?.trim() || null,
+    params.snapshot,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
   const anterior = [...params.historico];

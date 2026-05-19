@@ -8,11 +8,14 @@
     "dev:insecure-tls": "node scripts/dev-insecure-tls.cjs",
     "build": "next build",
     "start": "next start",
+    "worker:whatsapp": "node scripts/worker-whatsapp.js",
     "test": "vitest run",
     "smoke:playbook": "node scripts/smoke-agent-playbook.cjs",
     "checklist:hub": "node scripts/verify-hub-checklist.cjs",
     "smoke:webhook": "node scripts/smoke-whatsapp-webhook.cjs",
-    "diagnose:webhook": "node scripts/diagnose-uazapi-webhook.cjs"
+    "diagnose:webhook": "node scripts/diagnose-uazapi-webhook.cjs",
+    "audit:ferramentas": "node scripts/auditoria-ferramentas-agentes.cjs",
+    "sync:mistral-all": "node scripts/sync-mistral-all-agentes.cjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.16",
@@ -30,6 +33,8 @@
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0"
   }
 }

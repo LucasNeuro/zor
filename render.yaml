@@ -56,6 +56,54 @@ services:
         value: x-webhook-secret
       - key: DEFAULT_TENANT_ID
         value: "00000000-0000-4000-8000-000000000001"
+      - key: WORKER_POLL_MS
+        value: "2000"
+      - key: WORKER_BATCH_SIZE
+        value: "10"
+      - key: WORKER_CONCURRENCY
+        value: "4"
+      - key: MISTRAL_CHAT_TIMEOUT_MS
+        value: "30000"
+      - key: MISTRAL_CHAT_RETRIES
+        value: "1"
+
+  - type: worker
+    name: whatsapp-job-worker
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm run worker:whatsapp
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DEFAULT_TENANT_ID
+        value: "00000000-0000-4000-8000-000000000001"
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: UAZAPI_BASE_URL
+        sync: false
+      - key: UAZAPI_INSTANCE_TOKEN
+        sync: false
+      - key: WORKER_POLL_MS
+        value: "2000"
+      - key: WORKER_BATCH_SIZE
+        value: "10"
+      - key: WORKER_CONCURRENCY
+        value: "4"
+      - key: MISTRAL_CHAT_TIMEOUT_MS
+        value: "30000"
+      - key: MISTRAL_CHAT_RETRIES
+        value: "1"
 
   - type: cron
     name: dispatch-ciclos-cron

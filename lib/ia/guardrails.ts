@@ -24,6 +24,7 @@ const TABELAS_SO_HUMANO = [
 // CAMADA 3 — OPERACIONAL: IA opera livremente (apenas inserção/leitura)
 const TABELAS_OPERACIONAIS = [
   "hub_memorias_lead",
+  "hub_memorias_agente",
   "hub_prompt_logs",
   "hub_fila_mensagens",
   "hub_acoes_ia",

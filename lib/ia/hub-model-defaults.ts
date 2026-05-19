@@ -14,6 +14,21 @@ export function mistralDefaultModelId(): string {
   return process.env.MISTRAL_MODEL?.trim() || "mistral-small-latest";
 }
 
+/** Modelo barato para memória, resumo e tarefas auxiliares. */
+export function mistralMemoryModelId(): string {
+  return process.env.MISTRAL_MEMORY_MODEL?.trim() || "mistral-small-latest";
+}
+
+/**
+ * Modelo para Mistral Agents API — só aceita família Mistral.
+ * IDs Anthropic/legados são mapeados para MISTRAL_MODEL / mistral-small-latest.
+ */
+export function resolveMistralAgentsModelId(stored?: string | null): string {
+  const resolved = resolveInferenceModelId(stored);
+  if (isMistralFamilyModelId(resolved)) return resolved;
+  return mistralDefaultModelId();
+}
+
 /** Modelo efectivo para chamadas à API (expande sentinel → env). */
 export function resolveInferenceModelId(stored?: string | null): string {
   const raw = (stored ?? "").trim();

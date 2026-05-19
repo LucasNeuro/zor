@@ -136,6 +136,71 @@ function isTenantColumnMissing(message?: string): boolean {
   );
 }
 
+function linhasArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => String(x).trim()).filter(Boolean);
+}
+
+function montarPromptBaseDoCargo(params: {
+  nomeAgente: string;
+  tituloCargo: string;
+  promptTemplate?: unknown;
+  descricao?: unknown;
+  saudacaoCliente?: unknown;
+  usarPerguntasEssenciais?: unknown;
+  ordemPerguntasEssenciais?: unknown;
+  perguntasEssenciais?: unknown;
+  comprimentoPadrao?: unknown;
+}): string {
+  const promptTemplate = String(params.promptTemplate ?? "").trim();
+  const descricao = String(params.descricao ?? "").trim();
+  const saudacaoCliente = String(params.saudacaoCliente ?? "").trim();
+  const comprimentoPadrao = String(params.comprimentoPadrao ?? "").trim();
+  const ordemPerguntas = params.ordemPerguntasEssenciais === "final" ? "final" : "inicio";
+  const perguntasEssenciais = linhasArray(params.perguntasEssenciais);
+  const usarPerguntas = params.usarPerguntasEssenciais === true && perguntasEssenciais.length > 0;
+
+  const secoes: string[] = [];
+  secoes.push(
+    `Agente ${params.nomeAgente} em atendimento externo. Use o cargo ${params.tituloCargo} apenas como guia interno de operação.`
+  );
+
+  if (promptTemplate) {
+    secoes.push(`## Operação base do cargo\n${promptTemplate}`);
+  } else if (descricao) {
+    secoes.push(`## Operação base do cargo\n${descricao}`);
+  }
+
+  if (saudacaoCliente || comprimentoPadrao || usarPerguntas) {
+    const blocoAtendimento: string[] = [];
+    blocoAtendimento.push("## Regras de atendimento em canal externo");
+    blocoAtendimento.push(
+      "- Nunca diga ao cliente o nome do cargo/função interna (ex.: qualificadora, SDR, closer)."
+    );
+    blocoAtendimento.push("- Faça perguntas de qualificação naturalmente, sem anunciar processo interno.");
+    if (saudacaoCliente) blocoAtendimento.push(`- Saudação padrão: "${saudacaoCliente}"`);
+    if (comprimentoPadrao) blocoAtendimento.push(`- Comprimento padrão: ${comprimentoPadrao}`);
+    if (usarPerguntas) {
+      blocoAtendimento.push(
+        `- Aplicar perguntas essenciais no ${ordemPerguntas === "final" ? "final" : "início"} da conversa.`
+      );
+      blocoAtendimento.push("- Sequência de perguntas essenciais (ordem preferencial):");
+      for (const [idx, pergunta] of perguntasEssenciais.entries()) {
+        blocoAtendimento.push(`  ${idx + 1}. ${pergunta}`);
+      }
+    }
+    secoes.push(blocoAtendimento.join("\n"));
+  }
+
+  if (!promptTemplate && !descricao) {
+    secoes.push(
+      "Siga as regras do Obra10+, responda com clareza, sem inventar informações, e escale decisões críticas para humano."
+    );
+  }
+
+  return secoes.join("\n\n").trim();
+}
+
 export async function GET(request: NextRequest) {
   const supabase = db();
   const { searchParams } = new URL(request.url);
@@ -235,7 +300,7 @@ export async function POST(request: NextRequest) {
   const { data: cat, error: catErr } = await supabase
     .from("hub_cargos_catalogo")
     .select(
-      "slug, titulo, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao"
+      "slug, titulo, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao, saudacao_cliente, usar_perguntas_essenciais, ordem_perguntas_essenciais, perguntas_essenciais, comprimento_padrao"
     )
     .eq("slug", cargo_slug)
     .eq("ativo", true)
@@ -254,9 +319,17 @@ export async function POST(request: NextRequest) {
   const nivel = typeof cat.nivel === "number" ? cat.nivel : Number(cat.nivel) || 3;
   const promptBase =
     (system_prompt_base && String(system_prompt_base).trim()) ||
-    (cat.prompt_template && String(cat.prompt_template).trim()) ||
-    (cat.descricao && String(cat.descricao).trim()) ||
-    `Agente ${nome} — ${cat.titulo}. Siga as regras do Obra10+ e escale decisões críticas para humano.`;
+    montarPromptBaseDoCargo({
+      nomeAgente: String(nome).trim(),
+      tituloCargo: String(cat.titulo ?? "").trim(),
+      promptTemplate: cat.prompt_template,
+      descricao: cat.descricao,
+      saudacaoCliente: cat.saudacao_cliente,
+      usarPerguntasEssenciais: cat.usar_perguntas_essenciais,
+      ordemPerguntasEssenciais: cat.ordem_perguntas_essenciais,
+      perguntasEssenciais: cat.perguntas_essenciais,
+      comprimentoPadrao: cat.comprimento_padrao,
+    });
 
   // Gerar slug único
   const baseSlug = slugifyCargoSlug(nome);

@@ -154,6 +154,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       mercado: ctx.segmento,
       etapaFluxo: ctx.metadata?.etapa as string,
       mensagemAtual: ctx.mensagem,
+      canal: ctx.canal,
     });
 
     if (!promptData) {

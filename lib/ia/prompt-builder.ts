@@ -4,7 +4,6 @@
 // ============================================================
 import { createClient } from "@supabase/supabase-js";
 import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
-import { ordemConhecimentoSecao } from "@/lib/hub/conhecimento-secoes";
 import { buscarTrechosRag } from "@/lib/hub/rag";
 
 function db() {
@@ -14,12 +13,24 @@ function db() {
   );
 }
 
+function splitLinesLite(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof v === "string") {
+    return v
+      .split(/\n|,/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export interface PromptParams {
   agenteSlug: string;
   leadId?: string;
   mercado?: string;
   etapaFluxo?: string;
   mensagemAtual?: string;
+  canal?: string;
 }
 
 export interface PromptCompleto {
@@ -44,6 +55,16 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
 
   if (!agente) return null;
 
+  const { data: cargoCatalogo } = await supabase
+    .from("hub_cargos_catalogo")
+    .select(
+      "slug,titulo,saudacao_cliente,usar_perguntas_essenciais,perguntas_essenciais,comprimento_padrao"
+    )
+    .eq("titulo", String(agente.cargo ?? ""))
+    .eq("ativo", true)
+    .limit(1)
+    .maybeSingle();
+
   // 2. Busca personalidade
   const { data: personalidade } = await supabase
     .from("hub_personalidade")
@@ -51,16 +72,7 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     .eq("agente_slug", params.agenteSlug)
     .single();
 
-  // 3. Busca conhecimento por seção (ordenado)
-  const { data: conhecimentos } = await supabase
-    .from("hub_agente_conhecimento")
-    .select("*")
-    .eq("agente_slug", params.agenteSlug)
-    .eq("ativo", true)
-    .order("ordem", { ascending: true })
-    .order("secao");
-
-  // 4. Busca memórias do lead (top 5 mais relevantes)
+  // 3. Busca memórias do lead (top 5 mais relevantes)
   let memorias: Array<{ chave: string; valor: string }> = [];
   if (params.leadId) {
     const { data: mems } = await supabase
@@ -72,7 +84,7 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     if (mems) memorias = mems;
   }
 
-  // 5. Busca regras de IA do agente
+  // 4. Busca regras de IA do agente
   const { data: regras } = await supabase
     .from("hub_regras_ia")
     .select("instrucao, prioridade")
@@ -80,10 +92,10 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     .eq("ativo", true)
     .order("prioridade", { ascending: false });
 
-  // 6. Seleciona modelo baseado no contexto
+  // 5. Seleciona modelo baseado no contexto
   const modelo = selecionarModelo(agente, params.mercado);
 
-  // 7. Monta o prompt em camadas
+  // 6. Monta o prompt em camadas
   const secoes: string[] = [];
 
   // CAMADA 1 — IDENTIDADE
@@ -98,33 +110,27 @@ COMPORTAMENTO: Humor ${humorLabel} + Personalidade ${personalidadeLabel}.
 Tom de comunicação: ${tomComunicacao}.
 ${personalidade?.descricao_comportamento || ""}`);
 
-  // CAMADA 2 — CONTEXTO DO NEGÓCIO (conhecimento inserido por Wendel)
-  if (conhecimentos && conhecimentos.length > 0) {
-    const porSecao: Record<string, typeof conhecimentos> = {};
-    for (const c of conhecimentos) {
-      if (!porSecao[c.secao]) porSecao[c.secao] = [];
-      porSecao[c.secao].push(c);
+  // CAMADA 2 — OPERAÇÃO DO CARGO (externo)
+  if (cargoCatalogo) {
+    const linhas: string[] = [];
+    const saudacao = String(cargoCatalogo.saudacao_cliente ?? "").trim();
+    const comprimentoPadrao = String(cargoCatalogo.comprimento_padrao ?? "").trim();
+    const ordemPerguntas =
+      cargoCatalogo.ordem_perguntas_essenciais === "final" ? "final" : "inicio";
+    const perguntasEssenciais = splitLinesLite(cargoCatalogo.perguntas_essenciais);
+    const usarPerguntas = cargoCatalogo.usar_perguntas_essenciais === true && perguntasEssenciais.length > 0;
+    linhas.push("- Não mencionar cargo/função interna ao cliente (ex.: SDR, qualificador, closer).");
+    linhas.push("- Fazer perguntas de qualificação naturalmente, sem anunciar processo interno.");
+    if (saudacao) linhas.push(`- Saudação recomendada: "${saudacao}"`);
+    if (comprimentoPadrao) linhas.push(`- Comprimento padrão: ${comprimentoPadrao}`);
+    if (usarPerguntas) {
+      linhas.push(
+        `- Perguntas essenciais: aplicar no ${ordemPerguntas === "final" ? "final" : "início"} da conversa.`
+      );
+      linhas.push("- Lista em ordem preferencial:");
+      for (const [idx, p] of perguntasEssenciais.entries()) linhas.push(`  ${idx + 1}. ${p}`);
     }
-
-    const secaoLabels: Record<string, string> = {
-      fluxo_sdr: "NÚCLEO OPERACIONAL (POP)",
-      empresa: "SOBRE O NEGÓCIO",
-      servicos: "SERVIÇOS E PRODUTOS",
-      atendimento: "COMO ATENDER",
-      proibicoes: "NUNCA FAZER",
-      exemplos: "EXEMPLOS REAIS",
-      objeccoes: "COMO LIDAR COM OBJEÇÕES",
-    };
-
-    const secoesKeys = Object.keys(porSecao).sort(
-      (a, b) => ordemConhecimentoSecao(a) - ordemConhecimentoSecao(b) || a.localeCompare(b)
-    );
-    for (const secao of secoesKeys) {
-      const itens = porSecao[secao];
-      const label = secaoLabels[secao] || secao.toUpperCase();
-      const conteudo = itens.map(i => `[${i.titulo}]\n${i.conteudo}`).join("\n\n");
-      secoes.push(`═══ ${label} ═══\n${conteudo}`);
-    }
+    secoes.push(`═══ OPERAÇÃO DO CARGO ═══\n${linhas.join("\n")}`);
   }
 
   // CAMADA 2.5 — RAG do agente (documentos anexados no wizard)
@@ -193,12 +199,17 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
   }
 
   // CAMADA 7 — REGRAS UNIVERSAIS
-  secoes.push(`═══ REGRAS UNIVERSAIS ═══
-- Máximo 3 linhas por mensagem no WhatsApp — prefira 1 ou 2
-- Responda primeiro a pergunta do cliente, depois conduza
-- Nunca mencione que é IA a menos que seja perguntado diretamente
-- Se não souber, diga que vai verificar — nunca invente
-- Nunca encerre sem indicar o próximo passo`);
+  const regrasUniversais = [
+    "Responda primeiro a pergunta do cliente, depois conduza",
+    "Nunca mencione que é IA a menos que seja perguntado diretamente",
+    "Se não souber, diga que vai verificar — nunca invente",
+    "Nunca encerre sem indicar o próximo passo",
+  ];
+  if ((params.canal ?? "").toLowerCase() === "whatsapp") {
+    regrasUniversais.unshift("Máximo 3 linhas por mensagem no WhatsApp — prefira 1 ou 2");
+    regrasUniversais.push("Não mencionar cargo/função interna ao cliente (ex.: SDR, qualificador, closer).");
+  }
+  secoes.push(`═══ REGRAS UNIVERSAIS ═══\n${regrasUniversais.map((r) => `- ${r}`).join("\n")}`);
 
   const systemPrompt = secoes.join("\n\n");
   const tokensEstimados = Math.ceil(systemPrompt.length / 4);

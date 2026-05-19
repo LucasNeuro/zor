@@ -147,6 +147,11 @@ type CargoFormFields = {
   pode_fazer_padrao: string;
   nao_pode_fazer_padrao: string;
   prompt_template: string;
+  saudacao_cliente: string;
+  usar_perguntas_essenciais: boolean;
+  ordem_perguntas_essenciais: "inicio" | "final";
+  perguntas_essenciais: string;
+  comprimento_padrao: string;
   descricao: string;
   limite_autonomia_brl: string;
   ativo: boolean;
@@ -170,6 +175,11 @@ function emptyForm(): CargoFormFields {
     pode_fazer_padrao: "",
     nao_pode_fazer_padrao: "",
     prompt_template: "",
+    saudacao_cliente: "",
+    usar_perguntas_essenciais: false,
+    ordem_perguntas_essenciais: "inicio",
+    perguntas_essenciais: "",
+    comprimento_padrao: "Máx. 2 frases por mensagem.",
     descricao: "",
     limite_autonomia_brl: "5000",
     ativo: true,
@@ -208,6 +218,12 @@ function rowToForm(row: CargoRow): CargoFormFields {
     pode_fazer_padrao: lines("pode_fazer_padrao", "pode_fazer"),
     nao_pode_fazer_padrao: lines("nao_pode_fazer_padrao", "nao_pode_fazer"),
     prompt_template: String(row.prompt_template ?? ""),
+    saudacao_cliente: String(row.saudacao_cliente ?? ""),
+    usar_perguntas_essenciais: row.usar_perguntas_essenciais === true,
+    ordem_perguntas_essenciais:
+      row.ordem_perguntas_essenciais === "final" ? "final" : "inicio",
+    perguntas_essenciais: lines("perguntas_essenciais"),
+    comprimento_padrao: String(row.comprimento_padrao ?? ""),
     descricao: String(row.descricao ?? ""),
     limite_autonomia_brl:
       row.limite_autonomia_brl != null && row.limite_autonomia_brl !== ""
@@ -227,29 +243,6 @@ function splitLines(blob: string): string[] {
 
 function mergeSugestao(prev: CargoFormFields, s: Record<string, unknown>): CargoFormFields {
   const next = { ...prev };
-  const pickStr = (field: keyof CargoFormFields, srcKey: string) => {
-    const v = s[srcKey];
-    if (typeof v === "string" && v.trim()) (next as Record<string, unknown>)[field] = v.trim();
-  };
-  pickStr("titulo", "titulo");
-  pickStr("segmento", "segmento");
-  pickStr("especialidade", "especialidade");
-  pickStr("descricao_curta", "descricao_curta");
-  pickStr("area", "area");
-  pickStr("modelo_padrao", "modelo_padrao");
-  pickStr("modelo_critico", "modelo_critico");
-  pickStr("modelo_alto_valor", "modelo_alto_valor");
-  pickStr("prompt_template", "prompt_template");
-  pickStr("descricao", "descricao");
-  if (typeof s.supervisor_slug === "string") {
-    next.supervisor_slug = s.supervisor_slug.trim();
-  }
-  if (typeof s.nivel === "number" && Number.isFinite(s.nivel)) {
-    next.nivel = String(Math.min(5, Math.max(1, Math.round(s.nivel))));
-  }
-  if (typeof s.limite_autonomia_brl === "number" && Number.isFinite(s.limite_autonomia_brl)) {
-    next.limite_autonomia_brl = String(Math.max(0, s.limite_autonomia_brl));
-  }
   const asLines = (value: unknown): string | null => {
     if (Array.isArray(value)) {
       return value
@@ -266,6 +259,43 @@ function mergeSugestao(prev: CargoFormFields, s: Record<string, unknown>): Cargo
     }
     return null;
   };
+  const pickStr = (field: keyof CargoFormFields, srcKey: string) => {
+    const v = s[srcKey];
+    if (typeof v === "string" && v.trim()) (next as Record<string, unknown>)[field] = v.trim();
+  };
+  pickStr("titulo", "titulo");
+  pickStr("segmento", "segmento");
+  pickStr("especialidade", "especialidade");
+  pickStr("descricao_curta", "descricao_curta");
+  pickStr("area", "area");
+  pickStr("modelo_padrao", "modelo_padrao");
+  pickStr("modelo_critico", "modelo_critico");
+  pickStr("modelo_alto_valor", "modelo_alto_valor");
+  pickStr("prompt_template", "prompt_template");
+  pickStr("saudacao_cliente", "saudacao_cliente");
+  pickStr("comprimento_padrao", "comprimento_padrao");
+  if (typeof s.usar_perguntas_essenciais === "boolean") {
+    next.usar_perguntas_essenciais = s.usar_perguntas_essenciais;
+  }
+  if (s.ordem_perguntas_essenciais === "inicio" || s.ordem_perguntas_essenciais === "final") {
+    next.ordem_perguntas_essenciais = s.ordem_perguntas_essenciais;
+  }
+  const perguntasEssenciais =
+    asLines(s.perguntas_essenciais) ??
+    asLines(s.perguntas_obrigatorias) ??
+    asLines(s.perguntas) ??
+    null;
+  if (perguntasEssenciais != null) next.perguntas_essenciais = perguntasEssenciais;
+  pickStr("descricao", "descricao");
+  if (typeof s.supervisor_slug === "string") {
+    next.supervisor_slug = s.supervisor_slug.trim();
+  }
+  if (typeof s.nivel === "number" && Number.isFinite(s.nivel)) {
+    next.nivel = String(Math.min(5, Math.max(1, Math.round(s.nivel))));
+  }
+  if (typeof s.limite_autonomia_brl === "number" && Number.isFinite(s.limite_autonomia_brl)) {
+    next.limite_autonomia_brl = String(Math.max(0, s.limite_autonomia_brl));
+  }
   const pode =
     asLines(s.pode_fazer_padrao) ??
     asLines(s.pode_fazer) ??
@@ -691,6 +721,11 @@ export function CrmCargosCatalogDrawer({
       pode_fazer_padrao: splitLines(form.pode_fazer_padrao),
       nao_pode_fazer_padrao: splitLines(form.nao_pode_fazer_padrao),
       prompt_template: form.prompt_template.trim(),
+      saudacao_cliente: form.saudacao_cliente.trim(),
+      usar_perguntas_essenciais: form.usar_perguntas_essenciais,
+      ordem_perguntas_essenciais: form.ordem_perguntas_essenciais,
+      perguntas_essenciais: splitLines(form.perguntas_essenciais),
+      comprimento_padrao: form.comprimento_padrao.trim(),
       descricao: form.descricao.trim(),
       ativo: form.ativo,
     };
@@ -1749,6 +1784,134 @@ export function CrmCargosCatalogDrawer({
                     style={{ ...inp, resize: "vertical", fontFamily: "inherit", lineHeight: 1.45 }}
                   />
                 </label>
+
+                <div
+                  style={{
+                    border: `1px solid ${OB.borda}`,
+                    borderRadius: 10,
+                    background: "#121923",
+                    padding: 12,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <p style={{ margin: 0, color: OB.douradoLight, fontSize: 11, fontWeight: 800, letterSpacing: 0.3 }}>
+                      CONFIGURAÇÃO DE ATENDIMENTO EXTERNO
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void sugerirComMistral()}
+                      disabled={sugerindo || !form.titulo.trim()}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        border: "1px solid rgba(201, 162, 74, 0.42)",
+                        background: "rgba(201, 162, 74, 0.1)",
+                        color: OB.douradoLight,
+                        borderRadius: 8,
+                        padding: "6px 10px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: sugerindo || !form.titulo.trim() ? "not-allowed" : "pointer",
+                        opacity: sugerindo || !form.titulo.trim() ? 0.7 : 1,
+                      }}
+                      title="Gera saudação e sequência de perguntas com IA a partir do cargo."
+                    >
+                      <Sparkles size={12} aria-hidden />
+                      {sugerindo ? "Gerando…" : "Gerar com IA"}
+                    </button>
+                  </div>
+
+                  <label style={{ display: "block" }}>
+                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                      Saudação padrão (cliente)
+                    </span>
+                    <textarea
+                      value={form.saudacao_cliente}
+                      onChange={(e) => setForm((p) => ({ ...p, saudacao_cliente: e.target.value }))}
+                      rows={3}
+                      placeholder='Ex.: "Olá! Aqui é a Maria, do time de atendimento. Como posso te ajudar hoje?"'
+                      style={{ ...inp, resize: "vertical", fontFamily: "inherit", lineHeight: 1.45 }}
+                    />
+                  </label>
+
+                  <label style={{ display: "block" }}>
+                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                      Comprimento padrão
+                    </span>
+                    <input
+                      value={form.comprimento_padrao}
+                      onChange={(e) => setForm((p) => ({ ...p, comprimento_padrao: e.target.value }))}
+                      placeholder="Ex.: Máx. 2 frases por mensagem."
+                      style={inp}
+                    />
+                  </label>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                    <ObraCheckbox
+                      checked={form.usar_perguntas_essenciais}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, usar_perguntas_essenciais: e.target.checked }))
+                      }
+                    />
+                    <span style={{ color: OB.texto, fontSize: 12 }}>
+                      Usar sequência de perguntas essenciais
+                    </span>
+                  </label>
+
+                  {form.usar_perguntas_essenciais ? (
+                    <label style={{ display: "block" }}>
+                      <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                        Perguntas essenciais (uma por linha)
+                      </span>
+                      <textarea
+                        value={form.perguntas_essenciais}
+                        onChange={(e) => setForm((p) => ({ ...p, perguntas_essenciais: e.target.value }))}
+                        rows={5}
+                        placeholder={"Qual o seu nome?\nO que procura?\nQual região/faixa de valor?\nQual prazo para decidir?"}
+                        style={{ ...inp, resize: "vertical", fontFamily: "inherit", lineHeight: 1.45 }}
+                      />
+                    </label>
+                  ) : null}
+
+                  {form.usar_perguntas_essenciais ? (
+                    <label style={{ display: "block" }}>
+                      <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                        Ordem das perguntas
+                      </span>
+                      <select
+                        value={form.ordem_perguntas_essenciais}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            ordem_perguntas_essenciais:
+                              e.target.value === "final" ? "final" : "inicio",
+                          }))
+                        }
+                        style={inp}
+                      >
+                        <option value="inicio">No início da conversa (recomendado)</option>
+                        <option value="final">No final da conversa</option>
+                      </select>
+                    </label>
+                  ) : null}
+
+                  <p style={{ margin: 0, color: OB.texto2, fontSize: 11, lineHeight: 1.45 }}>
+                    Estes campos definem comportamento no canal externo. Evite mencionar cargo/função interna na
+                    saudação (ex.: “qualificador”, “SDR”, “closer”).
+                  </p>
+                </div>
 
                 <label style={{ display: "block" }}>
                   <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>

@@ -30,13 +30,67 @@ function stripJidToDigits(jid: string): string {
 
 /** ID da instância no webhook global UAZAPI (string ou objeto com id). */
 export function normalizeWebhookInstanceId(body: Record<string, unknown>): string | undefined {
+  const fromRoot = pickStr(body, "instanceId", "instance_id");
+  if (fromRoot) return fromRoot;
+
   const raw = body.instance ?? body.Instance;
   if (typeof raw === "string" && raw.trim()) return raw.trim();
-  if (raw && typeof raw === "object" && raw !== null && "id" in raw) {
-    const id = (raw as { id?: unknown }).id;
-    if (typeof id === "string" && id.trim()) return id.trim();
+  if (raw && typeof raw === "object" && raw !== null) {
+    const o = raw as Record<string, unknown>;
+    const id = pickStr(o, "id", "instanceId", "instance_id");
+    if (id) return id;
   }
   return undefined;
+}
+
+/** Webhook global UAZAPI envia muitas vezes `token` (instância) sem `instance` id. */
+export function extractWebhookInstanceRefs(body: Record<string, unknown>): {
+  instanceId?: string;
+  instanceToken?: string;
+} {
+  let instanceId = normalizeWebhookInstanceId(body);
+
+  const buckets: Record<string, unknown>[] = [body];
+  const payload = body.payload ?? body.Payload;
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    buckets.push(payload as Record<string, unknown>);
+  }
+  const rawData = body.data ?? body.Data;
+  if (Array.isArray(rawData) && rawData.length > 0 && typeof rawData[0] === "object" && rawData[0] !== null) {
+    buckets.push(rawData[0] as Record<string, unknown>);
+  } else if (rawData && typeof rawData === "object" && !Array.isArray(rawData)) {
+    buckets.push(rawData as Record<string, unknown>);
+  }
+  const data = resolverDataMensagem(body);
+  if (data) buckets.push(data);
+
+  let instanceToken: string | undefined;
+  for (const b of buckets) {
+    const t = pickStr(b, "token", "instanceToken", "instance_token", "apitoken", "apiToken");
+    if (t) {
+      instanceToken = t;
+      break;
+    }
+    const inst = b.instance ?? b.Instance;
+    if (inst && typeof inst === "object" && inst !== null) {
+      const o = inst as Record<string, unknown>;
+      const tok = pickStr(o, "token");
+      if (tok) instanceToken = tok;
+      if (!instanceId) {
+        const id = pickStr(o, "id", "instanceId", "instance_id");
+        if (id) instanceId = id;
+      }
+    }
+    if (!instanceId) {
+      const id = pickStr(b, "instanceId", "instance_id");
+      if (id) instanceId = id;
+    }
+  }
+
+  return {
+    ...(instanceId ? { instanceId } : {}),
+    ...(instanceToken ? { instanceToken } : {}),
+  };
 }
 
 function pickStr(data: Record<string, unknown>, ...keys: string[]): string {

@@ -4,7 +4,11 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { identificarMercado, identificarIntencao } from "@/lib/ia/agentes-config";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
-import { normalizeWebhookInstanceId, parseWhatsappWebhookBody } from "@/lib/whatsapp/webhook-inbound";
+import {
+  extractWebhookInstanceRefs,
+  normalizeWebhookInstanceId,
+  parseWhatsappWebhookBody,
+} from "@/lib/whatsapp/webhook-inbound";
 import { webhookSecretQueryParam } from "@/lib/whatsapp/webhook-auth";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
@@ -478,12 +482,16 @@ export async function POST(request: NextRequest) {
       instance,
     } = inbound.value;
 
-    const instanceKey = instance ?? normalizeWebhookInstanceId(body);
-    const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey);
+    const refs = extractWebhookInstanceRefs(body);
+    const instanceKey = instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);
+    const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey, {
+      instanceToken: refs.instanceToken,
+    });
     if (linhaWa.kind === "ignored") {
       log.warn("wa.webhook.resolver_ignored", {
         reason: linhaWa.reason,
         instance_id: instanceKey || null,
+        has_instance_token: Boolean(refs.instanceToken),
       });
       return trace.json({ status: "ignored", reason: linhaWa.reason }, 200, "resolver_ignored", {
         reason: linhaWa.reason,

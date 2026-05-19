@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWhatsappWebhookBody } from "./webhook-inbound";
+import { extractWebhookInstanceRefs, parseWhatsappWebhookBody } from "./webhook-inbound";
 
 const PNG = "5511914589862";
 
@@ -76,6 +76,16 @@ describe("parseWhatsappWebhookBody UAZAPI", () => {
     });
     expect(r.kind).toBe("ok");
     if (r.kind === "ok") expect(r.value.mensagemFinal).toBe("array ok");
+  });
+
+  it("extrai token de instância no root (webhook global)", () => {
+    const refs = extractWebhookInstanceRefs({
+      event: "messages",
+      token: "792df438-5d32-4e14-aaaa-bbbb",
+      chatid: `${PNG}@s.whatsapp.net`,
+      text: "oi",
+    });
+    expect(refs.instanceToken).toBe("792df438-5d32-4e14-aaaa-bbbb");
   });
 
   it("ignora messages_update", () => {

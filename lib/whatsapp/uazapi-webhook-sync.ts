@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { createHubLogger } from "@/lib/observability/hub-log";
 import { buildPublicWebhookUrl } from "@/lib/whatsapp/webhook-auth";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 
@@ -60,7 +61,13 @@ export async function syncWebhookDaInstancia(
     body: webhookBody(origin),
   });
 
-  if (!out.ok) return { ok: false, error: out.error };
+  if (!out.ok) {
+    createHubLogger("uazapi_webhook_sync").warn("wa.sync.instance_failed", { error: out.error });
+    return { ok: false, error: out.error };
+  }
+  createHubLogger("uazapi_webhook_sync").info("wa.sync.instance_ok", {
+    url_host: new URL(String(webhookBody(origin).url)).host,
+  });
   return { ok: true };
 }
 
@@ -83,7 +90,11 @@ export async function syncWebhookGlobal(
     body: webhookBody(origin),
   });
 
-  if (!out.ok) return { ok: false, error: out.error };
+  if (!out.ok) {
+    createHubLogger("uazapi_webhook_sync").warn("wa.sync.global_failed", { error: out.error });
+    return { ok: false, error: out.error };
+  }
+  createHubLogger("uazapi_webhook_sync").info("wa.sync.global_ok");
   return { ok: true };
 }
 
@@ -94,10 +105,16 @@ export async function syncWebhooksUazapi(
   instance: { ok: true } | { ok: false; error: string };
   global: { ok: true } | { ok: false; error: string; skipped?: boolean };
 }> {
+  const log = createHubLogger("uazapi_webhook_sync");
   const [instance, global] = await Promise.all([
     syncWebhookDaInstancia(request, instanceToken),
     syncWebhookGlobal(request),
   ]);
+  log.info("wa.sync.complete", {
+    instance_ok: instance.ok,
+    global_ok: global.ok,
+    global_skipped: !global.ok && "skipped" in global && global.skipped === true,
+  });
   return { instance, global };
 }
 

@@ -7,6 +7,7 @@ import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-what
 import { normalizeWebhookInstanceId, parseWhatsappWebhookBody } from "@/lib/whatsapp/webhook-inbound";
 import { webhookSecretQueryParam } from "@/lib/whatsapp/webhook-auth";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
+import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
 
 let warnedMissingWebhookSecret = false;
 
@@ -391,54 +392,70 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const trace = createWhatsappWebhookTrace(request);
+  const { log } = trace;
+
   try {
     const rawBody = await request.text();
+    log.info("wa.webhook.body_read", { body_bytes: rawBody.length });
 
     const skipVerify = process.env.NODE_ENV !== "production" && process.env.WEBHOOK_SKIP_SIGNATURE_VERIFY === "true";
     const secret = process.env.WEBHOOK_SECRET?.trim();
 
     if (process.env.NODE_ENV === "production" && !secret) {
-      console.error("[WEBHOOK] WEBHOOK_SECRET obrigatório em produção.");
-      return NextResponse.json({ error: "Webhook não configurado" }, { status: 500 });
+      log.error("wa.webhook.config_missing", { field: "WEBHOOK_SECRET" });
+      return trace.json({ error: "Webhook não configurado" }, 500, "config_missing");
     }
 
     if (secret && !skipVerify) {
       if (!webhookAutenticado(request, rawBody, secret)) {
-        console.warn("[WEBHOOK] Falha na verificação (HMAC ou header/Bearer)");
-        return NextResponse.json(
+        log.warn("wa.webhook.auth_failed", {
+          has_signature_header: Boolean(
+            request.headers.get("x-hub-signature-256") || request.headers.get("x-signature")
+          ),
+          has_bearer: Boolean(request.headers.get("authorization")?.startsWith("Bearer ")),
+          has_query_wh: request.nextUrl.searchParams.has(webhookSecretQueryParam()),
+        });
+        return trace.json(
           {
             error: "Não autorizado",
             code: "WEBHOOK_AUTH_FAILED",
             message:
               "Falha na verificação do webhook (HMAC SHA-256 ou credencial Bearer/cabeçalho não confere com WEBHOOK_SECRET).",
           },
-          { status: 401 }
+          401,
+          "auth_failed"
         );
       }
+      log.info("wa.webhook.auth_ok");
     } else if (!secret && !skipVerify) {
       if (!warnedMissingWebhookSecret) {
         warnedMissingWebhookSecret = true;
-        console.warn(
-          "[WEBHOOK] WEBHOOK_SECRET não definido — webhook aceita qualquer origem. Defina WEBHOOK_SECRET e alinhe UAZAPI (header ou HMAC). Em urgência local: WEBHOOK_SKIP_SIGNATURE_VERIFY=true"
-        );
+        log.warn("wa.webhook.auth_disabled", {
+          hint: "Defina WEBHOOK_SECRET ou use WEBHOOK_SKIP_SIGNATURE_VERIFY=true só em dev",
+        });
       }
+    } else if (skipVerify) {
+      log.warn("wa.webhook.auth_skipped_dev");
     }
 
     let body: Record<string, unknown>;
     try {
       body = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
-      return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+      return trace.json({ error: "JSON inválido" }, 400, "invalid_json");
     }
 
     const supabase = db();
 
     const inbound = parseWhatsappWebhookBody(body);
     if (inbound.kind === "ignored") {
-      return NextResponse.json({ status: inbound.status });
+      log.info("wa.webhook.parse_ignored", { reason: inbound.status });
+      return trace.json({ status: inbound.status }, 200, "parse_ignored");
     }
     if (inbound.kind === "unknown_event") {
-      return NextResponse.json({ status: "ignored", event: inbound.event });
+      log.info("wa.webhook.unknown_event", { event: inbound.event });
+      return trace.json({ status: "ignored", event: inbound.event }, 200, "unknown_event");
     }
 
     const {
@@ -454,8 +471,13 @@ export async function POST(request: NextRequest) {
     const instanceKey = instance ?? normalizeWebhookInstanceId(body);
     const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey);
     if (linhaWa.kind === "ignored") {
-      console.log("[WEBHOOK] ignorado:", linhaWa.reason, instanceKey ? `(instance=${instanceKey})` : "");
-      return NextResponse.json({ status: "ignored", reason: linhaWa.reason }, { status: 200 });
+      log.warn("wa.webhook.resolver_ignored", {
+        reason: linhaWa.reason,
+        instance_id: instanceKey || null,
+      });
+      return trace.json({ status: "ignored", reason: linhaWa.reason }, 200, "resolver_ignored", {
+        reason: linhaWa.reason,
+      });
     }
 
     const waSendOpts =
@@ -463,7 +485,15 @@ export async function POST(request: NextRequest) {
         ? { instanceToken: linhaWa.instanceToken as string }
         : {};
 
-    console.log(`[WEBHOOK] ${pushName || telefone}: ${mensagemFinal.slice(0, 80)}`);
+    log.info("wa.webhook.message_inbound", {
+      telefone: trace.maskTelefone(telefone),
+      push_name: pushName || null,
+      message_id: messageId || null,
+      preview: mensagemFinal.slice(0, 80),
+      instance_id: instanceKey || null,
+      linha_kind: linhaWa.kind,
+      agente_slug: linhaWa.kind === "agent_instance" ? linhaWa.agenteSlug : null,
+    });
 
     const intencao = identificarIntencao(mensagemFinal);
     const mercado = identificarMercado(mensagemFinal);
@@ -521,14 +551,17 @@ export async function POST(request: NextRequest) {
         dados: { telefone, pushName, mensagem: mensagemFinal },
       });
 
-      return NextResponse.json({ status: "ok", intencao: "parceiro", telefone });
+      return trace.json({ status: "ok", intencao: "parceiro", telefone: trace.maskTelefone(telefone) }, 200, "parceiro_ok");
     }
 
     const { lead, isNovo } = await encontrarOuCriarLead(telefone, pushName, mercado, mensagemFinal);
 
     if (!lead) {
-      return NextResponse.json({ status: "erro", erro: "Falha ao criar lead" }, { status: 500 });
+      log.error("wa.webhook.lead_failed", { telefone: trace.maskTelefone(telefone), mercado });
+      return trace.json({ status: "erro", erro: "Falha ao criar lead", code: "LEAD_CREATE_FAILED" }, 500, "lead_failed");
     }
+
+    log.info("wa.webhook.lead_ok", { lead_id: lead.id, is_novo: isNovo, mercado });
 
     let agenteResponsavelLead =
       typeof lead.agente_responsavel === "string" && lead.agente_responsavel.trim()
@@ -614,6 +647,7 @@ export async function POST(request: NextRequest) {
       typeof lead.humano_responsavel === "string" && lead.humano_responsavel.trim().length > 0;
 
     if (humanoResponsavelAtivo) {
+      log.info("wa.webhook.ia_skipped", { reason: "humano_responsavel_ativo" });
       try {
         await supabase.from("hub_atividades").insert({
           lead_id: lead.id,
@@ -629,6 +663,8 @@ export async function POST(request: NextRequest) {
     } else if (IA_ATIVA && agente) {
       const agenteSlug =
         typeof agente.agente_slug === "string" ? agente.agente_slug : "sdr";
+      const iaStarted = Date.now();
+      log.info("wa.webhook.ia_start", { agente_slug: agenteSlug, lead_id: lead.id });
       try {
         const { processarMensagem } = await import("@/lib/ia/engine");
         const resultado = await processarMensagem({
@@ -654,6 +690,11 @@ export async function POST(request: NextRequest) {
         });
 
         if (!resultado.sucesso || !resultado.resposta) {
+          log.warn("wa.webhook.ia_no_reply", {
+            agente_slug: agenteSlug,
+            motivo: resultado.erro || "engine_sem_resposta",
+            ia_duration_ms: Date.now() - iaStarted,
+          });
           await enviarFallbackIA({
             supabase,
             leadId: lead.id,
@@ -663,12 +704,24 @@ export async function POST(request: NextRequest) {
             mensagemOriginal: mensagemFinal,
             waSendOpts,
           });
+          log.info("wa.webhook.fallback_sent", { motivo: resultado.erro || "engine_sem_resposta" });
         } else {
+          log.info("wa.webhook.ia_ok", {
+            agente_slug: resultado.agenteSlug || agenteSlug,
+            modelo: resultado.modelo || null,
+            ia_duration_ms: Date.now() - iaStarted,
+            precisa_aprovacao: Boolean(resultado.precisaAprovacao),
+            resposta_chars: resultado.resposta.length,
+          });
           if (resultado.agenteSlug && agenteResponsavelLead !== resultado.agenteSlug) {
             await supabase.from("hub_leads_crm").update({ agente_responsavel: resultado.agenteSlug }).eq("id", lead.id);
           }
 
-          await enviarMensagemWhatsApp(telefone, resultado.resposta, waSendOpts);
+          const sendOut = await enviarMensagemWhatsApp(telefone, resultado.resposta, waSendOpts);
+          log.info("wa.webhook.send_text", {
+            ok: Boolean(sendOut),
+            telefone: trace.maskTelefone(telefone),
+          });
 
           if (!resultado.precisaAprovacao) {
             const slugEfetivo = resultado.agenteSlug || agenteSlug;
@@ -776,41 +829,56 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (e) {
-        console.error("[WEBHOOK] Erro IA:", e);
+        const errMsg = e instanceof Error ? e.message : "erro_ia_desconhecido";
+        log.error("wa.webhook.ia_error", { error: errMsg, ia_duration_ms: Date.now() - iaStarted });
         await enviarFallbackIA({
           supabase,
           leadId: lead.id,
           telefone,
           agenteSlug,
-          motivo: e instanceof Error ? e.message : "erro_ia_desconhecido",
+          motivo: errMsg,
           mensagemOriginal: mensagemFinal,
           waSendOpts,
         });
+        log.info("wa.webhook.fallback_sent", { motivo: errMsg });
       }
     } else if (!humanoResponsavelAtivo) {
+      const motivo = IA_ATIVA ? "agente_nao_encontrado" : "ia_api_key_ausente";
+      log.warn("wa.webhook.ia_skipped", { reason: motivo, ia_ativa: IA_ATIVA, tem_agente: Boolean(agente) });
       await enviarFallbackIA({
         supabase,
         leadId: lead.id,
         telefone,
         agenteSlug: agente?.agente_slug as string | undefined,
-        motivo: IA_ATIVA ? "agente_nao_encontrado" : "ia_api_key_ausente",
+        motivo,
         mensagemOriginal: mensagemFinal,
         waSendOpts,
       });
+      log.info("wa.webhook.fallback_sent", { motivo });
     }
 
-    return NextResponse.json({
-      status:        "ok",
-      lead_id:       lead.id,
-      mercado,
-      agente:        agente?.agente_slug,
-      isNovo,
-      tabelasSalvas: ["hub_pessoas", "hub_leads_crm", "hub_memorias_lead", "hub_fila_mensagens", "hub_acoes_ia", "hub_contatos_notificacao"],
-    });
-
+    return trace.json(
+      {
+        status: "ok",
+        lead_id: lead.id,
+        mercado,
+        agente: agente?.agente_slug,
+        isNovo,
+        tabelasSalvas: [
+          "hub_pessoas",
+          "hub_leads_crm",
+          "hub_memorias_lead",
+          "hub_fila_mensagens",
+          "hub_acoes_ia",
+          "hub_contatos_notificacao",
+        ],
+      },
+      200,
+      "ok"
+    );
   } catch (erro) {
     const errMsg = erro instanceof Error ? erro.message : "Erro desconhecido";
-    console.error("[WEBHOOK] Erro:", errMsg);
-    return NextResponse.json({ status: "erro", erro: errMsg }, { status: 500 });
+    log.error("wa.webhook.unhandled", { error: errMsg });
+    return trace.json({ status: "erro", erro: errMsg, code: "UNHANDLED" }, 500, "unhandled_error");
   }
 }

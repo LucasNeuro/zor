@@ -10,6 +10,27 @@ O escritório virtual usa **apenas UAZAPI** para envio e receção de mensagens 
 4. **Segredo do webhook:** defina `WEBHOOK_SECRET` no Render. Ao parear/atualizar o agente, o app regista na UAZAPI a URL `…/api/whatsapp/webhook?wh=<segredo>` (o parâmetro `wh` vem de `WEBHOOK_SECRET_QUERY_PARAM`). Opcional: o mesmo valor no header `x-webhook-secret` no painel UAZAPI.
 5. **Teste:** `npm run smoke:webhook` (local) ou enviar mensagem real no WhatsApp e confirmar log `POST /api/whatsapp/webhook` no Render.
 
+## Logs estruturados no Render (diagnóstico WhatsApp)
+
+Cada mensagem inbound gera linhas JSON no stdout (uma por evento), com `traceId` para correlacionar.
+
+**Filtros úteis no Live Tail:**
+
+| Filtro | Significado |
+|--------|-------------|
+| `"scope":"whatsapp_webhook"` | Só fluxo do webhook |
+| `"event":"wa.webhook.received"` | UAZAPI chegou ao servidor |
+| `"event":"wa.webhook.auth_failed"` | Segredo `?wh=` / header errado |
+| `"event":"wa.webhook.resolver_ignored"` | Instância não mapeada / não connected |
+| `"event":"wa.webhook.lead_failed"` | Erro ao criar lead (ex. `tenant_id`) |
+| `"event":"wa.webhook.ia_ok"` | IA respondeu |
+| `"event":"wa.webhook.send_text"` | Tentativa envio UAZAPI |
+| `"outcome":"ok"` | Fluxo concluído com sucesso |
+
+Variável opcional: `LOG_LEVEL=debug` (default `info`).
+
+**Importante:** logs do webhook aparecem no **terminal do servidor** (Render Logs / `npm run dev`), não no Console do browser (F12).
+
 ## Variáveis (`.env.local` / Render / Vercel)
 
 ```env

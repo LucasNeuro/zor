@@ -708,7 +708,6 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         nome,
         prefixo_mercado: mercados.join(","),
         personalidade: gerarPersonalidade(valores),
-        system_prompt_base: "",
         modo_operacao: modoOperacao,
         ciclo_execucao_padrao: cicloExecucaoPadrao,
         motor_ferramentas_habilitado: motorFerramentasHub,

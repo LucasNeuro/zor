@@ -63,6 +63,7 @@ export interface ContextoMensagem {
 export interface ResultadoEngine {
   sucesso: boolean;
   resposta?: string;
+  toolCallsExecutadas?: Array<{ nome: string; ok: boolean; resultadoPreview?: string }>;
   agenteSlug?: string;
   agenteNome?: string;
   modelo?: string;
@@ -212,7 +213,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       Boolean(ctx.leadId) &&
       isMistralFamilyModelId(modeloResolved);
 
-    const out = podeToolsMistral
+    let out = podeToolsMistral
       ? await completarChatComFerramentasMistral({
           systemPrompt,
           mensagens,
@@ -234,6 +235,18 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
           modeloFromDb: modelo,
           maxTokens: 1024,
         });
+    // Se tools Mistral falharem (ex.: 503 temporário), tenta sem tools antes de desistir.
+    if (!out.ok && podeToolsMistral) {
+      const fallbackSemTools = await completarChatPreferindoMistral({
+        systemPrompt,
+        mensagens,
+        modeloFromDb: modelo,
+        maxTokens: 1024,
+      });
+      if (fallbackSemTools.ok) {
+        out = fallbackSemTools;
+      }
+    }
     if (!out.ok) {
       return { sucesso: false, erro: out.erro };
     }
@@ -242,6 +255,11 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     const tokensEntrada = out.tokensEntrada;
     const tokensSaida = out.tokensSaida;
     const modeloLog = out.modeloLog;
+    const maybeToolCalls = (out as { toolCallsExecutadas?: unknown }).toolCallsExecutadas;
+    const toolCallsExecutadas: Array<{ nome: string; ok: boolean; resultadoPreview?: string }> =
+      Array.isArray(maybeToolCalls)
+        ? (maybeToolCalls as Array<{ nome: string; ok: boolean; resultadoPreview?: string }>)
+        : [];
     const custo = calcularCusto(modeloLog, tokensEntrada, tokensSaida);
     const latencia = Date.now() - inicio;
 
@@ -259,6 +277,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         tokens_output: tokensSaida,
         custo_estimado_brl: custo.brl,
         foi_escalado: false,
+        metadata: { tool_calls_executadas: toolCallsExecutadas.slice(0, 12) },
       })
       .select("id")
       .maybeSingle();
@@ -295,6 +314,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     return {
       sucesso: true,
       resposta: textoResposta,
+      toolCallsExecutadas,
       agenteSlug: agente.slug,
       agenteNome: agente.nome,
       modelo: modeloLog,

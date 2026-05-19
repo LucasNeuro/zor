@@ -535,7 +535,21 @@ export async function buscarTrechosRag(
   opts?: { limit?: number; threshold?: number }
 ): Promise<RagTrecho[]> {
   const texto = pergunta.trim();
-  if (texto.length < 3) return [];
+  // Evita custo/ruído com cumprimentos curtos ("oi", "olá") e perguntas sem contexto.
+  if (texto.length < 12) return [];
+
+  // Só tenta embedding se o agente tiver ao menos 1 documento pronto no RAG.
+  const { data: docPronto, error: docErr } = await supabase
+    .from("hub_agente_rag_documentos")
+    .select("id")
+    .eq("agente_slug", agenteSlug)
+    .eq("status", "pronto")
+    .limit(1);
+  if (docErr) {
+    console.warn("[rag] verificação docs prontos falhou:", docErr.message);
+    return [];
+  }
+  if (!Array.isArray(docPronto) || docPronto.length === 0) return [];
 
   const embed = await mistralEmbedTexts([texto]);
   if (!embed.ok) {

@@ -201,6 +201,19 @@ function montarPromptBaseDoCargo(params: {
   return secoes.join("\n\n").trim();
 }
 
+function montarBioDoCargo(params: {
+  tituloCargo: string;
+  descricaoCurta?: unknown;
+  saudacaoCliente?: unknown;
+}): string {
+  const titulo = String(params.tituloCargo ?? "").trim();
+  const descricaoCurta = String(params.descricaoCurta ?? "").trim();
+  const saudacao = String(params.saudacaoCliente ?? "").trim();
+  if (descricaoCurta) return descricaoCurta.slice(0, 200);
+  if (saudacao) return saudacao.slice(0, 200);
+  return (titulo ? `Atendimento orientado pelo cargo ${titulo}.` : "Atendimento orientado por cargo.").slice(0, 200);
+}
+
 export async function GET(request: NextRequest) {
   const supabase = db();
   const { searchParams } = new URL(request.url);
@@ -300,7 +313,7 @@ export async function POST(request: NextRequest) {
   const { data: cat, error: catErr } = await supabase
     .from("hub_cargos_catalogo")
     .select(
-      "slug, titulo, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao, saudacao_cliente, usar_perguntas_essenciais, ordem_perguntas_essenciais, perguntas_essenciais, comprimento_padrao"
+      "slug, titulo, descricao_curta, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao, saudacao_cliente, usar_perguntas_essenciais, ordem_perguntas_essenciais, perguntas_essenciais, comprimento_padrao"
     )
     .eq("slug", cargo_slug)
     .eq("ativo", true)
@@ -380,7 +393,13 @@ export async function POST(request: NextRequest) {
     sempre_dizer: [],
     nunca_dizer: [],
     prefixo_mercado: (prefixo_mercado && String(prefixo_mercado).trim()) || "GRL",
-    bio: (bio && String(bio).trim()) || null,
+    bio:
+      (bio && String(bio).trim()) ||
+      montarBioDoCargo({
+        tituloCargo: String(cat.titulo ?? "").trim(),
+        descricaoCurta: cat.descricao_curta,
+        saudacaoCliente: cat.saudacao_cliente,
+      }),
     horario_inicio: horario_inicio || "08:00:00",
     horario_fim: horario_fim || "22:00:00",
     dias_semana: diasTexto.length > 0 ? diasTexto : ["seg", "ter", "qua", "qui", "sex"],

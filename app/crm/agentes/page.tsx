@@ -15,6 +15,7 @@ import { calcularSaudeAgente, SAUDE_CORES } from "@/lib/agente-saude";
 import { INFERENCIA_IA_CRM_COPIA } from "@/lib/ia/hub-model-defaults";
 
 const MERCADOS_FIXOS = ["IMB", "ARQ", "RFM", "MRC", "ENG", "SRV", "PRO", "FOR"];
+const UI_FETCH_CACHE_TTL_MS = 15_000;
 
 const SEGMENTO_COR: Record<string, string> = {
   Marketing: "#3b82f6",
@@ -85,6 +86,20 @@ function markdownPlainPreview(raw: string, maxLen: number): string {
   const lastSpace = cut.lastIndexOf(" ");
   const base = lastSpace > maxLen * 0.6 ? cut.slice(0, lastSpace) : cut;
   return `${base.trimEnd()}…`;
+}
+
+function resumoCardAgente(agente: Agente): string {
+  const bio =
+    typeof agente.bio === "string" && agente.bio.trim()
+      ? markdownPlainPreview(agente.bio, 220)
+      : "";
+  if (bio) return bio;
+  const prompt =
+    typeof agente.system_prompt_base === "string" && agente.system_prompt_base.trim()
+      ? markdownPlainPreview(agente.system_prompt_base, 220)
+      : "";
+  if (prompt) return prompt;
+  return "Sem resumo configurado.";
 }
 
 function formatarData(v?: string) {
@@ -313,6 +328,10 @@ function AgentesView() {
   const [drawerSecConversasAberto, setDrawerSecConversasAberto] = useState(true);
 
   const detalheAberto = !!selectedSlug;
+  const listaCacheRef = useRef<{ ts: number; data: Agente[] } | null>(null);
+  const detalheCacheRef = useRef<Map<string, { ts: number; data: Agente }>>(new Map());
+  const logsCacheRef = useRef<Map<string, { ts: number; data: AgenteLog[] }>>(new Map());
+  const operacaoCacheRef = useRef<Map<string, { ts: number; data: OperacaoAgentePayload }>>(new Map());
 
   useEffect(() => {
     if (!selectedSlug) return;
@@ -403,6 +422,13 @@ function AgentesView() {
   }, [operacao]);
 
   const carregarAgentes = useCallback(() => {
+    const cached = listaCacheRef.current;
+    if (cached && Date.now() - cached.ts < UI_FETCH_CACHE_TTL_MS) {
+      setAgentes(cached.data);
+      setCarregando(false);
+      setErroLista(null);
+      return;
+    }
     setErroLista(null);
     setCarregando(true);
     fetch(urlParaModo(modoLista), { headers: internalApiHeaders() })
@@ -413,8 +439,13 @@ function AgentesView() {
           setAgentes([]);
           return;
         }
-        if (Array.isArray(data)) setAgentes(data);
-        else if (Array.isArray(data?.agentes)) setAgentes(data.agentes);
+        if (Array.isArray(data)) {
+          setAgentes(data);
+          listaCacheRef.current = { ts: Date.now(), data };
+        } else if (Array.isArray(data?.agentes)) {
+          setAgentes(data.agentes);
+          listaCacheRef.current = { ts: Date.now(), data: data.agentes };
+        }
         else {
           setAgentes([]);
           setErroLista("Resposta inesperada do servidor.");
@@ -428,6 +459,25 @@ function AgentesView() {
   }, [modoLista]);
 
   const carregarDetalhe = useCallback(async (slug: string) => {
+    const cached = detalheCacheRef.current.get(slug);
+    if (cached && Date.now() - cached.ts < UI_FETCH_CACHE_TTL_MS) {
+      setDetailAgente(cached.data);
+      setEditNome(String(cached.data?.nome || ""));
+      setEditMercados(
+        String(cached.data?.prefixo_mercado || "")
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean)
+      );
+      setEditBio(String(cached.data?.bio || ""));
+      setEditTom(String(cached.data?.tom_voz || ""));
+      setEditEstilo(String(cached.data?.estilo_comunicacao || ""));
+      setEditPrompt(String(cached.data?.system_prompt_base || ""));
+      setEditAtivo(cached.data?.ativo !== false);
+      setDetailLoading(false);
+      setDetailErro(null);
+      return;
+    }
     setDetailLoading(true);
     setDetailErro(null);
     try {
@@ -439,6 +489,7 @@ function AgentesView() {
         return;
       }
       setDetailAgente(data);
+      detalheCacheRef.current.set(slug, { ts: Date.now(), data });
       setEditNome(String(data?.nome || ""));
       setEditMercados(
         String(data?.prefixo_mercado || "")
@@ -460,6 +511,13 @@ function AgentesView() {
   }, []);
 
   const carregarLogs = useCallback(async (slug: string) => {
+    const cached = logsCacheRef.current.get(slug);
+    if (cached && Date.now() - cached.ts < UI_FETCH_CACHE_TTL_MS) {
+      setLogs(cached.data);
+      setLogsLoading(false);
+      setLogsErro(null);
+      return;
+    }
     setLogsLoading(true);
     setLogsErro(null);
     try {
@@ -474,6 +532,7 @@ function AgentesView() {
       }
       const raw = Array.isArray(data?.logs) ? data.logs : [];
       setLogs(raw);
+      logsCacheRef.current.set(slug, { ts: Date.now(), data: raw });
     } catch (e) {
       setLogsErro((e as Error)?.message || "Falha de rede ao carregar logs.");
       setLogs([]);
@@ -483,6 +542,13 @@ function AgentesView() {
   }, []);
 
   const carregarOperacao = useCallback(async (slug: string) => {
+    const cached = operacaoCacheRef.current.get(slug);
+    if (cached && Date.now() - cached.ts < UI_FETCH_CACHE_TTL_MS) {
+      setOperacao(cached.data);
+      setOperacaoLoading(false);
+      setOperacaoErro(null);
+      return;
+    }
     setOperacaoLoading(true);
     setOperacaoErro(null);
     try {
@@ -495,12 +561,14 @@ function AgentesView() {
         setOperacao(null);
         return;
       }
-      setOperacao({
+      const payload = {
         ciclos: Array.isArray(data?.ciclos) ? data.ciclos : [],
         execucoes_ciclo: Array.isArray(data?.execucoes_ciclo) ? data.execucoes_ciclo : [],
         acoes: Array.isArray(data?.acoes) ? data.acoes : [],
         ultimo_prompt_em: typeof data?.ultimo_prompt_em === "string" ? data.ultimo_prompt_em : null,
-      });
+      };
+      setOperacao(payload);
+      operacaoCacheRef.current.set(slug, { ts: Date.now(), data: payload });
     } catch (e) {
       setOperacaoErro((e as Error)?.message || "Falha de rede (operação).");
       setOperacao(null);
@@ -535,10 +603,11 @@ function AgentesView() {
 
   useEffect(() => {
     if (!selectedSlug) return;
+    router.prefetch(`/crm/agentes/${selectedSlug}`);
     void carregarDetalhe(selectedSlug);
     void carregarOperacao(selectedSlug);
     void carregarLogs(selectedSlug);
-  }, [selectedSlug, carregarDetalhe, carregarOperacao, carregarLogs]);
+  }, [selectedSlug, carregarDetalhe, carregarOperacao, carregarLogs, router]);
 
   const counters = {
     todos: agentes.length,
@@ -643,6 +712,8 @@ function AgentesView() {
       }
 
       if (detailAgente?.agente_slug === agente.agente_slug) setEditAtivo(proximo);
+      listaCacheRef.current = null;
+      detalheCacheRef.current.delete(agente.agente_slug);
     } finally {
       setAlternandoAtivoSlug(null);
     }
@@ -670,6 +741,10 @@ function AgentesView() {
       }
       setDialogExcluirAgente(null);
       setAgentes((prev) => prev.filter((a) => a.agente_slug !== agente.agente_slug));
+      listaCacheRef.current = null;
+      detalheCacheRef.current.delete(agente.agente_slug);
+      logsCacheRef.current.delete(agente.agente_slug);
+      operacaoCacheRef.current.delete(agente.agente_slug);
       if (selectedSlug === agente.agente_slug) {
         setSelectedSlug(null);
         setDetailAgente(null);
@@ -708,6 +783,8 @@ function AgentesView() {
         return;
       }
       setDetailAgente(data);
+      detalheCacheRef.current.set(selectedSlug, { ts: Date.now(), data });
+      listaCacheRef.current = null;
       void carregarOperacao(selectedSlug);
       setAgentes((prev) =>
         prev
@@ -847,10 +924,7 @@ function AgentesView() {
               const ativo = agente.ativo !== false;
               const avatarUrl = typeof agente.avatar_url === "string" && agente.avatar_url.trim() ? agente.avatar_url.trim() : null;
               const selecionado = selectedSlug === agente.agente_slug;
-              const bio =
-                typeof agente.bio === "string" && agente.bio.trim()
-                  ? markdownPlainPreview(agente.bio, 220)
-                  : null;
+              const bio = resumoCardAgente(agente);
 
               return (
                 <div
@@ -921,7 +995,7 @@ function AgentesView() {
                       overflow: "hidden",
                     }}
                   >
-                    {bio || "—"}
+                    {bio}
                   </p>
 
                   <p style={{ fontSize: 11, color: "#64748b", margin: 0, lineHeight: 1.5 }}>

@@ -1,8 +1,28 @@
 /** Chamadas Chat Completions Mistral — alinhado a `lib/playbook/mistral-appendix.ts`. */
 
 const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
+const DEFAULT_MISTRAL_CHAT_TIMEOUT_MS = 30_000;
+const DEFAULT_MISTRAL_CHAT_RETRIES = 1;
 
 export type MistralChatRole = "user" | "assistant";
+
+function mistralChatTimeoutMs(): number {
+  const raw = Number.parseInt(String(process.env.MISTRAL_CHAT_TIMEOUT_MS || ""), 10);
+  if (!Number.isFinite(raw) || raw < 5_000) return DEFAULT_MISTRAL_CHAT_TIMEOUT_MS;
+  return raw;
+}
+
+function mistralChatRetries(): number {
+  const raw = Number.parseInt(String(process.env.MISTRAL_CHAT_RETRIES || ""), 10);
+  if (!Number.isFinite(raw) || raw < 0) return DEFAULT_MISTRAL_CHAT_RETRIES;
+  return Math.min(raw, 3);
+}
+
+function shouldRetryMistral(status: number, body: string): boolean {
+  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) return true;
+  const b = body.toLowerCase();
+  return b.includes("service unavailable") || b.includes("timeout") || b.includes("overloaded");
+}
 
 export async function mistralChatCompletion(params: {
   model: string;
@@ -23,25 +43,60 @@ export async function mistralChatCompletion(params: {
     max_tokens: params.maxTokens ?? 1024,
     messages: [{ role: "system" as const, content: params.system }, ...params.messages],
   };
+  const retries = mistralChatRetries();
+  const timeoutMs = mistralChatTimeoutMs();
 
-  const res = await fetch(MISTRAL_CHAT_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    return { ok: false, error: `Mistral HTTP ${res.status}: ${t.slice(0, 280)}` };
-  }
-
-  const data = (await res.json()) as {
+  let data: {
     choices?: Array<{ message?: { content?: string | unknown } }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
+  } | null = null;
+  let lastError = "Mistral: falha desconhecida";
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort("mistral_timeout"), timeoutMs);
+    try {
+      const res = await fetch(MISTRAL_CHAT_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        lastError = `Mistral HTTP ${res.status}: ${t.slice(0, 280)}`;
+        if (attempt < retries && shouldRetryMistral(res.status, t)) {
+          await new Promise((r) => setTimeout(r, 450 * (attempt + 1)));
+          continue;
+        }
+        return { ok: false, error: lastError };
+      }
+
+      data = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string | unknown } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      break;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      const msg = e instanceof Error ? e.message : String(e);
+      lastError = msg.toLowerCase().includes("abort")
+        ? `Mistral timeout após ${timeoutMs}ms`
+        : msg || "fetch failed";
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 450 * (attempt + 1)));
+        continue;
+      }
+      return { ok: false, error: lastError };
+    }
+  }
+
+  if (!data) return { ok: false, error: lastError };
 
   const raw = data.choices?.[0]?.message?.content;
   const text = typeof raw === "string" ? raw : "";

@@ -9,6 +9,8 @@ import {
   type FerramentaCustomParaMistral,
 } from "@/lib/hub/ferramentas-custom-db";
 import { resolveInferenceModelId } from "@/lib/ia/hub-model-defaults";
+import { loadAgentPlaybookSnapshot } from "@/lib/playbook/agent-snapshot";
+import { buildUnifiedProductionPrompt } from "@/lib/playbook/render-deterministic";
 import { defaultTenantId } from "@/lib/tenant-default";
 
 const MISTRAL_AGENTS_URL = "https://api.mistral.ai/v1/agents";
@@ -23,9 +25,28 @@ type IdentRow = {
   tenant_id?: string | null;
 };
 
-function truncarInstrucoes(s: string, max = 12000): string {
+function truncarInstrucoes(s: string, max = 32000): string {
   if (s.length <= max) return s;
   return s.slice(0, max) + "\n\n[… truncado por limite Mistral …]";
+}
+
+/** Mesmo texto que a engine usa em produção (identidade + conhecimento + regras). */
+async function resolverInstrucoesMistral(
+  supabase: SupabaseClient,
+  agenteSlug: string,
+  fallback: string
+): Promise<string> {
+  const loaded = await loadAgentPlaybookSnapshot(supabase, agenteSlug);
+  if ("error" in loaded) {
+    return truncarInstrucoes(fallback);
+  }
+  try {
+    const unified = buildUnifiedProductionPrompt(loaded.snapshot).trim();
+    if (unified) return truncarInstrucoes(unified);
+  } catch (e) {
+    console.warn("[mistral-agents] buildUnifiedProductionPrompt:", agenteSlug, e);
+  }
+  return truncarInstrucoes(fallback);
 }
 
 export type SyncHubAgentMistralResult =
@@ -62,7 +83,8 @@ export async function syncHubAgenteParaMistral(
 
   const model = resolveInferenceModelId(String(r.modelo_padrao || ""));
   const name = `hub-${r.agente_slug}`.slice(0, 64);
-  const instructions = truncarInstrucoes(String(r.system_prompt_base || r.nome || r.agente_slug));
+  const fallbackInstr = String(r.system_prompt_base || r.nome || r.agente_slug);
+  const instructions = await resolverInstrucoesMistral(supabase, agenteSlug, fallbackInstr);
   const uso = mergeUsoFerramentasComPadraoPreservandoCustom(r.uso_ferramentas_ia);
   const tenantId = String(r.tenant_id || "").trim() || defaultTenantId();
   let customDefs: FerramentaCustomParaMistral[] = [];

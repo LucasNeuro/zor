@@ -140,13 +140,9 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       );
     }
 
-    // ETAPA 4: Busca histórico recente (últimas 5 mensagens)
-    const { data: historico } = await db
-      .from("hub_fila_mensagens")
-      .select("conteudo, direcao, criado_em")
-      .eq("lead_id", ctx.leadId)
-      .order("criado_em", { ascending: false })
-      .limit(5);
+    // ETAPA 4: Busca histórico recente (hub_fila_mensagens + fallback + resumo se 30+ msgs)
+    const { buscarHistoricoConversa } = await import("@/lib/ia/conversation-context");
+    const historicoCtx = await buscarHistoricoConversa(db, { leadId: ctx.leadId });
 
     // ETAPA 5: Monta o system prompt completo via banco
     const promptData = await construirPrompt({
@@ -174,15 +170,15 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     // ETAPA 7: Chama a IA
     const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
 
-    // Adiciona histórico recente
-    if (historico && historico.length > 0) {
-      const histOrdenado = [...historico].reverse();
-      for (const h of histOrdenado.slice(-4)) {
-        mensagens.push({
-          role: h.direcao === "entrada" ? "user" : "assistant",
-          content: h.conteudo as string,
-        });
-      }
+    // Adiciona histórico recente (+ resumo de conversa longa)
+    if (historicoCtx.resumoAnterior?.trim()) {
+      mensagens.push({
+        role: "user",
+        content: `[Resumo da conversa anterior — use como contexto, não cumprimente de novo por isto]\n${historicoCtx.resumoAnterior.trim()}`,
+      });
+    }
+    for (const h of historicoCtx.linhas) {
+      mensagens.push({ role: h.role, content: h.content });
     }
 
     mensagens.push({ role: "user", content: ctx.mensagem });
@@ -282,8 +278,21 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       .select("id")
       .maybeSingle();
 
-    // ETAPA 9: Salva memórias extraídas (schema CRM: chave / valor)
-    await extrairESalvarMemorias(ctx.leadId, ctx.mensagem, textoResposta);
+    // ETAPA 9: Salva memórias extraídas (lead + agente) via LLM
+    const { extrairESalvarMemoriasLead } = await import("@/lib/ia/memoria-lead");
+    await extrairESalvarMemoriasLead(db, ctx.leadId, ctx.mensagem, textoResposta);
+    try {
+      const { extrairESalvarMemoriasAgente } = await import("@/lib/ia/memoria-agente");
+      await extrairESalvarMemoriasAgente(db, {
+        agenteSlug: agente.slug,
+        tenantId: ctx.tenantId,
+        mensagemUsuario: ctx.mensagem,
+        respostaIA: textoResposta,
+        origem: ctx.canal === "whatsapp" ? "whatsapp" : "ia_engine",
+      });
+    } catch {
+      /* hub_memorias_agente opcional até migração aplicada */
+    }
 
     const statusSaida = ctx.statusFilaSaida ?? "pendente";
     const filaSaida: Record<string, unknown> = {
@@ -399,59 +408,6 @@ INSTRUÇÕES GERAIS
 `.trim());
 
   return secoes.join("\n\n");
-}
-
-// ── EXTRAIR E SALVAR MEMÓRIAS (hub_memorias_lead: chave / valor) ─────────────────────────
-async function extrairESalvarMemorias(
-  leadId: string,
-  mensagemUsuario: string,
-  respostaIA: string
-): Promise<void> {
-  const db = supabase();
-  const texto = `${mensagemUsuario} ${respostaIA}`.toLowerCase();
-
-  const padroes = [
-    { regex: /não (tenho|quero|posso|consigo|preciso)/gi, tipo: "objecao", relevancia: 0.8 },
-    { regex: /preciso de|estou procurando|quero|gostaria|interesse/gi, tipo: "interesse", relevancia: 0.7 },
-    { regex: /prefiro|gosto de|sempre uso|tenho costume/gi, tipo: "preferencia", relevancia: 0.6 },
-    { regex: /comprei|fechei|acordo|contrato|fechamos/gi, tipo: "compra", relevancia: 0.9 },
-    { regex: /orçamento|budget|investimento|valor|preço/gi, tipo: "financeiro", relevancia: 0.7 },
-    { regex: /urgente|preciso logo|prazo|quando|data/gi, tipo: "comportamento", relevancia: 0.6 },
-  ];
-
-  for (const padrao of padroes) {
-    const matches = texto.match(padrao.regex);
-    if (!matches) continue;
-    for (const match of matches.slice(0, 2)) {
-      const valor = match.slice(0, 200);
-      const chave = `${padrao.tipo}_auto`;
-
-      const { data: existente } = await db
-        .from("hub_memorias_lead")
-        .select("id, confianca")
-        .eq("lead_id", leadId)
-        .eq("chave", chave)
-        .ilike("valor", `%${valor.slice(0, Math.min(20, valor.length))}%`)
-        .maybeSingle();
-
-      if (existente) {
-        await db
-          .from("hub_memorias_lead")
-          .update({
-            confianca: Math.min(1, Number(existente.confianca) + 0.1),
-          })
-          .eq("id", existente.id);
-      } else {
-        await db.from("hub_memorias_lead").insert({
-          lead_id: leadId,
-          chave,
-          valor,
-          confianca: padrao.relevancia,
-          criado_por: "ia_engine",
-        });
-      }
-    }
-  }
 }
 
 // ── CALCULAR CUSTO ────────────────────────────────────────────

@@ -8,7 +8,9 @@ import {
   rowParaMistralDef,
   type FerramentaCustomParaMistral,
 } from "@/lib/hub/ferramentas-custom-db";
-import { resolveInferenceModelId } from "@/lib/ia/hub-model-defaults";
+import {
+  resolveMistralAgentsModelId,
+} from "@/lib/ia/hub-model-defaults";
 import { loadAgentPlaybookSnapshot } from "@/lib/playbook/agent-snapshot";
 import { buildUnifiedProductionPrompt } from "@/lib/playbook/render-deterministic";
 import { defaultTenantId } from "@/lib/tenant-default";
@@ -81,7 +83,7 @@ export async function syncHubAgenteParaMistral(
     return { ok: false, error: "Sincronização Mistral desativada para este agente." };
   }
 
-  const model = resolveInferenceModelId(String(r.modelo_padrao || ""));
+  const model = resolveMistralAgentsModelId(String(r.modelo_padrao || ""));
   const name = `hub-${r.agente_slug}`.slice(0, 64);
   const fallbackInstr = String(r.system_prompt_base || r.nome || r.agente_slug);
   const instructions = await resolverInstrucoesMistral(supabase, agenteSlug, fallbackInstr);
@@ -199,4 +201,33 @@ async function gravarErroSync(supabase: SupabaseClient, slug: string, erro: stri
 /** Serializa uso para JSONB: builtins normalizados + chaves hub_custom_* preservadas. */
 export function serializarUsoFerramentasParaDb(raw: unknown): Record<string, boolean> {
   return mergeUsoFerramentasComPadraoPreservandoCustom(raw);
+}
+
+/** Sincroniza todos os agentes com mistral_agent_sync_habilitado = true. */
+export async function syncTodosAgentesHubParaMistral(
+  supabase: SupabaseClient
+): Promise<Array<{ agente_slug: string; ok: boolean; mistral_agent_id?: string; error?: string }>> {
+  const { data, error } = await supabase
+    .from("hub_agente_identidade")
+    .select("agente_slug")
+    .eq("mistral_agent_sync_habilitado", true)
+    .order("agente_slug");
+
+  if (error) {
+    return [{ agente_slug: "*", ok: false, error: error.message }];
+  }
+
+  const out: Array<{ agente_slug: string; ok: boolean; mistral_agent_id?: string; error?: string }> = [];
+  for (const row of data ?? []) {
+    const slug = String((row as { agente_slug?: string }).agente_slug ?? "").trim();
+    if (!slug) continue;
+    const syn = await syncHubAgenteParaMistral(supabase, slug);
+    out.push({
+      agente_slug: slug,
+      ok: syn.ok,
+      mistral_agent_id: syn.ok ? syn.mistral_agent_id : undefined,
+      error: syn.ok ? undefined : syn.error,
+    });
+  }
+  return out;
 }

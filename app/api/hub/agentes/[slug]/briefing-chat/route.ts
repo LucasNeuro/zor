@@ -7,6 +7,7 @@ import {
   type BriefingMensagemLinha,
   type BriefingModoSessao,
 } from "@/lib/agente-briefing-chat";
+import { extrairESalvarMemoriasAgente, formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 
 function db() {
   return createClient(
@@ -251,6 +252,14 @@ export async function POST(
 
   const historicoParaModelo = historico.slice(0, -1);
 
+  let memoriasAgenteBloco = "";
+  try {
+    const memAgente = await listarMemoriasAgente(supabase, slug, 6);
+    memoriasAgenteBloco = formatarBlocoMemoriasAgente(memAgente);
+  } catch {
+    memoriasAgenteBloco = "";
+  }
+
   let resultado;
   try {
     if (modo === "simulacao_canal") {
@@ -275,6 +284,7 @@ export async function POST(
         snapshot,
         historico: historicoParaModelo,
         mensagemUsuario: textoUser,
+        memoriasAgenteBloco,
       });
     }
   } catch (e) {
@@ -295,6 +305,17 @@ export async function POST(
     },
   });
   if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
+
+  try {
+    await extrairESalvarMemoriasAgente(supabase, {
+      agenteSlug: slug,
+      mensagemUsuario: textoUser,
+      respostaIA: resultado.texto,
+      origem: "briefing",
+    });
+  } catch {
+    /* hub_memorias_agente opcional até migração aplicada */
+  }
 
   await supabase
     .from("hub_crm_agente_briefing_sessao")

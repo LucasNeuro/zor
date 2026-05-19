@@ -5,6 +5,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import { buscarTrechosRag } from "@/lib/hub/rag";
+import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 
 function db() {
   return createClient(
@@ -72,8 +73,9 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     .eq("agente_slug", params.agenteSlug)
     .single();
 
-  // 3. Busca memórias do lead (top 5 mais relevantes)
+  // 3. Busca memórias do lead (top 5) e do agente (top 6)
   let memorias: Array<{ chave: string; valor: string }> = [];
+  let memoriasAgenteTexto = "";
   if (params.leadId) {
     const { data: mems } = await supabase
       .from("hub_memorias_lead")
@@ -82,6 +84,12 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
       .order("confianca", { ascending: false })
       .limit(5);
     if (mems) memorias = mems;
+  }
+  try {
+    const memAgente = await listarMemoriasAgente(supabase, params.agenteSlug, 6);
+    memoriasAgenteTexto = formatarBlocoMemoriasAgente(memAgente);
+  } catch {
+    memoriasAgenteTexto = "";
   }
 
   // 4. Busca regras de IA do agente
@@ -198,6 +206,10 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
   if (memorias.length > 0) {
     const memTexto = memorias.map(m => `• [${m.chave}] ${m.valor}`).join("\n");
     secoes.push(`═══ O QUE VOCÊ LEMBRA DESTE LEAD ═══\n${memTexto}`);
+  }
+
+  if (memoriasAgenteTexto) {
+    secoes.push(memoriasAgenteTexto);
   }
 
   // CAMADA 6 — ETAPA DO FLUXO

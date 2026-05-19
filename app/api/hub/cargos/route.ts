@@ -46,6 +46,108 @@ function asStringArrayPatch(v: unknown): string[] | undefined {
   return undefined;
 }
 
+function asOptionalBooleanPatch(v: unknown): boolean | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    if (["1", "true", "sim", "yes", "on"].includes(t)) return true;
+    if (["0", "false", "nao", "não", "no", "off"].includes(t)) return false;
+  }
+  if (typeof v === "number") return v !== 0;
+  return undefined;
+}
+
+type CargoAtendimentoDefaults = {
+  saudacao_cliente: string;
+  usar_perguntas_essenciais: boolean;
+  ordem_perguntas_essenciais: "inicio" | "final";
+  perguntas_essenciais: string[];
+  comprimento_padrao: string;
+};
+
+function defaultsAtendimentoPorTipoCargo(input: {
+  slug: string;
+  titulo: string;
+  segmento: string | null;
+  especialidade: string | null;
+}): CargoAtendimentoDefaults {
+  const corpus = `${input.slug} ${input.titulo} ${input.segmento ?? ""} ${input.especialidade ?? ""}`.toLowerCase();
+
+  const base: CargoAtendimentoDefaults = {
+    saudacao_cliente: "Olá! Aqui é o time de atendimento. Como posso te ajudar hoje?",
+    usar_perguntas_essenciais: false,
+    ordem_perguntas_essenciais: "inicio",
+    perguntas_essenciais: [],
+    comprimento_padrao: "Máx. 2 frases por mensagem.",
+  };
+
+  const ehQualificacao =
+    /\b(sdr|qualific|closer|vendas|comercial|inside sales|pré-venda|pre-venda)\b/i.test(corpus);
+  if (ehQualificacao) {
+    return {
+      saudacao_cliente: "Olá! Aqui é o time de atendimento. Posso te ajudar com algumas perguntas rápidas?",
+      usar_perguntas_essenciais: true,
+      ordem_perguntas_essenciais: "inicio",
+      perguntas_essenciais: [
+        "Qual o seu nome?",
+        "O que procura no momento?",
+        "Qual região ou faixa de valor?",
+        "Qual o prazo para decidir?",
+      ],
+      comprimento_padrao: "Máx. 2 frases por mensagem.",
+    };
+  }
+
+  const ehSuporte = /\b(suporte|support|atendimento|help|sac|pós-venda|pos-venda)\b/i.test(corpus);
+  if (ehSuporte) {
+    return {
+      saudacao_cliente: "Olá! Aqui é o suporte. Me conta rapidamente o que aconteceu para eu te ajudar.",
+      usar_perguntas_essenciais: true,
+      ordem_perguntas_essenciais: "inicio",
+      perguntas_essenciais: [
+        "O que aconteceu exatamente?",
+        "Quando começou o problema?",
+        "Qual produto/serviço está envolvido?",
+        "Qual é o melhor contato para retorno?",
+      ],
+      comprimento_padrao: "Respostas curtas, diretas e objetivas (máx. 2 frases).",
+    };
+  }
+
+  const ehOperacoes = /\b(operaç|operac|analista|finance|cobran|backoffice|processo)\b/i.test(corpus);
+  if (ehOperacoes) {
+    return {
+      saudacao_cliente: "Olá! Vou validar seu pedido e já te atualizo com o próximo passo.",
+      usar_perguntas_essenciais: true,
+      ordem_perguntas_essenciais: "final",
+      perguntas_essenciais: [
+        "Qual é a sua solicitação principal?",
+        "Você tem algum número de pedido/protocolo?",
+        "Há prazo limite para essa solicitação?",
+      ],
+      comprimento_padrao: "Máx. 3 frases por mensagem; priorize clareza.",
+    };
+  }
+
+  const ehMarketing = /\b(marketing|tráfego|trafego|copy|social|conteúdo|conteudo)\b/i.test(corpus);
+  if (ehMarketing) {
+    return {
+      saudacao_cliente: "Olá! Vamos entender seu objetivo para te direcionar da melhor forma.",
+      usar_perguntas_essenciais: true,
+      ordem_perguntas_essenciais: "inicio",
+      perguntas_essenciais: [
+        "Qual objetivo principal da campanha/projeto?",
+        "Qual o público-alvo?",
+        "Qual orçamento ou limite de investimento?",
+      ],
+      comprimento_padrao: "Máx. 2 frases por mensagem; sem rodeios.",
+    };
+  }
+
+  return base;
+}
+
 export async function GET(request: NextRequest) {
   const supabase = db();
   const { searchParams } = new URL(request.url);
@@ -101,12 +203,20 @@ export async function POST(request: NextRequest) {
 
   const pode = asStringArrayPatch(body.pode_fazer_padrao) ?? [];
   const naoPode = asStringArrayPatch(body.nao_pode_fazer_padrao) ?? [];
+  const segmentoNorm = asTrimmedOrNull(body.segmento);
+  const especialidadeNorm = asTrimmedOrNull(body.especialidade);
+  const defaultsAtendimento = defaultsAtendimentoPorTipoCargo({
+    slug: slugFinal,
+    titulo,
+    segmento: segmentoNorm,
+    especialidade: especialidadeNorm,
+  });
 
   const row: Record<string, unknown> = {
     slug: slugFinal,
     titulo,
-    segmento: asTrimmedOrNull(body.segmento),
-    especialidade: asTrimmedOrNull(body.especialidade),
+    segmento: segmentoNorm,
+    especialidade: especialidadeNorm,
     descricao_curta: asTrimmedOrNull(body.descricao_curta),
     area: asTrimmedOrNull(body.area) ?? "geral",
     nivel,
@@ -120,6 +230,17 @@ export async function POST(request: NextRequest) {
     nao_pode_fazer_padrao: naoPode,
     prompt_template: asTrimmedOrNull(body.prompt_template) ?? "",
     descricao: asTrimmedOrNull(body.descricao) ?? "",
+    saudacao_cliente: asTrimmedOrNull(body.saudacao_cliente) ?? defaultsAtendimento.saudacao_cliente,
+    usar_perguntas_essenciais:
+      asOptionalBooleanPatch(body.usar_perguntas_essenciais) ?? defaultsAtendimento.usar_perguntas_essenciais,
+    ordem_perguntas_essenciais:
+      body.ordem_perguntas_essenciais === "final"
+        ? "final"
+        : body.ordem_perguntas_essenciais === "inicio"
+          ? "inicio"
+          : defaultsAtendimento.ordem_perguntas_essenciais,
+    perguntas_essenciais: asStringArrayPatch(body.perguntas_essenciais) ?? defaultsAtendimento.perguntas_essenciais,
+    comprimento_padrao: asTrimmedOrNull(body.comprimento_padrao) ?? defaultsAtendimento.comprimento_padrao,
     ativo: body.ativo !== false,
   };
 
@@ -201,6 +322,15 @@ export async function PATCH(request: NextRequest) {
   }
   if ("prompt_template" in body) patch.prompt_template = asOptionalTrimPatch(body.prompt_template);
   if ("descricao" in body) patch.descricao = asOptionalTrimPatch(body.descricao);
+  if ("saudacao_cliente" in body) patch.saudacao_cliente = asOptionalTrimPatch(body.saudacao_cliente);
+  if ("comprimento_padrao" in body) patch.comprimento_padrao = asOptionalTrimPatch(body.comprimento_padrao);
+  const usarPerguntasPatch = asOptionalBooleanPatch(body.usar_perguntas_essenciais);
+  if (usarPerguntasPatch !== undefined) patch.usar_perguntas_essenciais = usarPerguntasPatch;
+  const perguntasPatch = asStringArrayPatch(body.perguntas_essenciais);
+  if (perguntasPatch !== undefined) patch.perguntas_essenciais = perguntasPatch;
+  if (body.ordem_perguntas_essenciais === "inicio" || body.ordem_perguntas_essenciais === "final") {
+    patch.ordem_perguntas_essenciais = body.ordem_perguntas_essenciais;
+  }
 
   const nivelPatch = asOptionalNumberPatch(body.nivel);
   if (nivelPatch !== undefined && nivelPatch !== null) {

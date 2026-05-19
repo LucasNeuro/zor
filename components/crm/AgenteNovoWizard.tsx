@@ -5,10 +5,6 @@ import { useRouter } from "next/navigation";
 import { Clock, MessageSquare, Webhook, Zap } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
-  CONHECIMENTO_SECAO_ORDER,
-  CONHECIMENTO_TITULO_INSERT,
-} from "@/lib/hub/conhecimento-secoes";
-import {
   MODO_OPERACAO_DESCRICAO,
   MODO_OPERACAO_LABEL,
   type ModoOperacaoAgente,
@@ -41,7 +37,7 @@ const WIZARD_STEP_LABELS = [
   "Cargo",
   "Identidade",
   "Personalidade",
-  "Conhecimento",
+  "Documentos",
   "Revisão",
   "Ferramentas",
   "Materiais",
@@ -113,45 +109,6 @@ const EIXOS = [
   },
 ];
 
-const SECOES_CONHECIMENTO = [
-  {
-    id: "fluxo_sdr",
-    label: "Núcleo POP / fluxo operacional",
-    placeholder:
-      "Molde de estrutura — adapte ao cargo escolhido (título, nível, especialidade); o texto final não é genérico.\n\n## 1. Objetivo\nUma linha: o que este agente cumpre neste canal para este papel.\n\n## 2. Escopo\nUma linha: o que trata | o que fica fora.\n\n## 3. Triagem ou classificação\nUma linha | Tipo | Quando | (preencha 3–6 linhas quando tiver casos reais).\n\n## 4. Dados ou perguntas obrigatórias\nUma linha → depois lista numerada concreta.\n\n## 5. Critérios\nUma linha: prioridade | quando encerrar vs encaminhar.\n\n## 6. Próximos passos e SLA\nUma linha.\n\n## 7. Escalação para humano\nUma linha: quando e como passar a uma pessoa.",
-  },
-  {
-    id: "empresa",
-    label: "Sobre o negócio",
-    placeholder: "## Quem somos / missão\nUma linha.\n\n## Diferenciais e valor\nBullets curtos ou uma linha.",
-  },
-  {
-    id: "servicos",
-    label: "Serviços",
-    placeholder: "Lista: serviço | para quem | prazo ou garantia se souber — senão [completar].",
-  },
-  {
-    id: "atendimento",
-    label: "Como atender",
-    placeholder: "Fluxo em poucos passos, perguntas-chave, tom, quando escalar — alinhado ao cargo.",
-  },
-  {
-    id: "proibicoes",
-    label: "Nunca fazer",
-    placeholder: "Bullets: o que não prometer nem fazer neste cargo (dados, preços, temas vedados…).",
-  },
-  {
-    id: "objeccoes",
-    label: "Objeções comuns",
-    placeholder: "Objeção → resposta curta de exemplo (5–8 pares).",
-  },
-  {
-    id: "exemplos",
-    label: "Exemplos de atendimento",
-    placeholder: "2–4 trechos: pergunta do cliente / resposta do agente (tonalidade do cargo).",
-  },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function gerarPersonalidade(valores: number[]): string {
@@ -159,16 +116,6 @@ function gerarPersonalidade(valores: number[]): string {
     "## Tom e estilo de comunicação\n\n" +
     EIXOS.map((e, i) => e.frases[valores[i] - 1]).join("\n")
   );
-}
-
-function montarPrompt(conhecimento: Record<string, string>): string {
-  return CONHECIMENTO_SECAO_ORDER.map((id) => {
-    const v = (conhecimento[id] || "").trim();
-    if (!v) return null;
-    return `## ${CONHECIMENTO_TITULO_INSERT[id]}\n\n${v}`;
-  })
-    .filter((b): b is string => b != null)
-    .join("\n\n");
 }
 
 /** Modelos definidos no catálogo do cargo — alguns IDs antigos são normalizados para `mistral` no servidor. */
@@ -183,6 +130,17 @@ function cargoModelosForaDaListaHub(c: Cargo): string[] {
   return out;
 }
 
+function splitLinesLite(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof raw === "string") {
+    return raw
+      .split(/\n|,/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export type Cargo = {
   slug: string;
   titulo: string;
@@ -194,6 +152,10 @@ export type Cargo = {
   modelo_padrao?: string;
   modelo_critico?: string;
   modelo_alto_valor?: string;
+  saudacao_cliente?: string;
+  usar_perguntas_essenciais?: boolean;
+  perguntas_essenciais?: string[] | string;
+  comprimento_padrao?: string;
   [key: string]: unknown;
 };
 
@@ -298,15 +260,6 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [nome, setNome] = useState("");
   const [mercados, setMercados] = useState<string[]>([]);
   const [valores, setValores] = useState<number[]>([3, 3, 3, 3, 3]);
-  const [conhecimento, setConhecimento] = useState<Record<string, string>>({
-    fluxo_sdr: "",
-    empresa: "",
-    servicos: "",
-    atendimento: "",
-    proibicoes: "",
-    objeccoes: "",
-    exemplos: "",
-  });
   const [criando, setCriando] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [erro, setErro] = useState("");
@@ -317,9 +270,6 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [filtroSegmento, setFiltroSegmento] = useState<string>("");
   const [filtroEspecialidade, setFiltroEspecialidade] = useState<string>("");
 
-  const [abaConhecimento, setAbaConhecimento] = useState("fluxo_sdr");
-  const [gerandoIaConhecimento, setGerandoIaConhecimento] = useState<string | null>(null);
-  const [erroIaConhecimento, setErroIaConhecimento] = useState("");
 
   /** Padrão recomendado: copiloto interno. */
   const [modoOperacao, setModoOperacao] = useState<ModoOperacaoAgente>("jobs_internos");
@@ -354,7 +304,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [playbookGerando, setPlaybookGerando] = useState(false);
   const [playbookErro, setPlaybookErro] = useState("");
   const [playbookPublicUrl, setPlaybookPublicUrl] = useState<string | null>(null);
-  /** Escolhidos no passo Conhecimento; enviados e indexados logo após «Criar agente». */
+  /** Escolhidos no passo Documentos; enviados e indexados logo após «Criar agente». */
   const [ragPendentes, setRagPendentes] = useState<RagFilaItem[]>([]);
   const [ragPendenteErro, setRagPendenteErro] = useState("");
   const [ragPosCriacaoAviso, setRagPosCriacaoAviso] = useState("");
@@ -747,56 +697,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     fecharAssistente();
   }
 
-  async function gerarSecaoComIa(secaoId: string) {
-    if (!cargoSelecionado || !nome.trim()) {
-      setErroIaConhecimento("Preencha o nome do agente (passo Identidade) e selecione um cargo.");
-      return;
-    }
-    setErroIaConhecimento("");
-    setGerandoIaConhecimento(secaoId);
-    try {
-      const cargoPayload = {
-        slug: cargoSelecionado.slug,
-        titulo: cargoSelecionado.titulo,
-        segmento: cargoSelecionado.segmento ?? null,
-        nivel: cargoSelecionado.nivel ?? null,
-        especialidade: cargoSelecionado.especialidade ?? null,
-        descricao_curta:
-          typeof cargoSelecionado.descricao_curta === "string"
-            ? cargoSelecionado.descricao_curta
-            : null,
-        descricao:
-          typeof cargoSelecionado.descricao === "string" ? cargoSelecionado.descricao : null,
-      };
-      const res = await fetch("/api/hub/agentes/sugerir-conhecimento", {
-        method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({
-          secao: secaoId,
-          nome_agente: nome.trim(),
-          cargo: cargoPayload,
-          mercados,
-          texto_atual: conhecimento[secaoId] || "",
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { texto?: string; error?: string };
-      if (!res.ok) {
-        setErroIaConhecimento(data.error || "Falha ao gerar texto.");
-        return;
-      }
-      if (!data.texto?.trim()) {
-        setErroIaConhecimento("Resposta vazia do servidor.");
-        return;
-      }
-      setConhecimento((prev) => ({ ...prev, [secaoId]: data.texto!.trim() }));
-    } catch {
-      setErroIaConhecimento("Falha na requisição.");
-    } finally {
-      setGerandoIaConhecimento(null);
-    }
-  }
-
-  /** Grava no servidor o que o utilizador escolheu no wizard (modo, ciclos, conhecimento, ferramentas). */
+  /** Grava no servidor o que o utilizador escolheu no wizard (modo, ciclos, ferramentas). */
   async function sincronizarWizardNoAgente(slug: string): Promise<boolean> {
     const cicloExecucaoPadrao =
       modoOperacao === "canal_whatsapp" ? "interacao" : modoExecucao;
@@ -807,7 +708,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         nome,
         prefixo_mercado: mercados.join(","),
         personalidade: gerarPersonalidade(valores),
-        system_prompt_base: montarPrompt(conhecimento),
+        system_prompt_base: "",
         modo_operacao: modoOperacao,
         ciclo_execucao_padrao: cicloExecucaoPadrao,
         motor_ferramentas_habilitado: motorFerramentasHub,
@@ -844,9 +745,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         nome,
         prefixo_mercado: mercados.join(","),
         personalidade: gerarPersonalidade(valores),
-        system_prompt_base: montarPrompt(conhecimento),
-        conhecimento_secoes: conhecimento,
-        bio: (conhecimento.empresa?.trim() || conhecimento.fluxo_sdr?.trim() || "").slice(0, 200),
+        system_prompt_base: "",
+        conhecimento_secoes: {},
+        bio: null,
         horario_inicio: "08:00",
         horario_fim: "22:00",
         motor_ferramentas_habilitado: motorFerramentasHub,
@@ -1484,155 +1385,71 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
-                  Conhecimento
+                  Documentos (RAG)
                 </h2>
                 <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
-                  Preencha as secções que desejar — o agente usará estas informações. Os textos de exemplo
-                  são <strong style={{ color: "#adbac7" }}>estrutura guia</strong>, não conteúdo final:
-                  use o <strong style={{ color: "#adbac7" }}>cargo</strong> que escolheu (título, nível,
-                  especialidade) e preencha por cima. &quot;Gerar com IA&quot; também ancora no cargo em
-                  JSON. Opcionalmente, anexe até {RAG_DOCS_LIMIT} documentos abaixo para RAG (processados ao
-                  clicar em «Criar agente» no passo Ferramentas).
+                  O comportamento operacional (saudação, perguntas essenciais e comprimento padrão) vem do{" "}
+                  <strong style={{ color: "#adbac7" }}>cargo</strong>. Aqui anexe até{" "}
+                  <strong style={{ color: "#adbac7" }}>{RAG_DOCS_LIMIT} documentos</strong> sobre produto ou
+                  empresa para conhecimento factual (RAG).
                 </p>
               </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {SECOES_CONHECIMENTO.map((s) => {
-                  const temConteudo = !!conhecimento[s.id]?.trim();
-                  const ativa = abaConhecimento === s.id;
-                  return (
-                    <button
-                      type="button"
-                      key={s.id}
-                      onClick={() => {
-                        setAbaConhecimento(s.id);
-                        setErroIaConhecimento("");
-                      }}
-                      style={{
-                        padding: "6px 14px",
-                        borderRadius: 20,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        border: `1px solid ${ativa ? "#c9a24a" : "#30363d"}`,
-                        background: ativa ? "#c9a24a22" : "#161b22",
-                        color: ativa ? "#c9a24a" : "#8b949e",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                    >
-                      {s.label}
-                      {temConteudo && (
-                        <span
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: "#c9a24a",
-                            display: "inline-block",
-                          }}
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {SECOES_CONHECIMENTO.filter((s) => s.id === abaConhecimento).map((s) => (
-                <div key={s.id}>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", margin: 0 }}>
-                    {s.label}
-                  </label>
-                    <button
-                      type="button"
-                      onClick={() => gerarSecaoComIa(s.id)}
-                      disabled={
-                        !!gerandoIaConhecimento ||
-                        !cargoSelecionado ||
-                        !nome.trim()
-                      }
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: 8,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor:
-                          gerandoIaConhecimento || !cargoSelecionado || !nome.trim()
-                            ? "not-allowed"
-                            : "pointer",
-                        border: "1px solid #238636",
-                        background:
-                          gerandoIaConhecimento || !cargoSelecionado || !nome.trim()
-                            ? "#21262d"
-                            : "#23863633",
-                        color:
-                          gerandoIaConhecimento || !cargoSelecionado || !nome.trim()
-                            ? "#484f58"
-                            : "#3fb950",
-                        opacity:
-                          gerandoIaConhecimento || !cargoSelecionado || !nome.trim() ? 0.7 : 1,
-                        whiteSpace: "nowrap",
-                      }}
-                      title={
-                        !nome.trim()
-                          ? "Indique o nome do agente no passo Identidade."
-                          : "Gera esta secção com IA (contexto: cargo selecionado + nome agente)."
-                      }
-                    >
-                      {gerandoIaConhecimento === s.id
-                        ? "A gerar…"
-                        : "✨ Gerar com IA"}
-                    </button>
-                  </div>
-                  {s.id === "fluxo_sdr" && (
-                    <p
-                      style={{
-                        color: "#8b949e",
-                        fontSize: 12,
-                        margin: "0 0 8px",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      <strong style={{ color: "#adbac7" }}>Adaptar ao cargo:</strong> cada bloco abaixo é
-                      só guia de estrutura. Substitua por regras reais do papel (suporte, operações,
-                      comercial, etc.) — não deixe texto que serviria para qualquer função.
+              {cargoSelecionado ? (
+                <div
+                  style={{
+                    background: "#161b22",
+                    border: "1px solid #30363d",
+                    borderRadius: 12,
+                    padding: 14,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  <p style={{ margin: 0, color: "#8b949e", fontSize: 11, fontWeight: 700 }}>
+                    PREVIEW DO CARGO (ATENDIMENTO)
+                  </p>
+                  {typeof cargoSelecionado.saudacao_cliente === "string" && cargoSelecionado.saudacao_cliente.trim() ? (
+                    <p style={{ margin: 0, color: "#adbac7", fontSize: 12, lineHeight: 1.5 }}>
+                      <strong style={{ color: "#e6edf3" }}>Saudação:</strong>{" "}
+                      {cargoSelecionado.saudacao_cliente.trim()}
+                    </p>
+                  ) : (
+                    <p style={{ margin: 0, color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                      Sem saudação padrão definida no cargo.
                     </p>
                   )}
-                  {erroIaConhecimento && abaConhecimento === s.id && (
-                    <p style={{ color: "#f85149", fontSize: 12, margin: "0 0 8px" }}>{erroIaConhecimento}</p>
+                  {typeof cargoSelecionado.comprimento_padrao === "string" && cargoSelecionado.comprimento_padrao.trim() ? (
+                    <p style={{ margin: 0, color: "#adbac7", fontSize: 12, lineHeight: 1.5 }}>
+                      <strong style={{ color: "#e6edf3" }}>Comprimento:</strong>{" "}
+                      {cargoSelecionado.comprimento_padrao.trim()}
+                    </p>
+                  ) : null}
+                  {cargoSelecionado.usar_perguntas_essenciais === true ? (
+                    <div>
+                      <p style={{ margin: "0 0 4px", color: "#e6edf3", fontSize: 12, fontWeight: 700 }}>
+                        Perguntas essenciais
+                      </p>
+                      {splitLinesLite(cargoSelecionado.perguntas_essenciais).length > 0 ? (
+                        <ol style={{ margin: 0, paddingLeft: 18, color: "#adbac7", fontSize: 12, lineHeight: 1.5 }}>
+                          {splitLinesLite(cargoSelecionado.perguntas_essenciais).slice(0, 5).map((pergunta, idx) => (
+                            <li key={`${pergunta}-${idx}`}>{pergunta}</li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p style={{ margin: 0, color: "#8b949e", fontSize: 12 }}>
+                          Ativado no cargo, mas sem perguntas cadastradas.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, color: "#8b949e", fontSize: 12 }}>
+                      Este cargo não exige sequência de perguntas essenciais.
+                    </p>
                   )}
-                  <textarea
-                    value={conhecimento[s.id] || ""}
-                    onChange={(e) => setConhecimento((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                    placeholder={s.placeholder}
-                    rows={8}
-                    style={{
-                      width: "100%",
-                      background: "#161b22",
-                      border: "1px solid #30363d",
-                      color: "#e6edf3",
-                      borderRadius: 8,
-                      padding: "12px 14px",
-                      fontSize: 13,
-                      outline: "none",
-                      resize: "vertical",
-                      lineHeight: 1.6,
-                      boxSizing: "border-box",
-                    }}
-                  />
                 </div>
-              ))}
+              ) : null}
 
               <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -1641,10 +1458,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       Documentos para RAG (embeddings)
                     </p>
                     <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 12px", lineHeight: 1.55 }}>
-                      Até <strong style={{ color: "#adbac7" }}>{RAG_DOCS_LIMIT} ficheiros</strong>. Primeiro ficam só
-                      no navegador; o envio ao servidor exige um agente criado. Pode indexar já com{" "}
-                      <strong style={{ color: "#adbac7" }}>Processar embeddings</strong> (cria o agente se ainda não
-                      existir, sem saltar etapas) ou deixar na fila e concluir no passo{" "}
+                      Recomendado: subir até <strong style={{ color: "#adbac7" }}>{RAG_DOCS_LIMIT} ficheiros</strong>{" "}
+                      sobre produto, serviços e empresa. Primeiro ficam só no navegador; o envio ao servidor exige um
+                      agente criado. Pode indexar já com <strong style={{ color: "#adbac7" }}>Processar embeddings</strong>{" "}
+                      (cria o agente se ainda não existir) ou deixar na fila e concluir no passo{" "}
                       <strong style={{ color: "#adbac7" }}>Ferramentas</strong>. Formatos:{" "}
                       <strong style={{ color: "#adbac7" }}>{RAG_FORMATOS_RESUMO}</strong>.
                     </p>
@@ -1891,7 +1708,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   </div>
                 ) : (
                   <p style={{ color: "#6e7781", fontSize: 12, margin: "12px 0 0" }}>
-                    Nenhum documento na fila. Isto é opcional — o conhecimento por secções acima continua a valer.
+                    Nenhum documento na fila. Opcional, mas recomendado para enriquecer respostas com dados do seu produto/empresa.
                   </p>
                 )}
               </div>
@@ -1993,7 +1810,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Revisão
                 </h2>
                 <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
-                  Confira identidade, conhecimento e como o copiloto opera (canal e ciclos). Depois configure as ferramentas
+                  Confira identidade, cargo e como o copiloto opera (canal e ciclos). Depois configure as ferramentas
                   e crie o agente.
                 </p>
                 {ragPendentes.some((i) => i.status === "na_fila" || i.status === "preparado") ? (
@@ -2002,7 +1819,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     <strong style={{ color: "#e6edf3" }}>
                       {ragPendentes.filter((i) => i.status !== "concluido").length}
                     </strong>{" "}
-                    (serão indexados ao confirmar a criação do agente, se ainda não processou no passo Conhecimento).
+                    (serão indexados ao confirmar a criação do agente, se ainda não processou no passo Documentos).
                   </p>
                 ) : ragPendentes.some((i) => i.status === "concluido") ? (
                   <p style={{ color: "#3fb950", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
@@ -2514,7 +2331,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 </pre>
               </div>
 
-              {SECOES_CONHECIMENTO.filter((s) => conhecimento[s.id]?.trim()).length > 0 && (
+              {cargoSelecionado ? (
                 <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, overflow: "hidden" }}>
                   <p
                     style={{
@@ -2526,19 +2343,46 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       borderBottom: "1px solid #30363d",
                     }}
                   >
-                    CONHECIMENTO
+                    RESUMO DO CARGO (ATENDIMENTO)
                   </p>
-                  {SECOES_CONHECIMENTO.filter((s) => conhecimento[s.id]?.trim()).map((s) => (
-                    <div key={s.id} style={{ padding: "10px 16px", borderBottom: "1px solid #30363d" }}>
-                      <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>{s.label}</p>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #30363d" }}>
+                    <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>Saudação</p>
+                    <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
+                      {typeof cargoSelecionado.saudacao_cliente === "string" && cargoSelecionado.saudacao_cliente.trim()
+                        ? cargoSelecionado.saudacao_cliente.trim()
+                        : "Sem saudação padrão no cargo."}
+                    </p>
+                  </div>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #30363d" }}>
+                    <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>Comprimento</p>
+                    <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
+                      {typeof cargoSelecionado.comprimento_padrao === "string" && cargoSelecionado.comprimento_padrao.trim()
+                        ? cargoSelecionado.comprimento_padrao.trim()
+                        : "Sem comprimento padrão definido no cargo."}
+                    </p>
+                  </div>
+                  <div style={{ padding: "10px 16px" }}>
+                    <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>Perguntas essenciais</p>
+                    {cargoSelecionado.usar_perguntas_essenciais === true ? (
+                      splitLinesLite(cargoSelecionado.perguntas_essenciais).length > 0 ? (
+                        <ol style={{ margin: 0, paddingLeft: 18, color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                          {splitLinesLite(cargoSelecionado.perguntas_essenciais).slice(0, 5).map((p, idx) => (
+                            <li key={`${p}-${idx}`}>{p}</li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
+                          Ativado no cargo, mas sem perguntas preenchidas.
+                        </p>
+                      )
+                    ) : (
                       <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
-                        {conhecimento[s.id].slice(0, 100)}
-                        {conhecimento[s.id].length > 100 ? "..." : ""}
+                        Este cargo não exige sequência de perguntas.
                       </p>
-                    </div>
-                  ))}
+                    )}
+                  </div>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -2549,7 +2393,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Materiais (playbook)
                 </h2>
                 <p style={{ color: "#8b949e", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
-                  Gera um ficheiro no Storage com o conhecimento deste agente, para ferramentas ou equipas que precisem
+                  Gera um ficheiro no Storage com a configuração deste agente, para ferramentas ou equipas que precisem
                   do playbook num URL estável. Se já passou pelo passo Canal (WhatsApp), use <strong style={{ color: "#aebccf" }}>← Anterior</strong> a partir desse ecrã para voltar aqui antes de concluir.
                 </p>
               </div>

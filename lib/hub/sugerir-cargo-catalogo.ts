@@ -30,6 +30,11 @@ export type SugestaoCargoCatalogo = {
   pode_fazer_padrao?: string[];
   nao_pode_fazer_padrao?: string[];
   prompt_template?: string;
+  saudacao_cliente?: string;
+  usar_perguntas_essenciais?: boolean;
+  ordem_perguntas_essenciais?: "inicio" | "final";
+  perguntas_essenciais?: string[];
+  comprimento_padrao?: string;
   descricao?: string;
   limite_autonomia_brl?: number;
 };
@@ -84,6 +89,15 @@ function normalizarSugestao(o: Record<string, unknown>): SugestaoCargoCatalogo {
     pode_fazer_padrao: arr("pode_fazer_padrao"),
     nao_pode_fazer_padrao: arr("nao_pode_fazer_padrao"),
     prompt_template: str("prompt_template"),
+    saudacao_cliente: str("saudacao_cliente"),
+    usar_perguntas_essenciais:
+      typeof o.usar_perguntas_essenciais === "boolean" ? o.usar_perguntas_essenciais : undefined,
+    ordem_perguntas_essenciais:
+      o.ordem_perguntas_essenciais === "final" || o.ordem_perguntas_essenciais === "inicio"
+        ? o.ordem_perguntas_essenciais
+        : undefined,
+    perguntas_essenciais: arr("perguntas_essenciais"),
+    comprimento_padrao: str("comprimento_padrao"),
     descricao: str("descricao"),
     limite_autonomia_brl: num("limite_autonomia_brl"),
   };
@@ -101,7 +115,13 @@ Regras:
 - \`supervisor_slug\`: slug de **outro cargo** do catálogo quando fizer sentido (ex.: SDR → gerente_atendimento); senão **null**.
 - Listas curtas e acionáveis (máx. **12** itens cada em pode_fazer / nao_pode_fazer).
 - \`prompt_template\`: base de system prompt para agentes criados com este cargo (parágrafos claros; pode usar bullets com "-").
+- \`saudacao_cliente\`: saudação para canal externo (WhatsApp), curta e natural, sem mencionar cargo/função interna.
+- \`usar_perguntas_essenciais\`: booleano (true quando o cargo deve conduzir qualificação por perguntas).
+- \`ordem_perguntas_essenciais\`: "inicio" ou "final" (quando perguntar no fluxo).
+- \`perguntas_essenciais\`: lista ordenada de perguntas obrigatórias quando \`usar_perguntas_essenciais=true\`.
+- \`comprimento_padrao\`: orientação de tamanho da resposta (ex.: "máx. 2 frases por mensagem").
 - \`descricao\`: texto longo para documentação interna do papel (responsabilidades, limites).
+- Quando houver \`saudacao_cliente\`, nunca incluir termos como "qualificadora", "qualificador", "SDR", "closer", "cargo" ou "função interna".
 - Alinha segmento/especialidade ao **padrão já observado** no contexto quando possível — mas **sem violar** o documento conceito abaixo.
 
 ${documentoConceitoTaxonomiaParaIa()}`;
@@ -139,7 +159,7 @@ ${ctx}
 
 ## Saída obrigatória
 Um único objeto JSON com estas chaves (todas opcionais excepto convém preencher bem titulo alinhado ao pedido):
-"titulo","segmento","especialidade","descricao_curta","area","nivel","modelo_padrao","modelo_critico","modelo_alto_valor","supervisor_slug","pode_fazer_padrao","nao_pode_fazer_padrao","prompt_template","descricao","limite_autonomia_brl"`;
+"titulo","segmento","especialidade","descricao_curta","area","nivel","modelo_padrao","modelo_critico","modelo_alto_valor","supervisor_slug","pode_fazer_padrao","nao_pode_fazer_padrao","prompt_template","saudacao_cliente","usar_perguntas_essenciais","ordem_perguntas_essenciais","perguntas_essenciais","comprimento_padrao","descricao","limite_autonomia_brl"`;
 
   try {
     const res = await fetch(MISTRAL_CHAT_URL, {

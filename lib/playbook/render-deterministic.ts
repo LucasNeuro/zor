@@ -1,20 +1,9 @@
 import type { AgentPlaybookSnapshotV1 } from "./agent-snapshot";
-import { ordemConhecimentoSecao } from "@/lib/hub/conhecimento-secoes";
 import {
   HUB_AGENTE_FERRAMENTAS_CATALOGO,
   mergeUsoFerramentasComPadraoPreservandoCustom,
 } from "@/lib/hub/agente-ferramentas-registry";
 import { MODO_OPERACAO_LABEL, isModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
-
-const SECAO_LABEL: Record<string, string> = {
-  fluxo_sdr: "Núcleo operacional — objetivo, triagem e fluxo (POP)",
-  empresa: "Sobre o negócio",
-  servicos: "Serviços",
-  atendimento: "Como atender",
-  proibicoes: "Nunca fazer",
-  objeccoes: "Objeções comuns",
-  exemplos: "Exemplos de atendimento",
-};
 
 const CICLO_EXEC_LABEL: Record<string, string> = {
   interacao: "Gatilho por interação (mensagem no canal / webhook)",
@@ -46,36 +35,6 @@ ${String(id.system_prompt_base ?? "")}
 COMPORTAMENTO: Humor ${humorLabel} + Personalidade ${personalidadeLabel}.
 Tom de comunicação: ${tomComunicacao}.
 ${descComp}`);
-
-  if (snapshot.conhecimento.length > 0) {
-    type ConhRow = (typeof snapshot.conhecimento)[number];
-    const porSecao: Record<string, ConhRow[]> = {};
-    for (const c of snapshot.conhecimento) {
-      const sec = String(c.secao || "");
-      if (!porSecao[sec]) porSecao[sec] = [];
-      porSecao[sec].push(c);
-    }
-
-    const secaoLabels: Record<string, string> = {
-      fluxo_sdr: "NÚCLEO OPERACIONAL (POP)",
-      empresa: "SOBRE O NEGÓCIO",
-      servicos: "SERVIÇOS E PRODUTOS",
-      atendimento: "COMO ATENDER",
-      proibicoes: "NUNCA FAZER",
-      exemplos: "EXEMPLOS REAIS",
-      objeccoes: "COMO LIDAR COM OBJEÇÕES",
-    };
-
-    const secoesKeys = Object.keys(porSecao).sort(
-      (a, b) => ordemConhecimentoSecao(a) - ordemConhecimentoSecao(b) || a.localeCompare(b)
-    );
-    for (const secao of secoesKeys) {
-      const itens = porSecao[secao];
-      const label = secaoLabels[secao] || secao.toUpperCase();
-      const conteudo = itens.map((i) => `[${i.titulo}]\n${i.conteudo}`).join("\n\n");
-      secoes.push(`═══ ${label} ═══\n${conteudo}`);
-    }
-  }
 
   const naoPodeFazer = Array.isArray(id.nao_pode_fazer) ? (id.nao_pode_fazer as string[]) : [];
   const sempreDizer = Array.isArray(id.sempre_dizer) ? (id.sempre_dizer as string[]) : [];
@@ -184,6 +143,29 @@ function renderCargoLegivel(cargo: Record<string, unknown>): string[] {
     out.push(promptT);
   }
 
+  const saudacao = cargo.saudacao_cliente != null ? String(cargo.saudacao_cliente).trim() : "";
+  if (saudacao) {
+    out.push("");
+    out.push(`**Saudação cliente (externo):** ${saudacao}`);
+  }
+  const comprimento = cargo.comprimento_padrao != null ? String(cargo.comprimento_padrao).trim() : "";
+  if (comprimento) {
+    out.push(`**Comprimento padrão:** ${comprimento}`);
+  }
+  const usarPerguntas = cargo.usar_perguntas_essenciais === true;
+  const perguntas = Array.isArray(cargo.perguntas_essenciais)
+    ? cargo.perguntas_essenciais.map((x) => String(x).trim()).filter(Boolean)
+    : [];
+  if (usarPerguntas) {
+    out.push("");
+    out.push("### Perguntas essenciais");
+    if (perguntas.length > 0) {
+      for (const p of perguntas) out.push(`- ${p}`);
+    } else {
+      out.push("- (ativo, mas sem perguntas preenchidas)");
+    }
+  }
+
   const blocoLista = (título: string, arr: unknown) => {
     if (!Array.isArray(arr) || arr.length === 0) return;
     out.push("");
@@ -246,7 +228,7 @@ export function renderDeterministicPlaybookMd(
   );
   lines.push("- **Ferramentas Hub** listam o function calling activo; alinhar com o runtime (Mistral/Agno) se expuser tools.");
   lines.push("- Seguir limites **Pode / Não pode / Nunca dizer / Sempre dizer** na identidade quando existirem.");
-  lines.push("- Linhas em **hub_agente_conhecimento** entram no prompt unificado **e** aparecem por secção mais abaixo (auditoria).");
+  lines.push("- O comportamento de atendimento externo vem prioritariamente do **cargo** (saudação, perguntas essenciais, comprimento padrão).");
   lines.push("- Regras em **hub_regras_ia** aplicam-se por ordem de `prioridade`.");
   lines.push("- Matriz **hub_autonomia_matriz**: quando `exige_aprovacao` ou limites BRL, não avançar sem aprovação humana.");
   lines.push("- Referência Agno: [Build your first agent](https://docs.agno.com/first-agent).");
@@ -280,26 +262,6 @@ export function renderDeterministicPlaybookMd(
     lines.push(JSON.stringify(snapshot.personalidade_row, null, 2));
     lines.push("```");
     lines.push("");
-  }
-
-  if (snapshot.conhecimento.length > 0) {
-    lines.push("## Conhecimento (`hub_agente_conhecimento`)");
-    lines.push("");
-    const conhOrd = [...snapshot.conhecimento].sort((a, b) => {
-      const sa = String(a.secao || "");
-      const sb = String(b.secao || "");
-      const d = ordemConhecimentoSecao(sa) - ordemConhecimentoSecao(sb);
-      if (d !== 0) return d;
-      return sa.localeCompare(sb);
-    });
-    for (const row of conhOrd) {
-      const sec = String(row.secao || "");
-      const label = SECAO_LABEL[sec] || sec;
-      lines.push(`### ${label} (\`${sec}\`) — ${String(row.titulo ?? "")}`);
-      lines.push("");
-      lines.push(String(row.conteudo ?? ""));
-      lines.push("");
-    }
   }
 
   if (snapshot.regras_ia.length > 0) {

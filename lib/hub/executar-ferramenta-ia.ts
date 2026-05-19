@@ -69,6 +69,38 @@ async function executarFerramentaHubBuiltin(
       if (error) return JSON.stringify({ erro: "supabase", detalhe: error.message });
       return JSON.stringify({ memorias: data ?? [] });
     }
+    case "hub_lead_lookup_por_telefone": {
+      const telRaw = typeof args.telefone === "string" ? args.telefone : String(args.telefone ?? "");
+      const telefone = telRaw.replace(/\D/g, "");
+      if (telefone.length < 10) {
+        return JSON.stringify({ erro: "telefone_invalido", detalhe: "Informe ao menos 10 dígitos." });
+      }
+
+      const { data: lead, error: eLead } = await supabase
+        .from("hub_leads_crm")
+        .select(
+          "id, nome, telefone, estagio, score, valor_estimado, agente_responsavel, humano_responsavel, atualizado_em"
+        )
+        .eq("telefone", telefone)
+        .maybeSingle();
+      if (eLead) return JSON.stringify({ erro: "supabase", detalhe: eLead.message });
+      if (!lead) return JSON.stringify({ ok: true, encontrado: false, telefone });
+
+      const { data: pessoa, error: ePessoa } = await supabase
+        .from("hub_pessoas")
+        .select("id, codigo, nome, telefone, origem, atualizado_em")
+        .eq("telefone", telefone)
+        .maybeSingle();
+      if (ePessoa) return JSON.stringify({ erro: "supabase", detalhe: ePessoa.message });
+
+      return JSON.stringify({
+        ok: true,
+        encontrado: true,
+        telefone,
+        lead,
+        pessoa: pessoa ?? null,
+      });
+    }
     case "hub_metricas_escritorio": {
       const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
       const since = new Date(Date.now() - 7 * 86_400_000).toISOString();

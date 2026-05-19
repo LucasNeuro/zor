@@ -10,6 +10,7 @@ export type HubFerramentaCategoria = "cliente" | "analise" | "registos";
 export type HubAgenteFerramentaId =
   | "hub_lead_resumo"
   | "hub_lead_memorias"
+  | "hub_lead_lookup_por_telefone"
   | "hub_metricas_escritorio"
   | "hub_relatorio_html_simples"
   | "hub_registar_nota_lead"
@@ -71,6 +72,30 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
             maximum: 10,
           },
         },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    id: "hub_lead_lookup_por_telefone",
+    categoria: "cliente",
+    titulo: "Consultar lead por telefone",
+    descricao:
+      "Procura lead existente no CRM por telefone (normalizado) antes de criar novo contacto. Útil para triagem e análise.",
+    recomendadoWhatsApp: true,
+    mistralFunction: {
+      name: "hub_lead_lookup_por_telefone",
+      description:
+        "Consulta se já existe lead no CRM por telefone. Retorna lead e pessoa quando encontrados; não cria nem altera dados.",
+      parameters: {
+        type: "object",
+        properties: {
+          telefone: {
+            type: "string",
+            description: "Telefone com ou sem máscara; será normalizado para dígitos.",
+          },
+        },
+        required: ["telefone"],
         additionalProperties: false,
       },
     },
@@ -407,6 +432,7 @@ export function mergeUsoFerramentasComPadrao(
   const base: Record<HubAgenteFerramentaId, boolean> = {
     hub_lead_resumo: false,
     hub_lead_memorias: false,
+    hub_lead_lookup_por_telefone: false,
     hub_metricas_escritorio: false,
     hub_relatorio_html_simples: false,
     hub_registar_nota_lead: false,
@@ -431,6 +457,7 @@ export type HubFerramentaNivelAcesso = "leitura" | "escrita";
 export const HUB_FERRAMENTA_ACESSO: Record<HubAgenteFerramentaId, HubFerramentaNivelAcesso> = {
   hub_lead_resumo: "leitura",
   hub_lead_memorias: "leitura",
+  hub_lead_lookup_por_telefone: "leitura",
   hub_metricas_escritorio: "leitura",
   hub_relatorio_html_simples: "escrita",
   hub_registar_nota_lead: "escrita",

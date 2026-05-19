@@ -108,7 +108,11 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       ctx.canal
     );
 
-    if (!autonomia.podeAgir) {
+    const bypassAprovacaoAtendimentoWhatsapp =
+      demanda.tipo === "atendimento" &&
+      ctx.canal === "whatsapp";
+
+    if (!autonomia.podeAgir && !bypassAprovacaoAtendimentoWhatsapp) {
       const aprovacaoId = await criarAprovacao({
         tipo: "atendimento_critico",
         agenteSlug: agente.slug,
@@ -127,6 +131,12 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         precisaAprovacao: true,
         aprovacaoId: aprovacaoId || undefined,
       };
+    }
+
+    if (!autonomia.podeAgir && bypassAprovacaoAtendimentoWhatsapp) {
+      console.warn(
+        `[ENGINE] autonomia bloqueada ignorada para atendimento WhatsApp (${agente.slug}): ${autonomia.motivo}`
+      );
     }
 
     // ETAPA 4: Busca histórico recente (últimas 5 mensagens)

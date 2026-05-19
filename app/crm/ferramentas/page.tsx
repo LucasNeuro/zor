@@ -11,6 +11,7 @@ import {
   FileCode2,
   ListOrdered,
   PieChart,
+  Search,
   StickyNote,
   UserPen,
   UserRound,
@@ -41,6 +42,7 @@ const ICONE_SECAO: Record<HubFerramentaCategoria, LucideIcon> = {
 const ICONE_FERRAMENTA: Record<HubAgenteFerramentaId, LucideIcon> = {
   hub_lead_resumo: UserRound,
   hub_lead_memorias: Brain,
+  hub_lead_lookup_por_telefone: Search,
   hub_metricas_escritorio: BarChart3,
   hub_relatorio_html_simples: FileCode2,
   hub_registar_nota_lead: StickyNote,

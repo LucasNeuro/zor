@@ -34,7 +34,7 @@ export function CrmConfirmDialog({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 90,
+        zIndex: 200,
         background: "rgba(1, 4, 9, 0.72)",
         backdropFilter: "blur(4px)",
         display: "flex",

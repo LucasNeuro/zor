@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { AgenteBriefingDrawer } from "@/components/crm/AgenteBriefingChatPanel";
 import { AgenteFerramentasIaBlock, type CatalogoFerramentaCustomLite } from "@/components/crm/AgenteFerramentasIaBlock";
-import { AgenteUazapiBlock } from "@/components/crm/AgenteUazapiBlock";
+import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
 import { INFERENCIA_IA_CRM_COPIA } from "@/lib/ia/hub-model-defaults";
 import {
   mergeUsoFerramentasComPadraoPreservandoCustom,
@@ -649,9 +649,11 @@ export default function AgentePage() {
       {/* CONTEÚDO */}
       <div
         style={{
-          maxWidth: 880,
+          maxWidth: 1200,
           margin: "0 auto",
-          padding: "28px 28px 48px",
+          padding: "28px 32px 48px",
+          width: "100%",
+          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
           gap: 28,
@@ -891,6 +893,7 @@ export default function AgentePage() {
             {agente.modo_operacao === "canal_whatsapp" ? (
               <AgenteUazapiBlock
                 agenteSlug={slug}
+                agenteNome={agente.nome}
                 snapshot={{
                   uazapi_instance_id:
                     typeof agente.uazapi_instance_id === "string" ? agente.uazapi_instance_id : null,
@@ -908,7 +911,35 @@ export default function AgentePage() {
                   uazapi_proxy_city:
                     typeof agente.uazapi_proxy_city === "string" ? agente.uazapi_proxy_city : null,
                 }}
-                onRefresh={carregar}
+                onSnapshotPatch={(patch: Partial<AgenteUazapiSnapshot>) => {
+                  setAgente((prev) => {
+                    if (!prev) return prev;
+                    return {
+                      ...prev,
+                      ...(patch.uazapi_instance_id !== undefined && {
+                        uazapi_instance_id: patch.uazapi_instance_id,
+                      }),
+                      ...(patch.uazapi_instance_name !== undefined && {
+                        uazapi_instance_name: patch.uazapi_instance_name,
+                      }),
+                      ...(patch.uazapi_connection_status !== undefined && {
+                        uazapi_connection_status: patch.uazapi_connection_status,
+                      }),
+                      ...(patch.uazapi_has_instance_token !== undefined && {
+                        uazapi_has_instance_token: patch.uazapi_has_instance_token,
+                      }),
+                      ...(patch.uazapi_proxy_country !== undefined && {
+                        uazapi_proxy_country: patch.uazapi_proxy_country,
+                      }),
+                      ...(patch.uazapi_proxy_state !== undefined && {
+                        uazapi_proxy_state: patch.uazapi_proxy_state,
+                      }),
+                      ...(patch.uazapi_proxy_city !== undefined && {
+                        uazapi_proxy_city: patch.uazapi_proxy_city,
+                      }),
+                    };
+                  });
+                }}
               />
             ) : null}
             <AgenteFerramentasIaBlock

@@ -457,23 +457,16 @@ export async function POST(request: NextRequest) {
       if (!out.ok) {
         console.error("[playbook] pós-criação agente:", created.agente_slug, out.error);
       }
-    } catch (e) {
-      console.error("[playbook] pós-criação agente (exceção):", created.agente_slug, e);
-    }
-  });
-
-  if (mistralAgentSyncHabilitado) {
-    after(async () => {
-      try {
+      if (mistralAgentSyncHabilitado) {
         const syn = await syncHubAgenteParaMistral(supabase, created.agente_slug);
         if (!syn.ok) {
           console.warn("[mistral-agents] pós-criação sync:", created.agente_slug, syn.error);
         }
-      } catch (e) {
-        console.error("[mistral-agents] pós-criação sync (exceção):", created.agente_slug, e);
       }
-    });
-  }
+    } catch (e) {
+      console.error("[playbook/mistral] pós-criação agente (exceção):", created.agente_slug, e);
+    }
+  });
 
   let ciclo_aviso: string | undefined;
   let ciclo_erro: string | undefined;

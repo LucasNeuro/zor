@@ -3,10 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   extrairPaircodeDePayloadUazapi,
   extrairQrcodeDePayloadUazapi,
-  normalizarSrcImagemQrUazapi,
+  resolverQrcodeImagemParaApi,
 } from "@/lib/whatsapp/qr-uazapi";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 import {
+  extrairDiagnosticoInstanciaUazapi,
   pickInstanceFromResponse,
   statusFromPayloadUazapi,
 } from "@/lib/whatsapp/uazapi-instance-status";
@@ -23,6 +24,25 @@ import {
   formatWebhookSyncWarnings,
   syncWebhooksUazapi,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
+
+async function resolverQrRespostaUazapi(
+  payload: unknown,
+  instanceToken: string
+): Promise<{ qrcode?: string; qr_invalid?: boolean }> {
+  let qrRaw = extrairQrcodeDePayloadUazapi(payload);
+  if (!qrRaw) {
+    const st = await uazapiFetchJson<Record<string, unknown>>("/instance/status", {
+      method: "GET",
+      instanceToken,
+    });
+    if (st.ok) qrRaw = extrairQrcodeDePayloadUazapi(st.data);
+  }
+  if (!qrRaw) return {};
+  const resolved = await resolverQrcodeImagemParaApi(qrRaw, instanceToken);
+  if ("src" in resolved && resolved.src) return { qrcode: resolved.src };
+  if ("invalid" in resolved) return { qr_invalid: true };
+  return {};
+}
 
 function jsonErroUazapi(out: {
   error: string;
@@ -66,6 +86,9 @@ export async function POST(
     proxy_managed_country?: string;
     proxy_managed_state?: string;
     proxy_managed_city?: string;
+    /** Encerra sessão pendente antes de novo QR (recomendado se ficou em connecting). */
+    reset_session?: boolean;
+    systemName?: string;
   };
   try {
     body = await request.json();
@@ -262,11 +285,24 @@ export async function POST(
       if (stateQ) qs.set("state", stateQ);
       if (search) qs.set("search", search);
 
+      /** UAZAPI exige header `token` neste catálogo; `admintoken` sozinho devolve "Missing token". */
+      const adminToken = process.env.UAZAPI_ADMIN_TOKEN?.trim() || "";
+      const catalogToken = tokenInst || adminToken;
+      if (!catalogToken) {
+        return NextResponse.json(
+          {
+            error:
+              "Configure UAZAPI_ADMIN_TOKEN no servidor ou crie a instância UAZAPI neste agente para carregar as cidades.",
+          },
+          { status: 503 }
+        );
+      }
+
       const out = await uazapiFetchJson<Record<string, unknown>>(
         `/proxy-managed/cities?${qs.toString()}`,
         {
           method: "GET",
-          ...(tokenInst ? { instanceToken: tokenInst } : { admin: true }),
+          instanceToken: catalogToken,
         }
       );
       if (!out.ok) {
@@ -275,7 +311,13 @@ export async function POST(
       const cities = Array.isArray((out.data as { cities?: unknown })?.cities)
         ? (out.data as { cities: unknown[] }).cities
         : [];
-      return NextResponse.json({ ok: true, action: "list_proxy_cities", country, cities });
+      return NextResponse.json({
+        ok: true,
+        action: "list_proxy_cities",
+        country,
+        cities,
+        auth_source: tokenInst ? "instance" : "admin",
+      });
     }
 
     if (!tokenInst) {
@@ -290,12 +332,36 @@ export async function POST(
         Object.assign(row, persistPatchFromProxy(fromBody));
       }
       const merged = mergeUazapiProxyFields({ body: fromBody, stored: proxyFromStoredRow(row) });
+      if (!uazapiProxyConfigured(merged)) {
+        return NextResponse.json(
+          { error: "Guarde a cidade do proxy (região) antes de gerar o QR.", proxy_warning: UAZAPI_PROXY_SETUP_HINT },
+          { status: 400 }
+        );
+      }
+
+      const resetSession = body.reset_session === true;
+      const statusPre = await uazapiFetchJson<Record<string, unknown>>("/instance/status", {
+        method: "GET",
+        instanceToken: tokenInst,
+      });
+      const stPre = statusPre.ok ? statusFromPayloadUazapi(statusPre.data) : "disconnected";
+      if (resetSession || stPre === "connecting") {
+        await uazapiFetchJson<Record<string, unknown>>("/instance/disconnect", {
+          method: "POST",
+          instanceToken: tokenInst,
+        });
+        await new Promise((r) => setTimeout(r, 900));
+      }
+
       const payload = buildUazapiInstanceConnectBody({
-        browser: typeof body.browser === "string" ? body.browser : "auto",
+        browser: typeof body.browser === "string" ? body.browser : undefined,
         phone: typeof body.phone === "string" ? body.phone : undefined,
+        systemName:
+          typeof body.systemName === "string" && body.systemName.trim()
+            ? body.systemName.trim()
+            : slug,
         proxy: merged,
       });
-      const proxyWarning = uazapiProxyConfigured(merged) ? undefined : UAZAPI_PROXY_SETUP_HINT;
 
       const out = await uazapiFetchJson<Record<string, unknown>>("/instance/connect", {
         method: "POST",
@@ -312,21 +378,36 @@ export async function POST(
       const webhookSync = await syncWebhooksUazapi(request, tokenInst);
       const webhookWarning = formatWebhookSyncWarnings(webhookSync);
 
-      const qrRaw = extrairQrcodeDePayloadUazapi(out.data);
-      const qrcode = qrRaw ? normalizarSrcImagemQrUazapi(qrRaw) : undefined;
+      const qrPack = await resolverQrRespostaUazapi(out.data, tokenInst);
       const paircode = extrairPaircodeDePayloadUazapi(out.data);
+      const diag = extrairDiagnosticoInstanciaUazapi(out.data);
       return NextResponse.json({
         ok: true,
         action: "connect",
         uazapi_connection_status: st,
-        ...(qrcode ? { qrcode } : {}),
+        proxy_applied: merged,
+        session_reset: resetSession || stPre === "connecting",
+        qr_valid_seconds: 120,
+        ...(qrPack.qrcode ? { qrcode: qrPack.qrcode } : {}),
+        ...(qrPack.qr_invalid ? { qr_invalid: true } : {}),
         ...(paircode ? { paircode } : {}),
+        ...diag,
         webhook_sync: {
           instance: webhookSync.instance.ok,
           global: webhookSync.global.ok || webhookSync.global.skipped === true,
         },
         ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
-        ...(proxyWarning ? { proxy_warning: proxyWarning } : {}),
+        ...(qrPack.qr_invalid
+          ? {
+              connect_hint:
+                "A UAZAPI devolveu dados que não são uma imagem QR válida. Use «Desligar sessão», guarde a região e «Gerar QR» de novo.",
+            }
+          : !qrPack.qrcode
+            ? {
+                connect_hint:
+                  "UAZAPI não devolveu QR. Tente «Gerar QR» de novo ou «Desligar sessão» antes. O código expira em ~2 minutos.",
+              }
+            : {}),
       });
     }
 
@@ -351,16 +432,19 @@ export async function POST(
       }
 
       const inst = pickInstanceFromResponse(out.data);
-      const qrRaw = extrairQrcodeDePayloadUazapi(out.data);
-      const qrcode = qrRaw ? normalizarSrcImagemQrUazapi(qrRaw) : undefined;
+      const qrPack =
+        st === "connecting" ? await resolverQrRespostaUazapi(out.data, tokenInst) : {};
       const paircode = extrairPaircodeDePayloadUazapi(out.data);
+      const diag = extrairDiagnosticoInstanciaUazapi(out.data);
       return NextResponse.json({
         ok: true,
         action: "status",
         uazapi_connection_status: st,
-        ...(qrcode ? { qrcode } : {}),
+        ...(qrPack.qrcode ? { qrcode: qrPack.qrcode } : {}),
+        ...(qrPack.qr_invalid ? { qr_invalid: true } : {}),
         ...(paircode ? { paircode } : {}),
-        profileName: typeof inst?.profileName === "string" ? inst.profileName : undefined,
+        profileName: typeof inst?.profileName === "string" ? inst.profileName : diag.profileName,
+        ...diag,
         ...(webhookSync
           ? {
               webhook_sync: {

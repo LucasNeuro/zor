@@ -72,13 +72,18 @@ export function uazapiProxyConfigured(proxy: UazapiProxyConnectFields | null | u
 export function buildUazapiInstanceConnectBody(opts: {
   browser?: string;
   phone?: string;
+  systemName?: string;
   proxy?: UazapiProxyConnectFields | null;
 }): Record<string, unknown> {
-  const browser = (opts.browser || "auto").trim() || "auto";
+  /** `firefox` costuma ser mais estável que `auto`/`chrome` em novas sessões (doc UAZAPI). */
+  const browser = (opts.browser || "firefox").trim() || "firefox";
   const payload: Record<string, unknown> = { browser };
 
   const phone = opts.phone?.replace(/\D/g, "") ?? "";
   if (phone.length >= 10) payload.phone = phone;
+
+  const systemName = opts.systemName?.trim();
+  if (systemName) payload.systemName = systemName.slice(0, 80);
 
   const proxy = opts.proxy;
   if (proxy) {

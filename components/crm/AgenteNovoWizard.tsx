@@ -2734,7 +2734,17 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         uazapi_has_instance_token: false,
                       }
                     }
-                    onRefresh={() => refreshSnapshotUazapi()}
+                    onSnapshotPatch={(patch) =>
+                      setUazapiSnap((prev) => ({
+                        ...(prev ?? {
+                          uazapi_instance_id: null,
+                          uazapi_instance_name: null,
+                          uazapi_connection_status: null,
+                          uazapi_has_instance_token: false,
+                        }),
+                        ...patch,
+                      }))
+                    }
                   />
                 </>
               ) : (

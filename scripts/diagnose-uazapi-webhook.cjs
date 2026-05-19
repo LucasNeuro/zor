@@ -1,7 +1,19 @@
 /**
  * Diagnóstico UAZAPI ↔ Render webhook (não imprime tokens completos).
  * Uso: node scripts/diagnose-uazapi-webhook.cjs
+ *      npm run diagnose:uazapi
+ *
+ * TLS: em Windows com antivírus/proxy SSL, Node pode falhar com
+ * `UNABLE_TO_VERIFY_LEAF_SIGNATURE` — o script relaxa TLS como `npm run dev`.
+ * Verificação estrita: STRICT_TLS=1 node scripts/diagnose-uazapi-webhook.cjs
  */
+if (!process.env.STRICT_TLS) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  console.warn(
+    "[diagnose-uazapi] NODE_TLS_REJECT_UNAUTHORIZED=0 (só este processo). Use STRICT_TLS=1 para TLS estrito.\n"
+  );
+}
+
 const fs = require("fs");
 const path = require("path");
 const { createClient } = require("@supabase/supabase-js");

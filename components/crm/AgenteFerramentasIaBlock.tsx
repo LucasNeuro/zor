@@ -298,7 +298,9 @@ export function AgenteFerramentasIaBlock({
             Sincronizar com a nuvem Mistral ao guardar
           </span>
           <span style={{ display: "block", color: "#8b949e", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
-            Mesmo modelo e {nAtivas} função(ões) activa(s) noutros fluxos (ex. Studio).
+            Cria ou actualiza um Agent na Mistral (console) com o prompt unificado de produção (identidade,
+            conhecimento, regras) e {nAtivas} função(ões) activa(s). Requer{" "}
+            <code style={{ fontSize: 11 }}>MISTRAL_API_KEY</code> no servidor.
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>

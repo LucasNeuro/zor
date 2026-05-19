@@ -12,6 +12,39 @@ export function pickInstanceFromResponse(payload: unknown): Record<string, unkno
   return null;
 }
 
+export function extrairDiagnosticoInstanciaUazapi(payload: unknown): {
+  lastDisconnectReason?: string;
+  lastDisconnect?: string;
+  profileName?: string;
+  owner?: string;
+} {
+  const inst = pickInstanceFromResponse(payload);
+  const root = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+  const src = inst || root;
+  if (!src) return {};
+
+  const out: {
+    lastDisconnectReason?: string;
+    lastDisconnect?: string;
+    profileName?: string;
+    owner?: string;
+  } = {};
+
+  if (typeof src.lastDisconnectReason === "string" && src.lastDisconnectReason.trim()) {
+    out.lastDisconnectReason = src.lastDisconnectReason.trim();
+  }
+  if (typeof src.lastDisconnect === "string" && src.lastDisconnect.trim()) {
+    out.lastDisconnect = src.lastDisconnect.trim();
+  }
+  if (typeof src.profileName === "string" && src.profileName.trim()) {
+    out.profileName = src.profileName.trim();
+  }
+  if (typeof src.owner === "string" && src.owner.trim()) {
+    out.owner = src.owner.trim();
+  }
+  return out;
+}
+
 function normStatusString(raw: string): UazapiConnectionStatus | null {
   const s = raw.trim().toLowerCase();
   if (VALID.has(s)) return s as UazapiConnectionStatus;

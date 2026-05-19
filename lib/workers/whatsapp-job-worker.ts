@@ -1,0 +1,363 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createHubLogger, type HubLogger } from "@/lib/observability/hub-log";
+import { defaultTenantId } from "@/lib/tenant-default";
+import { processarMensagemInboundWhatsapp } from "@/lib/whatsapp/inbound-message-processor";
+import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
+
+type JobStatus = "pending" | "processing" | "done" | "retry" | "dead";
+
+type HubMsgJob = {
+  id: string;
+  tenant_id?: string | null;
+  canal: string;
+  telefone: string;
+  lead_id?: string | null;
+  agente_slug?: string | null;
+  message_id: string;
+  payload?: Record<string, unknown> | null;
+  status: JobStatus;
+  attempts: number;
+  max_attempts: number;
+};
+
+function workerEnvInt(name: string, fallback: number, min = 1, max = Number.MAX_SAFE_INTEGER): number {
+  const raw = Number.parseInt(String(process.env[name] || ""), 10);
+  if (!Number.isFinite(raw)) return fallback;
+  return Math.max(min, Math.min(max, raw));
+}
+
+export function workerPollMs(): number {
+  return workerEnvInt("WORKER_POLL_MS", 2000, 250, 60000);
+}
+
+export function workerBatchSize(): number {
+  return workerEnvInt("WORKER_BATCH_SIZE", 10, 1, 100);
+}
+
+export function workerConcurrency(): number {
+  return workerEnvInt("WORKER_CONCURRENCY", 4, 1, 20);
+}
+
+function workerMaxJitterMs(): number {
+  return workerEnvInt("WORKER_JITTER_MS", 400, 0, 10_000);
+}
+
+function workerId(): string {
+  const hostname = process.env.RENDER_INSTANCE_ID || process.env.HOSTNAME || "local";
+  return `wa-worker-${hostname}-${process.pid}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function supabaseAdmin(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!url || !key) {
+    throw new Error("Supabase env ausente: NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
+  }
+  return createClient(url, key);
+}
+
+function isTransientErrorMessage(raw: string): boolean {
+  const m = raw.toLowerCase();
+  return (
+    m.includes("timeout") ||
+    m.includes("timed out") ||
+    m.includes("http 503") ||
+    m.includes("http 504") ||
+    m.includes("http 429") ||
+    m.includes("service unavailable") ||
+    m.includes("fetch failed") ||
+    m.includes("network") ||
+    m.includes("econnreset") ||
+    m.includes("etimedout") ||
+    m.includes("eai_again")
+  );
+}
+
+function retryDelayMs(attempts: number): number {
+  const base = 1500;
+  const capped = Math.min(attempts, 8);
+  return Math.min(120_000, base * 2 ** Math.max(0, capped - 1));
+}
+
+function parsePayload(job: HubMsgJob): Record<string, unknown> {
+  if (job.payload && typeof job.payload === "object" && !Array.isArray(job.payload)) {
+    return job.payload;
+  }
+  return {};
+}
+
+function toStr(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+
+function toBool(v: unknown): boolean {
+  return v === true;
+}
+
+function toNullableStr(v: unknown): string | null {
+  const s = toStr(v).trim();
+  return s ? s : null;
+}
+
+type ReconstructedContext = {
+  telefone: string;
+  pushName: string;
+  messageId: string | null;
+  timestamp: string;
+  tipoMidia: string;
+  mensagemFinal: string;
+  mercado: string;
+  instanceKey: string | null;
+  isNovo: boolean;
+  lead: { id: string; humano_responsavel?: string | null; agente_responsavel?: string | null };
+  agente: { agente_slug: string } | null;
+  waSendOpts?: { instanceToken?: string | null };
+};
+
+function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
+  const payload = parsePayload(job);
+  const leadId = toStr(payload.leadId) || (job.lead_id || "");
+  if (!leadId) {
+    throw new Error("payload sem leadId");
+  }
+
+  const agenteSlugHint = toStr(payload.agenteSlugHint) || (job.agente_slug || "sdr");
+  const instanceToken = toStr(payload.instanceToken);
+  const telefone = toStr(payload.telefone) || job.telefone;
+  const messageId = toStr(payload.messageId) || job.message_id;
+  const timestamp = toStr(payload.timestamp) || new Date().toISOString();
+  const tipoMidia = toStr(payload.tipoMidia) || "texto";
+  const mensagemFinal = toStr(payload.mensagemFinal);
+  const mercado = toStr(payload.mercado) || "geral";
+  const pushName = toStr(payload.pushName);
+
+  if (!telefone || !mensagemFinal) {
+    throw new Error("payload inválido: telefone/mensagem ausentes");
+  }
+
+  return {
+    telefone,
+    pushName,
+    messageId: toNullableStr(messageId),
+    timestamp,
+    tipoMidia,
+    mensagemFinal,
+    mercado,
+    instanceKey: toNullableStr(payload.instance),
+    isNovo: toBool(payload.isNovo),
+    lead: {
+      id: leadId,
+      humano_responsavel: toNullableStr(payload.humano_responsavel),
+      agente_responsavel: agenteSlugHint,
+    },
+    agente: agenteSlugHint ? { agente_slug: agenteSlugHint } : null,
+    waSendOpts: instanceToken ? { instanceToken } : undefined,
+  };
+}
+
+async function updateJobStatus(
+  supabase: SupabaseClient,
+  job: HubMsgJob,
+  patch: Partial<{
+    status: JobStatus;
+    available_at: string;
+    last_error: string | null;
+    locked_at: string | null;
+    locked_by: string | null;
+  }>
+): Promise<void> {
+  const { error } = await supabase.from("hub_msg_jobs").update(patch).eq("id", job.id);
+  if (error) throw new Error(`falha update job ${job.id}: ${error.message}`);
+}
+
+async function claimBatch(
+  supabase: SupabaseClient,
+  worker: string,
+  batchSize: number
+): Promise<HubMsgJob[]> {
+  const { data, error } = await supabase.rpc("hub_msg_jobs_claim_batch", {
+    p_worker_id: worker,
+    p_limit: batchSize,
+  });
+  if (error) throw new Error(`falha claim batch: ${error.message}`);
+  return (Array.isArray(data) ? data : []) as HubMsgJob[];
+}
+
+async function tryConversationLock(supabase: SupabaseClient, telefone: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("hub_msg_jobs_try_lock_conversation", { p_telefone: telefone });
+  if (error) throw new Error(`falha advisory lock: ${error.message}`);
+  return data === true;
+}
+
+async function unlockConversation(supabase: SupabaseClient, telefone: string): Promise<void> {
+  await supabase.rpc("hub_msg_jobs_unlock_conversation", { p_telefone: telefone });
+}
+
+async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogger): Promise<void> {
+  const contexto = reconstruirContexto(job);
+  if (contexto.instanceKey) {
+    try {
+      const linha = await resolverLinhaWhatsAppInbound(supabase, contexto.instanceKey, {});
+      if (linha.kind === "agent_instance") {
+        if (!contexto.waSendOpts?.instanceToken) {
+          contexto.waSendOpts = { instanceToken: linha.instanceToken };
+        }
+        if (!contexto.agente || !contexto.agente.agente_slug) {
+          contexto.agente = { agente_slug: linha.agenteSlug };
+        }
+        if (!contexto.lead.agente_responsavel) {
+          contexto.lead.agente_responsavel = linha.agenteSlug;
+        }
+      }
+    } catch (e) {
+      log.warn("wa.worker.instance_resolve_failed", {
+        job_id: job.id,
+        instance: contexto.instanceKey,
+        error: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200),
+      });
+    }
+  }
+
+  const lockOk = await tryConversationLock(supabase, contexto.telefone);
+  if (!lockOk) {
+    const delayMs = retryDelayMs(Math.max(job.attempts, 1));
+    await updateJobStatus(supabase, job, {
+      status: "retry",
+      available_at: new Date(Date.now() + delayMs).toISOString(),
+      last_error: "conversation_locked",
+      locked_at: null,
+      locked_by: null,
+    });
+    log.info("wa.worker.job_requeued_lock", { job_id: job.id, telefone: contexto.telefone, delay_ms: delayMs });
+    return;
+  }
+
+  try {
+    await processarMensagemInboundWhatsapp({
+      supabase,
+      trace: {
+        log,
+        maskTelefone: (t) => (t ? `***${t.replace(/\D/g, "").slice(-4)}` : undefined),
+      },
+      lead: contexto.lead,
+      agente: contexto.agente,
+      mensagemFinal: contexto.mensagemFinal,
+      telefone: contexto.telefone,
+      pushName: contexto.pushName,
+      messageId: contexto.messageId,
+      timestamp: contexto.timestamp,
+      mercado: contexto.mercado,
+      instanceKey: contexto.instanceKey,
+      isNovo: contexto.isNovo,
+      tipoMidia: contexto.tipoMidia,
+      waSendOpts: contexto.waSendOpts,
+    });
+
+    await updateJobStatus(supabase, job, {
+      status: "done",
+      last_error: null,
+      locked_at: null,
+      locked_by: null,
+    });
+    log.info("wa.worker.job_done", { job_id: job.id, attempts: job.attempts, telefone: contexto.telefone });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const transient = isTransientErrorMessage(msg);
+    const shouldDead = job.attempts >= job.max_attempts || !transient;
+
+    if (shouldDead) {
+      await updateJobStatus(supabase, job, {
+        status: "dead",
+        last_error: msg.slice(0, 2000),
+        locked_at: null,
+        locked_by: null,
+      });
+      log.error("wa.worker.job_dead", {
+        job_id: job.id,
+        attempts: job.attempts,
+        max_attempts: job.max_attempts,
+        error: msg.slice(0, 260),
+      });
+      return;
+    }
+
+    const delayMs = retryDelayMs(job.attempts);
+    await updateJobStatus(supabase, job, {
+      status: "retry",
+      available_at: new Date(Date.now() + delayMs).toISOString(),
+      last_error: msg.slice(0, 2000),
+      locked_at: null,
+      locked_by: null,
+    });
+    log.warn("wa.worker.job_retry", {
+      job_id: job.id,
+      attempts: job.attempts,
+      max_attempts: job.max_attempts,
+      delay_ms: delayMs,
+      error: msg.slice(0, 260),
+    });
+  } finally {
+    await unlockConversation(supabase, contexto.telefone);
+  }
+}
+
+async function processBatch(
+  supabase: SupabaseClient,
+  jobs: HubMsgJob[],
+  concurrency: number,
+  rootLog: HubLogger
+): Promise<void> {
+  if (jobs.length === 0) return;
+  const queue = [...jobs];
+  const workers = Array.from({ length: Math.min(concurrency, jobs.length) }, async (_, i) => {
+    while (queue.length > 0) {
+      const job = queue.shift();
+      if (!job) return;
+      const log = rootLog.child({ worker_slot: i + 1, job_id: job.id, tenant_id: job.tenant_id || defaultTenantId() });
+      await processJob(supabase, job, log);
+    }
+  });
+  await Promise.all(workers);
+}
+
+export async function runWhatsappWorker(): Promise<never> {
+  const supabase = supabaseAdmin();
+  const id = workerId();
+  const pollMs = workerPollMs();
+  const batchSize = workerBatchSize();
+  const concurrency = workerConcurrency();
+  const jitterMax = workerMaxJitterMs();
+  const log = createHubLogger("whatsapp_worker", {
+    worker_id: id,
+    poll_ms: pollMs,
+    batch_size: batchSize,
+    concurrency,
+  });
+
+  log.info("wa.worker.started", {
+    node_env: process.env.NODE_ENV || "development",
+    mistral_timeout_ms: process.env.MISTRAL_CHAT_TIMEOUT_MS || null,
+    mistral_retries: process.env.MISTRAL_CHAT_RETRIES || null,
+  });
+
+  while (true) {
+    try {
+      const jobs = await claimBatch(supabase, id, batchSize);
+      if (jobs.length > 0) {
+        log.info("wa.worker.claimed_batch", { size: jobs.length });
+        await processBatch(supabase, jobs, concurrency, log);
+      } else {
+        const jitter = jitterMax > 0 ? Math.floor(Math.random() * jitterMax) : 0;
+        await sleep(pollMs + jitter);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.error("wa.worker.loop_error", { error: msg.slice(0, 260) });
+      await sleep(Math.max(1500, Math.floor(pollMs / 2)));
+    }
+  }
+}

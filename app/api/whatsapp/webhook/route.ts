@@ -14,6 +14,25 @@ import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
 
 let warnedMissingWebhookSecret = false;
+const WEBHOOK_DEDUPE_TTL_MS = 2 * 60 * 1000;
+const webhookRecentKeys = new Map<string, number>();
+
+function limparDedupeExpirados(nowMs: number) {
+  for (const [k, ts] of webhookRecentKeys.entries()) {
+    if (nowMs - ts > WEBHOOK_DEDUPE_TTL_MS) webhookRecentKeys.delete(k);
+  }
+}
+
+function marcarWebhookDedupe(messageId: string | null | undefined, telefone: string): boolean {
+  const mid = messageId?.trim();
+  if (!mid) return false;
+  const now = Date.now();
+  limparDedupeExpirados(now);
+  const key = `${telefone}|${mid}`;
+  if (webhookRecentKeys.has(key)) return true;
+  webhookRecentKeys.set(key, now);
+  return false;
+}
 
 function timingSafeStringEqual(a: string, b: string): boolean {
   try {
@@ -547,6 +566,14 @@ export async function POST(request: NextRequest) {
       linha_kind: linhaWa.kind,
       agente_slug: linhaWa.kind === "agent_instance" ? linhaWa.agenteSlug : null,
     });
+
+    if (marcarWebhookDedupe(messageId, telefone)) {
+      log.info("wa.webhook.duplicate_ignored_memory", {
+        telefone: trace.maskTelefone(telefone),
+        message_id: messageId || null,
+      });
+      return trace.json({ status: "ignored", reason: "duplicate_message_id_memory" }, 200, "duplicate_ignored");
+    }
 
     if (await mensagemWebhookJaProcessada(supabase, { messageId, telefone })) {
       log.info("wa.webhook.duplicate_ignored", {

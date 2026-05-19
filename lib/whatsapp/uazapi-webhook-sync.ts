@@ -6,6 +6,12 @@ import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 /** Filtros UAZAPI: excluir eco da API e grupos (não usar wasNotSentByApi — bloqueia inbound do lead). */
 export const UAZAPI_WEBHOOK_EXCLUDE_MESSAGES = ["wasSentByApi", "isGroupYes"] as const;
 
+function webhookSyncMode(): "global_only" | "instance_and_global" {
+  const raw = process.env.UAZAPI_WEBHOOK_SYNC_MODE?.trim().toLowerCase();
+  if (raw === "instance_and_global") return "instance_and_global";
+  return "global_only";
+}
+
 export function pickPublicAppOrigin(request: NextRequest): string | null {
   const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (fromEnv) {
@@ -71,6 +77,29 @@ export async function syncWebhookDaInstancia(
   return { ok: true };
 }
 
+async function disableWebhookDaInstancia(
+  request: NextRequest,
+  instanceToken: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const origin = pickPublicAppOrigin(request);
+  if (!origin) {
+    return { ok: false, error: "NEXT_PUBLIC_APP_URL ausente/inválido para webhook público" };
+  }
+
+  const out = await uazapiFetchJson<Record<string, unknown>>("/webhook", {
+    method: "POST",
+    instanceToken,
+    body: { enabled: false, url: buildPublicWebhookUrl(origin, process.env.WEBHOOK_SECRET) },
+  });
+
+  if (!out.ok) {
+    createHubLogger("uazapi_webhook_sync").warn("wa.sync.instance_disable_failed", { error: out.error });
+    return { ok: false, error: out.error };
+  }
+  createHubLogger("uazapi_webhook_sync").info("wa.sync.instance_disabled");
+  return { ok: true };
+}
+
 /** Webhook global (todas as instâncias) — requer UAZAPI_ADMIN_TOKEN no servidor. */
 export async function syncWebhookGlobal(
   request: NextRequest
@@ -106,11 +135,27 @@ export async function syncWebhooksUazapi(
   global: { ok: true } | { ok: false; error: string; skipped?: boolean };
 }> {
   const log = createHubLogger("uazapi_webhook_sync");
-  const [instance, global] = await Promise.all([
-    syncWebhookDaInstancia(request, instanceToken),
-    syncWebhookGlobal(request),
-  ]);
+  const mode = webhookSyncMode();
+
+  let instance: { ok: true } | { ok: false; error: string };
+  let global: { ok: true } | { ok: false; error: string; skipped?: boolean };
+
+  if (mode === "global_only") {
+    global = await syncWebhookGlobal(request);
+    if (global.ok) {
+      instance = await disableWebhookDaInstancia(request, instanceToken);
+    } else {
+      // Fallback de segurança: mantém operação ativa em ambientes sem admin token.
+      instance = await syncWebhookDaInstancia(request, instanceToken);
+    }
+  } else {
+    [instance, global] = await Promise.all([
+      syncWebhookDaInstancia(request, instanceToken),
+      syncWebhookGlobal(request),
+    ]);
+  }
   log.info("wa.sync.complete", {
+    mode,
     instance_ok: instance.ok,
     global_ok: global.ok,
     global_skipped: !global.ok && "skipped" in global && global.skipped === true,

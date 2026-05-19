@@ -131,6 +131,30 @@ async function enviarMensagemWhatsApp(
   };
 }
 
+async function mensagemWebhookJaProcessada(
+  supabase: ReturnType<typeof db>,
+  opts: { messageId?: string | null; telefone: string }
+): Promise<boolean> {
+  const mid = opts.messageId?.trim();
+  if (!mid) return false;
+
+  const { data, error } = await supabase
+    .from("hub_fila_mensagens")
+    .select("id")
+    .eq("canal", "whatsapp")
+    .eq("direcao", "entrada")
+    .eq("status", "pendente")
+    .eq("metadata->>messageId", mid)
+    .eq("metadata->>telefone", opts.telefone)
+    .limit(1);
+
+  if (error) {
+    console.error("[WEBHOOK] Erro ao deduplicar message_id:", error.message);
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
 async function encontrarOuCriarLead(telefone: string, nome: string, mercado: string, mensagem: string) {
   const supabase = db();
 
@@ -523,6 +547,14 @@ export async function POST(request: NextRequest) {
       linha_kind: linhaWa.kind,
       agente_slug: linhaWa.kind === "agent_instance" ? linhaWa.agenteSlug : null,
     });
+
+    if (await mensagemWebhookJaProcessada(supabase, { messageId, telefone })) {
+      log.info("wa.webhook.duplicate_ignored", {
+        telefone: trace.maskTelefone(telefone),
+        message_id: messageId || null,
+      });
+      return trace.json({ status: "ignored", reason: "duplicate_message_id" }, 200, "duplicate_ignored");
+    }
 
     const intencao = identificarIntencao(mensagemFinal);
     const mercado = identificarMercado(mensagemFinal);

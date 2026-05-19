@@ -115,9 +115,20 @@ async function enviarMensagemWhatsApp(
   const r = await whatsappSendText(telefone, mensagem, { instanceToken: opts?.instanceToken });
   if (!r.ok) {
     console.error("[WEBHOOK] Erro ao enviar mensagem:", r.provider, r.error, r.status, r.body);
-    return null;
+    return {
+      ok: false as const,
+      provider: r.provider ?? null,
+      status: r.status ?? null,
+      error: r.error,
+      body: r.body ?? null,
+    };
   }
-  return r.body ?? null;
+  return {
+    ok: true as const,
+    provider: r.provider,
+    status: r.status,
+    body: r.body ?? null,
+  };
 }
 
 async function encontrarOuCriarLead(telefone: string, nome: string, mercado: string, mensagem: string) {
@@ -736,8 +747,18 @@ export async function POST(request: NextRequest) {
           }
 
           const sendOut = await enviarMensagemWhatsApp(telefone, resultado.resposta, waSendOpts);
+          const sendBodyPreview =
+            sendOut.body && typeof sendOut.body === "object"
+              ? JSON.stringify(sendOut.body).slice(0, 240)
+              : typeof sendOut.body === "string"
+                ? sendOut.body.slice(0, 240)
+                : null;
           log.info("wa.webhook.send_text", {
-            ok: Boolean(sendOut),
+            ok: sendOut.ok,
+            provider: sendOut.provider,
+            send_status: sendOut.status,
+            send_error: sendOut.ok ? null : sendOut.error,
+            send_body_preview: sendBodyPreview,
             telefone: trace.maskTelefone(telefone),
           });
 

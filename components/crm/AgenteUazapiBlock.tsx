@@ -302,6 +302,9 @@ export function AgenteUazapiBlock({
   const [loading, setLoading] = useState<string | null>(null);
   const [err, setErr] = useState<ErroCtx | null>(null);
   const [qrcode, setQrcode] = useState<string | null>(null);
+  const [paircode, setPaircode] = useState<string | null>(null);
+  const [pairingPhone, setPairingPhone] = useState("");
+  const [pairingMode, setPairingMode] = useState<"qr" | "code">("qr");
   const [qrGeradoEm, setQrGeradoEm] = useState<number | null>(null);
   const [qrExpiradoUi, setQrExpiradoUi] = useState(false);
   const [qrRelogio, setQrRelogio] = useState(0);
@@ -463,12 +466,14 @@ export function AgenteUazapiBlock({
             setErr(montarErroDoCorpo(data, res.status));
             if (action === "connect" || action === "status") {
               setQrcode(null);
+              setPaircode(null);
             }
           }
           return data;
         }
         if (data.qr_invalid === true) {
           setQrcode(null);
+          setPaircode(null);
           setQrGeradoEm(null);
           if (!opts?.silent) {
             setErr({
@@ -484,6 +489,7 @@ export function AgenteUazapiBlock({
           const norm = normalizarSrcImagemQrUazapi(data.qrcode);
           if (norm) {
             setQrcode(norm);
+            setPaircode(null);
             if (action === "connect") {
               setQrGeradoEm(Date.now());
               setQrExpiradoUi(false);
@@ -501,6 +507,15 @@ export function AgenteUazapiBlock({
           setQrGeradoEm(null);
         }
 
+        if (typeof data.paircode === "string" && data.paircode.trim()) {
+          setPaircode(data.paircode.trim());
+          setQrcode(null);
+          setQrGeradoEm(null);
+          setQrExpiradoUi(false);
+        } else if (!opts?.silent && (action === "connect" || action === "status")) {
+          setPaircode(null);
+        }
+
         const lastReason =
           typeof data.lastDisconnectReason === "string" ? data.lastDisconnectReason.trim() : "";
         const connectHint =
@@ -515,9 +530,11 @@ export function AgenteUazapiBlock({
         }
         if (action === "delete_remote") {
           setQrcode(null);
+          setPaircode(null);
         }
         if (action === "disconnect") {
           setQrcode(null);
+          setPaircode(null);
           setQrGeradoEm(null);
           setQrExpiradoUi(false);
           setUazapiDiag(null);
@@ -538,6 +555,7 @@ export function AgenteUazapiBlock({
         }
         if (nextStatusRaw === "connected") {
           setQrcode(null);
+          setPaircode(null);
           setQrGeradoEm(null);
           setQrExpiradoUi(false);
         }
@@ -716,14 +734,25 @@ export function AgenteUazapiBlock({
   const qrExpirado =
     qrExpiradoUi || (qrGeradoEm != null && (qrRestanteMs ?? 0) <= 0);
   const mostrarQrAtivo = Boolean(mostrarQr && !qrExpirado);
+  const paircodeAtivo = Boolean(paircode?.trim());
+  const pairingPhoneDigits = pairingPhone.replace(/\D/g, "");
+  const podeConectarPorCodigo = pairingPhoneDigits.length >= 10 && pairingPhoneDigits.length <= 15;
   const precisaReconectar =
     temInstancia &&
     String(statusExibido).toLowerCase() !== "connected" &&
-    (qrExpirado || (String(statusExibido).toLowerCase() === "connecting" && !mostrarQrAtivo));
+    (qrExpirado || (String(statusExibido).toLowerCase() === "connecting" && !mostrarQrAtivo && !paircodeAtivo));
+  const conectarBloqueado =
+    acoesOff || !temInstancia || !regiaoGuardada || (pairingMode === "code" && !podeConectarPorCodigo);
 
   const reconectarWhatsApp = useCallback(() => {
-    void postAction("connect", { ...proxyConnectExtra(), reset_session: true });
-  }, [postAction, proxyConnectExtra]);
+    const statusLower = String(statusExibido).toLowerCase();
+    const resetSession = statusLower === "connecting" || qrExpirado;
+    void postAction("connect", {
+      ...proxyConnectExtra(),
+      ...(resetSession ? { reset_session: true } : {}),
+      ...(pairingMode === "code" && podeConectarPorCodigo ? { phone: pairingPhoneDigits } : {}),
+    });
+  }, [postAction, proxyConnectExtra, statusExibido, qrExpirado, pairingMode, pairingPhoneDigits, podeConectarPorCodigo]);
 
   const botoesFooter = (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -742,12 +771,12 @@ export function AgenteUazapiBlock({
         </button>
         <button
           type="button"
-          disabled={acoesOff || !temInstancia || !regiaoGuardada}
-          style={btnInGroup(acoesOff || !temInstancia || !regiaoGuardada, "primary", true)}
+          disabled={conectarBloqueado}
+          style={btnInGroup(conectarBloqueado, "primary", true)}
           onClick={() => reconectarWhatsApp()}
         >
           {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
-          {precisaReconectar ? "Reconectar" : "Gerar QR"}
+          {precisaReconectar ? "Reconectar" : pairingMode === "code" ? "Gerar código" : "Gerar QR"}
         </button>
         <button
           type="button"
@@ -782,9 +811,9 @@ export function AgenteUazapiBlock({
       {precisaReconectar ? (
         <button
           type="button"
-          disabled={acoesOff || !regiaoGuardada}
+          disabled={conectarBloqueado}
           style={{
-            ...btnBase(acoesOff || !regiaoGuardada, "primary"),
+            ...btnBase(conectarBloqueado, "primary"),
             width: "100%",
             minHeight: 44,
           }}
@@ -1059,6 +1088,71 @@ export function AgenteUazapiBlock({
             ) : null}
           </div>
 
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: 12,
+              background: "#161b22",
+              border: "1px solid #30363d",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 10px",
+                color: "#8b949e",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 0.06,
+              }}
+            >
+              MODO DE CONEXÃO
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+              <button
+                type="button"
+                disabled={acoesOff || !temInstancia}
+                style={btnInGroup(acoesOff || !temInstancia, pairingMode === "qr" ? "primary" : "default", true)}
+                onClick={() => setPairingMode("qr")}
+              >
+                <QrCode size={15} />
+                QR
+              </button>
+              <button
+                type="button"
+                disabled={acoesOff || !temInstancia}
+                style={btnInGroup(acoesOff || !temInstancia, pairingMode === "code" ? "primary" : "default", false)}
+                onClick={() => setPairingMode("code")}
+              >
+                <Smartphone size={15} />
+                Código
+              </button>
+            </div>
+            {pairingMode === "code" ? (
+              <div style={{ marginTop: 12 }}>
+                <label
+                  style={{ display: "block", color: "#8b949e", fontSize: 11, fontWeight: 700, marginBottom: 8 }}
+                >
+                  Número do WhatsApp (com DDI)
+                </label>
+                <input
+                  value={pairingPhone}
+                  onChange={(e) => setPairingPhone(e.target.value)}
+                  placeholder="5511999999999"
+                  inputMode="numeric"
+                  style={fieldStyle}
+                />
+                <p style={{ margin: "8px 0 0", color: "#8b949e", fontSize: 11 }}>
+                  A UAZAPI gera um código de pareamento quando `phone` é enviado no `connect`.
+                </p>
+                {pairingPhone.trim() && !podeConectarPorCodigo ? (
+                  <p style={{ margin: "6px 0 0", color: "#f85149", fontSize: 11 }}>
+                    Informe de 10 a 15 dígitos (ex.: 5511999999999).
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           {mostrarQrAtivo ? (
             <div
               style={{
@@ -1109,6 +1203,35 @@ export function AgenteUazapiBlock({
               <p style={{ margin: "12px 0 0", color: "#8b949e", fontSize: 11, lineHeight: 1.5 }}>
                 WhatsApp → Aparelhos ligados → Ligar com QR. Quando o tempo acabar, use{" "}
                 <strong style={{ color: "#e6edf3" }}>Reconectar</strong>.
+              </p>
+            </div>
+          ) : null}
+
+          {paircodeAtivo ? (
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 12,
+                border: "1px solid #58a6ff66",
+                background: "rgba(31, 111, 235, 0.14)",
+                textAlign: "center",
+              }}
+            >
+              <p style={{ margin: "0 0 8px", color: "#79c0ff", fontSize: 11, fontWeight: 700 }}>CÓDIGO DE PAREAMENTO</p>
+              <p
+                style={{
+                  margin: "0 0 10px",
+                  fontSize: 28,
+                  fontWeight: 900,
+                  letterSpacing: 1.2,
+                  color: "#e6edf3",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {paircode}
+              </p>
+              <p style={{ margin: 0, color: "#8b949e", fontSize: 11, lineHeight: 1.5 }}>
+                WhatsApp → Aparelhos conectados → Conectar com número. Digite este código no app.
               </p>
             </div>
           ) : null}

@@ -450,7 +450,17 @@ export async function POST(request: NextRequest) {
 
     const inbound = parseWhatsappWebhookBody(body);
     if (inbound.kind === "ignored") {
-      log.info("wa.webhook.parse_ignored", { reason: inbound.status });
+      log.info("wa.webhook.parse_ignored", {
+        reason: inbound.status,
+        event:
+          typeof body.event === "string"
+            ? body.event
+            : typeof body.EventType === "string"
+              ? body.EventType
+              : undefined,
+        top_keys: Object.keys(body).slice(0, 24),
+        data_kind: Array.isArray(body.data) ? "array" : typeof body.data,
+      });
       return trace.json({ status: inbound.status }, 200, "parse_ignored");
     }
     if (inbound.kind === "unknown_event") {

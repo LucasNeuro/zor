@@ -260,33 +260,57 @@ async function main() {
     }
   }
 
-  console.log("\n--- Teste POST manual Render (sanidade) ---");
-  if (appUrl && wh && instanceId) {
-    const body = JSON.stringify({
-      event: "messages",
-      instance: instanceId,
-      data: {
-        fromMe: false,
-        isGroup: false,
-        chatid: "5511999990000@s.whatsapp.net",
-        sender: "5511999990000@s.whatsapp.net",
-        senderName: "Diag",
-        messageid: `diag-${Date.now()}`,
-        messageTimestamp: Math.floor(Date.now() / 1000),
-        messageType: "conversation",
-        text: "diag script",
-      },
-    });
-    try {
-      const r = await fetch(`${appUrl}/api/whatsapp/webhook?wh=${encodeURIComponent(wh)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-      });
-      const j = await r.json().catch(() => ({}));
-      console.log(r.ok ? "[OK]" : "[--]", `POST Render webhook → HTTP ${r.status}`, j.status || j.error || "");
-    } catch (e) {
-      console.log("[--] POST Render falhou:", e.message);
+  console.log("\n--- Teste POST Render (resolver de instância) ---");
+  if (appUrl && wh) {
+    const url = `${appUrl}/api/whatsapp/webhook?wh=${encodeURIComponent(wh)}`;
+    const msgBase = {
+      EventType: "messages",
+      chatid: "5511999990000@s.whatsapp.net",
+      sender: "5511999990000@s.whatsapp.net",
+      messageid: `diag-${Date.now()}`,
+      messageTimestamp: Date.now(),
+      messageType: "conversation",
+      text: "diag resolver",
+    };
+    async function probe(label, extra) {
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...msgBase, ...extra }),
+        });
+        const j = await r.json().catch(() => ({}));
+        const okMaria = j.agente === "maria" || j.status === "ok";
+        console.log(
+          okMaria ? "[OK]" : "[!!]",
+          label,
+          "→ HTTP",
+          r.status,
+          j.reason || j.status || j.error || JSON.stringify(j).slice(0, 80)
+        );
+        return j;
+      } catch (e) {
+        console.log("[--]", label, "falhou:", e.message);
+        return null;
+      }
+    }
+    const semId = await probe("sem instance/token (como webhook global UAZAPI)", {});
+    const comToken = instanceToken
+      ? await probe("só token no body", { token: instanceToken })
+      : null;
+    const comId = instanceId ? await probe("com instance id", { instance: instanceId }) : null;
+
+    if (semId?.reason === "instancia_desconhecida_sem_fallback_global") {
+      console.log(
+        "     [!!] Render ainda sem resolver novo (token / único agente connected)."
+      );
+      console.log("     → Faça deploy do código atual ou defina UAZAPI_INSTANCE_TOKEN no Render.");
+    }
+    if (comToken?.reason === "instancia_desconhecida_sem_fallback_global") {
+      console.log("     [!!] Render ignora token no body — precisa deploy.");
+    }
+    if (comId?.agente === "maria" || comId?.status === "ok") {
+      console.log("     [OK] Com `instance` no JSON o Render já roteia para Maria.");
     }
   }
 

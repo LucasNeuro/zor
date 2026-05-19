@@ -4,7 +4,11 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { identificarMercado, identificarIntencao } from "@/lib/ia/agentes-config";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
-import { normalizeWebhookInstanceId, parseWhatsappWebhookBody } from "@/lib/whatsapp/webhook-inbound";
+import {
+  extractWebhookInstanceRefs,
+  normalizeWebhookInstanceId,
+  parseWhatsappWebhookBody,
+} from "@/lib/whatsapp/webhook-inbound";
 import { webhookSecretQueryParam } from "@/lib/whatsapp/webhook-auth";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
@@ -111,9 +115,20 @@ async function enviarMensagemWhatsApp(
   const r = await whatsappSendText(telefone, mensagem, { instanceToken: opts?.instanceToken });
   if (!r.ok) {
     console.error("[WEBHOOK] Erro ao enviar mensagem:", r.provider, r.error, r.status, r.body);
-    return null;
+    return {
+      ok: false as const,
+      provider: r.provider ?? null,
+      status: r.status ?? null,
+      error: r.error,
+      body: r.body ?? null,
+    };
   }
-  return r.body ?? null;
+  return {
+    ok: true as const,
+    provider: r.provider,
+    status: r.status,
+    body: r.body ?? null,
+  };
 }
 
 async function encontrarOuCriarLead(telefone: string, nome: string, mercado: string, mensagem: string) {
@@ -450,7 +465,17 @@ export async function POST(request: NextRequest) {
 
     const inbound = parseWhatsappWebhookBody(body);
     if (inbound.kind === "ignored") {
-      log.info("wa.webhook.parse_ignored", { reason: inbound.status });
+      log.info("wa.webhook.parse_ignored", {
+        reason: inbound.status,
+        event:
+          typeof body.event === "string"
+            ? body.event
+            : typeof body.EventType === "string"
+              ? body.EventType
+              : undefined,
+        top_keys: Object.keys(body).slice(0, 24),
+        data_kind: Array.isArray(body.data) ? "array" : typeof body.data,
+      });
       return trace.json({ status: inbound.status }, 200, "parse_ignored");
     }
     if (inbound.kind === "unknown_event") {
@@ -468,12 +493,16 @@ export async function POST(request: NextRequest) {
       instance,
     } = inbound.value;
 
-    const instanceKey = instance ?? normalizeWebhookInstanceId(body);
-    const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey);
+    const refs = extractWebhookInstanceRefs(body);
+    const instanceKey = instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);
+    const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey, {
+      instanceToken: refs.instanceToken,
+    });
     if (linhaWa.kind === "ignored") {
       log.warn("wa.webhook.resolver_ignored", {
         reason: linhaWa.reason,
         instance_id: instanceKey || null,
+        has_instance_token: Boolean(refs.instanceToken),
       });
       return trace.json({ status: "ignored", reason: linhaWa.reason }, 200, "resolver_ignored", {
         reason: linhaWa.reason,
@@ -718,8 +747,18 @@ export async function POST(request: NextRequest) {
           }
 
           const sendOut = await enviarMensagemWhatsApp(telefone, resultado.resposta, waSendOpts);
+          const sendBodyPreview =
+            sendOut.body && typeof sendOut.body === "object"
+              ? JSON.stringify(sendOut.body).slice(0, 240)
+              : typeof sendOut.body === "string"
+                ? sendOut.body.slice(0, 240)
+                : null;
           log.info("wa.webhook.send_text", {
-            ok: Boolean(sendOut),
+            ok: sendOut.ok,
+            provider: sendOut.provider,
+            send_status: sendOut.status,
+            send_error: sendOut.ok ? null : sendOut.error,
+            send_body_preview: sendBodyPreview,
             telefone: trace.maskTelefone(telefone),
           });
 

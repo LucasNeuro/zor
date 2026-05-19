@@ -345,7 +345,7 @@ export async function POST(
         instanceToken: tokenInst,
       });
       const stPre = statusPre.ok ? statusFromPayloadUazapi(statusPre.data) : "disconnected";
-      if (resetSession || stPre === "connecting") {
+      if (resetSession) {
         await uazapiFetchJson<Record<string, unknown>>("/instance/disconnect", {
           method: "POST",
           instanceToken: tokenInst,
@@ -386,7 +386,7 @@ export async function POST(
         action: "connect",
         uazapi_connection_status: st,
         proxy_applied: merged,
-        session_reset: resetSession || stPre === "connecting",
+        session_reset: resetSession,
         qr_valid_seconds: 120,
         ...(qrPack.qrcode ? { qrcode: qrPack.qrcode } : {}),
         ...(qrPack.qr_invalid ? { qr_invalid: true } : {}),

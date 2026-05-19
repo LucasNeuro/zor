@@ -58,7 +58,7 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
   const { data: cargoCatalogo } = await supabase
     .from("hub_cargos_catalogo")
     .select(
-      "slug,titulo,saudacao_cliente,usar_perguntas_essenciais,perguntas_essenciais,comprimento_padrao"
+      "slug,titulo,saudacao_cliente,usar_perguntas_essenciais,ordem_perguntas_essenciais,perguntas_essenciais,comprimento_padrao"
     )
     .eq("titulo", String(agente.cargo ?? ""))
     .eq("ativo", true)

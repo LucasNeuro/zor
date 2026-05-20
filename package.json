@@ -8,23 +8,27 @@
     "dev:insecure-tls": "node scripts/dev-insecure-tls.cjs",
     "build": "next build",
     "start": "next start",
-    "worker:whatsapp": "node scripts/worker-whatsapp.js",
+    "worker:whatsapp": "node --import tsx scripts/worker-whatsapp.js",
     "test": "vitest run",
     "smoke:playbook": "node scripts/smoke-agent-playbook.cjs",
     "checklist:hub": "node scripts/verify-hub-checklist.cjs",
     "smoke:webhook": "node scripts/smoke-whatsapp-webhook.cjs",
     "diagnose:webhook": "node scripts/diagnose-uazapi-webhook.cjs",
     "audit:ferramentas": "node scripts/auditoria-ferramentas-agentes.cjs",
-    "sync:mistral-all": "node scripts/sync-mistral-all-agentes.cjs"
+    "sync:mistral-all": "node scripts/sync-mistral-all-agentes.cjs",
+    "check:jobs": "node scripts/check-msg-jobs.cjs"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.90.16",
     "@anthropic-ai/sdk": "^0.92.0",
     "@supabase/supabase-js": "^2.105.1",
+    "@tanstack/react-query": "^5.90.16",
     "lucide-react": "^0.468.0",
     "next": "^16.2.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -32,9 +36,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "vitest": "^3.2.4",
-    "ts-node": "^10.9.2",
-    "tsconfig-paths": "^4.2.0"
+    "vitest": "^3.2.4"
   }
 }

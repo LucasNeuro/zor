@@ -71,7 +71,8 @@ services:
     name: whatsapp-job-worker
     runtime: node
     plan: starter
-    buildCommand: npm install
+    # ts-node/tsconfig-paths are required at runtime; include devDependencies on build.
+    buildCommand: npm install --include=dev
     startCommand: npm run worker:whatsapp
     envVars:
       - key: NODE_VERSION

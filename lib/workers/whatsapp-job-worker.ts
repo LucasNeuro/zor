@@ -197,8 +197,36 @@ async function unlockConversation(supabase: SupabaseClient, telefone: string): P
   await supabase.rpc("hub_msg_jobs_unlock_conversation", { p_telefone: telefone });
 }
 
+async function tokenInstanciaPorAgente(
+  supabase: SupabaseClient,
+  agenteSlug: string
+): Promise<string | null> {
+  const slug = agenteSlug.trim();
+  if (!slug) return null;
+  const { data, error } = await supabase
+    .from("hub_agente_identidade")
+    .select("uazapi_instance_token")
+    .eq("agente_slug", slug)
+    .maybeSingle();
+  if (error) {
+    console.warn("[WORKER] token por agente:", error.message);
+    return null;
+  }
+  const token = typeof data?.uazapi_instance_token === "string" ? data.uazapi_instance_token.trim() : "";
+  return token || null;
+}
+
 async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogger): Promise<void> {
   const contexto = reconstruirContexto(job);
+
+  if (!contexto.waSendOpts?.instanceToken) {
+    const slug = contexto.agente?.agente_slug || job.agente_slug || "";
+    const token = await tokenInstanciaPorAgente(supabase, slug);
+    if (token) {
+      contexto.waSendOpts = { instanceToken: token };
+    }
+  }
+
   if (contexto.instanceKey) {
     try {
       const linha = await resolverLinhaWhatsAppInbound(supabase, contexto.instanceKey, {});

@@ -2,11 +2,8 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 
 const projectRoot = path.resolve(__dirname, "..");
-
 process.env.TS_NODE_PROJECT = process.env.TS_NODE_PROJECT || path.join(projectRoot, "tsconfig.json");
-process.env.TS_NODE_TRANSPILE_ONLY = process.env.TS_NODE_TRANSPILE_ONLY || "true";
 
-require("ts-node/register");
 require("tsconfig-paths/register");
 
 async function bootstrap() {

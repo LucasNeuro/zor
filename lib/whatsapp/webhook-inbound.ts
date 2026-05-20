@@ -65,12 +65,14 @@ export function extractWebhookInstanceRefs(body: Record<string, unknown>): {
   if (data) buckets.push(data);
 
   let instanceToken: string | undefined;
+  let instanceName: string | undefined;
   for (const b of buckets) {
     const t = pickStr(b, "token", "instanceToken", "instance_token", "apitoken", "apiToken");
     if (t) {
       instanceToken = t;
-      break;
     }
+    const n = pickStr(b, "instanceName", "instance_name", "name");
+    if (n) instanceName = n;
     const inst = b.instance ?? b.Instance;
     if (inst && typeof inst === "object" && inst !== null) {
       const o = inst as Record<string, unknown>;
@@ -90,6 +92,7 @@ export function extractWebhookInstanceRefs(body: Record<string, unknown>): {
   return {
     ...(instanceId ? { instanceId } : {}),
     ...(instanceToken ? { instanceToken } : {}),
+    ...(instanceName ? { instanceName } : {}),
   };
 }
 

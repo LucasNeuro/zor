@@ -98,10 +98,34 @@ async function resolverUnicoAgenteWhatsappConectado(
 export async function resolverLinhaWhatsAppInbound(
   supabase: SupabaseClient,
   instanceId: string | undefined | null,
-  opts?: { instanceToken?: string | null }
+  opts?: { instanceToken?: string | null; instanceName?: string | null }
 ): Promise<LinhaWhatsAppWebhook> {
   const id = instanceId?.trim() || "";
   const tokenIn = opts?.instanceToken?.trim() || "";
+  const nameIn = opts?.instanceName?.trim() || "";
+
+  if (nameIn) {
+    const { data: byName, error: nameErr } = await supabase
+      .from("hub_agente_identidade")
+      .select(
+        "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo, arquivado_em"
+      )
+      .eq("uazapi_instance_name", nameIn)
+      .maybeSingle();
+
+    if (nameErr) {
+      console.warn("[WEBHOOK] resolver linha WhatsApp (instanceName):", nameErr.message);
+    } else {
+      const byNameResolved = await resolverPorLinhaHub(
+        supabase,
+        byName as AgenteWaRow | null,
+        "instancia_sem_agente_hub"
+      );
+      if (byNameResolved.kind !== "ignored" || byNameResolved.reason !== "instancia_sem_agente_hub") {
+        return byNameResolved;
+      }
+    }
+  }
 
   if (id) {
     const { data: row, error } = await supabase

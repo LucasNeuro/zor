@@ -413,6 +413,7 @@ export async function POST(request: NextRequest) {
     const instanceKey = instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);
     const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey, {
       instanceToken: refs.instanceToken,
+      instanceName: refs.instanceName,
     });
     if (linhaWa.kind === "ignored") {
       log.warn("wa.webhook.resolver_ignored", {
@@ -565,6 +566,7 @@ export async function POST(request: NextRequest) {
       pushName,
       mercado,
       instance: instanceKey ?? null,
+      instanceToken: waSendOpts.instanceToken ?? null,
       tipoMidia,
       mensagemFinal,
       leadId: lead.id,

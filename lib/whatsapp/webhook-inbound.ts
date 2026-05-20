@@ -47,6 +47,7 @@ export function normalizeWebhookInstanceId(body: Record<string, unknown>): strin
 export function extractWebhookInstanceRefs(body: Record<string, unknown>): {
   instanceId?: string;
   instanceToken?: string;
+  instanceName?: string;
 } {
   let instanceId = normalizeWebhookInstanceId(body);
 

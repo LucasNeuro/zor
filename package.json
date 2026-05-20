@@ -8,7 +8,7 @@
     "dev:insecure-tls": "node scripts/dev-insecure-tls.cjs",
     "build": "next build",
     "start": "next start",
-    "worker:whatsapp": "node --import tsx scripts/worker-whatsapp.js",
+    "worker:whatsapp": "node scripts/worker-whatsapp.js",
     "test": "vitest run",
     "smoke:playbook": "node scripts/smoke-agent-playbook.cjs",
     "checklist:hub": "node scripts/verify-hub-checklist.cjs",
@@ -16,7 +16,8 @@
     "diagnose:webhook": "node scripts/diagnose-uazapi-webhook.cjs",
     "audit:ferramentas": "node scripts/auditoria-ferramentas-agentes.cjs",
     "sync:mistral-all": "node scripts/sync-mistral-all-agentes.cjs",
-    "check:jobs": "node scripts/check-msg-jobs.cjs"
+    "check:jobs": "node scripts/check-msg-jobs.cjs",
+    "process:jobs": "node scripts/process-whatsapp-jobs-once.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

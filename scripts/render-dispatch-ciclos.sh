@@ -28,3 +28,21 @@ curl -fsS -X GET \
   -H "Authorization: Bearer ${secret}" \
   -H "Accept: application/json" \
   "$url"
+
+wa_url="${DISPATCH_WHATSAPP_JOBS_URL:-}"
+if [ -z "$wa_url" ]; then
+  base="${NEXT_PUBLIC_APP_URL:-}"
+  base="${base%/}"
+  if [ -n "$base" ]; then
+    wa_url="${base}/api/cron/process-whatsapp-jobs"
+  fi
+fi
+
+if [ -n "$wa_url" ]; then
+  echo "render-dispatch-ciclos: process-whatsapp-jobs → ${wa_url}"
+  curl -fsS -X GET \
+    -H "Authorization: Bearer ${secret}" \
+    -H "Accept: application/json" \
+    --max-time 300 \
+    "$wa_url" || echo "render-dispatch-ciclos: process-whatsapp-jobs failed (non-fatal)" >&2
+fi

@@ -340,30 +340,77 @@ async function processBatch(
   rootLog: HubLogger
 ): Promise<void> {
   if (jobs.length === 0) return;
-  const queue = [...jobs];
-  const workers = Array.from({ length: Math.min(concurrency, jobs.length) }, async (_, i) => {
-    while (queue.length > 0) {
-      const job = queue.shift();
-      if (!job) return;
-      const log = rootLog.child({ worker_slot: i + 1, job_id: job.id, tenant_id: job.tenant_id || defaultTenantId() });
-      await processJob(supabase, job, log);
+
+  const byPhone = new Map<string, HubMsgJob[]>();
+  for (const job of jobs) {
+    const key = job.telefone.trim() || job.id;
+    const list = byPhone.get(key) ?? [];
+    list.push(job);
+    byPhone.set(key, list);
+  }
+
+  const phoneQueues = [...byPhone.values()];
+  const slots = Math.min(concurrency, phoneQueues.length);
+  let nextQueue = 0;
+
+  const workers = Array.from({ length: slots }, async (_, i) => {
+    while (true) {
+      const idx = nextQueue++;
+      if (idx >= phoneQueues.length) return;
+      const queue = phoneQueues[idx]!;
+      for (const job of queue) {
+        const log = rootLog.child({
+          worker_slot: i + 1,
+          job_id: job.id,
+          tenant_id: job.tenant_id || defaultTenantId(),
+          telefone: job.telefone,
+        });
+        await processJob(supabase, job, log);
+      }
     }
   });
   await Promise.all(workers);
 }
 
-export async function runWhatsappWorker(): Promise<never> {
+/** Um ciclo: claim + processa lote (usado pelo cron HTTP e pelo worker contínuo). */
+export async function runWhatsappWorkerTick(): Promise<{
+  claimed: number;
+  worker_id: string;
+  error?: string;
+}> {
   const supabase = supabaseAdmin();
   const id = workerId();
-  const pollMs = workerPollMs();
   const batchSize = workerBatchSize();
   const concurrency = workerConcurrency();
-  const jitterMax = workerMaxJitterMs();
   const log = createHubLogger("whatsapp_worker", {
     worker_id: id,
-    poll_ms: pollMs,
     batch_size: batchSize,
     concurrency,
+    mode: "tick",
+  });
+
+  try {
+    const jobs = await claimBatch(supabase, id, batchSize);
+    if (jobs.length > 0) {
+      log.info("wa.worker.claimed_batch", { size: jobs.length });
+      await processBatch(supabase, jobs, concurrency, log);
+    }
+    return { claimed: jobs.length, worker_id: id };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error("wa.worker.tick_error", { error: msg.slice(0, 260) });
+    return { claimed: 0, worker_id: id, error: msg.slice(0, 500) };
+  }
+}
+
+export async function runWhatsappWorker(): Promise<never> {
+  const pollMs = workerPollMs();
+  const jitterMax = workerMaxJitterMs();
+  const log = createHubLogger("whatsapp_worker", {
+    poll_ms: pollMs,
+    batch_size: workerBatchSize(),
+    concurrency: workerConcurrency(),
+    mode: "loop",
   });
 
   log.info("wa.worker.started", {
@@ -373,18 +420,11 @@ export async function runWhatsappWorker(): Promise<never> {
   });
 
   while (true) {
-    try {
-      const jobs = await claimBatch(supabase, id, batchSize);
-      if (jobs.length > 0) {
-        log.info("wa.worker.claimed_batch", { size: jobs.length });
-        await processBatch(supabase, jobs, concurrency, log);
-      } else {
-        const jitter = jitterMax > 0 ? Math.floor(Math.random() * jitterMax) : 0;
-        await sleep(pollMs + jitter);
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      log.error("wa.worker.loop_error", { error: msg.slice(0, 260) });
+    const result = await runWhatsappWorkerTick();
+    if (result.claimed === 0 && !result.error) {
+      const jitter = jitterMax > 0 ? Math.floor(Math.random() * jitterMax) : 0;
+      await sleep(pollMs + jitter);
+    } else if (result.error) {
       await sleep(Math.max(1500, Math.floor(pollMs / 2)));
     }
   }

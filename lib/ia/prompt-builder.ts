@@ -7,6 +7,12 @@ import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import { buscarTrechosRag } from "@/lib/hub/rag";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
+import {
+  blocoPerguntasEssenciaisCargo,
+  obterProximaPerguntaEssencial,
+  substituirPlaceholdersSaudacao,
+  type TurnoMinimo,
+} from "@/lib/ia/perguntas-essenciais-cargo";
 
 function db() {
   return createClient(
@@ -35,6 +41,8 @@ export interface PromptParams {
   canal?: string;
   /** Quantidade de turnos anteriores na conversa (0 = primeiro contacto). */
   turnosAnteriores?: number;
+  /** Histórico para calcular próxima pergunta essencial do cargo (sem expor lista completa ao modelo). */
+  turnosConversa?: TurnoMinimo[];
 }
 
 export interface PromptCompleto {
@@ -125,36 +133,64 @@ ${personalidade?.descricao_comportamento || ""}`);
   const conversaEmAndamento = turnosAnteriores > 0;
   const canalWhatsapp = (params.canal ?? "").toLowerCase() === "whatsapp";
 
-  if (canalWhatsapp) {
+  const turnosConversa = params.turnosConversa ?? [];
+  const ordemPerguntasCargo =
+    cargoCatalogo?.ordem_perguntas_essenciais === "final" ? "final" : "inicio";
+  const perguntasEssenciaisCargo = cargoCatalogo
+    ? splitLinesLite(cargoCatalogo.perguntas_essenciais)
+    : [];
+  const usarPerguntasCargo =
+    cargoCatalogo?.usar_perguntas_essenciais === true && perguntasEssenciaisCargo.length > 0;
+
+  const proximaPerguntaEssencial = usarPerguntasCargo
+    ? obterProximaPerguntaEssencial(perguntasEssenciaisCargo, turnosConversa, ordemPerguntasCargo)
+    : null;
+
+  if (canalWhatsapp && !usarPerguntasCargo) {
     secoes.push(blocoFluxoPrimeiroAtendimentoWhatsapp(turnosAnteriores));
   }
 
-  // CAMADA 2 — OPERAÇÃO DO CARGO (externo)
+  // CAMADA 2 — OPERAÇÃO DO CARGO (externo / WhatsApp)
   if (cargoCatalogo) {
     const linhas: string[] = [];
     const saudacao = String(cargoCatalogo.saudacao_cliente ?? "").trim();
     const comprimentoPadrao = String(cargoCatalogo.comprimento_padrao ?? "").trim();
-    const ordemPerguntas =
-      cargoCatalogo.ordem_perguntas_essenciais === "final" ? "final" : "inicio";
-    const perguntasEssenciais = splitLinesLite(cargoCatalogo.perguntas_essenciais);
-    const usarPerguntas = cargoCatalogo.usar_perguntas_essenciais === true && perguntasEssenciais.length > 0;
+    const nomeAgente = String(agente.nome ?? params.agenteSlug);
+
     linhas.push("- Não mencionar cargo/função interna ao cliente (ex.: SDR, qualificador, closer).");
     linhas.push("- Fazer perguntas de qualificação naturalmente, sem anunciar processo interno.");
-    if (conversaEmAndamento) {
-      linhas.push("- CONVERSA JÁ INICIADA: não repita saudação, não se reapresente, não refaça perguntas já respondidas.");
+
+    if (usarPerguntasCargo) {
+      linhas.push(
+        ...blocoPerguntasEssenciaisCargo({
+          usarPerguntas: true,
+          perguntas: perguntasEssenciaisCargo,
+          ordem: ordemPerguntasCargo,
+          saudacao: saudacao || undefined,
+          nomeAgente,
+          comprimentoPadrao: comprimentoPadrao || undefined,
+          conversaEmAndamento,
+          proximaPergunta: proximaPerguntaEssencial,
+        })
+      );
+    } else if (conversaEmAndamento) {
+      linhas.push("- CONVERSA JÁ INICIADA: não repita saudação, não se reapresente.");
       linhas.push("- Responda direto ao que o cliente acabou de dizer; no máximo UMA pergunta nova por mensagem.");
-      linhas.push("- Tom de chat contínuo (WhatsApp), não roteiro de abertura de call.");
     } else {
-      if (saudacao) linhas.push(`- Saudação recomendada (só na 1ª mensagem): "${saudacao}"`);
-      if (comprimentoPadrao) linhas.push(`- Comprimento padrão: ${comprimentoPadrao}`);
-      if (usarPerguntas) {
+      if (saudacao) {
         linhas.push(
-          `- Perguntas essenciais: aplicar no ${ordemPerguntas === "final" ? "final" : "início"} da conversa, uma de cada vez.`
+          `- Saudação (só na 1ª mensagem): «${substituirPlaceholdersSaudacao(saudacao, nomeAgente)}»`
         );
-        linhas.push("- Lista em ordem preferencial:");
-        for (const [idx, p] of perguntasEssenciais.entries()) linhas.push(`  ${idx + 1}. ${p}`);
       }
+      if (comprimentoPadrao) linhas.push(`- Comprimento padrão: ${comprimentoPadrao}`);
     }
+
+    if (canalWhatsapp && usarPerguntasCargo) {
+      linhas.push(
+        "- WhatsApp: máximo 2 frases curtas; uma pergunta por mensagem; avance como na simulação interna do CRM."
+      );
+    }
+
     secoes.push(`═══ OPERAÇÃO DO CARGO ═══\n${linhas.join("\n")}`);
   }
 

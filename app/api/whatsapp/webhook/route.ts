@@ -186,6 +186,7 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
   if (leadExistente) {
     const leadUpdate = {
       atualizado_em: new Date().toISOString(),
+      ultimo_contato: new Date().toISOString(),
       pessoa_id: pessoa?.id ?? leadExistente.pessoa_id,
       tenant_id: leadExistente.tenant_id || defaultTenantId(),
     };
@@ -195,15 +196,7 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
       upd = await supabase.from("hub_leads_crm").update(semTenant).eq("id", leadExistente.id);
     }
 
-    await supabase.from("hub_memorias_lead").insert({
-      lead_id: leadExistente.id,
-      chave: "retorno_wa",
-      valor: mensagem.slice(0, 100),
-      confianca: 0.8,
-      criado_por: "whatsapp",
-    });
-
-    return { lead: leadExistente, isNovo: false };
+    return { lead: leadExistente, isNovo: false, pessoaId: pessoa?.id ?? leadExistente.pessoa_id };
   }
 
   const agenteResponsavel = mercado === "imobiliario" || mercado === "arquitetura" ? "atendente" : "sdr";
@@ -220,54 +213,30 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
       agente_responsavel: agenteResponsavel,
       pessoa_id: pessoa?.id ?? null,
       tenant_id: defaultTenantId(),
-      metadata: { mercado, primeira_mensagem: mensagem.slice(0, 200) },
+      metadata: {
+        mercado,
+        fase_atendimento: "conversa_ia",
+        primeira_mensagem: mensagem.slice(0, 200),
+      },
     })
     .select()
     .single();
 
   if (error || !novoLead) {
     console.error("[WEBHOOK] Erro ao criar lead:", error);
-    return { lead: null, isNovo: false };
+    return { lead: null, isNovo: false as const, pessoaId: null as string | null };
   }
 
-  await Promise.all([
-    // TABELA 1: hub_memorias_lead — memórias do lead
-    supabase.from("hub_memorias_lead").insert([
-      {
-        lead_id: novoLead.id,
-        chave: "telefone",
-        valor: telefone,
-        confianca: 1.0,
-        criado_por: "sistema",
-      },
-      {
-        lead_id: novoLead.id,
-        chave: "mercado",
-        valor: mercado,
-        confianca: 0.9,
-        criado_por: "analise",
-      },
-      {
-        lead_id: novoLead.id,
-        chave: "nome",
-        valor: nome || `Lead ${telefone.slice(-4)}`,
-        confianca: 0.9,
-        criado_por: "whatsapp",
-      },
-    ]),
-
-    // TABELA 2: hub_atividades — timeline do lead
-    supabase.from("hub_atividades").insert({
+  await supabase.from("hub_atividades").insert({
       lead_id: novoLead.id,
       tipo: "mensagem",
-      descricao: `Novo lead via WhatsApp — mercado: ${mercado} — mensagem: ${mensagem.slice(0, 100)}`,
+    descricao: `Contacto WhatsApp iniciado — mercado: ${mercado}`,
       feito_por: "sistema",
       feito_por_tipo: "ia",
       metadata: { telefone, mercado, primeira_mensagem: true },
-    }),
-  ]);
+  });
 
-  return { lead: novoLead, isNovo: true };
+  return { lead: novoLead, isNovo: true, pessoaId: pessoa?.id ?? null };
 }
 
 type EnqueueWhatsappJobInput = {
@@ -289,7 +258,7 @@ async function enqueueWhatsappJob(
 ): Promise<"accepted" | "duplicate"> {
   const jobRow = {
     tenant_id: input.tenantId,
-    canal: "whatsapp",
+      canal: "whatsapp",
     telefone: input.telefone,
     lead_id: input.leadId,
     agente_slug: input.agenteSlug,
@@ -521,7 +490,7 @@ export async function POST(request: NextRequest) {
       return trace.json({ status: "ok", intencao: "parceiro", telefone: trace.maskTelefone(telefone) }, 200, "parceiro_ok");
     }
 
-    const { lead, isNovo } = await encontrarOuCriarLead(telefone, pushName, mercado, mensagemFinal);
+    const { lead, isNovo, pessoaId } = await encontrarOuCriarLead(telefone, pushName, mercado, mensagemFinal);
 
     if (!lead) {
       log.error("wa.webhook.lead_failed", { telefone: trace.maskTelefone(telefone), mercado });
@@ -567,14 +536,15 @@ export async function POST(request: NextRequest) {
     }
 
     const enqueuePayload = {
-      telefone,
-      pushName,
-      mercado,
+            telefone,
+            pushName,
+            mercado,
       instance: instanceKey ?? null,
       instanceToken: waSendOpts.instanceToken ?? null,
-      tipoMidia,
+            tipoMidia,
       mensagemFinal,
-      leadId: lead.id,
+            leadId: lead.id,
+      pessoaId: pessoaId ?? lead.pessoa_id ?? null,
       isNovo,
       timestamp,
       messageId: messageIdParaFila,
@@ -585,7 +555,7 @@ export async function POST(request: NextRequest) {
 
     const enqueueStatus = await enqueueWhatsappJob(supabase, {
       tenantId: defaultTenantId(),
-      telefone,
+            telefone,
       leadId: lead.id as string,
       agenteSlug: agenteSlugHint,
       messageId: messageIdParaFila,

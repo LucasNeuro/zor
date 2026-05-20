@@ -62,6 +62,8 @@ services:
         value: "10"
       - key: WORKER_CONCURRENCY
         value: "1"
+      - key: WHATSAPP_JOB_PROCESSOR
+        value: worker_only
       - key: MISTRAL_CHAT_TIMEOUT_MS
         value: "30000"
       - key: MISTRAL_CHAT_RETRIES

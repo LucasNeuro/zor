@@ -445,6 +445,20 @@ export function mergeUsoFerramentasComPadrao(
   return base;
 }
 
+/** Primeiro atendimento WhatsApp: ferramentas de leitura/escrita no CRM activadas por defeito. */
+export function mergeUsoFerramentasWhatsappCanal(
+  uso: Partial<Record<HubAgenteFerramentaId, boolean>>,
+  modoOperacao?: string | null
+): Record<HubAgenteFerramentaId, boolean> {
+  const base = mergeUsoFerramentasComPadrao(uso);
+  if (modoOperacao === "canal_whatsapp") {
+    if (coalesceFerramentaBool(uso.hub_atualizar_lead) !== false) base.hub_atualizar_lead = true;
+    if (coalesceFerramentaBool(uso.hub_lead_memorias) !== false) base.hub_lead_memorias = true;
+    if (coalesceFerramentaBool(uso.hub_lead_resumo) !== false) base.hub_lead_resumo = true;
+  }
+  return base;
+}
+
 export const HUB_FERRAMENTA_SECAO_LABEL: Record<HubFerramentaCategoria, string> = {
   cliente: "Dados do cliente nesta conversa",
   analise: "Análise e partilha",

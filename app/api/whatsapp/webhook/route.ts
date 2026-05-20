@@ -13,6 +13,7 @@ import { webhookSecretQueryParam } from "@/lib/whatsapp/webhook-auth";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
 import { dispararProcessamentoJobsWhatsapp } from "@/lib/whatsapp/trigger-job-processor";
+import { supersedeJobsAntigosMesmoTelefone } from "@/lib/whatsapp/supersede-jobs-antigos";
 
 let warnedMissingWebhookSecret = false;
 const WEBHOOK_DEDUPE_TTL_MS = 2 * 60 * 1000;
@@ -303,6 +304,9 @@ async function enqueueWhatsappJob(
     .maybeSingle();
 
   if (error) throw error;
+  if (data?.id) {
+    await supersedeJobsAntigosMesmoTelefone(supabase, input.telefone, data.id);
+  }
   return data?.id ? "accepted" : "duplicate";
 }
 

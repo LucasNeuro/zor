@@ -273,7 +273,11 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
     return;
   }
 
-  const lockOk = await tryConversationLock(supabase, contexto.telefone);
+  let lockOk = await tryConversationLock(supabase, contexto.telefone);
+  if (!lockOk) {
+    await sleep(800);
+    lockOk = await tryConversationLock(supabase, contexto.telefone);
+  }
   if (!lockOk) {
     const delayMs = retryDelayMs(Math.max(job.attempts, 1));
     await updateJobStatus(supabase, job, {

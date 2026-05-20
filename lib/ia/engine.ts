@@ -140,25 +140,47 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       );
     }
 
-    // ETAPA 4: Busca histórico recente (hub_fila_mensagens + fallback + resumo se 30+ msgs)
+    // ETAPA 4: Busca histórico recente (hub_fila_mensagens + hub_mensagens + resumo se 30+ msgs)
     const { buscarHistoricoConversa } = await import("@/lib/ia/conversation-context");
     const historicoCtx = await buscarHistoricoConversa(db, { leadId: ctx.leadId });
+    const turnosAnteriores = historicoCtx.linhas.length;
+
+    let etapaFluxo = typeof ctx.metadata?.etapa === "string" ? ctx.metadata.etapa : undefined;
+    if (!etapaFluxo) {
+      const { data: fluxoRow } = await db
+        .from("hub_fluxos")
+        .select("fase, proximo_passo, acao_esperada")
+        .eq("agente_slug", agente.slug)
+        .eq("ativo", true)
+        .order("ordem", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (fluxoRow) {
+        etapaFluxo = `Fase: ${fluxoRow.fase}\nPróximo passo: ${fluxoRow.proximo_passo}\nAção esperada: ${fluxoRow.acao_esperada}`;
+      }
+    }
 
     // ETAPA 5: Monta o system prompt completo via banco
     const promptData = await construirPrompt({
       agenteSlug: agente.slug,
       leadId: ctx.leadId,
       mercado: ctx.segmento,
-      etapaFluxo: ctx.metadata?.etapa as string,
+      etapaFluxo,
       mensagemAtual: ctx.mensagem,
       canal: ctx.canal,
+      turnosAnteriores,
     });
 
     if (!promptData) {
       return { sucesso: false, erro: "Não foi possível construir o prompt do agente" };
     }
 
-    const systemPrompt = promptData.systemPrompt;
+    let systemPrompt = promptData.systemPrompt;
+    if (historicoCtx.linhas.length > 0) {
+      const { formatarBlocoContextoConversa } = await import("@/lib/ia/conversation-context");
+      const bloco = formatarBlocoContextoConversa(historicoCtx.linhas);
+      if (bloco) systemPrompt = `${systemPrompt}\n\n${bloco}`;
+    }
     const modelo = promptData.modelo;
 
     // ETAPA 6: Estima tokens antes de chamar
@@ -181,7 +203,13 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       mensagens.push({ role: h.role, content: h.content });
     }
 
-    mensagens.push({ role: "user", content: ctx.mensagem });
+    const msgAtual = ctx.mensagem.trim();
+    const ultimaLinha = historicoCtx.linhas[historicoCtx.linhas.length - 1];
+    const jaIncluiuMensagemAtual =
+      ultimaLinha?.role === "user" && ultimaLinha.content.trim() === msgAtual;
+    if (!jaIncluiuMensagemAtual) {
+      mensagens.push({ role: "user", content: ctx.mensagem });
+    }
 
     const { data: ferrIaRow } = await db
       .from("hub_agente_identidade")
@@ -306,7 +334,22 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     };
     if (ctx.tenantId) filaSaida.tenant_id = ctx.tenantId;
 
-    // ETAPA 10: Enfileira resposta para envio
+    // ETAPA 10: Persiste turno na fila (entrada + saída) para histórico fluido no WhatsApp
+    const filaEntrada: Record<string, unknown> = {
+      lead_id: ctx.leadId,
+      agente_id: agente.slug,
+      canal: ctx.canal,
+      direcao: "entrada",
+      conteudo: ctx.mensagem,
+      status: "processado",
+      metadata: { feito_por: "engine", messageId: ctx.metadata?.messageId ?? null },
+    };
+    if (ctx.tenantId) filaEntrada.tenant_id = ctx.tenantId;
+    try {
+      await db.from("hub_fila_mensagens").insert(filaEntrada);
+    } catch (e) {
+      console.warn("[ENGINE] hub_fila_mensagens entrada:", e);
+    }
     await db.from("hub_fila_mensagens").insert(filaSaida);
 
     const hora = new Date().getHours();

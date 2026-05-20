@@ -348,6 +348,14 @@ export async function verificarAutonomia(
   valorEnvolvido: number,
   canal?: CanalAutonomia
 ): Promise<{ podeAgir: boolean; motivo: string; precisaAprovacao: boolean }> {
+  if (canal === "whatsapp") {
+    return {
+      podeAgir: true,
+      motivo: "Primeiro atendimento WhatsApp — autonomia plena sem hierarquia no CRM",
+      precisaAprovacao: false,
+    };
+  }
+
   const db = supabase();
 
   const { data: linhasMatriz } = await db

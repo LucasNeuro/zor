@@ -24,21 +24,6 @@ export async function avaliarJobDuplicado(
     }
   }
 
-  if (job.created_at) {
-    const { data: maisNovo } = await supabase
-      .from("hub_msg_jobs")
-      .select("id")
-      .eq("canal", "whatsapp")
-      .eq("telefone", job.telefone)
-      .in("status", ["pending", "retry", "processing"])
-      .gt("created_at", job.created_at)
-      .neq("id", job.id)
-      .limit(1);
-    if (maisNovo?.length) {
-      return { ignorar: true, motivo: "mensagem_mais_recente_na_fila" };
-    }
-  }
-
   return { ignorar: false };
 }
 

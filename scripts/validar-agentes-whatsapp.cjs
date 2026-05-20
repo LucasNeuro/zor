@@ -78,9 +78,10 @@ async function main() {
   const { data: agentes, error: eA } = await supabase
     .from("hub_agente_identidade")
     .select(
-      "agente_slug,nome,cargo,ativo,modo_operacao,motor_ferramentas_habilitado,uso_ferramentas_ia,uazapi_instance_token,mistral_agent_id"
+      "agente_slug,nome,cargo,ativo,modo_operacao,motor_ferramentas_habilitado,uso_ferramentas_ia,uazapi_instance_token,uazapi_connection_status,mistral_agent_id"
     )
     .eq("ativo", true)
+    .is("arquivado_em", null)
     .order("agente_slug");
 
   if (eA) {
@@ -105,8 +106,11 @@ async function main() {
     if (c.titulo) cargoByTitulo.set(String(c.titulo).trim(), c);
   }
 
-  const wa = (agentes || []).filter((a) => a.modo_operacao === "canal_whatsapp");
-  console.log(`\n=== Agentes WhatsApp (canal_whatsapp): ${wa.length} ===\n`);
+  const temToken = (a) => Boolean(String(a.uazapi_instance_token || "").trim());
+  const wa = (agentes || []).filter(
+    (a) => a.modo_operacao === "canal_whatsapp" || temToken(a)
+  );
+  console.log(`\n=== Agentes WhatsApp (canal ou token UAZAPI): ${wa.length} ===\n`);
 
   const fixes = [];
   let ok = 0;
@@ -116,7 +120,11 @@ async function main() {
     const cargo = cargoByTitulo.get(String(ag.cargo || "").trim());
     const issues = [];
 
-    if (!ag.uazapi_instance_token?.trim()) issues.push("sem_token_uazapi");
+    if (!temToken(ag)) issues.push("sem_token_uazapi");
+    if (ag.modo_operacao !== "canal_whatsapp") issues.push("modo_operacao_nao_canal_whatsapp");
+    if (ag.uazapi_connection_status && ag.uazapi_connection_status !== "connected") {
+      issues.push(`whatsapp_status_${ag.uazapi_connection_status}`);
+    }
     if (!cargo) issues.push("cargo_nao_encontrado_no_catalogo");
     else {
       if (!cargo.usar_perguntas_essenciais) issues.push("cargo_sem_perguntas_essenciais");

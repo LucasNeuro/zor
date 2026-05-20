@@ -25,10 +25,15 @@ function nomeParecePlaceholder(nome: string): boolean {
   return !n || n.startsWith("lead ") || n === "lead whatsapp" || n.length < 2;
 }
 
+export type MemoriasPatchCrmResult = {
+  args: Record<string, unknown>;
+  resumo: string;
+};
+
 /** Converte memórias do lead em patch CRM estruturado. */
 export function memoriasParaPatchCrm(
   memorias: Array<{ chave: string; valor: string }>
-): Record<string, unknown> {
+): MemoriasPatchCrmResult {
   const args: Record<string, unknown> = {};
   const metaExtra: Record<string, unknown> = {};
   const textos: string[] = [];

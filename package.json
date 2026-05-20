@@ -17,7 +17,9 @@
     "audit:ferramentas": "node scripts/auditoria-ferramentas-agentes.cjs",
     "sync:mistral-all": "node scripts/sync-mistral-all-agentes.cjs",
     "check:jobs": "node scripts/check-msg-jobs.cjs",
-    "process:jobs": "node scripts/process-whatsapp-jobs-once.cjs"
+    "process:jobs": "node scripts/process-whatsapp-jobs-once.cjs",
+    "validar:whatsapp": "node scripts/validar-agentes-whatsapp.cjs",
+    "validar:whatsapp:fix": "node scripts/validar-agentes-whatsapp.cjs --fix"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

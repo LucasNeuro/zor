@@ -61,7 +61,7 @@ services:
       - key: WORKER_BATCH_SIZE
         value: "10"
       - key: WORKER_CONCURRENCY
-        value: "4"
+        value: "1"
       - key: MISTRAL_CHAT_TIMEOUT_MS
         value: "30000"
       - key: MISTRAL_CHAT_RETRIES
@@ -99,7 +99,7 @@ services:
       - key: WORKER_BATCH_SIZE
         value: "10"
       - key: WORKER_CONCURRENCY
-        value: "4"
+        value: "1"
       - key: MISTRAL_CHAT_TIMEOUT_MS
         value: "30000"
       - key: MISTRAL_CHAT_RETRIES

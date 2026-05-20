@@ -68,6 +68,16 @@ function dedupeHistorico(linhas: HistoricoConversaLinha[]): HistoricoConversaLin
   return out;
 }
 
+function parseSortMs(iso?: string | null): number {
+  if (!iso) return 0;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function ordenarHistorico(linhas: HistoricoConversaLinha[]): HistoricoConversaLinha[] {
+  return [...linhas].sort((a, b) => parseSortMs(a.criadoEm) - parseSortMs(b.criadoEm));
+}
+
 async function buscarTodasLinhasConversa(
   supabase: SupabaseClient,
   leadId: string,
@@ -80,30 +90,24 @@ async function buscarTodasLinhasConversa(
     .order("criado_em", { ascending: true })
     .limit(max);
 
-  let linhas = mapFila((fila ?? []) as Array<{ conteudo: unknown; direcao: unknown; criado_em?: string | null }>);
+  const { data: msgs } = await supabase
+    .from("hub_mensagens")
+    .select("conteudo, remetente, enviada_em, criado_em")
+    .eq("lead_id", leadId)
+    .order("enviada_em", { ascending: true, nullsFirst: false })
+    .limit(max);
 
-  if (linhas.length < 8) {
-    const { data: msgs } = await supabase
-      .from("hub_mensagens")
-      .select("conteudo, remetente, enviada_em, criado_em")
-      .eq("lead_id", leadId)
-      .order("enviada_em", { ascending: true, nullsFirst: false })
-      .limit(max);
+  const deFila = mapFila((fila ?? []) as Array<{ conteudo: unknown; direcao: unknown; criado_em?: string | null }>);
+  const deMsgs = mapMensagens(
+    (msgs ?? []) as Array<{
+      conteudo: unknown;
+      remetente: unknown;
+      enviada_em?: string | null;
+      criado_em?: string | null;
+    }>
+  );
 
-    const extra = mapMensagens(
-      (msgs ?? []) as Array<{
-        conteudo: unknown;
-        remetente: unknown;
-        enviada_em?: string | null;
-        criado_em?: string | null;
-      }>
-    );
-    linhas = dedupeHistorico([...extra, ...linhas]);
-  } else {
-    linhas = dedupeHistorico(linhas);
-  }
-
-  return linhas;
+  return ordenarHistorico(dedupeHistorico([...deMsgs, ...deFila]));
 }
 
 async function contarMensagensConversa(supabase: SupabaseClient, leadId: string): Promise<number> {

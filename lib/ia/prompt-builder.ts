@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import { buscarTrechosRag } from "@/lib/hub/rag";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
+import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
 
 function db() {
   return createClient(
@@ -32,6 +33,8 @@ export interface PromptParams {
   etapaFluxo?: string;
   mensagemAtual?: string;
   canal?: string;
+  /** Quantidade de turnos anteriores na conversa (0 = primeiro contacto). */
+  turnosAnteriores?: number;
 }
 
 export interface PromptCompleto {
@@ -118,6 +121,14 @@ COMPORTAMENTO: Humor ${humorLabel} + Personalidade ${personalidadeLabel}.
 Tom de comunicação: ${tomComunicacao}.
 ${personalidade?.descricao_comportamento || ""}`);
 
+  const turnosAnteriores = Math.max(0, params.turnosAnteriores ?? 0);
+  const conversaEmAndamento = turnosAnteriores > 0;
+  const canalWhatsapp = (params.canal ?? "").toLowerCase() === "whatsapp";
+
+  if (canalWhatsapp) {
+    secoes.push(blocoFluxoPrimeiroAtendimentoWhatsapp(turnosAnteriores));
+  }
+
   // CAMADA 2 — OPERAÇÃO DO CARGO (externo)
   if (cargoCatalogo) {
     const linhas: string[] = [];
@@ -129,14 +140,20 @@ ${personalidade?.descricao_comportamento || ""}`);
     const usarPerguntas = cargoCatalogo.usar_perguntas_essenciais === true && perguntasEssenciais.length > 0;
     linhas.push("- Não mencionar cargo/função interna ao cliente (ex.: SDR, qualificador, closer).");
     linhas.push("- Fazer perguntas de qualificação naturalmente, sem anunciar processo interno.");
-    if (saudacao) linhas.push(`- Saudação recomendada: "${saudacao}"`);
-    if (comprimentoPadrao) linhas.push(`- Comprimento padrão: ${comprimentoPadrao}`);
-    if (usarPerguntas) {
-      linhas.push(
-        `- Perguntas essenciais: aplicar no ${ordemPerguntas === "final" ? "final" : "início"} da conversa.`
-      );
-      linhas.push("- Lista em ordem preferencial:");
-      for (const [idx, p] of perguntasEssenciais.entries()) linhas.push(`  ${idx + 1}. ${p}`);
+    if (conversaEmAndamento) {
+      linhas.push("- CONVERSA JÁ INICIADA: não repita saudação, não se reapresente, não refaça perguntas já respondidas.");
+      linhas.push("- Responda direto ao que o cliente acabou de dizer; no máximo UMA pergunta nova por mensagem.");
+      linhas.push("- Tom de chat contínuo (WhatsApp), não roteiro de abertura de call.");
+    } else {
+      if (saudacao) linhas.push(`- Saudação recomendada (só na 1ª mensagem): "${saudacao}"`);
+      if (comprimentoPadrao) linhas.push(`- Comprimento padrão: ${comprimentoPadrao}`);
+      if (usarPerguntas) {
+        linhas.push(
+          `- Perguntas essenciais: aplicar no ${ordemPerguntas === "final" ? "final" : "início"} da conversa, uma de cada vez.`
+        );
+        linhas.push("- Lista em ordem preferencial:");
+        for (const [idx, p] of perguntasEssenciais.entries()) linhas.push(`  ${idx + 1}. ${p}`);
+      }
     }
     secoes.push(`═══ OPERAÇÃO DO CARGO ═══\n${linhas.join("\n")}`);
   }
@@ -227,6 +244,14 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
   if ((params.canal ?? "").toLowerCase() === "whatsapp") {
     regrasUniversais.unshift("Máximo 3 linhas por mensagem no WhatsApp — prefira 1 ou 2");
     regrasUniversais.push("Não mencionar cargo/função interna ao cliente (ex.: SDR, qualificador, closer).");
+    if (conversaEmAndamento) {
+      regrasUniversais.push(
+        "Não repetir «Olá», «tudo bem?», nome da empresa ou «como posso ajudar» se já apareceu no histórico."
+      );
+      regrasUniversais.push("Avance o assunto: confirme o que entendeu e proponha o próximo passo concreto.");
+    } else {
+      regrasUniversais.push("Primeira mensagem: seja acolhedor e faça no máximo uma pergunta objetiva.");
+    }
   }
   secoes.push(`═══ REGRAS UNIVERSAIS ═══\n${regrasUniversais.map((r) => `- ${r}`).join("\n")}`);
 

@@ -14,6 +14,7 @@ import { resolveInferenceModelId, isMistralFamilyModelId } from "./hub-model-def
 import {
   ferramentasMistralListaParaAgente,
   mergeUsoFerramentasComPadraoPreservandoCustom,
+  mergeUsoFerramentasWhatsappCanal,
 } from "@/lib/hub/agente-ferramentas-registry";
 import { executarFerramentaHub } from "@/lib/hub/executar-ferramenta-ia";
 import {
@@ -56,6 +57,7 @@ export interface ContextoMensagem {
   /** Se ativo no banco, usa este agente; caso contrário aplica o router. */
   agenteSlugHint?: string;
   tenantId?: string;
+  pessoaId?: string | null;
   /** Ex.: WhatsApp usa `pendente_envio` para alinhar ao envio UAZAPI após resposta da IA. */
   statusFilaSaida?: string;
 }
@@ -140,10 +142,24 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       );
     }
 
-    // ETAPA 4: Busca histórico recente (hub_fila_mensagens + hub_mensagens + resumo se 30+ msgs)
+    // ETAPA 4: Histórico — metadata CRM (fiável) + hub_fila_mensagens
     const { buscarHistoricoConversa } = await import("@/lib/ia/conversation-context");
+    let turnosCrm: import("@/lib/crm/conversa-turnos-crm").TurnoConversaCrm[] = [];
+    if (ctx.canal === "whatsapp" && ctx.leadId) {
+      const crmTurnos = await import("@/lib/crm/conversa-turnos-crm");
+      turnosCrm = await crmTurnos.registarEntradaUsuarioCrm(db, ctx.leadId, ctx.mensagem);
+    }
     const historicoCtx = await buscarHistoricoConversa(db, { leadId: ctx.leadId });
-    const turnosAnteriores = historicoCtx.linhas.length;
+    const turnosAnteriores =
+      ctx.canal === "whatsapp"
+        ? Math.max(
+            (await import("@/lib/crm/conversa-turnos-crm")).contarTurnosAnteriores(
+              turnosCrm,
+              ctx.mensagem
+            ),
+            historicoCtx.linhas.length
+          )
+        : historicoCtx.linhas.length;
 
     let etapaFluxo = typeof ctx.metadata?.etapa === "string" ? ctx.metadata.etapa : undefined;
     if (!etapaFluxo) {
@@ -161,6 +177,11 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     }
 
     // ETAPA 5: Monta o system prompt completo via banco
+    const turnosParaPrompt =
+      ctx.canal === "whatsapp" && turnosCrm.length > 0
+        ? turnosCrm.map((t) => ({ role: t.role, content: t.content }))
+        : historicoCtx.linhas.map((l) => ({ role: l.role, content: l.content }));
+
     const promptData = await construirPrompt({
       agenteSlug: agente.slug,
       leadId: ctx.leadId,
@@ -169,6 +190,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       mensagemAtual: ctx.mensagem,
       canal: ctx.canal,
       turnosAnteriores,
+      turnosConversa: turnosParaPrompt,
     });
 
     if (!promptData) {
@@ -176,9 +198,13 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     }
 
     let systemPrompt = promptData.systemPrompt;
-    if (historicoCtx.linhas.length > 0) {
+    const linhasContexto =
+      ctx.canal === "whatsapp" && turnosCrm.length > 0
+        ? turnosCrm.map((t) => ({ role: t.role, content: t.content }))
+        : historicoCtx.linhas;
+    if (linhasContexto.length > 0) {
       const { formatarBlocoContextoConversa } = await import("@/lib/ia/conversation-context");
-      const bloco = formatarBlocoContextoConversa(historicoCtx.linhas);
+      const bloco = formatarBlocoContextoConversa(linhasContexto);
       if (bloco) systemPrompt = `${systemPrompt}\n\n${bloco}`;
     }
     const modelo = promptData.modelo;
@@ -192,23 +218,27 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     // ETAPA 7: Chama a IA
     const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
 
-    // Adiciona histórico recente (+ resumo de conversa longa)
     if (historicoCtx.resumoAnterior?.trim()) {
       mensagens.push({
         role: "user",
         content: `[Resumo da conversa anterior — use como contexto, não cumprimente de novo por isto]\n${historicoCtx.resumoAnterior.trim()}`,
       });
     }
-    for (const h of historicoCtx.linhas) {
-      mensagens.push({ role: h.role, content: h.content });
-    }
 
-    const msgAtual = ctx.mensagem.trim();
-    const ultimaLinha = historicoCtx.linhas[historicoCtx.linhas.length - 1];
-    const jaIncluiuMensagemAtual =
-      ultimaLinha?.role === "user" && ultimaLinha.content.trim() === msgAtual;
-    if (!jaIncluiuMensagemAtual) {
-      mensagens.push({ role: "user", content: ctx.mensagem });
+    if (ctx.canal === "whatsapp" && turnosCrm.length > 0) {
+      const { turnosParaMensagensLlm } = await import("@/lib/crm/conversa-turnos-crm");
+      mensagens.push(...turnosParaMensagensLlm(turnosCrm, ctx.mensagem));
+    } else {
+      for (const h of historicoCtx.linhas) {
+        mensagens.push({ role: h.role, content: h.content });
+      }
+      const msgAtual = ctx.mensagem.trim();
+      const ultimaLinha = historicoCtx.linhas[historicoCtx.linhas.length - 1];
+      const jaIncluiuMensagemAtual =
+        ultimaLinha?.role === "user" && ultimaLinha.content.trim() === msgAtual;
+      if (!jaIncluiuMensagemAtual) {
+        mensagens.push({ role: "user", content: ctx.mensagem });
+      }
     }
 
     const { data: ferrIaRow } = await db
@@ -226,7 +256,11 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     } catch {
       customDefs = [];
     }
-    const usoMap = mergeUsoFerramentasComPadraoPreservandoCustom(ferrIaRow?.uso_ferramentas_ia ?? {});
+    const modoOp = ferrIaRow?.modo_operacao ?? (ctx.canal === "whatsapp" ? "canal_whatsapp" : null);
+    const usoMap = mergeUsoFerramentasWhatsappCanal(
+      mergeUsoFerramentasComPadraoPreservandoCustom(ferrIaRow?.uso_ferramentas_ia ?? {}),
+      modoOp
+    );
     const mistralTools = ferramentasMistralListaParaAgente(usoMap, customDefs);
     const modeloResolved = resolveInferenceModelId(modelo);
     const temMistralKey = Boolean(process.env.MISTRAL_API_KEY?.trim());
@@ -307,8 +341,19 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       .maybeSingle();
 
     // ETAPA 9: Salva memórias extraídas (lead + agente) via LLM
-    const { extrairESalvarMemoriasLead } = await import("@/lib/ia/memoria-lead");
-    await extrairESalvarMemoriasLead(db, ctx.leadId, ctx.mensagem, textoResposta);
+    if (ctx.canal === "whatsapp" && ctx.leadId) {
+      const { registarRespostaAssistenteCrm } = await import("@/lib/crm/conversa-turnos-crm");
+      await registarRespostaAssistenteCrm(db, ctx.leadId, textoResposta);
+    }
+
+    const { persistirDadosLeadWhatsapp } = await import("@/lib/crm/persistir-lead-whatsapp");
+    await persistirDadosLeadWhatsapp(db, {
+      leadId: ctx.leadId,
+      mensagemUsuario: ctx.mensagem,
+      respostaIA: textoResposta,
+      agenteSlug: agente.slug,
+      pessoaId: ctx.pessoaId ?? null,
+    });
     try {
       const { extrairESalvarMemoriasAgente } = await import("@/lib/ia/memoria-agente");
       await extrairESalvarMemoriasAgente(db, {

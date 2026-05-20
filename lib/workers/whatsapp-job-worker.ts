@@ -37,7 +37,7 @@ export function workerBatchSize(): number {
 }
 
 export function workerConcurrency(): number {
-  return workerEnvInt("WORKER_CONCURRENCY", 4, 1, 20);
+  return workerEnvInt("WORKER_CONCURRENCY", 1, 1, 20);
 }
 
 function workerMaxJitterMs(): number {
@@ -115,7 +115,12 @@ type ReconstructedContext = {
   mercado: string;
   instanceKey: string | null;
   isNovo: boolean;
-  lead: { id: string; humano_responsavel?: string | null; agente_responsavel?: string | null };
+  lead: {
+    id: string;
+    pessoa_id?: string | null;
+    humano_responsavel?: string | null;
+    agente_responsavel?: string | null;
+  };
   agente: { agente_slug: string } | null;
   waSendOpts?: { instanceToken?: string | null };
 };
@@ -153,6 +158,7 @@ function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
     isNovo: toBool(payload.isNovo),
     lead: {
       id: leadId,
+      pessoa_id: toNullableStr(payload.pessoaId),
       humano_responsavel: toNullableStr(payload.humano_responsavel),
       agente_responsavel: agenteSlugHint,
     },
@@ -189,14 +195,30 @@ async function claimBatch(
   return (Array.isArray(data) ? data : []) as HubMsgJob[];
 }
 
-async function tryConversationLock(supabase: SupabaseClient, telefone: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc("hub_msg_jobs_try_lock_conversation", { p_telefone: telefone });
-  if (error) throw new Error(`falha advisory lock: ${error.message}`);
-  return data === true;
-}
+/** Jobs presos em processing (ex.: crash) voltam a retry para não bloquear o telefone no claim. */
+async function recuperarJobsProcessingExpirados(
+  supabase: SupabaseClient,
+  maxMinutos = 8
+): Promise<number> {
+  const limite = new Date(Date.now() - maxMinutos * 60_000).toISOString();
+  const { data, error } = await supabase
+    .from("hub_msg_jobs")
+    .update({
+      status: "retry",
+      last_error: "processing_expirado_recuperado",
+      locked_at: null,
+      locked_by: null,
+      available_at: new Date().toISOString(),
+    })
+    .eq("status", "processing")
+    .lt("locked_at", limite)
+    .select("id");
 
-async function unlockConversation(supabase: SupabaseClient, telefone: string): Promise<void> {
-  await supabase.rpc("hub_msg_jobs_unlock_conversation", { p_telefone: telefone });
+  if (error) {
+    console.warn("[WORKER] recuperar processing expirados:", error.message);
+    return 0;
+  }
+  return Array.isArray(data) ? data.length : 0;
 }
 
 async function tokenInstanciaPorAgente(
@@ -273,22 +295,13 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
     return;
   }
 
-  let lockOk = await tryConversationLock(supabase, contexto.telefone);
-  if (!lockOk) {
-    await sleep(800);
-    lockOk = await tryConversationLock(supabase, contexto.telefone);
-  }
-  if (!lockOk) {
-    const delayMs = retryDelayMs(Math.max(job.attempts, 1));
-    await updateJobStatus(supabase, job, {
-      status: "retry",
-      available_at: new Date(Date.now() + delayMs).toISOString(),
-      last_error: "conversation_locked",
-      locked_at: null,
-      locked_by: null,
-    });
-    log.info("wa.worker.job_requeued_lock", { job_id: job.id, telefone: contexto.telefone, delay_ms: delayMs });
-    return;
+  if (!contexto.lead.pessoa_id) {
+    const { data: leadRow } = await supabase
+      .from("hub_leads_crm")
+      .select("pessoa_id")
+      .eq("id", contexto.lead.id)
+      .maybeSingle();
+    if (leadRow?.pessoa_id) contexto.lead.pessoa_id = String(leadRow.pessoa_id);
   }
 
   try {
@@ -355,8 +368,6 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
       delay_ms: delayMs,
       error: msg.slice(0, 260),
     });
-  } finally {
-    await unlockConversation(supabase, contexto.telefone);
   }
 }
 
@@ -417,6 +428,7 @@ export async function runWhatsappWorkerTick(): Promise<{
   });
 
   try {
+    await recuperarJobsProcessingExpirados(supabase);
     const jobs = await claimBatch(supabase, id, batchSize);
     if (jobs.length > 0) {
       log.info("wa.worker.claimed_batch", { size: jobs.length });

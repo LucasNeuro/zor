@@ -116,7 +116,12 @@ export async function processarMensagemInboundWhatsapp(params: {
 }) {
   const { supabase, trace } = params;
   const log = trace.log;
-  const lead = params.lead as { id: string; humano_responsavel?: string | null; agente_responsavel?: string | null };
+  const lead = params.lead as {
+    id: string;
+    pessoa_id?: string | null;
+    humano_responsavel?: string | null;
+    agente_responsavel?: string | null;
+  };
   const agente = params.agente;
   const humanoResponsavelAtivo =
     typeof lead.humano_responsavel === "string" && lead.humano_responsavel.trim().length > 0;
@@ -174,6 +179,7 @@ export async function processarMensagemInboundWhatsapp(params: {
       segmento: params.mercado,
       agenteSlugHint: agenteSlug,
       tenantId: defaultTenantId(),
+      pessoaId: lead.pessoa_id ?? null,
       statusFilaSaida: "pendente_envio",
       metadata: {
         telefone: params.telefone,

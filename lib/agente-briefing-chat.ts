@@ -219,7 +219,18 @@ export async function executarSimulacaoCanalReply(params: {
   historico: BriefingMensagemLinha[];
   mensagemUsuario: string;
 }): Promise<{ texto: string; modelo: string; tokens_input: number; tokens_output: number; custo_brl: number }> {
-  const pc = await construirPrompt({ agenteSlug: params.agenteSlug });
+  const turnosConversa = params.historico.map((m) => ({
+    role: (m.papel === "user" ? "user" : "assistant") as "user" | "assistant",
+    content: m.conteudo,
+  }));
+
+  const pc = await construirPrompt({
+    agenteSlug: params.agenteSlug,
+    canal: "whatsapp",
+    turnosAnteriores: params.historico.length,
+    mensagemAtual: params.mensagemUsuario,
+    turnosConversa: [...turnosConversa, { role: "user", content: params.mensagemUsuario }],
+  });
   if (!pc) {
     throw new Error(
       "Não foi possível montar o prompt do agente. Verifique se o modelo está ativo em hub_agente_identidade."

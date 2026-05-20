@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHubLogger, type HubLogger } from "@/lib/observability/hub-log";
 import { defaultTenantId } from "@/lib/tenant-default";
+import { avaliarJobDuplicado } from "@/lib/whatsapp/anti-duplicata-resposta";
 import { processarMensagemInboundWhatsapp } from "@/lib/whatsapp/inbound-message-processor";
 import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
 
@@ -18,6 +19,7 @@ type HubMsgJob = {
   status: JobStatus;
   attempts: number;
   max_attempts: number;
+  created_at?: string | null;
 };
 
 function workerEnvInt(name: string, fallback: number, min = 1, max = Number.MAX_SAFE_INTEGER): number {
@@ -248,6 +250,27 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
         error: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200),
       });
     }
+  }
+
+  const dup = await avaliarJobDuplicado(supabase, {
+    id: job.id,
+    telefone: job.telefone,
+    message_id: job.message_id,
+    created_at: job.created_at,
+  });
+  if (dup.ignorar) {
+    await updateJobStatus(supabase, job, {
+      status: "done",
+      last_error: dup.motivo ?? "duplicata_ignorada",
+      locked_at: null,
+      locked_by: null,
+    });
+    log.info("wa.worker.job_skip_duplicate", {
+      job_id: job.id,
+      telefone: contexto.telefone,
+      motivo: dup.motivo,
+    });
+    return;
   }
 
   const lockOk = await tryConversationLock(supabase, contexto.telefone);

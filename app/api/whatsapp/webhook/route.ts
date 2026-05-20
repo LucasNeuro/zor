@@ -12,6 +12,7 @@ import {
 import { webhookSecretQueryParam } from "@/lib/whatsapp/webhook-auth";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
+import { dispararProcessamentoJobsWhatsapp } from "@/lib/whatsapp/trigger-job-processor";
 
 let warnedMissingWebhookSecret = false;
 const WEBHOOK_DEDUPE_TTL_MS = 2 * 60 * 1000;
@@ -595,6 +596,10 @@ export async function POST(request: NextRequest) {
       mercado,
       is_novo: isNovo,
     });
+
+    if (enqueueStatus === "accepted") {
+      dispararProcessamentoJobsWhatsapp(log);
+    }
 
     return trace.json(
       {

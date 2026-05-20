@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
+import { respostaIaJaEnviadaRecente } from "@/lib/whatsapp/anti-duplicata-resposta";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
 type LoggerLike = {
@@ -224,6 +225,13 @@ export async function processarMensagemInboundWhatsapp(params: {
     }
 
     if (!menuJaEnviado) {
+      const jaEnviou = await respostaIaJaEnviadaRecente(supabase, lead.id, resultado.resposta);
+      if (jaEnviou) {
+        log.info("wa.processor.send_text_skip", {
+          reason: "resposta_ia_duplicada_recente",
+          telefone: trace.maskTelefone(params.telefone),
+        });
+      } else {
       const sendOut = await enviarMensagemWhatsApp(params.telefone, resultado.resposta, params.waSendOpts);
       const sendBodyPreview =
         sendOut.body && typeof sendOut.body === "object"
@@ -239,6 +247,7 @@ export async function processarMensagemInboundWhatsapp(params: {
         send_body_preview: sendBodyPreview,
         telefone: trace.maskTelefone(params.telefone),
       });
+      }
     } else {
       log.info("wa.processor.send_text_skip", {
         reason: "tool_hub_whatsapp_menu_already_sent",

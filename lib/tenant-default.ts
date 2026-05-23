@@ -13,17 +13,27 @@ function headerUuidValido(s: string): boolean {
 }
 
 
-/** PostgREST sem coluna (ex.: migração tenant_id ainda não aplicada). */
+/** PostgREST / Postgres sem coluna (migração ainda não aplicada no Supabase). */
 export function isMissingPgColumn(err: unknown, column?: string): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { code?: string; message?: string };
-  if (e.code === "PGRST204") {
-    if (!column) return true;
-    return (e.message || "").toLowerCase().includes(column.toLowerCase());
-  }
   const m = (e.message || "").toLowerCase();
-  if (column && m.includes(column.toLowerCase())) return true;
-  return m.includes("schema cache");
+  if (e.code === "PGRST204" || e.code === "42703") {
+    if (!column) return true;
+    return m.includes(column.toLowerCase());
+  }
+  if (m.includes("schema cache")) {
+    if (!column) return true;
+    return m.includes(column.toLowerCase());
+  }
+  if (
+    column &&
+    m.includes(column.toLowerCase()) &&
+    (m.includes("column") || m.includes("could not find"))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function tenantIdFromRequest(headers: Headers): string {

@@ -56,13 +56,17 @@ export async function GET(
   if (!bio || !spb) {
     const cargoTitulo = typeof out.cargo === "string" ? out.cargo.trim() : "";
     if (cargoTitulo) {
-      const { data: cat } = await supabase
-        .from("hub_cargos_catalogo")
-        .select("descricao_curta,saudacao_cliente,prompt_template,descricao")
-        .eq("titulo", cargoTitulo)
-        .eq("ativo", true)
-        .limit(1)
-        .maybeSingle();
+      const { resolverCargoCatalogoParaAgente } = await import("@/lib/hub/resolver-cargo-catalogo");
+      const catBasico = await resolverCargoCatalogoParaAgente(supabase, cargoTitulo);
+      const { data: cat } = catBasico
+        ? await supabase
+            .from("hub_cargos_catalogo")
+            .select("descricao_curta,saudacao_cliente,prompt_template,descricao")
+            .eq("slug", catBasico.slug)
+            .eq("ativo", true)
+            .limit(1)
+            .maybeSingle()
+        : { data: null };
       if (cat) {
         const descCurta = typeof cat.descricao_curta === "string" ? cat.descricao_curta.trim() : "";
         const saudacao = typeof cat.saudacao_cliente === "string" ? cat.saudacao_cliente.trim() : "";

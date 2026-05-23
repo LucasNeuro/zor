@@ -26,12 +26,16 @@ WHERE i.ativo = true
   )
 ORDER BY i.agente_slug;
 
--- Detalhe das perguntas essenciais do cargo da Maria (ajuste o slug se necessário)
+-- Detalhe das perguntas essenciais do cargo (ajuste o slug: maria, mario, etc.)
 SELECT
   i.agente_slug,
   c.titulo,
   c.usar_perguntas_essenciais,
-  unnest(c.perguntas_essenciais) WITH ORDINALITY AS pergunta(linha, ordem)
+  p.linha AS pergunta,
+  p.ordem
 FROM public.hub_agente_identidade i
-JOIN public.hub_cargos_catalogo c ON trim(c.titulo) = trim(i.cargo) AND c.ativo = true
+JOIN public.hub_cargos_catalogo c
+  ON trim(c.titulo) = trim(i.cargo)
+  AND c.ativo = true
+CROSS JOIN LATERAL unnest(c.perguntas_essenciais) WITH ORDINALITY AS p(linha, ordem)
 WHERE i.agente_slug = 'maria';

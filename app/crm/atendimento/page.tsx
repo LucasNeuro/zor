@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "rea
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import {
   Bot,
   Brain,
@@ -73,6 +74,8 @@ function AtendimentoContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { setSlot } = useCrmHeaderSlot();
+  const narrow = useNarrowViewport();
+  const isMobile = narrow !== false;
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [leadSel, setLeadSel] = useState<Lead | null>(null);
@@ -358,6 +361,10 @@ function AtendimentoContent() {
   );
 
   useEffect(() => {
+    if (isMobile) {
+      setSlot(null);
+      return;
+    }
     setSlot({
       path: pathname,
       subtitle: `${leads.length} conversas ativas`,
@@ -369,14 +376,20 @@ function AtendimentoContent() {
       ),
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, leads.length]);
+  }, [pathname, setSlot, leads.length, isMobile]);
 
   return (
     <div className={`flex flex-1 min-h-0 flex-col overflow-hidden ${C.bg}`}>
+      {isMobile && !leadSel && (
+        <div className={`shrink-0 border-b ${C.border} px-3 py-3`}>
+          <h1 className="text-base font-bold text-[#e6edf3]">Atendimento</h1>
+          <p className="text-xs text-zinc-500">{leads.length} conversas</p>
+        </div>
+      )}
       <div className="flex flex-1 overflow-hidden">
 
         {/* LISTA DE LEADS */}
-        <div className={`w-72 flex-shrink-0 flex flex-col border-r ${C.border} ${C.bgAlt}`}>
+        <div className={`flex flex-shrink-0 flex-col border-r ${C.border} ${C.bgAlt} ${isMobile ? (leadSel ? "hidden" : "w-full") : "w-72"}`}>
           <div className={`p-3 border-b ${C.border} space-y-2`}>
             <input
               value={busca} onChange={e => setBusca(e.target.value)}
@@ -404,7 +417,7 @@ function AtendimentoContent() {
               <div className="p-4 text-center text-zinc-500 text-xs">Nenhum lead neste filtro</div>
             ) : filtrados.map(lead => (
               <button key={lead.id} onClick={() => selecionarLead(lead)}
-                className={`w-full px-3 py-3 border-b border-white/[0.05] text-left transition-colors ${
+                className={`min-h-14 w-full px-3 py-3 border-b border-white/[0.05] text-left transition-colors ${
                   leadSel?.id === lead.id
                     ? "bg-[#003b26]/35 border-l-2 border-l-[#c9a24a]"
                     : "hover:bg-white/[0.04]"
@@ -431,7 +444,7 @@ function AtendimentoContent() {
         </div>
 
         {/* ÁREA DO CHAT */}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-[#0a0e14]">
+        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden bg-[#0a0e14] ${isMobile && !leadSel ? "hidden" : ""}`}>
           {!leadSel ? (
             <div className="flex-1 flex items-center justify-center px-6">
               <div className="text-center max-w-sm">
@@ -448,8 +461,18 @@ function AtendimentoContent() {
           ) : (
             <>
               {/* Cabeçalho do chat */}
-              <div className={`px-4 py-3.5 border-b ${C.border} flex items-center justify-between flex-shrink-0 bg-black/20`}>
-                <div className="min-w-0">
+              <div className={`flex flex-shrink-0 items-center justify-between border-b ${C.border} bg-black/20 px-4 py-3.5`}>
+                {isMobile && (
+                  <button
+                    type="button"
+                    onClick={() => setLeadSel(null)}
+                    className="mr-2 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300"
+                    aria-label="Voltar à lista"
+                  >
+                    ←
+                  </button>
+                )}
+                <div className="min-w-0 flex-1">
                   <div className="text-zinc-50 font-semibold text-sm truncate">{leadSel.nome}</div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_COR[leadSel.estagio] || "bg-gray-500"}`} />

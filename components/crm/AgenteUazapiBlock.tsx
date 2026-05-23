@@ -744,6 +744,8 @@ export function AgenteUazapiBlock({
   const conectarBloqueado =
     acoesOff || !temInstancia || !regiaoGuardada || (pairingMode === "code" && !podeConectarPorCodigo);
 
+  const conectado = String(statusExibido).toLowerCase() === "connected";
+
   const reconectarWhatsApp = useCallback(() => {
     const statusLower = String(statusExibido).toLowerCase();
     const resetSession = statusLower === "connecting" || qrExpirado;
@@ -755,87 +757,113 @@ export function AgenteUazapiBlock({
   }, [postAction, proxyConnectExtra, statusExibido, qrExpirado, pairingMode, pairingPhoneDigits, podeConectarPorCodigo]);
 
   const botoesFooter = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <p style={{ margin: 0, color: "#6e7681", fontSize: 10, fontWeight: 700, letterSpacing: 0.06 }}>
-        AÇÕES
-      </p>
-      <div style={{ ...btnGroupShell, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-        <button
-          type="button"
-          disabled={acoesOff || temInstancia}
-          style={btnInGroup(acoesOff || temInstancia, "primary", true)}
-          onClick={() => postAction("create")}
-        >
-          {loading === "create" ? <Loader2 size={15} className="animate-spin" /> : <Smartphone size={15} />}
-          Criar instância
-        </button>
-        <button
-          type="button"
-          disabled={conectarBloqueado}
-          style={btnInGroup(conectarBloqueado, "primary", true)}
-          onClick={() => reconectarWhatsApp()}
-        >
-          {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
-          {precisaReconectar ? "Reconectar" : pairingMode === "code" ? "Gerar código" : "Gerar QR"}
-        </button>
-        <button
-          type="button"
-          disabled={loading !== null || !temInstancia}
-          style={btnInGroup(loading !== null || !temInstancia, "default", false)}
-          onClick={() => postAction("status")}
-        >
-          {loading === "status" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-          Actualizar estado
-        </button>
-      </div>
-      <div style={{ ...btnGroupShell, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-        <button
-          type="button"
-          disabled={acoesOff || !temInstancia}
-          style={btnInGroup(acoesOff || !temInstancia, "default", true)}
-          onClick={() => postAction("sync_webhook")}
-        >
-          {loading === "sync_webhook" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-          Sincronizar webhook
-        </button>
-        <button
-          type="button"
-          disabled={acoesOff || !temInstancia}
-          style={btnInGroup(acoesOff || !temInstancia, "default", false)}
-          onClick={() => postAction("disconnect")}
-        >
-          {loading === "disconnect" ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}
-          Desligar sessão
-        </button>
-      </div>
-      {precisaReconectar ? (
-        <button
-          type="button"
-          disabled={conectarBloqueado}
-          style={{
-            ...btnBase(conectarBloqueado, "primary"),
-            width: "100%",
-            minHeight: 44,
-          }}
-          onClick={() => reconectarWhatsApp()}
-        >
-          {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-          Reconectar WhatsApp (novo QR)
-        </button>
-      ) : null}
-      <button
-        type="button"
-        disabled={acoesOff || !temInstancia}
-        style={{
-          ...btnBase(acoesOff || !temInstancia, "danger"),
-          width: "100%",
-          minHeight: 42,
-        }}
-        onClick={() => setDialogExcluirUazapi(true)}
-      >
-        {loading === "delete_remote" ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-        Eliminar na UAZAPI
-      </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {!temInstancia ? (
+        <>
+          <p style={{ margin: 0, color: "#c9a24a", fontSize: 10, fontWeight: 800, letterSpacing: 0.08 }}>
+            PASSO 1 — CADASTRAR INSTÂNCIA
+          </p>
+          <p style={{ margin: 0, color: "#8b949e", fontSize: 11, lineHeight: 1.45 }}>
+            Guarde a região (cidade) acima e crie a instância na UAZAPI. O QR para ligar o telefone aparece no passo 2.
+          </p>
+          <button
+            type="button"
+            disabled={acoesOff || !regiaoGuardada}
+            style={{
+              ...btnBase(acoesOff || !regiaoGuardada, "primary"),
+              width: "100%",
+              minHeight: 44,
+            }}
+            onClick={() => postAction("create")}
+          >
+            {loading === "create" ? <Loader2 size={15} className="animate-spin" /> : <Smartphone size={15} />}
+            Criar instância UAZAPI
+          </button>
+          {!regiaoGuardada ? (
+            <p style={{ margin: 0, color: "#e6c06a", fontSize: 11 }}>
+              Selecione a cidade e use «Guardar região» antes de criar.
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p style={{ margin: 0, color: "#c9a24a", fontSize: 10, fontWeight: 800, letterSpacing: 0.08 }}>
+            PASSO 2 — LIGAR WHATSAPP
+          </p>
+          <div style={{ ...btnGroupShell, gridTemplateColumns: conectado ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))" }}>
+            {!conectado ? (
+              <button
+                type="button"
+                disabled={conectarBloqueado}
+                style={btnInGroup(conectarBloqueado, "primary", true)}
+                onClick={() => reconectarWhatsApp()}
+              >
+                {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
+                {precisaReconectar ? "Reconectar" : pairingMode === "code" ? "Gerar código" : "Gerar QR"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={loading !== null}
+              style={btnInGroup(loading !== null, "default", !conectado)}
+              onClick={() => postAction("status")}
+            >
+              {loading === "status" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              Actualizar estado
+            </button>
+            <button
+              type="button"
+              disabled={acoesOff}
+              style={btnInGroup(acoesOff, "default", false)}
+              onClick={() => postAction("disconnect")}
+            >
+              {loading === "disconnect" ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}
+              Desligar sessão
+            </button>
+          </div>
+          {!conectado ? (
+            <div style={{ ...btnGroupShell, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+              <button
+                type="button"
+                disabled={acoesOff}
+                style={btnInGroup(acoesOff, "default", true)}
+                onClick={() => postAction("sync_webhook")}
+              >
+                {loading === "sync_webhook" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                Sincronizar webhook
+              </button>
+              <button
+                type="button"
+                disabled={acoesOff}
+                style={btnInGroup(acoesOff, "default", false)}
+                onClick={() => setSideoverOpen(false)}
+              >
+                Fechar
+              </button>
+            </div>
+          ) : null}
+          {precisaReconectar && !conectado ? (
+            <button
+              type="button"
+              disabled={conectarBloqueado}
+              style={{ ...btnBase(conectarBloqueado, "primary"), width: "100%", minHeight: 44 }}
+              onClick={() => reconectarWhatsApp()}
+            >
+              {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              Reconectar WhatsApp
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={acoesOff}
+            style={{ ...btnBase(acoesOff, "danger"), width: "100%", minHeight: 42 }}
+            onClick={() => setDialogExcluirUazapi(true)}
+          >
+            {loading === "delete_remote" ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+            Eliminar instância na UAZAPI
+          </button>
+        </>
+      )}
     </div>
   );
 
@@ -880,7 +908,11 @@ export function AgenteUazapiBlock({
               <div style={{ minWidth: 0 }}>
                 <p style={{ margin: 0, color: "#e6edf3", fontSize: 14, fontWeight: 800 }}>WhatsApp</p>
                 <p style={{ margin: "4px 0 0", color: "#8b949e", fontSize: 12, lineHeight: 1.45 }}>
-                  Ligação por QR ·{" "}
+                  {temInstancia
+                    ? conectado
+                      ? "Telefone ligado · "
+                      : "Instância criada — ligue o telefone (passo 2) · "
+                    : "Passo 1: cadastro · "}
                   <span
                     style={{
                       display: "inline-block",
@@ -901,7 +933,7 @@ export function AgenteUazapiBlock({
                       Região: <strong style={{ color: "#aebccf" }}>{regiaoLabel}</strong>
                     </>
                   ) : (
-                    <span style={{ color: "#e6c06a" }}>Defina a região antes do QR</span>
+                    <span style={{ color: "#e6c06a" }}>Defina a região antes de criar a instância</span>
                   )}
                 </p>
               </div>
@@ -935,10 +967,51 @@ export function AgenteUazapiBlock({
         open={sideoverOpen}
         onClose={() => setSideoverOpen(false)}
         title={agenteNome?.trim() || agenteSlug}
-        subtitle="Conexão só por QR. Guarde a cidade (proxy) antes de gerar o código."
+        subtitle={
+          temInstancia
+            ? "Passo 2: ligue o WhatsApp com QR ou código (instância já cadastrada)."
+            : "Passo 1: região do número e criar instância — sem QR neste passo."
+        }
         footer={botoesFooter}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              marginBottom: 4,
+            }}
+          >
+            <div
+              style={{
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: `1px solid ${!temInstancia ? "#c9a24a66" : "#30363d"}`,
+                background: !temInstancia ? "#c9a24a14" : "#0d1117",
+                textAlign: "center",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: !temInstancia ? "#c9a24a" : "#6e7681" }}>
+                1. Cadastro
+              </p>
+            </div>
+            <div
+              style={{
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: `1px solid ${temInstancia ? "#c9a24a66" : "#30363d"}`,
+                background: temInstancia ? "#c9a24a14" : "#0d1117",
+                textAlign: "center",
+                opacity: temInstancia ? 1 : 0.45,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: temInstancia ? "#c9a24a" : "#484f58" }}>
+                2. Ligar WhatsApp
+              </p>
+            </div>
+          </div>
+
           <div
             style={{
               position: "relative",
@@ -986,7 +1059,7 @@ export function AgenteUazapiBlock({
               </p>
             ) : (
               <p style={{ margin: "10px 0 0", paddingLeft: 12, fontSize: 12, color: "#8b949e" }}>
-                Sem instância — use <strong style={{ color: "#c9d1d9" }}>Criar instância</strong> no rodapé.
+                Sem instância — conclua o <strong style={{ color: "#c9d1d9" }}>passo 1</strong> abaixo.
               </p>
             )}
           </div>
@@ -999,6 +1072,9 @@ export function AgenteUazapiBlock({
               background: "#161b22",
             }}
           >
+            <p style={{ margin: "0 0 12px", color: "#c9a24a", fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
+              PASSO 1 — REGIÃO E INSTÂNCIA
+            </p>
             <div
               style={{
                 display: "flex",
@@ -1088,6 +1164,38 @@ export function AgenteUazapiBlock({
             ) : null}
           </div>
 
+          {!temInstancia ? (
+            <div
+              style={{
+                padding: "14px 16px",
+                borderRadius: 12,
+                border: "1px dashed #484f58",
+                background: "#0d1117",
+              }}
+            >
+              <p style={{ margin: 0, color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                O <strong style={{ color: "#e6edf3" }}>QR e o pareamento</strong> ficam disponíveis depois de criar a
+                instância (passo 2). Use os botões no rodapé deste painel.
+              </p>
+            </div>
+          ) : conectado ? (
+            <div
+              style={{
+                padding: "16px",
+                borderRadius: 12,
+                border: "1px solid #3fb95044",
+                background: "#23863618",
+                textAlign: "center",
+              }}
+            >
+              <p style={{ margin: 0, color: "#3fb950", fontSize: 13, fontWeight: 800 }}>
+                WhatsApp conectado
+              </p>
+              <p style={{ margin: "8px 0 0", color: "#8b949e", fontSize: 11 }}>
+                A instância está ativa. Para trocar de número, desligue a sessão e gere um novo QR.
+              </p>
+            </div>
+          ) : (
           <div
             style={{
               padding: "14px 16px",
@@ -1096,6 +1204,9 @@ export function AgenteUazapiBlock({
               border: "1px solid #30363d",
             }}
           >
+            <p style={{ margin: "0 0 10px", color: "#c9a24a", fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
+              PASSO 2 — LIGAR O TELEFONE
+            </p>
             <p
               style={{
                 margin: "0 0 10px",
@@ -1152,8 +1263,9 @@ export function AgenteUazapiBlock({
               </div>
             ) : null}
           </div>
+          )}
 
-          {mostrarQrAtivo ? (
+          {temInstancia && !conectado && mostrarQrAtivo ? (
             <div
               style={{
                 padding: 16,
@@ -1207,7 +1319,7 @@ export function AgenteUazapiBlock({
             </div>
           ) : null}
 
-          {paircodeAtivo ? (
+          {temInstancia && !conectado && paircodeAtivo ? (
             <div
               style={{
                 padding: 16,
@@ -1236,7 +1348,7 @@ export function AgenteUazapiBlock({
             </div>
           ) : null}
 
-          {precisaReconectar ? (
+          {temInstancia && !conectado && precisaReconectar ? (
             <div
               style={{
                 padding: 16,

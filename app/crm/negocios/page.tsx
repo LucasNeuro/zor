@@ -1,12 +1,14 @@
 "use client";
-import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { KpiBar } from "@/components/crm/KpiBar";
 import { SearchBar } from "@/components/crm/SearchBar";
 import { FilterPills } from "@/components/crm/FilterPills";
 import { EmptyState } from "@/components/crm/EmptyState";
+import { NegocioFormDrawer } from "@/components/crm/NegocioFormDrawer";
+import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
 
 const LIMIT = 20;
 
@@ -74,24 +76,36 @@ const TD: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+const KANBAN_ETAPAS = [
+  { id: "briefing", label: "Briefing", color: "#3b82f6" },
+  { id: "match", label: "Match", color: "#f59e0b" },
+  { id: "sit-down", label: "Sit-down", color: "#a855f7" },
+  { id: "concluido", label: "Concluído", color: "#22c55e" },
+] as const;
+
 export default function NegociosPage() {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { setSlot } = useCrmHeaderSlot();
+  const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [negocios, setNegocios] = useState<Negocio[]>([]);
+  const [dragId, setDragId] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [busca, setBusca] = useState("");
   const [etapa, setEtapa] = useState("");
   const [offset, setOffset] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [carregandoMais, setCarregandoMais] = useState(false);
+  const [drawerAberto, setDrawerAberto] = useState(false);
 
-  useEffect(() => {
+  const carregarLista = useCallback(() => {
     setCarregando(true);
     const p = new URLSearchParams({ offset: "0" });
     if (busca) p.set("busca", busca);
     if (etapa) p.set("etapa", etapa);
 
-    fetch(`/api/crm/negocios?${p}`, { headers: internalApiHeaders() })
+    return fetch(`/api/crm/negocios?${p}`, { headers: internalApiHeaders() })
       .then((r) => r.json())
       .then((d) => {
         setNegocios(d.data ?? []);
@@ -101,6 +115,17 @@ export default function NegociosPage() {
       .catch(() => {})
       .finally(() => setCarregando(false));
   }, [busca, etapa]);
+
+  useEffect(() => {
+    const et = searchParams.get("etapa");
+    const v = searchParams.get("view");
+    if (et) setEtapa(et);
+    if (v === "kanban" || v === "lista") setView(v);
+  }, [searchParams]);
+
+  useEffect(() => {
+    void carregarLista();
+  }, [carregarLista]);
 
   function carregarMais() {
     setCarregandoMais(true);
@@ -124,13 +149,22 @@ export default function NegociosPage() {
   const concluidoCount = negocios.filter((n) => n.etapa === "concluido").length;
   const temMais = negocios.length < total;
 
+  async function moverEtapa(negocioId: string, novaEtapa: string) {
+    await fetch(`/api/crm/negocios/${negocioId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+      body: JSON.stringify({ etapa: novaEtapa }),
+    });
+    setNegocios((prev) => prev.map((n) => (n.id === negocioId ? { ...n, etapa: novaEtapa } : n)));
+  }
+
   useEffect(() => {
     setSlot({
       path: pathname,
       actions: (
         <button
           type="button"
-          onClick={() => alert("Formulário disponível em breve")}
+          onClick={() => setDrawerAberto(true)}
           style={{
             background: "#003b26",
             color: "#c9a24a",
@@ -151,6 +185,12 @@ export default function NegociosPage() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: "24px" }}>
+      <NegocioFormDrawer
+        open={drawerAberto}
+        onClose={() => setDrawerAberto(false)}
+        onSaved={carregarLista}
+      />
+
       {/* KPI Bar — by etapa */}
       <KpiBar kpis={[
         { label: "Total", value: total, color: "#c9a24a" },
@@ -170,8 +210,28 @@ export default function NegociosPage() {
       </div>
 
       {/* Filter Pills — by etapa */}
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <FilterPills pills={ETAPAS} active={etapa} onChange={setEtapa} />
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {(["kanban", "lista"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #30363d",
+                background: view === v ? "#003b26" : "transparent",
+                color: view === v ? "#c9a24a" : "#8b949e",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              {v === "kanban" ? "Kanban" : "Lista"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Content */}
@@ -179,6 +239,55 @@ export default function NegociosPage() {
         <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando...</p>
       ) : negocios.length === 0 ? (
         <EmptyState message="Nenhum negócio encontrado." />
+      ) : view === "kanban" ? (
+        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
+          {KANBAN_ETAPAS.map((col) => {
+            const cards = negocios.filter((n) => n.etapa === col.id);
+            return (
+              <div
+                key={col.id}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  if (dragId) void moverEtapa(dragId, col.id);
+                  setDragId(null);
+                }}
+                style={{
+                  minWidth: 240,
+                  flex: "1 0 240px",
+                  background: "#161b22",
+                  borderRadius: 10,
+                  border: "1px solid #30363d",
+                  padding: 10,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: col.color }}>{col.label}</span>
+                  <span style={{ fontSize: 11, color: "#8b949e" }}>{cards.length}</span>
+                </div>
+                {cards.map((n) => (
+                  <div
+                    key={n.id}
+                    draggable
+                    onDragStart={() => setDragId(n.id)}
+                    onClick={() => router.push(`/crm/negocios/${n.id}`)}
+                    style={{
+                      background: "#0d1117",
+                      border: "1px solid #21262d",
+                      borderRadius: 8,
+                      padding: 10,
+                      marginBottom: 8,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{n.titulo}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "#8b949e", fontFamily: "monospace" }}>{n.codigo}</p>
+                    <p style={{ margin: "6px 0 0", fontSize: 12, color: "#c9a24a" }}>{formatCurrency(n.valor_estimado)}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <>
           <div style={{ overflowX: "auto" }}>
@@ -202,7 +311,7 @@ export default function NegociosPage() {
                   return (
                     <tr
                       key={n.id}
-                      onClick={() => console.log(n.id)}
+                      onClick={() => router.push(`/crm/negocios/${n.id}`)}
                       style={{ borderBottom: "1px solid #21262d", cursor: "pointer" }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#161b22"; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
@@ -215,9 +324,8 @@ export default function NegociosPage() {
                         <span style={{
                           fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20,
                           background: "#c9a24a22", color: "#c9a24a", border: "1px solid #c9a24a44",
-                          fontFamily: "monospace",
                         }}>
-                          {n.prefixo_mercado}
+                          {labelMercadoPrefixo(n.prefixo_mercado)}
                         </span>
                       </td>
                       <td style={TD}>

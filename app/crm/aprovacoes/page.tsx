@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const C = {
@@ -74,6 +75,8 @@ function AprovacoesInner() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { setSlot } = useCrmHeaderSlot();
+  const narrow = useNarrowViewport();
+  const isMobile = narrow !== false;
   const tipoParam = searchParams.get("tipo") ?? "todos";
 
   const [aprovacoes, setAprovacoes] = useState<Aprovacao[]>([]);
@@ -169,6 +172,10 @@ function AprovacoesInner() {
   const filtradas = filtro === "todos" ? aprovacoes : aprovacoes.filter(a => a.tipo === filtro);
 
   useEffect(() => {
+    if (isMobile) {
+      setSlot(null);
+      return;
+    }
     setSlot({
       path: pathname,
       subtitle: `${aprovacoes.length} pendente${aprovacoes.length !== 1 ? "s" : ""} — tudo que precisa da sua decisão`,
@@ -199,10 +206,19 @@ function AprovacoesInner() {
         ) : undefined,
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, aprovacoes.length]);
+  }, [pathname, setSlot, aprovacoes.length, isMobile]);
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection: "column" }}>
+
+      {isMobile && (
+        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.line}`, background: C.white, flexShrink: 0 }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.green }}>Aprovações</p>
+          <p style={{ margin: "4px 0 0", fontSize: 12, color: C.muted }}>
+            {aprovacoes.length} pendente{aprovacoes.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      )}
 
       {/* ── Filters ─── */}
       <div style={{
@@ -215,7 +231,7 @@ function AprovacoesInner() {
           const count = t === "todos" ? aprovacoes.length : aprovacoes.filter(a => a.tipo === t).length;
           return (
             <button key={t} onClick={() => setFiltro(t)} style={{
-              padding: "6px 14px", borderRadius: 20, whiteSpace: "nowrap", cursor: "pointer",
+              minHeight: 44, padding: "8px 14px", borderRadius: 20, whiteSpace: "nowrap", cursor: "pointer",
               background: active ? C.green : C.bg,
               border: `1px solid ${active ? C.green : C.line}`,
               color: active ? "#fff" : C.muted,
@@ -278,7 +294,7 @@ function AprovacoesInner() {
         ) : (
           <div style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))",
             gap: 16,
           }}>
             {filtradas.map(ap => {
@@ -354,10 +370,11 @@ function AprovacoesInner() {
                   {/* Action buttons */}
                   <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
                     <button
+                      type="button"
                       onClick={() => aprovar(ap.id)}
                       disabled={isProcessing}
                       style={{
-                        flex: 1, padding: "9px 0", borderRadius: 8,
+                        flex: 1, minHeight: 44, padding: "12px 0", borderRadius: 8,
                         background: isProcessing ? C.line : C.green,
                         border: "none", color: isProcessing ? C.muted : "#fff",
                         fontSize: 12, fontWeight: 700, cursor: isProcessing ? "not-allowed" : "pointer",
@@ -369,10 +386,11 @@ function AprovacoesInner() {
                       {isProcessing ? "..." : "✓ Aprovar"}
                     </button>
                     <button
+                      type="button"
                       onClick={() => rejeitar(ap.id)}
                       disabled={isProcessing}
                       style={{
-                        flex: 1, padding: "9px 0", borderRadius: 8,
+                        flex: 1, minHeight: 44, padding: "12px 0", borderRadius: 8,
                         background: "transparent",
                         border: `1px solid ${isProcessing ? C.line : C.red + "66"}`,
                         color: isProcessing ? C.muted : C.red,

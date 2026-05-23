@@ -37,3 +37,31 @@ export async function GET() {
 
   return NextResponse.json({ rows });
 }
+
+export async function PATCH(request: Request) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as {
+    updates?: { passo: number; mercado: string; horas_espera: number }[];
+  };
+
+  const updates = body.updates;
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return NextResponse.json({ error: "updates[] obrigatório" }, { status: 400 });
+  }
+
+  const supabase = db();
+  for (const u of updates) {
+    const { error } = await supabase
+      .from("hub_followup_config")
+      .update({ horas_espera: u.horas_espera })
+      .eq("passo", u.passo)
+      .eq("mercado", u.mercado)
+      .eq("ativo", true);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return GET();
+}

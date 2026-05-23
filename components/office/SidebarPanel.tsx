@@ -45,7 +45,7 @@ export function SidebarPanel({ painel, metricas }: SidebarPanelProps) {
   if (painel === "fila_whatsapp" || painel === "conversas_ativas") {
     return (
       <div>
-        <Stat label="Conversas ativas" value={metricas.conversasAtivas} cor="#22c55e" />
+        <Stat label="Fila de mensagens" value={metricas.mensagensFilaPendentes} cor="#22c55e" />
         <Stat label="Aguardando você" value={metricas.leadsAguardando} cor={metricas.leadsAguardando > 0 ? "#c9a24a" : "#34d399"} />
         <Stat label="Aprovações pendentes" value={metricas.aprovacoesPendentes} cor={metricas.aprovacoesPendentes > 0 ? "#ef4444" : "#34d399"} />
         <NavBtn href="/crm/atendimento" label="Abrir Atendimento" />
@@ -56,7 +56,7 @@ export function SidebarPanel({ painel, metricas }: SidebarPanelProps) {
   if (painel === "sla_monitor") {
     return (
       <div>
-        <Stat label="Em atendimento" value={metricas.conversasAtivas} cor="#22c55e" />
+        <Stat label="Em atendimento" value={metricas.mensagensFilaPendentes} cor="#22c55e" />
         <Stat label="Aguardando resposta" value={metricas.leadsAguardando} cor={metricas.leadsAguardando > 0 ? "#c9a24a" : "#34d399"} />
         <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(201,162,74,0.05)", border: "1px solid rgba(201,162,74,0.15)", marginTop: 8 }}>
           <p style={{ fontSize: 10, color: "var(--obra-texto-2, #8b949e)", margin: 0, lineHeight: 1.5 }}>
@@ -87,7 +87,7 @@ export function SidebarPanel({ painel, metricas }: SidebarPanelProps) {
       <div>
         <Stat label="Agentes ativos" value={metricas.agentesAtivos} cor="#22c55e" />
         <Stat label="Leads hoje" value={metricas.leadsHoje} cor="#60a5fa" />
-        <Stat label="Conversas" value={metricas.conversasAtivas} cor="#a78bfa" />
+        <Stat label="Fila mensagens" value={metricas.mensagensFilaPendentes} cor="#a78bfa" />
         <NavBtn href="/crm/agentes" label="Ver Todos os Agentes" />
       </div>
     );

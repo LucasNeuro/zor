@@ -43,6 +43,10 @@
     {
       "path": "/api/ml/ciclo?acao=kpis",
       "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/crm/kpis/calcular",
+      "schedule": "15 * * * *"
     }
   ]
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CrmStickyPageHeader } from "@/components/crm/CrmStickyPageHeader";
 import { useMetricas } from "@/hooks/useMetricas";
+import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { supabase } from "@/lib/supabase/client";
 
 type LinhaRelatorio = {
@@ -29,10 +30,21 @@ function baixarCsv(nome: string, linhas: LinhaRelatorio[]) {
   URL.revokeObjectURL(url);
 }
 
+const ENTIDADES = [
+  { id: "leads", label: "Leads" },
+  { id: "negocios", label: "Negócios" },
+  { id: "empresas", label: "Empresas" },
+  { id: "imoveis", label: "Imóveis" },
+  { id: "financeiro", label: "Financeiro" },
+] as const;
+
 export default function Relatorios() {
   const metricas = useMetricas();
   const [decisoesPendentes, setDecisoesPendentes] = useState(0);
   const [kpisForaMeta, setKpisForaMeta] = useState(0);
+  const [entidadePreview, setEntidadePreview] = useState<string>("leads");
+  const [previewLinhas, setPreviewLinhas] = useState<string[][]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     async function carregarComplementos() {
@@ -59,7 +71,7 @@ export default function Relatorios() {
     },
     {
       titulo: "Atendimento",
-      valor: `${metricas.conversasAtivas} conversas ativas`,
+      valor: `${metricas.mensagensFilaPendentes} mensagens na fila`,
       detalhe: `${metricas.leadsAguardando} leads aguardando ação`,
     },
     {
@@ -79,6 +91,27 @@ export default function Relatorios() {
     },
   ], [decisoesPendentes, kpisForaMeta, metricas]);
 
+  async function carregarPreview() {
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(
+        `/api/crm/relatorios/export?entidade=${encodeURIComponent(entidadePreview)}`,
+        { headers: internalApiHeaders() }
+      );
+      const text = await res.text();
+      const rows = text
+        .split("\n")
+        .filter(Boolean)
+        .slice(0, 11)
+        .map((line) => line.split(",").map((c) => c.replace(/^"|"$/g, "").replace(/""/g, '"')));
+      setPreviewLinhas(rows);
+    } catch {
+      setPreviewLinhas([]);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
   return (
     <div className="flex min-h-full flex-col bg-[#0d1117]">
       <CrmStickyPageHeader
@@ -95,13 +128,89 @@ export default function Relatorios() {
                 Atualizado a partir de Supabase via `/api/crm/metricas`.
               </p>
             </div>
-            <button
-              onClick={() => baixarCsv("relatorio-operacional", linhas)}
-              className="rounded-lg border border-[#f9731640] bg-[#f973161a] px-3 py-2 text-xs font-bold text-[#f97316] hover:bg-[#f9731626]"
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => baixarCsv("relatorio-operacional", linhas)}
+                className="rounded-lg border border-[#f9731640] bg-[#f973161a] px-3 py-2 text-xs font-bold text-[#f97316] hover:bg-[#f9731626]"
+              >
+                Resumo CSV
+              </button>
+              {(["leads", "negocios", "empresas", "imoveis"] as const).map((ent) => (
+                <a
+                  key={ent}
+                  href={`/api/crm/relatorios/export?entidade=${ent}`}
+                  download
+                  onClick={(e) => {
+                    e.preventDefault();
+                    fetch(`/api/crm/relatorios/export?entidade=${ent}`, { headers: internalApiHeaders() })
+                      .then((r) => r.blob())
+                      .then((blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `${ent}-${new Date().toISOString().slice(0, 10)}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      });
+                  }}
+                  className="rounded-lg border border-[#30363d] px-3 py-2 text-xs font-bold text-[#8b949e] hover:text-[#e6edf3]"
+                >
+                  {ent}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6 rounded-xl border border-[#30363d] bg-[#161b22] p-4">
+          <p className="text-sm font-bold text-[#e6edf3]">Pré-visualização CSV</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <select
+              value={entidadePreview}
+              onChange={(e) => setEntidadePreview(e.target.value)}
+              className="min-h-10 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-xs text-[#e6edf3]"
             >
-              Exportar CSV
+              {ENTIDADES.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void carregarPreview()}
+              disabled={previewLoading}
+              className="min-h-10 rounded-lg bg-[#c9a24a] px-4 text-xs font-bold text-[#003b26] disabled:opacity-50"
+            >
+              {previewLoading ? "Carregando…" : "Pré-visualizar (10 linhas)"}
             </button>
           </div>
+          {previewLinhas.length > 0 && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#30363d] text-[#8b949e]">
+                    {previewLinhas[0]?.map((h, i) => (
+                      <th key={i} className="px-2 py-1.5 font-bold">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewLinhas.slice(1).map((row, ri) => (
+                    <tr key={ri} className="border-b border-[#21262d] text-[#e6edf3]">
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="max-w-[200px] truncate px-2 py-1.5">
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {metricas.loading ? (

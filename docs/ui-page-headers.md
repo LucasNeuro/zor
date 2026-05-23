@@ -26,5 +26,5 @@ Keep the **page title** and **primary actions** visible while long content scrol
 
 ## References
 
-- KPIs: `app/crm/kpis/page.tsx`
+- Analytics: `app/crm/analytics/page.tsx` (redirect legado: `/crm/kpis`)
 - Leads: `app/crm/leads/page.tsx`

@@ -3,32 +3,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
+import { Plus, X, ChevronDown } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase/client";
 import {
-  LayoutDashboard,
-  Users,
-  User,
-  Building2,
-  Home,
-  Briefcase,
-  MessageSquare,
-  ClipboardCheck,
-  LineChart,
-  LayoutTemplate,
-  Workflow,
-  GitBranch,
-  Handshake,
-  ClipboardList,
-  Zap,
-  Wrench,
-  Radio,
-  MessageCircle,
-  PenLine,
-  Settings,
-  Shield,
-  Plus,
-  X,
-  ChevronDown,
-} from "lucide-react";
+  CRM_NAV_GROUPS,
+  filterCrmNavGroupsForRole,
+  findCrmNavGroupIdForPath,
+  isCrmNavPathActive,
+  type CrmNavItem,
+} from "@/lib/crm-nav-groups";
 import { Obra10LogoBadge, Obra10BrandHeader } from "@/components/brand/Obra10Brand";
 import { CrmQueryProvider } from "@/components/crm/CrmQueryProvider";
 import { CrmSessionFooter } from "@/components/crm/CrmSessionFooter";
@@ -39,112 +23,75 @@ import { CrmSidebarToggleButton } from "@/components/crm/CrmSidebarToggleButton"
 import { CRM_CHROME_SOLID } from "@/lib/crm-shell-theme";
 
 import { shouldHideCrmUniversalHeader } from "@/lib/crm-universal-header-visibility";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 
 const SIDEBAR_STORAGE_KEY = "crm-sidebar-expanded";
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  extra?: { href: string; label: string };
-};
-
-/** Gavetas do menu (desktop expandido): reduz rolagem ao mostrar só um bloco por vez. Ver docs/crm-sidebar-navigation.md */
-const NAV_GROUPS: { id: string; label: string; sectionIcon: LucideIcon; items: NavItem[] }[] = [
-  {
-    id: "inicio",
-    label: "Início",
-    sectionIcon: LayoutDashboard,
-    items: [
-      { href: "/crm", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/crm/kpis", label: "KPIs", icon: LineChart },
-    ],
-  },
-  {
-    id: "pipeline",
-    label: "Pipeline e cadastros",
-    sectionIcon: Users,
-    items: [
-      { href: "/crm/leads", label: "Leads", icon: Users },
-      { href: "/crm/pessoas", label: "Pessoas", icon: User },
-      { href: "/crm/empresas", label: "Empresas", icon: Building2 },
-      { href: "/crm/imoveis", label: "Imóveis", icon: Home },
-      { href: "/crm/negocios", label: "Negócios", icon: Briefcase },
-    ],
-  },
-  {
-    id: "atendimento",
-    label: "Atendimento",
-    sectionIcon: MessageSquare,
-    items: [
-      { href: "/crm/atendimento", label: "Atendimento", icon: MessageSquare },
-      { href: "/crm/aprovacoes", label: "Aprovações", icon: ClipboardCheck },
-    ],
-  },
-  {
-    id: "midia",
-    label: "Parceiros e mídia",
-    sectionIcon: Handshake,
-    items: [
-      { href: "/crm/parceiros", label: "Parceiros", icon: Handshake },
-      { href: "/crm/relatorios", label: "Relatórios", icon: ClipboardList },
-      { href: "/crm/trafego", label: "Tráfego", icon: Radio },
-      { href: "/crm/conteudo", label: "Conteúdo", icon: PenLine },
-    ],
-  },
-  {
-    id: "automacao",
-    label: "AI — Funcionários",
-    sectionIcon: Workflow,
-    items: [
-      {
-        href: "/crm/agentes",
-        label: "Modelos",
-        icon: LayoutTemplate,
-      },
-      { href: "/crm/ciclos", label: "Ciclos IA", icon: Zap },
-      { href: "/crm/canais", label: "Canais", icon: MessageCircle },
-      { href: "/crm/ferramentas", label: "Ferramentas", icon: Wrench },
-    ],
-  },
-  {
-    id: "sistema",
-    label: "Sistema",
-    sectionIcon: Settings,
-    items: [
-      { href: "/crm/configuracoes", label: "Configurações", icon: Settings },
-      { href: "/crm/onboarding-tenant", label: "Onboarding tenant", icon: Shield },
-    ],
-  },
-];
 
 function NavIcon({ Icon, expanded }: { Icon: LucideIcon; expanded: boolean }) {
   const size = expanded ? 18 : 20;
   return <Icon size={size} strokeWidth={1.5} className="flex-shrink-0" aria-hidden />;
 }
 
-function isNavActive(pathname: string, href: string): boolean {
-  if (href === "/crm") return pathname === "/crm";
-  if (pathname === href) return true;
-  return pathname.startsWith(`${href}/`);
-}
-
-function findGroupIdForPath(pathname: string): string {
-  for (const g of NAV_GROUPS) {
-    if (g.items.some(item => isNavActive(pathname, item.href))) return g.id;
-  }
-  return NAV_GROUPS[0]?.id ?? "inicio";
+function CrmNavItemLabel({ item, expanded }: { item: CrmNavItem; expanded: boolean }) {
+  if (!expanded) return null;
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+      <span className="min-w-0 truncate font-medium">{item.label}</span>
+      {item.navBadge ? (
+        <span
+          className="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+          style={{ background: "#c9a24a18", color: "#c9a24a", border: "1px solid #c9a24a35" }}
+        >
+          {item.navBadge}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const narrow = useNarrowViewport();
+  const slimMobile = narrow !== false;
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [openDrawerId, setOpenDrawerId] = useState<string | null>(NAV_GROUPS[0].id);
+  const [userRole, setUserRole] = useState("");
+  const [openDrawerId, setOpenDrawerId] = useState<string | null>(CRM_NAV_GROUPS[0].id);
   const [collapsedFlyoutId, setCollapsedFlyoutId] = useState<string | null>(null);
   const miniSidebarShellRef = useRef<HTMLDivElement>(null);
   const miniFlyoutRef = useRef<HTMLDivElement>(null);
+
+  const navGroups = useMemo(
+    () => filterCrmNavGroupsForRole(CRM_NAV_GROUPS, userRole),
+    [userRole]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRole(u: User) {
+      const row = await supabase.from("users").select("role").eq("auth_id", u.id).maybeSingle();
+      if (!cancelled) setUserRole(row.data?.role != null ? String(row.data.role) : "");
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = session?.user;
+      if (u) void loadRole(u);
+      else setUserRole("");
+    });
+
+    void supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) void loadRole(user);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     setCollapsedFlyoutId(null);
@@ -172,7 +119,10 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     };
   }, [collapsedFlyoutId]);
 
-  const activeGroupId = useMemo(() => findGroupIdForPath(pathname), [pathname]);
+  const activeGroupId = useMemo(
+    () => findCrmNavGroupIdForPath(navGroups, pathname),
+    [navGroups, pathname]
+  );
 
   const syncOpenDrawer = useCallback(() => {
     setOpenDrawerId(activeGroupId);
@@ -210,6 +160,23 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 
   function toggleDrawer(id: string) {
     setOpenDrawerId(prev => (prev === id ? null : id));
+  }
+
+  if (slimMobile) {
+    return (
+      <CrmQueryProvider>
+        <CrmHeaderProvider>
+          <CrmShellProvider value={{ sidebarExpanded: false, toggleSidebar: () => {} }}>
+            <div
+              className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#0d1117]"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {children}
+            </div>
+          </CrmShellProvider>
+        </CrmHeaderProvider>
+      </CrmQueryProvider>
+    );
   }
 
   return (
@@ -251,9 +218,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           <nav className="flex min-h-0 w-full flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-0.5">
             {sidebarExpanded ? (
               <>
-                {NAV_GROUPS.map(group => {
+                {navGroups.map(group => {
                   const open = openDrawerId === group.id;
-                  const groupHasActive = group.items.some(item => isNavActive(pathname, item.href));
+                  const groupHasActive = group.items.some(item => isCrmNavPathActive(pathname, item.href));
                   return (
                     <div key={group.id} className="w-full flex-shrink-0">
                       <button
@@ -290,7 +257,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                             }}
                           >
                             {group.items.map(item => {
-                              const active = isNavActive(pathname, item.href);
+                              const active = isCrmNavPathActive(pathname, item.href);
                               return (
                                 <div key={item.href} className={`relative group ${sidebarExpanded ? "w-full" : ""}`}>
                                   <Link
@@ -314,9 +281,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                                       />
                                     )}
                                     <NavIcon Icon={item.icon} expanded={sidebarExpanded} />
-                                    {sidebarExpanded && (
-                                      <span className="min-w-0 truncate font-medium">{item.label}</span>
-                                    )}
+                                    {sidebarExpanded && <CrmNavItemLabel item={item} expanded />}
                                   </Link>
                                   {item.extra && (
                                     <Link
@@ -343,9 +308,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
               </>
             ) : (
               <>
-                {NAV_GROUPS.map(group => {
+                {navGroups.map(group => {
                   const flyoutOpen = collapsedFlyoutId === group.id;
-                  const groupHasActive = group.items.some(item => isNavActive(pathname, item.href));
+                  const groupHasActive = group.items.some(item => isCrmNavPathActive(pathname, item.href));
                   const SectionIcon = group.sectionIcon;
                   return (
                     <button
@@ -391,7 +356,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 
         {collapsedFlyoutId && !sidebarExpanded
           ? (() => {
-              const group = NAV_GROUPS.find(g => g.id === collapsedFlyoutId);
+              const group = navGroups.find(g => g.id === collapsedFlyoutId);
               if (!group) return null;
               return (
                 <div
@@ -433,7 +398,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   <div className="min-h-0 flex-1 overflow-y-auto py-2" style={{ WebkitOverflowScrolling: "touch" }}>
                     <div className="space-y-0.5 px-2">
                       {group.items.map(item => {
-                        const active = isNavActive(pathname, item.href);
+                        const active = isCrmNavPathActive(pathname, item.href);
                         return (
                           <div key={item.href} className="relative">
                             <Link
@@ -446,7 +411,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                               }}
                             >
                               <NavIcon Icon={item.icon} expanded />
-                              <span className="min-w-0 truncate">{item.label}</span>
+                              <CrmNavItemLabel item={item} expanded />
                             </Link>
                             {item.extra && (
                               <Link
@@ -577,9 +542,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
               <CrmSessionFooter variant="drawer" onNavigate={() => setMobileMenuOpen(false)} />
             </div>
             <nav className="min-h-0 flex-1 overflow-y-auto py-2" style={{ WebkitOverflowScrolling: "touch" }}>
-              {NAV_GROUPS.map(group => {
+              {navGroups.map(group => {
                 const open = openDrawerId === group.id;
-                const groupHasActive = group.items.some(item => isNavActive(pathname, item.href));
+                const groupHasActive = group.items.some(item => isCrmNavPathActive(pathname, item.href));
                 return (
                   <div key={group.id} className="px-2 pb-2">
                     <button
@@ -612,7 +577,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                           }}
                         >
                           {group.items.map(item => {
-                            const active = isNavActive(pathname, item.href);
+                            const active = isCrmNavPathActive(pathname, item.href);
                             return (
                               <div key={item.href} className="relative px-1 py-0.5">
                                 <Link
@@ -625,7 +590,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                                   }}
                                 >
                                   <NavIcon Icon={item.icon} expanded />
-                                  <span className="min-w-0">{item.label}</span>
+                                  <CrmNavItemLabel item={item} expanded />
                                 </Link>
                                 {item.extra && (
                                   <Link

@@ -47,6 +47,16 @@ export async function POST(
     .maybeSingle();
 
   if (error) {
+    const msg = error.message ?? "";
+    if (msg.includes("arquivado_em") && msg.includes("does not exist")) {
+      return NextResponse.json(
+        {
+          erro:
+            "Coluna arquivado_em ausente no banco. Aplique a migração supabase/migrations/20260522200000_hub_agente_arquivado_em.sql.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ erro: error.message }, { status: 500 });
   }
   if (!data) {

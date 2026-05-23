@@ -5,6 +5,25 @@ html, body {
   max-width: 100vw;
 }
 
+/* Mobile: evita “faixa” extra abaixo da nav (100vh + scroll fantasma) */
+@media (max-width: 767px) {
+  html,
+  body {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    background-color: #0d1117;
+  }
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }

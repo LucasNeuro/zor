@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import type { CrmMetricas } from "@/lib/crm/dashboard-aggregate";
 import { supabase } from "@/lib/supabase/client";
 
 const REALTIME_METRICAS =
@@ -14,25 +15,15 @@ function inicioDiaLocalISO(): string {
   return hoje.toISOString();
 }
 
-export interface Metricas {
-  leadsHoje: number;
-  leadsAguardando: number;
-  aprovacoesPendentes: number;
-  conversasAtivas: number;
-  agentesAtivos: number;
-  receitaPotencial: number;
-  parceirosAtivos: number;
-  encaminhamentosHoje: number;
-  taxaQualificacao: number;
-  taxaEncaminhamento: number;
+export type Metricas = CrmMetricas & {
   loading: boolean;
-}
+};
 
 const inicial: Metricas = {
   leadsHoje: 0,
   leadsAguardando: 0,
   aprovacoesPendentes: 0,
-  conversasAtivas: 0,
+  mensagensFilaPendentes: 0,
   agentesAtivos: 0,
   receitaPotencial: 0,
   parceirosAtivos: 0,
@@ -54,10 +45,10 @@ export function useMetricas() {
       headers: { ...internalApiHeaders() },
     });
     if (!res.ok) {
-      setMetricas(prev => ({ ...prev, loading: false }));
+      setMetricas((prev) => ({ ...prev, loading: false }));
       return;
     }
-    const body = (await res.json()) as Omit<Metricas, "loading">;
+    const body = (await res.json()) as CrmMetricas;
     setMetricas({
       ...body,
       loading: false,

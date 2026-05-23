@@ -38,12 +38,20 @@ const TD: React.CSSProperties = {
   verticalAlign: "middle",
 };
 
+const SLUGS_CANAL_PADRAO = new Set(["atendente", "sdr", "gerente_atendimento", "diretor_geral_ia"]);
+
 function ehCanalRelevante(a: CanalAgenteRow): boolean {
   if (a.arquivado_em) return false;
   if (a.ativo === false) return false;
+  if (a.modo_operacao === "jobs_internos") return false;
   if (a.modo_operacao === "canal_whatsapp") return true;
   const id = typeof a.uazapi_instance_id === "string" ? a.uazapi_instance_id.trim() : "";
-  return id.length > 0;
+  if (id.length > 0) return true;
+  // Sem coluna modo_operacao no banco: mostrar agentes de atendimento típicos
+  if (a.modo_operacao == null || a.modo_operacao === "") {
+    return SLUGS_CANAL_PADRAO.has(a.agente_slug);
+  }
+  return false;
 }
 
 function statusLabel(status?: string | null): string {
@@ -179,8 +187,9 @@ export default function CanaisPage() {
       </div>
 
       <p style={{ margin: "0 0 16px", color: "#8b949e", fontSize: 13, lineHeight: 1.5, maxWidth: 720 }}>
-        Visão operacional das instâncias WhatsApp (UAZAPI) por agente. O ícone de olho mostra apenas o estado da
-        conexão; criar instância, QR e pareamento ficam na ficha do modelo e no wizard.
+        Visão operacional: só estado da conexão. <strong style={{ color: "#c9a24a" }}>Cadastrar instância</strong> (nome,
+        proxy, token UAZAPI) é na ficha do agente; <strong style={{ color: "#c9a24a" }}>QR / pareamento</strong> é um
+        passo à parte, quando for ligar o WhatsApp ao telefone.
       </p>
 
       <div style={{ marginBottom: 12 }}>

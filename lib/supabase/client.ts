@@ -35,6 +35,10 @@ export type HubPessoa = {
   tipo: 'lead' | 'parceiro' | 'cliente' | 'fornecedor' | 'prospect'
   documento: string | null
   empresa: string | null
+  area_atuacao: string | null
+  cep: string | null
+  logradouro: string | null
+  bairro: string | null
   cidade: string | null
   estado: string | null
   origem: string | null

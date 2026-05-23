@@ -84,7 +84,14 @@ BEGIN
 
     RAISE NOTICE 'Auth criado: id=% email=%', v_user_id, v_email;
   ELSE
-    -- Auth já existe: só garante identity + alinha public.users (não altera senha aqui).
+    -- Auth já existe: actualiza senha + garante identity + alinha public.users.
+    UPDATE auth.users
+    SET
+      encrypted_password = v_encrypted_pw,
+      email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+      updated_at = NOW()
+    WHERE id = v_user_id;
+
     IF NOT EXISTS (
       SELECT 1 FROM auth.identities WHERE user_id = v_user_id AND provider = 'email'
     ) THEN

@@ -136,6 +136,17 @@ function isTenantColumnMissing(message?: string): boolean {
   );
 }
 
+function isArquivadoColumnMissing(message?: string): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  if (!m.includes("arquivado_em") || !m.includes("hub_agente_identidade")) return false;
+  return (
+    m.includes("does not exist") ||
+    m.includes("schema cache") ||
+    m.includes("could not find")
+  );
+}
+
 function linhasArray(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   return v.map((x) => String(x).trim()).filter(Boolean);
@@ -223,7 +234,7 @@ export async function GET(request: NextRequest) {
   const arquivados = searchParams.get("arquivados");
   const tenantId = tenantIdFromRequest(request.headers);
 
-  async function executarConsulta(aplicarTenant: boolean) {
+  async function executarConsulta(aplicarTenant: boolean, filtrarArquivados: boolean) {
     let query = supabase
       .from("hub_agente_identidade")
       .select("*")
@@ -236,25 +247,39 @@ export async function GET(request: NextRequest) {
 
     if (todos) {
       // Inclui ativos, inativos e arquivados.
-    } else if (arquivados === "somente") {
+    } else if (filtrarArquivados && arquivados === "somente") {
       query = query.not("arquivado_em", "is", null);
-    } else {
+    } else if (filtrarArquivados) {
       query = query.is("arquivado_em", null);
       if (ativo === "false") {
         query = query.eq("ativo", false);
       } else {
         query = query.eq("ativo", true);
       }
+    } else if (arquivados === "somente") {
+      // Sem coluna arquivado_em: nenhum agente “só arquivados”.
+      query = query.eq("agente_slug", "__nenhum_arquivado__");
+    } else if (ativo === "false") {
+      query = query.eq("ativo", false);
+    } else {
+      query = query.eq("ativo", true);
     }
 
     return await query;
   }
 
-  let { data, error } = await executarConsulta(true);
+  let aplicarTenant = true;
+  let filtrarArquivados = true;
+  let { data, error } = await executarConsulta(aplicarTenant, filtrarArquivados);
 
-  // Compatibilidade com bases antigas que ainda não têm tenant_id.
+  if (error && isArquivadoColumnMissing(error.message)) {
+    filtrarArquivados = false;
+    ({ data, error } = await executarConsulta(aplicarTenant, filtrarArquivados));
+  }
+
   if (error && isTenantColumnMissing(error.message)) {
-    ({ data, error } = await executarConsulta(false));
+    aplicarTenant = false;
+    ({ data, error } = await executarConsulta(aplicarTenant, filtrarArquivados));
   }
 
   if (error) {

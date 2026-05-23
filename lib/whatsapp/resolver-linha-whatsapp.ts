@@ -20,6 +20,9 @@ type AgenteWaRow = {
   arquivado_em?: string | null;
 };
 
+const AGENTE_WA_SELECT =
+  "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo";
+
 function validarAgenteWaRow(r: AgenteWaRow, tid: string): LinhaWhatsAppWebhook | null {
   if (r.arquivado_em != null || r.ativo === false) {
     return { kind: "ignored", reason: "agente_inativo_ou_arquivado" };
@@ -70,13 +73,10 @@ async function resolverUnicoAgenteWhatsappConectado(
   const tid = defaultTenantId();
   const { data: rows, error } = await supabase
     .from("hub_agente_identidade")
-    .select(
-      "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo, arquivado_em"
-    )
+    .select(AGENTE_WA_SELECT)
     .eq("modo_operacao", "canal_whatsapp")
     .eq("uazapi_connection_status", "connected")
-    .eq("ativo", true)
-    .is("arquivado_em", null);
+    .eq("ativo", true);
 
   if (error || !rows?.length) return null;
 
@@ -107,9 +107,7 @@ export async function resolverLinhaWhatsAppInbound(
   if (nameIn) {
     const { data: byName, error: nameErr } = await supabase
       .from("hub_agente_identidade")
-      .select(
-        "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo, arquivado_em"
-      )
+      .select(AGENTE_WA_SELECT)
       .eq("uazapi_instance_name", nameIn)
       .maybeSingle();
 
@@ -130,9 +128,7 @@ export async function resolverLinhaWhatsAppInbound(
   if (id) {
     const { data: row, error } = await supabase
       .from("hub_agente_identidade")
-      .select(
-        "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo, arquivado_em"
-      )
+      .select(AGENTE_WA_SELECT)
       .eq("uazapi_instance_id", id)
       .maybeSingle();
 
@@ -148,9 +144,7 @@ export async function resolverLinhaWhatsAppInbound(
 
     const { data: byName, error: nameErr } = await supabase
       .from("hub_agente_identidade")
-      .select(
-        "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo, arquivado_em"
-      )
+      .select(AGENTE_WA_SELECT)
       .eq("uazapi_instance_name", id)
       .maybeSingle();
 
@@ -167,9 +161,7 @@ export async function resolverLinhaWhatsAppInbound(
   if (tokenIn) {
     const { data: row, error } = await supabase
       .from("hub_agente_identidade")
-      .select(
-        "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo, arquivado_em"
-      )
+      .select(AGENTE_WA_SELECT)
       .eq("uazapi_instance_token", tokenIn)
       .maybeSingle();
 

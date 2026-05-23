@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
+import { LeadPropostasPanel } from "@/components/crm/LeadPropostasPanel";
 import {
   codigoParticipante,
   emailExibicao,
@@ -14,9 +16,11 @@ import {
 import {
   ArrowLeft,
   Brain,
+  Briefcase,
   Check,
   ChevronLeft,
   ClipboardList,
+  FileText,
   IdCard,
   MessageSquare,
   Sparkles,
@@ -217,7 +221,7 @@ export default function LeadFichaPage() {
   const [ultimaFila, setUltimaFila] = useState<UltimaFilaMini | null>(null);
   const [atividades, setAtividades] = useState<Record<string, unknown>[]>([]);
   const [memorias, setMemorias] = useState<Record<string, unknown>[]>([]);
-  const [aba, setAba] = useState<"atividades" | "memorias" | "dados">("atividades");
+  const [aba, setAba] = useState<"atividades" | "memorias" | "propostas" | "dados">("atividades");
   const [memoriasErro, setMemoriasErro] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
@@ -387,6 +391,20 @@ export default function LeadFichaPage() {
 
   const chipsMemoria = useMemo(() => memorias.flatMap(chipsFromMemoriaRow), [memorias]);
 
+  async function criarNegocio() {
+    const res = await fetch(`/api/crm/leads/${id}/converter-negocio`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+      body: JSON.stringify({}),
+    });
+    const json = (await res.json()) as { data?: { id: string }; error?: string };
+    if (!res.ok) {
+      alert(json.error || "Não foi possível criar o negócio.");
+      return;
+    }
+    if (json.data?.id) router.push(`/crm/negocios/${json.data.id}`);
+  }
+
   async function moverEstagio(estagioNovo: string) {
     await supabase
       .from("hub_leads_crm")
@@ -511,18 +529,29 @@ export default function LeadFichaPage() {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => router.push(`/crm/atendimento?lead=${id}`)}
-          className="inline-flex flex-shrink-0 items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors md:text-sm"
-          style={{
-            background: "linear-gradient(180deg, #c45c26 0%, #9a471d 100%)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-          }}
-        >
-          <MessageSquare className="h-4 w-4 opacity-90" strokeWidth={2} />
-          Central de atendimento
-        </button>
+        <div className="flex flex-shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={() => void criarNegocio()}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold transition-colors md:text-sm"
+            style={{ borderColor: BORDER_SUBTLE, color: "#c9a24a", background: "#003b2622" }}
+          >
+            <Briefcase className="h-4 w-4" strokeWidth={2} />
+            Criar negócio
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push(`/crm/atendimento?lead=${id}`)}
+            className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors md:text-sm"
+            style={{
+              background: "linear-gradient(180deg, #c45c26 0%, #9a471d 100%)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+            }}
+          >
+            <MessageSquare className="h-4 w-4 opacity-90" strokeWidth={2} />
+            Central de atendimento
+          </button>
+        </div>
       </header>
 
       <div
@@ -560,6 +589,7 @@ export default function LeadFichaPage() {
           tabs={[
             { id: "atividades", label: `Atividades (${atividades.length})`, icon: ClipboardList },
             { id: "memorias", label: `Memórias IA (${chipsMemoria.length})`, icon: Brain },
+            { id: "propostas", label: "Propostas", icon: FileText },
             { id: "dados", label: "Dados", icon: IdCard },
           ]}
           style={{
@@ -701,6 +731,14 @@ export default function LeadFichaPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {aba === "propostas" && (
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6" style={{ backgroundColor: BG_DEEP }}>
+              <div className="mx-auto max-w-lg">
+                <LeadPropostasPanel leadId={id} />
+              </div>
             </div>
           )}
 

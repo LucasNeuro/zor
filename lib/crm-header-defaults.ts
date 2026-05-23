@@ -48,36 +48,43 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
   }
   if (third && seg === "agentes") {
     if (third === "novo") {
-      return { title: "Novo modelo IA" };
+      return { title: "Novo agente IA" };
     }
-    return { title: "Modelo IA" };
+    return { title: "Agente IA" };
+  }
+  if (third && seg === "pessoas") {
+    return { title: "Pessoa" };
+  }
+  if (third && seg === "empresas") {
+    return { title: "Empresa" };
   }
 
   const map: Record<string, CrmHeaderDefault> = {
-    kpis: { title: "Painel de KPIs", subtitle: "Métricas em tempo real — últimas 24h" },
+    analytics: { title: "Analytics", subtitle: "KPIs, métricas e tendências — últimas 24h" },
+    kpis: { title: "Analytics", subtitle: "KPIs, métricas e tendências — últimas 24h" },
     leads: { title: "Pipeline de Leads" },
     pessoas: { title: "Pessoas" },
     empresas: { title: "Empresas" },
     imoveis: { title: "Imóveis" },
     negocios: { title: "Negócios" },
-    atendimento: { title: "Central de Atendimento" },
+    atendimento: { title: "Inbox", subtitle: "Central de conversas e atendimento" },
     aprovacoes: { title: "Central de Aprovações" },
     parceiros: { title: "Parceiros" },
-    relatorios: { title: "Relatórios", subtitle: "Exportáveis em PDF e Excel" },
+    relatorios: { title: "Relatórios", subtitle: "Exportáveis em CSV e análises operacionais" },
     trafego: {
-      title: "Tráfego & Campanhas",
+      title: "Campanhas",
       subtitle: "Dados Windsor.ai · Meta Ads · Google Ads",
     },
     conteudo: {
       title: "Conteúdo & Copy",
       subtitle: "Central de criação de conteúdo — em desenvolvimento",
     },
-    agentes: { title: "Modelos IA", subtitle: "Assistentes e templates por agente" },
+    agentes: { title: "Agentes IA", subtitle: "Assistentes, playbooks e configuração por agente" },
     "agentes-reais": {
-      title: "Copiloto Global",
-      subtitle: "Orquestração de fluxos internos com modelos IA, playbooks e ciclos",
+      title: "Copiloto",
+      subtitle: "IA operacional global — orquestração de fluxos, playbooks e ciclos",
     },
-    ciclos: { title: "Central de Ciclos IA" },
+    ciclos: { title: "Automações", subtitle: "Fluxos automáticos e ciclos dos agentes" },
     canais: {
       title: "Canais WhatsApp",
       subtitle: "Instâncias UAZAPI conectadas aos agentes — operação e status",
@@ -87,13 +94,17 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
       title: "Contatos de Notificação",
       subtitle: "Quem recebe alertas de novos leads e aprovações",
     },
+    usuarios: {
+      title: "Usuários & Permissões",
+      subtitle: "Gestão de equipe e papéis — em construção",
+    },
     configuracoes: {
       title: "Configurações",
       subtitle: "Regras operacionais sem precisar de programador",
     },
     "onboarding-tenant": {
-      title: "Onboarding multi-empresa (piloto)",
-      subtitle: "Roteiro interno até o fluxo guiado estar no produto.",
+      title: "Onboarding",
+      subtitle: "Configuração inicial multi-empresa (administradores)",
     },
     integracoes: {
       title: "Integrações",

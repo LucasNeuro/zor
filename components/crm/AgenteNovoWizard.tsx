@@ -2514,7 +2514,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 </h2>
                 <p style={{ color: "#8b949e", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
                   {modoOperacao === "canal_whatsapp"
-                    ? "Ligue o WhatsApp via UAZAPI (instância e QR/pairing). O token da API não é mostrado aqui."
+                    ? "Passo 1: região + criar instância UAZAPI. Passo 2 (opcional agora): QR ou código para ligar o telefone."
                     : "Este agente está em modo copiloto interno (jobs por ciclo). Não há WhatsApp neste fluxo — pode concluir e gerir ciclos na Central ou na ficha do agente."}
                 </p>
               </div>

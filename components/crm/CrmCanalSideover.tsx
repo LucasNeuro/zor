@@ -85,7 +85,10 @@ function fmtDataHora(iso?: string | null): string | null {
 export function CrmCanalSideover({ agente, onClose }: Props) {
   if (!agente) return null;
 
-  const modoWhatsapp = agente.modo_operacao === "canal_whatsapp";
+  const modoWhatsapp =
+    agente.modo_operacao === "canal_whatsapp" ||
+    ((!agente.modo_operacao || agente.modo_operacao === "") &&
+      ["atendente", "sdr", "gerente_atendimento"].includes(agente.agente_slug));
   const modoLabel =
     agente.modo_operacao && agente.modo_operacao in MODO_OPERACAO_LABEL
       ? MODO_OPERACAO_LABEL[agente.modo_operacao as keyof typeof MODO_OPERACAO_LABEL]
@@ -223,8 +226,7 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
             </div>
 
             <p style={{ margin: "0 0 8px", color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
-              Dados espelhados no banco (sem consulta à UAZAPI nesta tela). Para criar instância, QR ou desligar
-              sessão, use a ficha do modelo ou o wizard.
+              Só leitura do estado. Cadastro da instância e QR de ligação ficam na ficha do agente (passos 1 e 2).
             </p>
             {snapshotFmt ? (
               <p style={{ margin: 0, fontSize: 11, color: "#6e7681" }}>Última gravação no sistema: {snapshotFmt}</p>

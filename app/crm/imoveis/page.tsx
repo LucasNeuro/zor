@@ -7,6 +7,7 @@ import { KpiBar } from "@/components/crm/KpiBar";
 import { SearchBar } from "@/components/crm/SearchBar";
 import { FilterPills } from "@/components/crm/FilterPills";
 import { EmptyState } from "@/components/crm/EmptyState";
+import { ImovelFormDrawer } from "@/components/crm/ImovelFormDrawer";
 
 const LIMIT = 20;
 
@@ -78,6 +79,8 @@ export default function ImoveisPage() {
   const [offset, setOffset] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [carregandoMais, setCarregandoMais] = useState(false);
+  const [drawerAberto, setDrawerAberto] = useState(false);
+  const [editImovel, setEditImovel] = useState<Imovel | null>(null);
 
   useEffect(() => {
     setCarregando(true);
@@ -122,7 +125,7 @@ export default function ImoveisPage() {
       actions: (
         <button
           type="button"
-          onClick={() => alert("Formulário disponível em breve")}
+          onClick={() => setDrawerAberto(true)}
           style={{
             background: "#003b26",
             color: "#c9a24a",
@@ -141,8 +144,43 @@ export default function ImoveisPage() {
     return () => setSlot(null);
   }, [pathname, setSlot]);
 
+  function recarregar() {
+    setOffset(0);
+    setCarregando(true);
+    const p = new URLSearchParams({ offset: "0", ativo: String(ativo) });
+    if (busca) p.set("busca", busca);
+    if (finalidade) p.set("finalidade", finalidade);
+    fetch(`/api/crm/imoveis?${p}`, { headers: internalApiHeaders() })
+      .then((r) => r.json())
+      .then((d) => {
+        setImoveis(d.data ?? []);
+        setTotal(d.total ?? 0);
+        setOffset(LIMIT);
+      })
+      .finally(() => setCarregando(false));
+  }
+
   return (
     <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: "24px" }}>
+      <ImovelFormDrawer
+        open={drawerAberto}
+        onClose={() => { setDrawerAberto(false); setEditImovel(null); }}
+        onSaved={recarregar}
+        initial={
+          editImovel
+            ? {
+                id: editImovel.id,
+                titulo: editImovel.titulo ?? "",
+                cidade: editImovel.cidade,
+                estado: editImovel.estado,
+                valor: editImovel.valor,
+                tipo: editImovel.tipo ?? undefined,
+                finalidade: editImovel.finalidade ?? undefined,
+                ativo: editImovel.ativo !== false,
+              }
+            : null
+        }
+      />
       {/* KPI Bar */}
       <KpiBar kpis={[
         { label: "Total", value: total, color: "#c9a24a" },
@@ -218,7 +256,7 @@ export default function ImoveisPage() {
                   return (
                     <tr
                       key={im.id}
-                      onClick={() => console.log(im.id)}
+                      onClick={() => { setEditImovel(im); setDrawerAberto(true); }}
                       style={{ borderBottom: "1px solid #21262d", cursor: "pointer" }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#161b22"; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}

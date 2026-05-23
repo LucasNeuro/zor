@@ -1,125 +1,195 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useMetricas } from "@/hooks/useMetricas";
+
+import { useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { BarChart3, UserPlus } from "lucide-react";
+import { CrmAcaoAgora } from "@/components/crm/CrmAcaoAgora";
+import { CrmAlertasStrip } from "@/components/crm/CrmAlertasStrip";
+import { CrmEquipeResumo } from "@/components/crm/CrmEquipeResumo";
+import { CrmMetricCard, CrmSectionTitle } from "@/components/crm/CrmMetricCard";
+import { CrmOperacaoResumo } from "@/components/crm/CrmOperacaoResumo";
+import { CrmPipelineResumo } from "@/components/crm/CrmPipelineResumo";
+import { CrmUltimosLeads } from "@/components/crm/CrmUltimosLeads";
+import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { useAgentes } from "@/hooks/useAgentes";
+import { useCrmDashboard } from "@/hooks/useCrmDashboard";
+import { moedaPipeline } from "@/lib/crm/pipeline-funil";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const m = useMetricas();
-  const { agentes } = useAgentes();
+  const pathname = usePathname();
+  const { setSlot } = useCrmHeaderSlot();
+  const narrow = useNarrowViewport();
+  const isMobile = narrow !== false;
+  const dash = useCrmDashboard();
+  const { agentes, loading: loadingAgentes } = useAgentes();
+  const m = dash;
 
-  const cards = [
-    { label: "Leads aguardando você", valor: m.leadsAguardando, cor: m.leadsAguardando > 0 ? "#c9a24a" : "#003b26", rota: "/crm/leads" },
-    { label: "Aprovações pendentes", valor: m.aprovacoesPendentes, cor: m.aprovacoesPendentes > 0 ? "#b3261e" : "#003b26", rota: "/crm/aprovacoes" },
-    { label: "Conversas ativas", valor: m.conversasAtivas, cor: "#003b26", rota: "/crm/atendimento" },
-    { label: "Leads hoje", valor: m.leadsHoje, cor: "#003b26", rota: "/crm/leads" },
-    { label: "Modelos IA ativos", valor: m.agentesAtivos, cor: "#003b26", rota: "/crm/agentes" },
+  useEffect(() => {
+    if (isMobile) {
+      setSlot(null);
+      return;
+    }
+    setSlot({
+      path: pathname,
+      actions: (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/crm/analytics"
+            className="flex items-center gap-1.5 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-xs font-bold text-[#e6edf3] transition-colors hover:border-[#c9a24a55] hover:text-[#c9a24a]"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            Ver tendências
+          </Link>
+          <button
+            type="button"
+            onClick={() => router.push("/crm/leads")}
+            className="flex items-center gap-1.5 rounded-lg border border-[#c9a24a44] bg-[#003b2622] px-3 py-1.5 text-xs font-bold text-[#c9a24a] hover:bg-[#003b2640]"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Leads
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/crm/parceiros/novo")}
+            className="rounded-lg border border-[#30363d] px-3 py-1.5 text-xs font-bold text-[#60a5fa] hover:bg-[#21262d]"
+          >
+            + Parceiro
+          </button>
+        </div>
+      ),
+    });
+    return () => setSlot(null);
+  }, [pathname, setSlot, router, isMobile]);
+
+  const receita =
+    m.receitaPotencial > 0 ? moedaPipeline(m.receitaPotencial) : "R$0";
+
+  const hoje = [
+    {
+      label: "Encaminhamentos hoje",
+      valor: m.encaminhamentosHoje,
+      sub: "rede de parceiros",
+      cor: "#a78bfa",
+      rota: "/crm/parceiros",
+    },
+    {
+      label: "Modelos IA ativos",
+      valor: m.agentesAtivos,
+      sub: "agentes no hub",
+      cor: "#60a5fa",
+      rota: "/crm/agentes",
+    },
+  ];
+
+  const saude = [
+    {
+      label: "Taxa qualificação",
+      valor: `${m.taxaQualificacao}%`,
+      sub: "do total de leads",
+      cor: "#34d399",
+      rota: "/crm/leads",
+    },
+    {
+      label: "Taxa encaminhamento",
+      valor: `${m.taxaEncaminhamento}%`,
+      sub: "leads com encaminhamento",
+      cor: "#f59e0b",
+      rota: "/crm/parceiros",
+    },
+    {
+      label: "Parceiros ativos",
+      valor: m.parceirosAtivos,
+      sub: "homologados",
+      cor: "#60a5fa",
+      rota: "/crm/parceiros",
+    },
     {
       label: "Receita potencial",
-      valor: m.receitaPotencial > 0 ? `R$${(m.receitaPotencial / 1000).toFixed(0)}k` : "R$0",
+      valor: receita,
+      sub: "pipeline em aberto",
       cor: "#c9a24a",
       rota: "/crm/leads",
     },
   ];
 
-  const cardsParceiros = [
-    { label: "Parceiros ativos", valor: m.parceirosAtivos, cor: "#60a5fa", rota: "/crm/parceiros" },
-    { label: "Encaminhamentos hoje", valor: m.encaminhamentosHoje, cor: "#a78bfa", rota: "/crm/parceiros" },
-    { label: "Taxa qualificação", valor: `${m.taxaQualificacao}%`, cor: "#34d399", rota: "/crm/leads" },
-    { label: "Taxa encaminhamento", valor: `${m.taxaEncaminhamento}%`, cor: "#f59e0b", rota: "/crm/parceiros" },
-  ];
+  const dataHoje = new Date().toLocaleDateString("pt-BR", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 
   return (
-    <div style={{ background: "#0d1117", minHeight: "100vh", padding: "1.5rem" }}>
-      {/* Atendimento */}
-      <div style={{ marginBottom: 8 }}>
-        <p style={{ color: "#484f58", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 8px" }}>Atendimento</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-          {cards.map(c => (
-            <button key={c.label} onClick={() => router.push(c.rota)}
-              style={{
-                borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer",
-                background: "#161b22", border: `1px solid ${c.cor}40`,
-                borderLeft: `3px solid ${c.cor}`, transition: "transform 150ms",
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.02)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
-            >
-              <p style={{ color: "#8b949e", fontSize: 11, margin: "0 0 4px" }}>{c.label}</p>
-              <p style={{ fontSize: 28, fontWeight: 900, margin: 0, color: (c.valor !== 0 && c.valor !== "R$0") ? c.cor : "#e6edf3", letterSpacing: "-1px" }}>
-                {c.valor}
-              </p>
-            </button>
-          ))}
+    <div className={`bg-[#0d1117] ${isMobile ? "min-h-0 p-3 pb-6" : "min-h-screen p-4 sm:p-6"}`}>
+      {isMobile && (
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-lg font-bold text-[#e6edf3]">Pulso</h1>
+            <p className="text-xs capitalize text-[#8b949e]">{dataHoje}</p>
+          </div>
+          <Link
+            href="/crm/analytics"
+            className="flex min-h-11 items-center gap-1 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-xs font-bold text-[#c9a24a]"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            Tendências
+          </Link>
         </div>
-      </div>
-
-      {/* Parceiros */}
-      <div style={{ marginBottom: 24, marginTop: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <p style={{ color: "#484f58", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>Rede de Parceiros</p>
-          <button onClick={() => router.push("/crm/parceiros/novo")}
-            style={{ fontSize: 11, color: "#60a5fa", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
-            + Convidar parceiro
+      )}
+      {dash.erro && (
+        <div
+          className="mb-4 rounded-xl border border-[#f8514966] bg-[#1a0a0a] px-4 py-3 text-sm text-[#ff7b72]"
+          role="alert"
+        >
+          {dash.erro}
+          <button
+            type="button"
+            onClick={() => dash.recarregar()}
+            className="ml-2 text-xs font-bold underline"
+          >
+            Tentar novamente
           </button>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-          {cardsParceiros.map(c => (
-            <button key={c.label} onClick={() => router.push(c.rota)}
-              style={{
-                borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer",
-                background: "#161b22", border: `1px solid ${c.cor}40`,
-                borderLeft: `3px solid ${c.cor}`, transition: "transform 150ms",
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.02)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
-            >
-              <p style={{ color: "#8b949e", fontSize: 11, margin: "0 0 4px" }}>{c.label}</p>
-              <p style={{ fontSize: 28, fontWeight: 900, margin: 0, color: c.cor, letterSpacing: "-1px" }}>
-                {c.valor}
-              </p>
-            </button>
-          ))}
-        </div>
+      )}
+      <CrmAcaoAgora m={m} loading={m.loading} indisponivel={!!dash.erro && !dash.carregado} />
+      <CrmPipelineResumo />
+      <CrmAlertasStrip alertas={dash.alertas} loading={dash.loading} />
+      <CrmUltimosLeads leads={dash.leadsRecentes} loading={dash.loading} />
+      <CrmOperacaoResumo operacao={dash.operacao} loading={dash.loading} />
+
+      <CrmSectionTitle>Hoje</CrmSectionTitle>
+      <div className="mb-6 grid grid-cols-2 gap-2">
+        {hoje.map((c) => (
+          <CrmMetricCard
+            key={c.label}
+            label={c.label}
+            valor={c.valor}
+            sub={c.sub}
+            cor={c.cor}
+            loading={m.loading}
+            onClick={() => router.push(c.rota)}
+          />
+        ))}
       </div>
 
-      {/* Equipe */}
-      <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 14, padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h2 style={{ color: "#e6edf3", fontWeight: 700, fontSize: 14, margin: 0 }}>Equipe IA</h2>
-          <button onClick={() => router.push("/crm/agentes")} style={{ fontSize: 12, color: "#c9a24a", background: "none", border: "none", cursor: "pointer" }}>
-            Ver todos →
-          </button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {agentes.map(a => (
-            <button key={a.agente_slug} onClick={() => router.push(`/crm/agentes/${a.agente_slug}`)}
-              style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
-                borderRadius: 10, background: "#0d1117", border: "1px solid #30363d",
-                cursor: "pointer", textAlign: "left", transition: "border-color 150ms",
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "#c9a24a40"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "#30363d"; }}
-            >
-              <div style={{
-                width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: "#003b26", color: "#c9a24a", fontWeight: 800, fontSize: 14,
-              }}>
-                {(a.nome || "?").charAt(0)}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ color: "#e6edf3", fontWeight: 700, fontSize: 13, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nome}</p>
-                <p style={{ color: "#8b949e", fontSize: 11, margin: 0 }}>{a.cargo}</p>
-              </div>
-              <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "#003b2630", color: "#c9a24a" }}>
-                N{a.nivel}
-              </span>
-            </button>
-          ))}
-        </div>
+      <CrmSectionTitle>Saúde comercial</CrmSectionTitle>
+      <div className="mb-6 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {saude.map((c) => (
+          <CrmMetricCard
+            key={c.label}
+            label={c.label}
+            valor={c.valor}
+            sub={c.sub}
+            cor={c.cor}
+            loading={m.loading}
+            onClick={() => router.push(c.rota)}
+          />
+        ))}
       </div>
+
+      <CrmEquipeResumo agentes={agentes} ciclos={dash.ciclos} loading={loadingAgentes || dash.loading} />
     </div>
   );
 }

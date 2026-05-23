@@ -27,5 +27,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ aprovacoes: data ?? [] });
+  const aprovacoes = (data ?? []).map((row: Record<string, unknown>) => ({
+    ...row,
+    descricao: row.descricao ?? row.titulo ?? "Aprovação",
+    motivo: row.motivo ?? row.descricao ?? "",
+    agente_slug: row.agente_slug ?? row.solicitado_por ?? "sdr",
+    agente_nome: row.agente_nome ?? row.agente_slug ?? "IA",
+    confianca_ia: row.confianca_ia ?? 85,
+    valor_envolvido: row.valor_envolvido ?? row.valor ?? 0,
+  }));
+
+  return NextResponse.json({ aprovacoes });
 }

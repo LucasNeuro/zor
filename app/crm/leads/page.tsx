@@ -1,8 +1,10 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,7 +114,10 @@ function borderColor(iso: string) {
 export default function LeadsPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { setSlot } = useCrmHeaderSlot();
+  const narrow = useNarrowViewport();
+  const isMobile = narrow !== false;
   const [leads, setLeads] = useState<Lead[]>([]);
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [busca, setBusca] = useState("");
@@ -128,6 +133,7 @@ export default function LeadsPage() {
   const [confirmandoPerda, setConfirmandoPerda] = useState(false);
   const [form, setForm] = useState({ nome: "", telefone: "", origem: "whatsapp", valor_estimado: "", estagio: "novo" });
   const [salvando, setSalvando] = useState(false);
+  const [erroForm, setErroForm] = useState("");
   const [leadDragId, setLeadDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -190,6 +196,14 @@ export default function LeadsPage() {
   }, []);
 
   useEffect(() => {
+    const est = searchParams.get("estagio");
+    const v = searchParams.get("view");
+    if (est) setFiltroEstagio(est);
+    if (v === "kanban" || v === "lista") setView(v);
+    else if (isMobile) setView("lista");
+  }, [searchParams, isMobile]);
+
+  useEffect(() => {
     carregar();
     const ch = supabase.channel("leads_rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "hub_leads_crm" }, carregar)
@@ -214,18 +228,37 @@ export default function LeadsPage() {
 
   async function criarLead() {
     if (!form.nome.trim()) return;
+    setErroForm("");
     setSalvando(true);
-    await supabase.from("hub_leads_crm").insert({
-      nome: form.nome.trim(),
-      telefone: form.telefone || null,
-      origem: form.origem,
-      valor_estimado: parseFloat(form.valor_estimado.replace(",", ".")) || 0,
-      estagio: form.estagio,
-    });
-    setNovoAberto(false);
-    setForm({ nome: "", telefone: "", origem: "whatsapp", valor_estimado: "", estagio: "novo" });
-    setSalvando(false);
-    carregar();
+    try {
+      const res = await fetch("/api/crm/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+        body: JSON.stringify({
+          nome: form.nome.trim(),
+          telefone: form.telefone || null,
+          origem: form.origem,
+          valor_estimado: form.valor_estimado,
+          estagio: form.estagio,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+      if (!res.ok) {
+        const base = data.error || "Não foi possível criar o lead.";
+        const detail = data.detail?.trim();
+        setErroForm(
+          process.env.NODE_ENV === "development" && detail ? `${base} — ${detail}` : base
+        );
+        return;
+      }
+      setNovoAberto(false);
+      setForm({ nome: "", telefone: "", origem: "whatsapp", valor_estimado: "", estagio: "novo" });
+      await carregar();
+    } catch {
+      setErroForm("Erro de rede. Tente novamente.");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   async function moverEstagio(leadId: string, novoEstagio: string) {
@@ -278,6 +311,10 @@ export default function LeadsPage() {
   const pipeline = leads.filter(l => !["ganho", "perdido"].includes(l.estagio)).reduce((s, l) => s + l.valor_estimado, 0);
 
   useEffect(() => {
+    if (isMobile) {
+      setSlot(null);
+      return;
+    }
     setSlot({
       path: pathname,
       subtitle: `${leads.length} leads · tempo real`,
@@ -319,7 +356,7 @@ export default function LeadsPage() {
           </select>
           <button
             type="button"
-            onClick={() => setNovoAberto(true)}
+            onClick={() => { setErroForm(""); setNovoAberto(true); }}
             className="min-h-11 w-full touch-manipulation rounded-lg bg-[#c9a24a] px-4 py-2 text-sm font-bold text-[#003b26] transition-colors hover:bg-[#e0b86a] min-[480px]:min-h-10 min-[480px]:w-auto"
           >
             + Novo Lead
@@ -328,10 +365,81 @@ export default function LeadsPage() {
       ),
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, leads.length, view, busca, filtroEstagio]);
+  }, [pathname, setSlot, leads.length, view, busca, filtroEstagio, isMobile]);
+
+  const headerControls = (
+    <>
+      <div className="inline-flex w-full rounded-lg bg-[#21262d] p-0.5 min-[480px]:w-auto">
+        <button
+          type="button"
+          onClick={() => setView("kanban")}
+          className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "kanban" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"}`}
+        >
+          Kanban
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("lista")}
+          className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "lista" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"}`}
+        >
+          Lista
+        </button>
+      </div>
+      <input
+        value={busca}
+        onChange={e => setBusca(e.target.value)}
+        placeholder="Buscar lead..."
+        className="w-full min-h-11 min-w-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-44"
+      />
+      <select
+        value={filtroEstagio}
+        onChange={e => setFiltroEstagio(e.target.value)}
+        className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
+      >
+        <option value="">Todos os estágios</option>
+        {ESTAGIOS.map(e => (
+          <option key={e.id} value={e.id}>
+            {e.label}
+          </option>
+        ))}
+      </select>
+      {!isMobile && (
+        <button
+          type="button"
+          onClick={() => { setErroForm(""); setNovoAberto(true); }}
+          className="min-h-11 w-full touch-manipulation rounded-lg bg-[#c9a24a] px-4 py-2 text-sm font-bold text-[#003b26] transition-colors hover:bg-[#e0b86a] min-[480px]:min-h-10 min-[480px]:w-auto"
+        >
+          + Novo Lead
+        </button>
+      )}
+    </>
+  );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
+
+      {isMobile && (
+        <div className="sticky top-0 z-20 shrink-0 space-y-2 border-b border-[#30363d] bg-[#161b22] px-3 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h1 className="text-base font-bold text-[#e6edf3]">Leads</h1>
+              <p className="text-[11px] text-[#8b949e]">{leads.length} leads · tempo real</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">{headerControls}</div>
+        </div>
+      )}
+
+      {isMobile && (
+        <button
+          type="button"
+          onClick={() => { setErroForm(""); setNovoAberto(true); }}
+          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,8px))] right-4 z-30 flex h-11 min-w-11 items-center justify-center rounded-full bg-[#c9a24a] px-4 text-sm font-bold text-[#003b26] shadow-lg"
+          aria-label="Novo lead"
+        >
+          + Novo
+        </button>
+      )}
 
       {/* ─── METRICS ─── */}
       <div className="grid grid-cols-2 gap-px sm:grid-cols-4 flex-shrink-0 bg-[#30363d]">
@@ -353,12 +461,17 @@ export default function LeadsPage() {
         {view === "kanban" ? (
 
           /* KANBAN */
-          <div className="flex gap-3 h-full overflow-x-auto p-4">
+          <div
+            className={`flex h-full overflow-x-auto ${isMobile ? "snap-x snap-mandatory scroll-pl-3 gap-2.5 px-3 py-3 scrollbar-none" : "gap-3 p-4"}`}
+          >
             {ESTAGIOS.map(est => {
               const col = filtrados.filter(l => l.estagio === est.id);
               const total = col.reduce((s, l) => s + l.valor_estimado, 0);
               return (
-                <div key={est.id} className="flex-shrink-0 flex flex-col" style={{ width: 230 }}>
+                <div
+                  key={est.id}
+                  className={`flex flex-shrink-0 flex-col ${isMobile ? "w-[clamp(9rem,50vw,11.5rem)] snap-start" : "w-[230px]"}`}
+                >
                   {/* Column header */}
                   <div className="rounded-t-xl px-3 py-2.5" style={{ backgroundColor: est.color + "1A", borderLeft: `3px solid ${est.color}`, borderTop: `1px solid ${est.color}40`, borderRight: `1px solid ${est.color}40` }}>
                     <div className="flex items-center justify-between">
@@ -368,19 +481,19 @@ export default function LeadsPage() {
                     {total > 0 && <p className="text-xs mt-0.5 font-bold" style={{ color: est.color }}>{moeda(total)}</p>}
                   </div>
                   {/* Cards */}
-                  <div className="flex-1 bg-gray-900/40 rounded-b-xl border border-t-0 border-gray-800 p-2 space-y-2 overflow-y-auto transition-colors"
+                  <div className="flex-1 space-y-2 overflow-y-auto rounded-b-xl border border-t-0 border-[#30363d] bg-[#161b22]/60 p-2 transition-colors"
                     style={{ minHeight: 80, backgroundColor: dragOver === est.id ? est.color + "12" : undefined }}
                     onDragOver={e => { e.preventDefault(); setDragOver(est.id); }}
                     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
                     onDrop={e => { e.preventDefault(); const lid = e.dataTransfer.getData("leadId"); if (lid) moverEstagio(lid, est.id); setLeadDragId(null); setDragOver(null); }}>
                     {col.map(lead => (
                       <div key={lead.id}
-                        draggable
+                        draggable={!isMobile}
                         onDragStart={e => { e.dataTransfer.setData("leadId", lead.id); setLeadDragId(lead.id); }}
                         onDragEnd={() => { setLeadDragId(null); setDragOver(null); }}
-                        onClick={() => router.push(`/crm/leads/${lead.id}`)}
-                        className="bg-gray-900 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:bg-gray-800 transition-all"
-                        style={{ borderWidth: 1, borderStyle: "solid", borderColor: "#374151", borderLeftWidth: 3, borderLeftColor: borderColor(lead.atualizado_em), opacity: leadDragId === lead.id ? 0.5 : 1 }}>
+                        onClick={() => (isMobile ? abrirDetalhe(lead) : router.push(`/crm/leads/${lead.id}`))}
+                        className="cursor-pointer rounded-xl border border-[#30363d] bg-[#161b22] p-3 transition-all hover:bg-[#21262d] active:cursor-grabbing"
+                        style={{ borderLeftWidth: 3, borderLeftColor: borderColor(lead.atualizado_em), opacity: leadDragId === lead.id ? 0.5 : 1 }}>
                         <p className="text-white text-xs font-bold truncate leading-tight">{lead.nome}</p>
                         {lead._pessoa_codigo && (
                           <p className="text-[10px] font-mono text-[#c9a24a]/90 truncate mt-0.5">{lead._pessoa_codigo}</p>
@@ -393,13 +506,24 @@ export default function LeadsPage() {
                             </span>
                           )}
                           {lead.agente_responsavel && (
-                            <span className="text-xs text-gray-600 truncate">{lead.agente_responsavel}</span>
+                            <span className="truncate text-xs text-[#8b949e]">{lead.agente_responsavel}</span>
                           )}
-                          <span className="ml-auto text-xs text-gray-600">{tempo(lead.atualizado_em)}</span>
+                          <span className="ml-auto text-xs text-[#8b949e]">{tempo(lead.atualizado_em)}</span>
                         </div>
+                        {isMobile && lead.telefone && (
+                          <a
+                            href={`https://wa.me/55${lead.telefone.replace(/\D/g, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="mt-2 flex min-h-11 w-full items-center justify-center rounded-lg bg-[#25D366] text-xs font-bold text-white"
+                          >
+                            WhatsApp
+                          </a>
+                        )}
                       </div>
                     ))}
-                    {col.length === 0 && <p className="text-center py-4 text-gray-700 text-xs">vazio</p>}
+                    {col.length === 0 && <p className="py-4 text-center text-xs text-[#484f58]">vazio</p>}
                   </div>
                 </div>
               );
@@ -410,6 +534,53 @@ export default function LeadsPage() {
 
           /* LISTA */
           <div className="h-full overflow-y-auto">
+            {isMobile ? (
+              <ul className="space-y-2 p-3 pb-24">
+                {filtrados.map(lead => {
+                  const est = ESTAGIOS.find(e => e.id === lead.estagio);
+                  return (
+                    <li key={lead.id}>
+                      <button
+                        type="button"
+                        onClick={() => abrirDetalhe(lead)}
+                        className="flex w-full min-h-14 flex-col gap-2 rounded-xl border border-[#30363d] bg-[#161b22] p-3 text-left"
+                        style={{ borderLeftWidth: 3, borderLeftColor: borderColor(lead.atualizado_em) }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-[#e6edf3]">{lead.nome}</p>
+                            {lead.telefone && <p className="text-xs text-[#8b949e]">{lead.telefone}</p>}
+                          </div>
+                          {est && (
+                            <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: est.color + "25", color: est.color }}>
+                              {est.label}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {lead.valor_estimado > 0 && <span className="text-xs font-bold text-[#22C55E]">{moeda(lead.valor_estimado)}</span>}
+                          <span className="ml-auto text-xs text-[#8b949e]">{tempo(lead.atualizado_em)}</span>
+                        </div>
+                        {lead.telefone && (
+                          <a
+                            href={`https://wa.me/55${lead.telefone.replace(/\D/g, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="flex min-h-11 w-full items-center justify-center rounded-lg bg-[#25D366] text-xs font-bold text-white"
+                          >
+                            WhatsApp
+                          </a>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+                {filtrados.length === 0 && (
+                  <p className="py-12 text-center text-sm text-[#8b949e]">Nenhum lead encontrado</p>
+                )}
+              </ul>
+            ) : (
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-900 border-b border-gray-800">
                 <tr>
@@ -463,6 +634,7 @@ export default function LeadsPage() {
                 )}
               </tbody>
             </table>
+            )}
           </div>
         )}
       </div>
@@ -470,13 +642,13 @@ export default function LeadsPage() {
       {/* ─── NEW LEAD SLIDE-OVER ─── */}
       {novoAberto && (
         <div className="fixed inset-0 z-50 flex">
-          <div className="flex-1 bg-black/50" onClick={() => setNovoAberto(false)} />
-          <div className="w-96 bg-gray-900 border-l border-gray-800 flex flex-col h-full shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-              <p className="text-white font-bold">Novo Lead</p>
-              <button onClick={() => setNovoAberto(false)} className="text-gray-500 hover:text-white text-xl">×</button>
+          {!isMobile && <div className="flex-1 bg-black/50" onClick={() => setNovoAberto(false)} />}
+          <div className={`flex h-full max-h-[100dvh] flex-col border-[#30363d] bg-[#161b22] shadow-2xl ${isMobile ? "w-full" : "w-96 border-l"}`}>
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-[#30363d] px-5 py-4">
+              <p className="font-bold text-[#e6edf3]">Novo Lead</p>
+              <button type="button" onClick={() => setNovoAberto(false)} className="min-h-11 min-w-11 text-xl text-[#8b949e]">×</button>
             </div>
-            <div className="flex-1 p-5 space-y-4 overflow-y-auto">
+            <div className="flex-1 min-h-0 p-5 space-y-4 overflow-y-auto">
               {[
                 { label: "Nome *", key: "nome", type: "text", placeholder: "Nome do lead" },
                 { label: "Telefone", key: "telefone", type: "tel", placeholder: "(11) 99999-9999" },
@@ -504,9 +676,12 @@ export default function LeadsPage() {
                   {ESTAGIOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
                 </select>
               </div>
+              {erroForm && (
+                <p className="text-red-400 text-xs">{erroForm}</p>
+              )}
             </div>
-            <div className="px-5 py-4 border-t border-gray-800">
-              <button onClick={criarLead} disabled={salvando || !form.nome.trim()}
+            <div className="px-5 py-4 border-t border-gray-800 flex-shrink-0 bg-gray-900">
+              <button onClick={() => void criarLead()} disabled={salvando || !form.nome.trim()}
                 className="w-full bg-[#c9a24a] hover:bg-[#e0b86a] disabled:opacity-50 text-white font-bold text-sm py-3 rounded-xl transition-colors">
                 {salvando ? "Criando..." : "+ Criar Lead"}
               </button>
@@ -518,8 +693,10 @@ export default function LeadsPage() {
       {/* ─── LEAD DETAIL SLIDE-OVER ─── */}
       {detalhe && (
         <div className="fixed inset-0 z-50 flex">
-          <div className="flex-1 bg-black/50" onClick={() => { setDetalhe(null); setConfirmandoPerda(false); }} />
-          <div className="w-[520px] bg-gray-900 border-l border-gray-800 flex flex-col h-full shadow-2xl overflow-hidden">
+          {!isMobile && (
+            <div className="flex-1 bg-black/50" onClick={() => { setDetalhe(null); setConfirmandoPerda(false); }} />
+          )}
+          <div className={`flex h-full flex-col overflow-hidden border-[#30363d] bg-[#161b22] shadow-2xl ${isMobile ? "w-full" : "w-[520px] border-l"}`}>
 
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-800 flex-shrink-0">

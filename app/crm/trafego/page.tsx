@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
+import Link from "next/link";
 
 type Campanha = {
   campaign_name: string;
@@ -33,6 +35,8 @@ function num(v: number) {
 export default function TrafegoPage() {
   const pathname = usePathname();
   const { setSlot } = useCrmHeaderSlot();
+  const narrow = useNarrowViewport();
+  const isMobile = narrow !== false;
   const [periodo, setPeriodo] = useState("7d");
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,35 +67,44 @@ export default function TrafegoPage() {
     { label: "Conversões", value: String(totalConversoes), cor: "#22C55E" },
   ];
 
+  const periodoControls = (
+    <div className="flex rounded-lg p-0.5" style={{ background: "#21262d" }}>
+      {PERIODOS.map((p) => (
+        <button
+          key={p.value}
+          type="button"
+          onClick={() => setPeriodo(p.value)}
+          className="min-h-11 flex-1 rounded-md px-3 py-2 text-xs font-bold transition-colors md:min-h-0 md:flex-none md:py-1.5"
+          style={{
+            background: periodo === p.value ? "#30363d" : "transparent",
+            color: periodo === p.value ? "#e6edf3" : "#8b949e",
+          }}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  );
+
   useEffect(() => {
-    setSlot({
-      path: pathname,
-      actions: (
-        <div className="flex rounded-lg p-0.5" style={{ background: "#21262d" }}>
-          {PERIODOS.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => setPeriodo(p.value)}
-              className="rounded-md px-3 py-1.5 text-xs font-bold transition-colors"
-              style={{
-                background: periodo === p.value ? "#30363d" : "transparent",
-                color: periodo === p.value ? "#e6edf3" : "#8b949e",
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      ),
-    });
+    if (isMobile) {
+      setSlot(null);
+      return;
+    }
+    setSlot({ path: pathname, actions: periodoControls });
     return () => setSlot(null);
-  }, [pathname, setSlot, periodo]);
+  }, [pathname, setSlot, periodo, isMobile]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden" style={{ background: "#0d1117" }}>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:h-screen" style={{ background: "#0d1117" }}>
+      {isMobile && (
+        <div className="shrink-0 space-y-2 border-b border-[#30363d] px-3 py-3">
+          <h1 className="text-base font-bold text-[#e6edf3]">Marketing</h1>
+          {periodoControls}
+        </div>
+      )}
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-px flex-shrink-0" style={{ background: "#21262d" }}>
+      <div className="grid grid-cols-2 gap-px flex-shrink-0 md:grid-cols-4" style={{ background: "#21262d" }}>
         {kpis.map(k => (
           <div key={k.label} className="px-5 py-3" style={{ background: "#0d1117" }}>
             <p className="text-xs mb-0.5" style={{ color: "#8b949e" }}>{k.label}</p>
@@ -110,9 +123,11 @@ export default function TrafegoPage() {
 
         {!loading && erro && (
           <div className="rounded-xl p-6 text-center" style={{ background: "#1a0a0a", border: "1px solid #4a1a1a" }}>
-            <p className="text-sm mb-1" style={{ color: "#EF4444" }}>Erro ao carregar dados</p>
+            <p className="text-sm mb-1" style={{ color: "#EF4444" }}>Campanhas indisponíveis</p>
             <p className="text-xs" style={{ color: "#8b949e" }}>{erro}</p>
-            <p className="text-xs mt-3" style={{ color: "#484f58" }}>Configure a integração Windsor.ai em /crm/configuracoes</p>
+            <Link href="/crm/integracoes" className="mt-4 inline-block min-h-11 rounded-lg bg-[#c9a24a] px-4 py-2.5 text-xs font-bold text-[#003b26]">
+              Configurar em Integrações
+            </Link>
           </div>
         )}
 
@@ -121,10 +136,32 @@ export default function TrafegoPage() {
             <p className="text-4xl mb-3">📡</p>
             <p className="font-bold mb-1" style={{ color: "#e6edf3" }}>Nenhuma campanha encontrada</p>
             <p className="text-xs" style={{ color: "#8b949e" }}>Conecte suas contas de anúncios no Windsor.ai</p>
+            <Link href="/crm/integracoes" className="mt-4 inline-block text-xs font-bold text-[#c9a24a] underline">
+              Configurar integrações
+            </Link>
           </div>
         )}
 
-        {!loading && !erro && campanhas.length > 0 && (
+        {!loading && !erro && campanhas.length > 0 && isMobile && (
+          <ul className="space-y-3">
+            {campanhas.map((c, i) => (
+              <li
+                key={i}
+                className="rounded-xl border border-[#30363d] bg-[#161b22] p-4"
+              >
+                <p className="mb-2 truncate text-sm font-bold text-[#e6edf3]">{c.campaign_name}</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div><span className="text-[#8b949e]">Gasto</span><p className="font-bold text-[#EF4444]">{moeda(c.spend)}</p></div>
+                  <div><span className="text-[#8b949e]">Cliques</span><p className="font-bold text-[#3B82F6]">{num(c.clicks)}</p></div>
+                  <div><span className="text-[#8b949e]">CTR</span><p className="font-bold text-[#F97316]">{(c.ctr * 100).toFixed(2)}%</p></div>
+                  <div><span className="text-[#8b949e]">Conv.</span><p className="font-bold text-[#22C55E]">{c.conversions || 0}</p></div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {!loading && !erro && campanhas.length > 0 && !isMobile && (
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #30363d" }}>
             <table className="w-full text-sm">
               <thead style={{ background: "#161b22" }}>

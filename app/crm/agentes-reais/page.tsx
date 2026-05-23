@@ -23,8 +23,8 @@ export default function WorkflowsPlaceholderPage() {
           <strong style={{ color: "#c9a24a", fontWeight: 600 }}>playbooks</strong>,{" "}
           <strong style={{ color: "#c9a24a", fontWeight: 600 }}>skills</strong> e{" "}
           <strong style={{ color: "#c9a24a", fontWeight: 600 }}>ciclos</strong>. Enquanto finalizamos esta
-          visão unificada, configure tudo em{" "}
-          <strong style={{ color: "#c9a24a", fontWeight: 600 }}>Modelos</strong>.
+          visão unificada,           configure tudo em{" "}
+          <strong style={{ color: "#c9a24a", fontWeight: 600 }}>Agentes IA</strong>.
         </p>
       </div>
     </div>

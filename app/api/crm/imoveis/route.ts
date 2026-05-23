@@ -47,3 +47,39 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ data: data ?? [], total: count ?? 0 });
 }
+
+export async function POST(request: NextRequest) {
+  const supabase = db();
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+
+  const titulo = String(body.titulo || "").trim();
+  if (!titulo) return NextResponse.json({ error: "Título obrigatório" }, { status: 400 });
+
+  const year = new Date().getFullYear();
+  const { count } = await supabase.from("hub_imoveis").select("*", { count: "exact", head: true });
+  const codigo = body.codigo || `IMO-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+
+  const row = {
+    codigo,
+    titulo,
+    tipo: body.tipo || "apartamento",
+    finalidade: body.finalidade || "venda",
+    status: body.status || "captacao",
+    valor: body.valor != null ? Number(body.valor) : null,
+    cidade: body.cidade || null,
+    estado: body.estado || null,
+    bairro: body.bairro || null,
+    dormitorios: body.dormitorios != null ? Number(body.dormitorios) : null,
+    area_total_m2: body.area_total_m2 != null ? Number(body.area_total_m2) : null,
+    ativo: body.ativo !== false,
+  };
+
+  const { data, error } = await supabase.from("hub_imoveis").insert(row).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ data }, { status: 201 });
+}

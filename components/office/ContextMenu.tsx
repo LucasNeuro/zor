@@ -27,7 +27,8 @@ export function ContextMenu({ metricas, onNavegar, onItemClick }: ContextMenuPro
       title: "Visão Geral",
       items: [
         { label: "Dashboard", href: "/crm" },
-        { label: "Pipeline", href: "/crm/leads" },
+        { label: "Analytics", href: "/crm/analytics" },
+        { label: "Leads", href: "/crm/leads" },
         { label: "Equipe", key: "ias_ativas" },
       ],
     },
@@ -41,9 +42,9 @@ export function ContextMenu({ metricas, onNavegar, onItemClick }: ContextMenuPro
           badgeColor: "#c9a24a",
         },
         {
-          label: "Conversas ativas",
+          label: "Inbox",
           href: "/crm/atendimento",
-          badge: metricas.conversasAtivas || undefined,
+          badge: metricas.mensagensFilaPendentes || undefined,
           badgeColor: "#22c55e",
         },
         { label: "SLA crítico", key: "sla_monitor" },
@@ -64,7 +65,7 @@ export function ContextMenu({ metricas, onNavegar, onItemClick }: ContextMenuPro
     {
       title: "Configuração",
       items: [
-        { label: "Agentes", href: "/crm/agentes" },
+        { label: "Agentes IA", href: "/crm/agentes" },
         { label: "Novo agente", href: "/crm/agentes/novo" },
         { label: "Integrações", href: "/crm/integracoes" },
       ],

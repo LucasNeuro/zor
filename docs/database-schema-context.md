@@ -2,7 +2,9 @@
 
 **Gerado:** 2026-05-11  
 **Última atualização docs:** 2026-05-12  
-**Projeto Supabase (ref):** `cdjlqsznerdhwqyunodl` (MCP Cursor: pode viver em `.cursor/mcp.json` na raiz do workspace, ex. pasta pai `vitual/`, ou na configuração global do Cursor)
+**Projeto Supabase (ref):** `cdjlqsznerdhwqyunodl` (doc histórico) · **desenvolvimento ativo:** OBRA10 `zollengyqtmyhnbrkepu` (`.env.local`, `supabase link`)
+
+**Pacote CRM integral (2026-05-22):** `20260523120000_crm_integral_core.sql` + `20260523150000_crm_rls_extended.sql` — ver [`crm-schema-audit-obra10.md`](./crm-schema-audit-obra10.md).
 
 Este ficheiro serve de **contexto para agentes e para ti**. Combina o que está **definido no repositório** com o inventário de tabelas que o **código** usa. **Não substitui** um `pg_dump` nem o estado live até ser atualizado via MCP ou SQL no dashboard.
 

@@ -1,11 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  dadosExtrasEndereco,
+  enriquecerPessoaDaDb,
+  HUB_PESSOA_SELECT_CORE,
+  HUB_PESSOA_SELECT_EXTENDED,
+} from "@/lib/crm/hub-pessoas-compat";
+import { isMissingPgColumn } from "@/lib/tenant-default";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const PESSOA_SELECT =
-  "id, codigo, nome, telefone, email, documento, tipo, tipo_pessoa, empresa, origem, area_atuacao, cep, logradouro, bairro, cidade, estado, criado_em, atualizado_em";
 
 function db() {
   return createClient(
@@ -42,20 +46,28 @@ export async function GET(
   }
 
   const supabase = db();
-  const { data, error } = await supabase
+  let res = await supabase
     .from("hub_pessoas")
-    .select(PESSOA_SELECT)
+    .select(HUB_PESSOA_SELECT_EXTENDED)
     .eq("id", id)
     .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (res.error && isMissingPgColumn(res.error)) {
+    res = await supabase
+      .from("hub_pessoas")
+      .select(HUB_PESSOA_SELECT_CORE)
+      .eq("id", id)
+      .maybeSingle();
   }
-  if (!data) {
+
+  if (res.error) {
+    return NextResponse.json({ error: res.error.message }, { status: 500 });
+  }
+  if (!res.data) {
     return NextResponse.json({ error: "Pessoa não encontrada." }, { status: 404 });
   }
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ data: enriquecerPessoaDaDb(res.data as Record<string, unknown>) });
 }
 
 export async function PATCH(
@@ -104,22 +116,56 @@ export async function PATCH(
     if (key in body) updates[key] = body[key];
   }
 
+  const enderecoKeys = ["area_atuacao", "cep", "logradouro", "bairro"] as const;
+  const temEndereco = enderecoKeys.some((k) => k in body);
+  if (temEndereco) {
+    const extrasPatch = dadosExtrasEndereco({
+      area_atuacao: (body.area_atuacao as string) ?? null,
+      cep: (body.cep as string) ?? null,
+      logradouro: (body.logradouro as string) ?? null,
+      bairro: (body.bairro as string) ?? null,
+    });
+    const { data: atual } = await db()
+      .from("hub_pessoas")
+      .select("dados_extras")
+      .eq("id", id)
+      .maybeSingle();
+    const prev =
+      atual?.dados_extras && typeof atual.dados_extras === "object" && !Array.isArray(atual.dados_extras)
+        ? (atual.dados_extras as Record<string, unknown>)
+        : {};
+    updates.dados_extras = { ...prev, ...extrasPatch };
+  }
+
   if (Object.keys(updates).length === 1) {
     return NextResponse.json({ error: "Nenhum campo para atualizar." }, { status: 400 });
   }
 
   const supabase = db();
-  const { data, error } = await supabase
+  let result = await supabase
     .from("hub_pessoas")
     .update(updates)
     .eq("id", id)
-    .select(PESSOA_SELECT)
+    .select(HUB_PESSOA_SELECT_EXTENDED)
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data) return NextResponse.json({ error: "Pessoa não encontrada." }, { status: 404 });
+  if (result.error && isMissingPgColumn(result.error)) {
+    const fallback = { ...updates };
+    for (const k of enderecoKeys) delete fallback[k];
+    result = await supabase
+      .from("hub_pessoas")
+      .update(fallback)
+      .eq("id", id)
+      .select(HUB_PESSOA_SELECT_CORE)
+      .maybeSingle();
+  }
 
-  return NextResponse.json({ data });
+  if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 });
+  if (!result.data) return NextResponse.json({ error: "Pessoa não encontrada." }, { status: 404 });
+
+  return NextResponse.json({
+    data: enriquecerPessoaDaDb(result.data as Record<string, unknown>),
+  });
 }
 
 export async function DELETE(

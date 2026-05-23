@@ -1,6 +1,12 @@
 ﻿import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  enriquecerListaPessoas,
+  enriquecerPessoaDaDb,
+  HUB_PESSOA_SELECT_CORE,
+  montarRowInsertHubPessoa,
+} from "@/lib/crm/hub-pessoas-compat";
+import {
   gerarCodigoPessoa,
   validarPessoaCadastro,
   type PessoaCadastroPayload,
@@ -14,17 +20,13 @@ function db() {
   );
 }
 
-
-const HUB_PESSOA_OPTIONAL_COLUMNS = [
+const HUB_PESSOA_OPTIONAL_INSERT_COLUMNS = [
   "tenant_id",
   "area_atuacao",
   "cep",
   "logradouro",
   "bairro",
 ] as const;
-
-const PESSOA_INSERT_SELECT =
-  "id, codigo, nome, telefone, email, tipo, tipo_pessoa, empresa, area_atuacao, cidade, estado, cep, criado_em";
 
 function supabaseConfigError(): string | null {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) {
@@ -36,41 +38,67 @@ function supabaseConfigError(): string | null {
   return null;
 }
 
+function isTenantFkError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  if (e.code !== "23503") return false;
+  const m = (e.message || "").toLowerCase();
+  return m.includes("tenant") || m.includes("hub_tenants");
+}
+
 async function insertHubPessoa(
   supabase: SupabaseClient,
   row: Record<string, unknown>,
   tenantId: string
 ) {
-  let payload: Record<string, unknown> = { ...row, tenant_id: tenantId };
   const baseRow = { ...row };
-  for (let attempt = 0; attempt < HUB_PESSOA_OPTIONAL_COLUMNS.length + 2; attempt++) {
+  let withTenant = false;
+  let payload: Record<string, unknown> = { ...baseRow };
+  let lastError: { message?: string; code?: string } | null = null;
+
+  if (tenantId) {
+    withTenant = true;
+    payload = { ...baseRow, tenant_id: tenantId };
+  }
+
+  for (let attempt = 0; attempt < HUB_PESSOA_OPTIONAL_INSERT_COLUMNS.length + 5; attempt++) {
     const { data, error } = await supabase
       .from("hub_pessoas")
       .insert(payload)
-      .select(PESSOA_INSERT_SELECT)
+      .select(HUB_PESSOA_SELECT_CORE)
       .single();
-    if (!error) return { data, error: null };
-    if (isMissingPgColumn(error, "tenant_id")) {
+
+    if (!error && data) {
+      return { data: enriquecerPessoaDaDb(data as Record<string, unknown>), error: null };
+    }
+
+    if (error) lastError = error;
+
+    if (isTenantFkError(error)) {
+      withTenant = false;
+      delete (baseRow as Record<string, unknown>).tenant_id;
       payload = { ...baseRow };
-      for (const col of HUB_PESSOA_OPTIONAL_COLUMNS) {
-        if (col === "tenant_id") continue;
-        delete (payload as Record<string, unknown>)[col];
-        delete (baseRow as Record<string, unknown>)[col];
-      }
       continue;
     }
-    const missing = HUB_PESSOA_OPTIONAL_COLUMNS.find((col) => isMissingPgColumn(error, col));
+
+    if (isMissingPgColumn(error, "tenant_id")) {
+      withTenant = false;
+      delete (baseRow as Record<string, unknown>).tenant_id;
+      payload = { ...baseRow };
+      continue;
+    }
+
+    const missing = HUB_PESSOA_OPTIONAL_INSERT_COLUMNS.find((col) =>
+      isMissingPgColumn(error, col)
+    );
     if (missing) {
-      delete (payload as Record<string, unknown>)[missing];
       delete (baseRow as Record<string, unknown>)[missing];
-      payload =
-        missing === "tenant_id"
-          ? { ...baseRow }
-          : { ...baseRow, tenant_id: tenantId };
+      payload = withTenant ? { ...baseRow, tenant_id: tenantId } : { ...baseRow };
       continue;
     }
-    const code = "code" in error ? String(error.code) : "";
-    const msg = "message" in error ? String(error.message) : "";
+
+    const code = error && "code" in error ? String(error.code) : "";
+    const msg = error && "message" in error ? String(error.message) : "";
     if (code === "PGRST205" || msg.includes("hub_pessoas")) {
       return {
         data: null,
@@ -81,9 +109,54 @@ async function insertHubPessoa(
         },
       };
     }
-    return { data: null, error };
+    if (error) return { data: null, error };
   }
-  return { data: null, error: { message: "Falha ao gravar hub_pessoas." } };
+
+  return {
+    data: null,
+    error: {
+      message:
+        lastError?.message?.trim() ||
+        "Falha ao gravar hub_pessoas. Execute 20260521130000_hub_pessoas_area_endereco.sql no Supabase.",
+      code: lastError?.code,
+    },
+  };
+}
+
+async function listarPessoas(
+  supabase: SupabaseClient,
+  params: { busca: string; tipo_pessoa: string; offset: number; limit: number }
+) {
+  const run = (select: string) => {
+    let query = supabase
+      .from("hub_pessoas")
+      .select(select, { count: "exact" })
+      .order("criado_em", { ascending: false })
+      .range(params.offset, params.offset + params.limit - 1);
+
+    if (params.busca) {
+      query = query.or(
+        `nome.ilike.%${params.busca}%,email.ilike.%${params.busca}%,telefone.ilike.%${params.busca}%`
+      );
+    }
+    if (params.tipo_pessoa) {
+      query = query.eq("tipo_pessoa", params.tipo_pessoa);
+    }
+    return query;
+  };
+
+  const extended =
+    `${HUB_PESSOA_SELECT_CORE}, area_atuacao, cep, logradouro, bairro`;
+  const first = await run(extended);
+  if (!first.error) return first;
+
+  const missingCol = ["area_atuacao", "cep", "logradouro", "bairro"].some((c) =>
+    isMissingPgColumn(first.error, c)
+  );
+  if (missingCol || isMissingPgColumn(first.error)) {
+    return run(HUB_PESSOA_SELECT_CORE);
+  }
+  return first;
 }
 
 async function contarPorTipo(
@@ -106,26 +179,8 @@ export async function GET(request: NextRequest) {
   const offset = parseInt(searchParams.get("offset") || "0", 10);
   const limit = 20;
 
-  let query = supabase
-    .from("hub_pessoas")
-    .select(
-      "id, codigo, nome, telefone, email, tipo, tipo_pessoa, empresa, area_atuacao, cidade, estado, cep, criado_em",
-      { count: "exact" }
-    )
-    .order("criado_em", { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (busca) {
-    query = query.or(
-      `nome.ilike.%${busca}%,email.ilike.%${busca}%,telefone.ilike.%${busca}%`
-    );
-  }
-  if (tipo_pessoa) {
-    query = query.eq("tipo_pessoa", tipo_pessoa);
-  }
-
   const [{ data, error, count }, pf, pj] = await Promise.all([
-    query,
+    listarPessoas(supabase, { busca, tipo_pessoa, offset, limit }),
     contarPorTipo(supabase, "PF"),
     contarPorTipo(supabase, "PJ"),
   ]);
@@ -135,7 +190,7 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    data: data ?? [],
+    data: enriquecerListaPessoas((data ?? []) as unknown as Record<string, unknown>[]),
     total: count ?? 0,
     stats: { pf, pj },
   });
@@ -207,28 +262,13 @@ export async function POST(request: NextRequest) {
 
   const codigo = await gerarCodigoPessoa(supabase);
   const now = new Date().toISOString();
+  const row = montarRowInsertHubPessoa(d, codigo, now);
 
-  const row: Record<string, unknown> = {
-    codigo,
-    nome: d.nome,
-    telefone: d.telefone,
-    email: d.email,
-    documento: d.documento,
-    tipo: "cliente",
-    tipo_pessoa: d.tipo_pessoa,
-    empresa: d.tipo_pessoa === "PJ" ? d.empresa : null,
-    area_atuacao: d.area_atuacao,
-    cep: d.cep,
-    logradouro: d.logradouro,
-    bairro: d.bairro,
-    cidade: d.cidade,
-    estado: d.estado,
-    origem: d.origem,
-    criado_em: now,
-    atualizado_em: now,
-  };
-
-  const { data: created, error } = await insertHubPessoa(supabase, row, tenantId || defaultTenantId());
+  const { data: created, error } = await insertHubPessoa(
+    supabase,
+    row,
+    tenantId || defaultTenantId()
+  );
 
   if (error) {
     if ("code" in error && error.code === "23505") {
@@ -244,4 +284,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ data: created }, { status: 201 });
 }
-

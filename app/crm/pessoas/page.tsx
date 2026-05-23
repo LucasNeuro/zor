@@ -8,7 +8,7 @@ import { KpiBar } from "@/components/crm/KpiBar";
 import { SearchBar } from "@/components/crm/SearchBar";
 import { FilterPills } from "@/components/crm/FilterPills";
 import { EmptyState } from "@/components/crm/EmptyState";
-import { PessoaFormModal } from "@/components/crm/PessoaFormModal";
+import { PessoaFormDrawer } from "@/components/crm/PessoaFormModal";
 import { labelAreaAtuacao } from "@/lib/crm/areas-atuacao";
 
 const LIMIT = 20;
@@ -216,7 +216,7 @@ export default function PessoasPage() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: "24px" }}>
-      <PessoaFormModal
+      <PessoaFormDrawer
         open={modalAberto}
         onClose={() => setModalAberto(false)}
         onSaved={(pessoaId) => {

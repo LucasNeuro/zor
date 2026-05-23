@@ -48,9 +48,18 @@ export function obterProximaPerguntaEssencial(
 export function substituirPlaceholdersSaudacao(saudacao: string, nomeAgente: string): string {
   const nome = nomeAgente.trim() || "Maria";
   return saudacao
+    .replace(/\[Seu\s*Nome\]/gi, nome)
     .replace(/\[Nome\]/gi, nome)
     .replace(/\[nome\]/g, nome)
     .trim();
+}
+
+/** Saudação já convida resposta (ex.: «como posso ajudar?») — não empilhar outra pergunta na 1ª mensagem. */
+export function saudacaoJaTemPergunta(saudacao: string): boolean {
+  const s = saudacao.trim();
+  if (!s) return false;
+  if (/\?\s*$/.test(s)) return true;
+  return /\b(como posso|em que posso|posso te ajudar|posso ajudar|o que você precisa|o que precisa)\b/i.test(s);
 }
 
 export function blocoPerguntasEssenciaisCargo(params: {
@@ -84,9 +93,16 @@ export function blocoPerguntasEssenciaisCargo(params: {
       linhas.push(`- Comprimento: ${params.comprimentoPadrao}`);
     }
     if (params.ordem === "inicio" && params.proximaPergunta) {
-      linhas.push(
-        "- Se a saudação já tiver pergunta de nome, **não** repita na mesma mensagem; na **próxima** resposta use a pergunta indicada abaixo."
-      );
+      const saudacaoComPergunta = params.saudacao ? saudacaoJaTemPergunta(params.saudacao) : false;
+      if (saudacaoComPergunta) {
+        linhas.push(
+          "- A saudação já traz pergunta aberta — **não** empilhe outra na mesma mensagem; na **próxima** resposta use a pergunta obrigatória abaixo."
+        );
+      } else {
+        linhas.push(
+          "- Na **1ª mensagem**, após o tom da saudação (máx. 2 frases), **termine** com a pergunta obrigatória abaixo — não use só «Olá, como posso ajudar?» genérico."
+        );
+      }
     }
   } else {
     linhas.push("- Conversa em andamento: **sem** nova saudação, **sem** reapresentação.");

@@ -157,7 +157,7 @@ type Props = {
 
 
 
-export function PessoaFormModal({ open, onClose, onSaved }: Props) {
+export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
   const [tipo, setTipo] = useState<TipoPessoaCadastro>("PF");
 
@@ -459,10 +459,7 @@ export function PessoaFormModal({ open, onClose, onSaved }: Props) {
       if (!res.ok) {
         const base = data.error || data.erro || "Não foi possível salvar o cadastro.";
         const detail = data.detail?.trim();
-        const msg =
-          process.env.NODE_ENV === "development" && detail
-            ? `${base} — ${detail}`
-            : base;
+        const msg = detail ? `${base} — ${detail}` : base;
         setErro(msg);
         return;
       }
@@ -485,73 +482,49 @@ export function PessoaFormModal({ open, onClose, onSaved }: Props) {
 
 
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
-
-
   return (
-
     <div
-
       role="dialog"
-
       aria-modal="true"
-
       aria-labelledby="pessoa-form-title"
-
-      style={{
-
-        position: "fixed",
-
-        inset: 0,
-
-        zIndex: 200,
-
-        display: "flex",
-
-        alignItems: "center",
-
-        justifyContent: "center",
-
-        padding: 16,
-
-        background: "rgba(1, 4, 9, 0.72)",
-
-      }}
-
-      onClick={onClose}
-
+      style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex" }}
     >
-
+      <div style={{ flex: 1, background: "rgba(1, 4, 9, 0.72)" }} onClick={onClose} />
       <div
-
         onClick={(e) => e.stopPropagation()}
-
         style={{
-
           width: "100%",
-
-          maxWidth: 520,
-
-          maxHeight: "90vh",
-
-          overflowY: "auto",
-
+          maxWidth: 440,
+          height: "100%",
+          maxHeight: "100dvh",
+          display: "flex",
+          flexDirection: "column",
           background: "#0d1117",
-
-          border: "1px solid #30363d",
-
-          borderRadius: 14,
-
-          padding: "20px 22px",
-
+          borderLeft: "1px solid #30363d",
           boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
-
         }}
-
       >
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            padding: "18px 20px 12px",
+            borderBottom: "1px solid #21262d",
+            flexShrink: 0,
+          }}
+        >
 
           <div>
 
@@ -603,9 +576,8 @@ export function PessoaFormModal({ open, onClose, onSaved }: Props) {
 
         </div>
 
-
-
-        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 16px" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18, paddingTop: 4 }}>
 
           {(["PF", "PJ"] as const).map((t) => {
 
@@ -1027,14 +999,22 @@ export function PessoaFormModal({ open, onClose, onSaved }: Props) {
             </div>
 
           </div>
+        </div>
+        </div>
 
-
-
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "12px 20px 18px",
+            borderTop: "1px solid #21262d",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
           {erro && <p style={{ color: "#ef4444", fontSize: 12, margin: 0 }}>{erro}</p>}
 
-
-
-          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <div style={{ display: "flex", gap: 10 }}>
 
             <button
 
@@ -1109,15 +1089,14 @@ export function PessoaFormModal({ open, onClose, onSaved }: Props) {
             </button>
 
           </div>
-
         </div>
-
       </div>
-
     </div>
-
   );
 
 }
+
+/** @deprecated Use PessoaFormDrawer */
+export const PessoaFormModal = PessoaFormDrawer;
 
 

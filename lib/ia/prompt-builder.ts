@@ -7,6 +7,7 @@ import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import { buscarTrechosRag } from "@/lib/hub/rag";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
+import { resolverCargoCatalogoParaAgente } from "@/lib/hub/resolver-cargo-catalogo";
 import {
   blocoPerguntasEssenciaisCargo,
   obterProximaPerguntaEssencial,
@@ -67,15 +68,9 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
 
   if (!agente) return null;
 
-  const { data: cargoCatalogo } = await supabase
-    .from("hub_cargos_catalogo")
-    .select(
-      "slug,titulo,saudacao_cliente,usar_perguntas_essenciais,ordem_perguntas_essenciais,perguntas_essenciais,comprimento_padrao"
-    )
-    .eq("titulo", String(agente.cargo ?? ""))
-    .eq("ativo", true)
-    .limit(1)
-    .maybeSingle();
+  const cargoCatalogo = await resolverCargoCatalogoParaAgente(supabase, {
+    cargo: agente.cargo as string | null,
+  });
 
   // 2. Busca personalidade
   const { data: personalidade } = await supabase
@@ -161,6 +156,11 @@ ${personalidade?.descricao_comportamento || ""}`);
     linhas.push("- Fazer perguntas de qualificação naturalmente, sem anunciar processo interno.");
 
     if (usarPerguntasCargo) {
+      if (!conversaEmAndamento) {
+        linhas.push(
+          "- **Prioridade na 1ª mensagem:** use a saudação e a pergunta obrigatória desta camada; não substitua por cumprimento genérico («Olá! Tudo certo? Como posso ajudar?»)."
+        );
+      }
       linhas.push(
         ...blocoPerguntasEssenciaisCargo({
           usarPerguntas: true,
@@ -285,7 +285,7 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
         "Não repetir «Olá», «tudo bem?», nome da empresa ou «como posso ajudar» se já apareceu no histórico."
       );
       regrasUniversais.push("Avance o assunto: confirme o que entendeu e proponha o próximo passo concreto.");
-    } else {
+    } else if (!usarPerguntasCargo) {
       regrasUniversais.push("Primeira mensagem: seja acolhedor e faça no máximo uma pergunta objetiva.");
     }
   }

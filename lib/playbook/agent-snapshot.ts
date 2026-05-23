@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolverCargoCatalogoParaAgente } from "@/lib/hub/resolver-cargo-catalogo";
 import { canonicalJsonStringify } from "./canonical-json";
 import { createHash } from "crypto";
 
@@ -56,13 +57,7 @@ export async function loadAgentPlaybookSnapshot(
       .order("prioridade", { ascending: false }),
     supabase.from("hub_agente_configuracao").select("*").eq("agente_slug", agenteSlug).maybeSingle(),
     supabase.from("hub_autonomia_matriz").select("*").eq("agente_slug", agenteSlug).eq("ativo", true).order("prioridade", { ascending: false }),
-    supabase
-      .from("hub_cargos_catalogo")
-      .select("*")
-      .eq("titulo", identity.cargo as string)
-      .eq("ativo", true)
-      .limit(1)
-      .maybeSingle(),
+    resolverCargoCatalogoParaAgente(supabase, identity.cargo as string),
   ]);
 
   const snapshot: AgentPlaybookSnapshotV1 = {
@@ -75,7 +70,7 @@ export async function loadAgentPlaybookSnapshot(
     regras_ia: (regras.data || []) as Array<Record<string, unknown>>,
     configuracao: (configuracao.data || null) as Record<string, unknown> | null,
     autonomia_matriz: (autonomia.data || []) as Array<Record<string, unknown>>,
-    cargo_catalogo: (cargoCat.data || null) as Record<string, unknown> | null,
+    cargo_catalogo: (cargoCat || null) as Record<string, unknown> | null,
   };
 
   return { snapshot, hash: hashSnapshot(snapshot) };

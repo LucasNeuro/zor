@@ -764,13 +764,14 @@ export function AgenteUazapiBlock({
             PASSO 1 — CADASTRAR INSTÂNCIA
           </p>
           <p style={{ margin: 0, color: "#8b949e", fontSize: 11, lineHeight: 1.45 }}>
-            Guarde a região (cidade) acima e crie a instância na UAZAPI. O QR para ligar o telefone aparece no passo 2.
+            Crie a instância na UAZAPI com o botão abaixo. Em seguida escolha a cidade e use «Guardar região». O QR
+            para ligar o telefone fica no passo 2.
           </p>
           <button
             type="button"
-            disabled={acoesOff || !regiaoGuardada}
+            disabled={acoesOff}
             style={{
-              ...btnBase(acoesOff || !regiaoGuardada, "primary"),
+              ...btnBase(acoesOff, "primary"),
               width: "100%",
               minHeight: 44,
             }}
@@ -779,9 +780,9 @@ export function AgenteUazapiBlock({
             {loading === "create" ? <Loader2 size={15} className="animate-spin" /> : <Smartphone size={15} />}
             Criar instância UAZAPI
           </button>
-          {!regiaoGuardada ? (
+          {!regiaoGuardada && temInstancia ? (
             <p style={{ margin: 0, color: "#e6c06a", fontSize: 11 }}>
-              Selecione a cidade e use «Guardar região» antes de criar.
+              Instância criada — seleccione a cidade acima e use «Guardar região» antes de gerar o QR.
             </p>
           ) : null}
         </>
@@ -932,8 +933,10 @@ export function AgenteUazapiBlock({
                     <>
                       Região: <strong style={{ color: "#aebccf" }}>{regiaoLabel}</strong>
                     </>
+                  ) : temInstancia ? (
+                    <span style={{ color: "#e6c06a" }}>Escolha a cidade e guarde a região antes do QR</span>
                   ) : (
-                    <span style={{ color: "#e6c06a" }}>Defina a região antes de criar a instância</span>
+                    <span style={{ color: "#e6c06a" }}>Crie a instância UAZAPI (rodapé) — depois escolha a cidade</span>
                   )}
                 </p>
               </div>
@@ -970,7 +973,7 @@ export function AgenteUazapiBlock({
         subtitle={
           temInstancia
             ? "Passo 2: ligue o WhatsApp com QR ou código (instância já cadastrada)."
-            : "Passo 1: região do número e criar instância — sem QR neste passo."
+            : "Passo 1: criar instância na UAZAPI (sem QR). Depois cidade/região; QR no passo 2."
         }
         footer={botoesFooter}
       >
@@ -1155,7 +1158,15 @@ export function AgenteUazapiBlock({
               </button>
             </div>
             {cidadesProxyErro ? (
-              <p style={{ margin: "8px 0 0", color: "#f85149", fontSize: 11 }}>{cidadesProxyErro}</p>
+              <p style={{ margin: "8px 0 0", color: "#f85149", fontSize: 11 }}>
+                {!temInstancia && /invalid token/i.test(cidadesProxyErro)
+                  ? "A lista de cidades só fica disponível depois de criar a instância (botão no rodapé). O admin token da UAZAPI não serve para este catálogo."
+                  : cidadesProxyErro}
+              </p>
+            ) : !temInstancia && cidadesProxy.length === 0 && !cidadesProxyErro ? (
+              <p style={{ margin: "8px 0 0", color: "#8b949e", fontSize: 11 }}>
+                Cidades aparecem após «Criar instância UAZAPI» (rodapé).
+              </p>
             ) : null}
             {proxyState ? (
               <p style={{ margin: "6px 0 0", color: "#6e7781", fontSize: 11 }}>

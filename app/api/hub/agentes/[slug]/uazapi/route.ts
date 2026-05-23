@@ -24,6 +24,7 @@ import {
   formatWebhookSyncWarnings,
   syncWebhooksUazapi,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
+import { resolverTokenCatalogoProxyCidades } from "@/lib/whatsapp/uazapi-proxy-cities-token";
 
 async function resolverQrRespostaUazapi(
   payload: unknown,
@@ -285,24 +286,16 @@ export async function POST(
       if (stateQ) qs.set("state", stateQ);
       if (search) qs.set("search", search);
 
-      /** UAZAPI exige header `token` neste catálogo; `admintoken` sozinho devolve "Missing token". */
-      const adminToken = process.env.UAZAPI_ADMIN_TOKEN?.trim() || "";
-      const catalogToken = tokenInst || adminToken;
-      if (!catalogToken) {
-        return NextResponse.json(
-          {
-            error:
-              "Configure UAZAPI_ADMIN_TOKEN no servidor ou crie a instância UAZAPI neste agente para carregar as cidades.",
-          },
-          { status: 503 }
-        );
+      const catalogAuth = await resolverTokenCatalogoProxyCidades(tokenInst);
+      if (!catalogAuth.ok) {
+        return NextResponse.json({ error: catalogAuth.error }, { status: catalogAuth.status });
       }
 
       const out = await uazapiFetchJson<Record<string, unknown>>(
         `/proxy-managed/cities?${qs.toString()}`,
         {
           method: "GET",
-          instanceToken: catalogToken,
+          instanceToken: catalogAuth.token,
         }
       );
       if (!out.ok) {
@@ -316,7 +309,7 @@ export async function POST(
         action: "list_proxy_cities",
         country,
         cities,
-        auth_source: tokenInst ? "instance" : "admin",
+        auth_source: catalogAuth.source,
       });
     }
 

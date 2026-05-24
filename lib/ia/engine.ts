@@ -142,6 +142,24 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       );
     }
 
+    if (ctx.canal === "whatsapp" && ctx.leadId && ctx.telefone?.trim()) {
+      const { sincronizarContatoWhatsappNoCrm } = await import("@/lib/crm/sincronizar-contato-whatsapp");
+      await sincronizarContatoWhatsappNoCrm(db, {
+        leadId: ctx.leadId,
+        pessoaId: ctx.pessoaId ?? null,
+        dados: {
+          telefone: ctx.telefone,
+          pushName: ctx.nome,
+          messageId:
+            typeof ctx.metadata?.messageId === "string" ? ctx.metadata.messageId : null,
+          tipoMidia: typeof ctx.metadata?.tipoMidia === "string" ? ctx.metadata.tipoMidia : null,
+          timestamp: typeof ctx.metadata?.timestamp === "string" ? ctx.metadata.timestamp : null,
+          mercado: ctx.segmento,
+          instanceKey: typeof ctx.metadata?.instance === "string" ? ctx.metadata.instance : null,
+        },
+      });
+    }
+
     // ETAPA 4: Histórico — metadata CRM (fiável) + hub_fila_mensagens
     const { buscarHistoricoConversa } = await import("@/lib/ia/conversation-context");
     let turnosCrm: import("@/lib/crm/conversa-turnos-crm").TurnoConversaCrm[] = [];
@@ -150,8 +168,15 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       turnosCrm = await crmTurnos.registarEntradaUsuarioCrm(db, ctx.leadId, ctx.mensagem);
     }
     const historicoCtx = await buscarHistoricoConversa(db, { leadId: ctx.leadId });
-    const turnosAnteriores =
-      ctx.canal === "whatsapp"
+    if (historicoCtx.sessaoReiniciada) {
+      turnosCrm = turnosCrm.filter((t) => {
+        const msg = ctx.mensagem.trim();
+        return t.role === "user" && t.content.trim() === msg;
+      });
+    }
+    const turnosAnteriores = historicoCtx.sessaoReiniciada
+      ? 0
+      : ctx.canal === "whatsapp"
         ? Math.max(
             (await import("@/lib/crm/conversa-turnos-crm")).contarTurnosAnteriores(
               turnosCrm,
@@ -186,11 +211,12 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       agenteSlug: agente.slug,
       leadId: ctx.leadId,
       mercado: ctx.segmento,
-      etapaFluxo,
+      etapaFluxo: historicoCtx.sessaoReiniciada ? undefined : etapaFluxo,
       mensagemAtual: ctx.mensagem,
       canal: ctx.canal,
       turnosAnteriores,
       turnosConversa: turnosParaPrompt,
+      sessaoReiniciada: historicoCtx.sessaoReiniciada,
     });
 
     if (!promptData) {
@@ -207,6 +233,15 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       const bloco = formatarBlocoContextoConversa(linhasContexto);
       if (bloco) systemPrompt = `${systemPrompt}\n\n${bloco}`;
     }
+    if (ctx.canal === "whatsapp") {
+      const { blocoDadosCanalWhatsappCrm } = await import("@/lib/crm/sincronizar-contato-whatsapp");
+      const { blocoIsolamentoConversaWhatsapp } = await import("@/lib/crm/isolamento-conversa-lead");
+      systemPrompt = `${systemPrompt}\n\n${blocoDadosCanalWhatsappCrm({
+        telefone: ctx.telefone,
+        pushName: ctx.nome,
+        leadId: ctx.leadId,
+      })}\n\n${blocoIsolamentoConversaWhatsapp(ctx.telefone)}`;
+    }
     const modelo = promptData.modelo;
 
     // ETAPA 6: Estima tokens antes de chamar
@@ -218,7 +253,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     // ETAPA 7: Chama a IA
     const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
 
-    if (historicoCtx.resumoAnterior?.trim()) {
+    if (!historicoCtx.sessaoReiniciada && historicoCtx.resumoAnterior?.trim()) {
       mensagens.push({
         role: "user",
         content: `[Resumo da conversa anterior — use como contexto, não cumprimente de novo por isto]\n${historicoCtx.resumoAnterior.trim()}`,
@@ -283,6 +318,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
               leadId: ctx.leadId!,
               agenteSlug: agente.slug,
               tenantId: ctx.tenantId,
+              telefoneSessao: ctx.telefone,
               modoOperacao:
                 (ferrIaRow as { modo_operacao?: string | null } | null | undefined)?.modo_operacao ?? null,
             }),
@@ -353,7 +389,20 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       respostaIA: textoResposta,
       agenteSlug: agente.slug,
       pessoaId: ctx.pessoaId ?? null,
+      telefone: ctx.telefone,
+      pushName: ctx.nome,
     });
+
+    if (ctx.canal === "whatsapp") {
+      const { reforcarCrmAposTurnoWhatsapp } = await import("@/lib/crm/sincronizar-contato-whatsapp");
+      await reforcarCrmAposTurnoWhatsapp(db, {
+        leadId: ctx.leadId,
+        mensagemUsuario: ctx.mensagem,
+        pushName: ctx.nome,
+        telefone: ctx.telefone,
+        toolCallsExecutadas,
+      });
+    }
     try {
       const { extrairESalvarMemoriasAgente } = await import("@/lib/ia/memoria-agente");
       await extrairESalvarMemoriasAgente(db, {

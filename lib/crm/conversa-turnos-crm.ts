@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  filtrarLinhasHistoricoNaSessao,
+  garantirSessaoConversaAtiva,
+} from "@/lib/ia/sessao-conversa-ttl";
 
 export type TurnoConversaCrm = {
   role: "user" | "assistant";
@@ -40,7 +44,10 @@ export async function carregarTurnosConversaCrm(
     data?.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
       ? (data.metadata as Record<string, unknown>)
       : {};
-  return normalizarTurnos(meta.conversa_turnos);
+  const turnos = normalizarTurnos(meta.conversa_turnos);
+  return filtrarLinhasHistoricoNaSessao(
+    turnos.map((t) => ({ ...t, criadoEm: t.at }))
+  ).map(({ role, content, at }) => ({ role, content, at }));
 }
 
 export async function salvarTurnosConversaCrm(
@@ -76,7 +83,19 @@ export async function registarEntradaUsuarioCrm(
   leadId: string,
   mensagem: string
 ): Promise<TurnoConversaCrm[]> {
-  const turnos = await carregarTurnosConversaCrm(supabase, leadId);
+  const { data: metaRow } = await supabase
+    .from("hub_leads_crm")
+    .select("metadata")
+    .eq("id", leadId)
+    .maybeSingle();
+  const meta =
+    metaRow?.metadata && typeof metaRow.metadata === "object" && !Array.isArray(metaRow.metadata)
+      ? (metaRow.metadata as Record<string, unknown>)
+      : {};
+  const turnosBrutos = normalizarTurnos(meta.conversa_turnos);
+  await garantirSessaoConversaAtiva(supabase, leadId, turnosBrutos);
+
+  let turnos = await carregarTurnosConversaCrm(supabase, leadId);
   const msg = mensagem.trim();
   if (!msg) return turnos;
 

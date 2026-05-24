@@ -4,6 +4,7 @@ import {
   enriquecerListaPessoas,
   enriquecerPessoaDaDb,
   HUB_PESSOA_SELECT_CORE,
+  HUB_PESSOA_SELECT_LIST,
   montarRowInsertHubPessoa,
 } from "@/lib/crm/hub-pessoas-compat";
 import {
@@ -25,6 +26,8 @@ const HUB_PESSOA_OPTIONAL_INSERT_COLUMNS = [
   "area_atuacao",
   "cep",
   "logradouro",
+  "numero",
+  "complemento",
   "bairro",
 ] as const;
 
@@ -125,7 +128,15 @@ async function insertHubPessoa(
 
 async function listarPessoas(
   supabase: SupabaseClient,
-  params: { busca: string; tipo_pessoa: string; offset: number; limit: number }
+  params: {
+    busca: string;
+    tipo_pessoa: string;
+    estado: string;
+    origem: string;
+    area_atuacao: string;
+    offset: number;
+    limit: number;
+  }
 ) {
   const run = (select: string) => {
     let query = supabase
@@ -135,40 +146,44 @@ async function listarPessoas(
       .range(params.offset, params.offset + params.limit - 1);
 
     if (params.busca) {
+      const b = params.busca.replace(/%/g, "");
       query = query.or(
-        `nome.ilike.%${params.busca}%,email.ilike.%${params.busca}%,telefone.ilike.%${params.busca}%`
+        `nome.ilike.%${b}%,email.ilike.%${b}%,telefone.ilike.%${b}%,codigo.ilike.%${b}%,documento.ilike.%${b}%`
       );
     }
     if (params.tipo_pessoa) {
       query = query.eq("tipo_pessoa", params.tipo_pessoa);
     }
+    if (params.estado) {
+      query = query.eq("estado", params.estado);
+    }
+    if (params.origem) {
+      query = query.eq("origem", params.origem);
+    }
+    if (params.area_atuacao) {
+      query = query.eq("area_atuacao", params.area_atuacao);
+    }
     return query;
   };
 
-  const extended =
-    `${HUB_PESSOA_SELECT_CORE}, area_atuacao, cep, logradouro, bairro`;
-  const first = await run(extended);
+  const first = await run(HUB_PESSOA_SELECT_LIST);
   if (!first.error) return first;
 
-  const missingCol = ["area_atuacao", "cep", "logradouro", "bairro"].some((c) =>
-    isMissingPgColumn(first.error, c)
-  );
+  const missingCol = [
+    "area_atuacao",
+    "cep",
+    "logradouro",
+    "numero",
+    "complemento",
+    "bairro",
+    "tenant_id",
+    "dados_extras",
+    "codigo",
+  ].some((c) => isMissingPgColumn(first.error, c));
   if (missingCol || isMissingPgColumn(first.error)) {
     return run(HUB_PESSOA_SELECT_CORE);
   }
   return first;
-}
-
-async function contarPorTipo(
-  supabase: SupabaseClient,
-  tipo: "PF" | "PJ"
-): Promise<number> {
-  const { count, error } = await supabase
-    .from("hub_pessoas")
-    .select("*", { count: "exact", head: true })
-    .eq("tipo_pessoa", tipo);
-  if (error) return 0;
-  return count ?? 0;
 }
 
 export async function GET(request: NextRequest) {
@@ -176,14 +191,21 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const busca = searchParams.get("busca") || "";
   const tipo_pessoa = searchParams.get("tipo_pessoa") || "";
+  const estado = searchParams.get("estado") || "";
+  const origem = searchParams.get("origem") || "";
+  const area_atuacao = searchParams.get("area_atuacao") || "";
   const offset = parseInt(searchParams.get("offset") || "0", 10);
-  const limit = 20;
+  const limit = Math.min(parseInt(searchParams.get("limit") || "200", 10), 500);
 
-  const [{ data, error, count }, pf, pj] = await Promise.all([
-    listarPessoas(supabase, { busca, tipo_pessoa, offset, limit }),
-    contarPorTipo(supabase, "PF"),
-    contarPorTipo(supabase, "PJ"),
-  ]);
+  const { data, error, count } = await listarPessoas(supabase, {
+    busca,
+    tipo_pessoa,
+    estado,
+    origem,
+    area_atuacao,
+    offset,
+    limit,
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -192,7 +214,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     data: enriquecerListaPessoas((data ?? []) as unknown as Record<string, unknown>[]),
     total: count ?? 0,
-    stats: { pf, pj },
   });
 }
 

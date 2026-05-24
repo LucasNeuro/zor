@@ -7,11 +7,18 @@ import { uploadArquivo } from "@/lib/ia/storage";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
+import {
+  telefoneConversaId,
+  telefonesConversaEquivalentes,
+  validarLeadTelefoneSessao,
+} from "@/lib/crm/isolamento-conversa-lead";
 
 export type FerramentaHubContexto = {
   leadId: string;
   agenteSlug: string;
   tenantId?: string;
+  /** Telefone WhatsApp da sessão (identificador global da conversa). */
+  telefoneSessao?: string | null;
   /** hub_agente_identidade.modo_operacao — usado para gates de escrita seguros */
   modoOperacao?: string | null;
 };
@@ -38,20 +45,40 @@ async function executarFerramentaHubBuiltin(
   ctx: FerramentaHubContexto,
   supabase: SupabaseClient
 ): Promise<string> {
+  const telSessao = telefoneConversaId(ctx.telefoneSessao ?? "");
+  if (telSessao.length >= 10) {
+    const isolamento = await validarLeadTelefoneSessao(supabase, ctx.leadId, telSessao);
+    if (!isolamento.ok) {
+      return JSON.stringify({ erro: isolamento.codigo, detalhe: isolamento.detalhe });
+    }
+  }
+
   switch (toolName) {
     case "hub_lead_resumo": {
       const { data, error } = await supabase
         .from("hub_leads_crm")
         .select(
-          "id, nome, telefone, estagio, valor_estimado, agente_responsavel, humano_responsavel, atualizado_em, metadata"
+          "id, nome, telefone, estagio, valor_estimado, interesse_principal, agente_responsavel, humano_responsavel, atualizado_em, metadata"
         )
         .eq("id", ctx.leadId)
         .maybeSingle();
       if (error) return JSON.stringify({ erro: "supabase", detalhe: error.message });
       if (!data) return JSON.stringify({ erro: "lead_nao_encontrado", lead_id: ctx.leadId });
+      const meta =
+        data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+          ? { ...(data.metadata as Record<string, unknown>) }
+          : {};
+      const sessaoReiniciadaEm = meta.sessao_reiniciada_em;
+      delete meta.conversa_turnos;
+      for (const key of Object.keys(meta)) {
+        if (/^fluxo/i.test(key) && key !== "fluxo_id") delete meta[key];
+      }
       return JSON.stringify({
-        lead: data,
+        lead: { ...data, metadata: meta },
         agente_slug_conversa: ctx.agenteSlug,
+        sessao_reiniciada_em: sessaoReiniciadaEm ?? null,
+        sessao_telefone: telSessao.length >= 10 ? telSessao : data.telefone ?? null,
+        aviso: "Dados apenas deste contacto WhatsApp — não misturar com outros números.",
       });
     }
     case "hub_lead_memorias": {
@@ -60,20 +87,39 @@ async function executarFerramentaHubBuiltin(
         typeof limRaw === "number" && Number.isFinite(limRaw)
           ? Math.min(10, Math.max(1, Math.floor(limRaw)))
           : 5;
+      const { cutoffSessaoConversaMs } = await import("@/lib/ia/sessao-conversa-ttl");
+      const cutoffIso = new Date(cutoffSessaoConversaMs()).toISOString();
       const { data, error } = await supabase
         .from("hub_memorias_lead")
         .select("chave, valor, confianca, criado_por, criado_em")
         .eq("lead_id", ctx.leadId)
+        .gte("criado_em", cutoffIso)
         .order("confianca", { ascending: false })
         .limit(lim);
       if (error) return JSON.stringify({ erro: "supabase", detalhe: error.message });
       return JSON.stringify({ memorias: data ?? [] });
     }
     case "hub_lead_lookup_por_telefone": {
-      const telRaw = typeof args.telefone === "string" ? args.telefone : String(args.telefone ?? "");
-      const telefone = telRaw.replace(/\D/g, "");
+      const telRaw =
+        typeof args.telefone === "string" && args.telefone.trim()
+          ? args.telefone
+          : telSessao.length >= 10
+            ? telSessao
+            : "";
+      const telefone = telefoneConversaId(telRaw);
       if (telefone.length < 10) {
-        return JSON.stringify({ erro: "telefone_invalido", detalhe: "Informe ao menos 10 dígitos." });
+        return JSON.stringify({
+          erro: "telefone_invalido",
+          detalhe: "Use o telefone desta conversa ou hub_lead_resumo para a sessão actual.",
+        });
+      }
+
+      if (telSessao.length >= 10 && !telefonesConversaEquivalentes(telefone, telSessao)) {
+        return JSON.stringify({
+          erro: "isolamento_sessao",
+          detalhe:
+            "Só é permitido consultar o telefone desta conversa. Para a ficha actual use hub_lead_resumo.",
+        });
       }
 
       const { data: lead, error: eLead } = await supabase

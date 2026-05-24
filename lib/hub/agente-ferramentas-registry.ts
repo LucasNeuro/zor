@@ -81,21 +81,21 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
     categoria: "cliente",
     titulo: "Consultar lead por telefone",
     descricao:
-      "Procura lead existente no CRM por telefone (normalizado) antes de criar novo contacto. Útil para triagem e análise.",
-    recomendadoWhatsApp: true,
+      "Consulta a ficha CRM **só do telefone desta conversa** (isolamento). Para a sessão actual prefira hub_lead_resumo.",
+    recomendadoWhatsApp: false,
     mistralFunction: {
       name: "hub_lead_lookup_por_telefone",
       description:
-        "Consulta se já existe lead no CRM por telefone. Retorna lead e pessoa quando encontrados; não cria nem altera dados.",
+        "Consulta lead/pessoa no CRM apenas pelo telefone **desta** conversa WhatsApp (o mesmo da sessão). Não use para pesquisar outros números. Se omitir telefone, usa o da sessão. Não cria nem altera dados.",
       parameters: {
         type: "object",
         properties: {
           telefone: {
             type: "string",
-            description: "Telefone com ou sem máscara; será normalizado para dígitos.",
+            description:
+              "Opcional — só o telefone desta conversa (será validado). Omita para usar o número da sessão.",
           },
         },
-        required: ["telefone"],
         additionalProperties: false,
       },
     },
@@ -156,7 +156,7 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
     mistralFunction: {
       name: "hub_atualizar_lead",
       description:
-        "Actualiza dados factuais do lead desta conversa no CRM. Use quando o cliente revelar orçamento, interesse, dados de contacto, qualificação ou próximo passo. Não use para estágios ganho/perdido (equipa humana). Envie só campos que mudaram.",
+        "Actualiza a ficha do lead desta conversa no CRM (WhatsApp). O telefone já está no sistema — não peça número. Grave nome, e-mail, interesse_principal, valor_estimado, score, proxima_acao e metadata (fluxo, cidade, potencial) sempre que o cliente revelar algo novo, na mesma volta da resposta, sem anunciar «salvar no CRM». Não use estágios ganho/perdido. Envie só campos que mudaram.",
       parameters: {
         type: "object",
         properties: {

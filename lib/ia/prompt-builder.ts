@@ -7,6 +7,7 @@ import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import { buscarTrechosRag } from "@/lib/hub/rag";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
+import { cutoffSessaoConversaMs } from "@/lib/ia/sessao-conversa-ttl";
 import { resolverCargoCatalogoParaAgente } from "@/lib/hub/resolver-cargo-catalogo";
 import {
   blocoPerguntasEssenciaisCargo,
@@ -44,6 +45,8 @@ export interface PromptParams {
   turnosAnteriores?: number;
   /** Histórico para calcular próxima pergunta essencial do cargo (sem expor lista completa ao modelo). */
   turnosConversa?: TurnoMinimo[];
+  /** Sessão reiniciada após TTL — tratar como primeiro contacto (Mari: nome + menu). */
+  sessaoReiniciada?: boolean;
 }
 
 export interface PromptCompleto {
@@ -82,11 +85,13 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
   // 3. Busca memórias do lead (top 5) e do agente (top 6)
   let memorias: Array<{ chave: string; valor: string }> = [];
   let memoriasAgenteTexto = "";
-  if (params.leadId) {
+  if (params.leadId && !params.sessaoReiniciada) {
+    const cutoffIso = new Date(cutoffSessaoConversaMs()).toISOString();
     const { data: mems } = await supabase
       .from("hub_memorias_lead")
       .select("chave, valor, confianca")
       .eq("lead_id", params.leadId)
+      .gte("criado_em", cutoffIso)
       .order("confianca", { ascending: false })
       .limit(5);
     if (mems) memorias = mems;
@@ -124,7 +129,9 @@ COMPORTAMENTO: Humor ${humorLabel} + Personalidade ${personalidadeLabel}.
 Tom de comunicação: ${tomComunicacao}.
 ${personalidade?.descricao_comportamento || ""}`);
 
-  const turnosAnteriores = Math.max(0, params.turnosAnteriores ?? 0);
+  const turnosAnteriores = params.sessaoReiniciada
+    ? 0
+    : Math.max(0, params.turnosAnteriores ?? 0);
   const conversaEmAndamento = turnosAnteriores > 0;
   const canalWhatsapp = (params.canal ?? "").toLowerCase() === "whatsapp";
 
@@ -143,6 +150,13 @@ ${personalidade?.descricao_comportamento || ""}`);
 
   if (canalWhatsapp && !usarPerguntasCargo) {
     secoes.push(blocoFluxoPrimeiroAtendimentoWhatsapp(turnosAnteriores));
+  }
+
+  if (params.sessaoReiniciada && canalWhatsapp) {
+    secoes.push(`═══ NOVA SESSÃO (INACTIVIDADE) ═══
+Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta conversa:
+- Não retome assuntos antigos (imóveis, orçamentos ou fluxos anteriores) salvo se o cliente mencionar agora.
+- Siga o POP: saudação, pedir nome se faltar, menu de triagem quando aplicável.`);
   }
 
   // CAMADA 2 — OPERAÇÃO DO CARGO (externo / WhatsApp)

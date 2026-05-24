@@ -522,6 +522,11 @@ export default function LeadFichaPage() {
                 {estagio}
               </span>
             </div>
+            {(lead.codigo as string | undefined) && (
+              <p className="mt-0.5 font-mono text-xs font-semibold text-[#c9a24a]">
+                {String(lead.codigo)}
+              </p>
+            )}
             <p className="mt-0.5 truncate text-xs" style={{ color: "#7d8a99" }}>
               {lead.telefone as string} · {lead.origem as string}
               {(lead.valor_estimado as number) > 0 &&

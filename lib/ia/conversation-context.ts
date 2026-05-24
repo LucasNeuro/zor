@@ -4,6 +4,13 @@ import {
   carregarResumoConversa,
   salvarResumoConversa,
 } from "@/lib/ia/memoria-lead";
+import {
+  filtrarLinhasHistoricoNaSessao,
+  garantirSessaoConversaAtiva,
+  obterUltimaAtividadeLeadMs,
+  sessaoConversaExpirada,
+  ultimaAtividadeMs,
+} from "@/lib/ia/sessao-conversa-ttl";
 
 export type HistoricoConversaLinha = {
   role: "user" | "assistant";
@@ -14,6 +21,8 @@ export type HistoricoConversaLinha = {
 export type HistoricoConversaResultado = {
   linhas: HistoricoConversaLinha[];
   resumoAnterior?: string;
+  /** Sessão reiniciada por inactividade (TTL); modelo deve tratar como 1.º contacto. */
+  sessaoReiniciada?: boolean;
 };
 
 /** Limite de mensagens de contexto (2–24). Env: HUB_ENGINE_HISTORICO_MENSAGENS */
@@ -127,21 +136,33 @@ async function contarMensagensConversa(supabase: SupabaseClient, leadId: string)
 
 /**
  * Histórico recente + resumo automático quando conversa >= HUB_CONVERSA_RESUMO_APARTIR (default 30).
+ * Isolamento: sempre filtrado por `leadId` (1 lead = 1 telefone WhatsApp normalizado).
  */
 export async function buscarHistoricoConversa(
   supabase: SupabaseClient,
   params: { leadId: string; limite?: number }
 ): Promise<HistoricoConversaResultado> {
   const limite = params.limite ?? historicoConversaLimite();
-  const total = await contarMensagensConversa(supabase, params.leadId);
+  const todasBrutas = await buscarTodasLinhasConversa(supabase, params.leadId, 150);
+  const ultimaAt = await obterUltimaAtividadeLeadMs(supabase, params.leadId);
+  const ultimaNasLinhas = ultimaAtividadeMs(
+    todasBrutas.map((l) => parseSortMs(l.criadoEm ?? null))
+  );
+  const ultima = ultimaAtividadeMs([ultimaAt, ultimaNasLinhas]);
+
+  if (todasBrutas.length > 0 && sessaoConversaExpirada(ultima)) {
+    await garantirSessaoConversaAtiva(supabase, params.leadId);
+    return { linhas: [], sessaoReiniciada: true };
+  }
+
+  const todas = filtrarLinhasHistoricoNaSessao(todasBrutas);
+  const total = todas.length;
   const limiarResumo = conversaResumoApartirDe();
 
   if (total < limiarResumo) {
-    const todas = await buscarTodasLinhasConversa(supabase, params.leadId, 48);
     return { linhas: todas.slice(-limite) };
   }
 
-  const todas = await buscarTodasLinhasConversa(supabase, params.leadId, 150);
   const recentes = todas.slice(-limite);
   const antigas = todas.slice(0, Math.max(0, todas.length - limite));
 

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
+import { nomeLeadEhPlaceholder, pushNameParaNomeExibicao } from "@/lib/crm/sincronizar-contato-whatsapp";
 import { extrairESalvarMemoriasLead } from "@/lib/ia/memoria-lead";
+import { cutoffSessaoConversaMs } from "@/lib/ia/sessao-conversa-ttl";
 
 function parseValorBrl(texto: string): number | undefined {
   const t = texto.replace(/\s/g, "");
@@ -21,8 +23,7 @@ function extrairNomeDaMensagem(mensagem: string): string | undefined {
 }
 
 function nomeParecePlaceholder(nome: string): boolean {
-  const n = nome.trim().toLowerCase();
-  return !n || n.startsWith("lead ") || n === "lead whatsapp" || n.length < 2;
+  return nomeLeadEhPlaceholder(nome);
 }
 
 export type MemoriasPatchCrmResult = {
@@ -95,9 +96,11 @@ export async function persistirDadosLeadWhatsapp(
     respostaIA: string;
     agenteSlug: string;
     pessoaId?: string | null;
+    telefone?: string;
+    pushName?: string | null;
   }
 ): Promise<{ ok: boolean; campos?: string[]; motivo?: string }> {
-  const { leadId, mensagemUsuario, respostaIA, agenteSlug, pessoaId } = params;
+  const { leadId, mensagemUsuario, respostaIA, agenteSlug, pessoaId, telefone, pushName } = params;
 
   await extrairESalvarMemoriasLead(supabase, leadId, mensagemUsuario, respostaIA);
 
@@ -112,10 +115,12 @@ export async function persistirDadosLeadWhatsapp(
     });
   }
 
+  const cutoffIso = new Date(cutoffSessaoConversaMs()).toISOString();
   const { data: mems } = await supabase
     .from("hub_memorias_lead")
     .select("chave, valor")
     .eq("lead_id", leadId)
+    .gte("criado_em", cutoffIso)
     .order("criado_em", { ascending: false })
     .limit(40);
 
@@ -140,6 +145,18 @@ export async function persistirDadosLeadWhatsapp(
       fase_atendimento: "dados_sincronizados",
       ultima_sincronizacao: new Date().toISOString(),
     };
+  }
+
+  const nomeWa = pushNameParaNomeExibicao(pushName);
+  if (
+    nomeWa &&
+    nomeLeadEhPlaceholder(typeof leadAtual.nome === "string" ? leadAtual.nome : "") &&
+    !toolArgs.nome
+  ) {
+    toolArgs.nome = nomeWa;
+  }
+  if (telefone?.trim() && !toolArgs.metadata) {
+    toolArgs.metadata = { wa_telefone: telefone.replace(/\D/g, "").slice(0, 15) };
   }
 
   const built = buildHubLeadsCrmPatch(toolArgs, leadAtual as Record<string, unknown>);

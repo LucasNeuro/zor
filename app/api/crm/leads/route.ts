@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { validarLeadCadastro } from "@/lib/crm/lead-cadastro";
+import { gerarCodigoPessoa } from "@/lib/crm/pessoa-cadastro";
+import { prepararRowHubLeadInsert, validarLeadCadastro } from "@/lib/crm/lead-cadastro";
 import { defaultTenantId, isMissingPgColumn, tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
@@ -21,7 +22,7 @@ function supabaseConfigError(): string | null {
 }
 
 const LEAD_INSERT_SELECT =
-  "id, nome, telefone, email, origem, estagio, score, valor_estimado, pessoa_id, criado_em, atualizado_em";
+  "id, codigo, nome, telefone, email, origem, estagio, score, valor_estimado, pessoa_id, criado_em, atualizado_em";
 
 async function vincularPessoaPorTelefone(
   supabase: SupabaseClient,
@@ -37,9 +38,7 @@ async function vincularPessoaPorTelefone(
 
   if (existente?.id) return existente.id as string;
 
-  const year = new Date().getFullYear();
-  const { count } = await supabase.from("hub_pessoas").select("*", { count: "exact", head: true });
-  const codigo = `PES-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  const codigo = await gerarCodigoPessoa(supabase);
 
   const { data: nova, error } = await supabase
     .from("hub_pessoas")
@@ -98,7 +97,11 @@ async function insertHubLead(
         },
       };
     }
-    if (!isMissingPgColumn(error, "tenant_id") && !isMissingPgColumn(error, "pessoa_id")) {
+    if (
+      !isMissingPgColumn(error, "tenant_id") &&
+      !isMissingPgColumn(error, "pessoa_id") &&
+      !isMissingPgColumn(error, "codigo")
+    ) {
       return { data: null, error };
     }
   }
@@ -189,8 +192,18 @@ export async function POST(request: NextRequest) {
     pessoa_id = await vincularPessoaPorTelefone(supabase, d.telefone, d.nome, d.origem);
   }
 
+  let pessoa_codigo: string | null = null;
+  if (pessoa_id) {
+    const { data: pe } = await supabase
+      .from("hub_pessoas")
+      .select("codigo")
+      .eq("id", pessoa_id)
+      .maybeSingle();
+    pessoa_codigo = pe?.codigo != null ? String(pe.codigo) : null;
+  }
+
   const now = new Date().toISOString();
-  const row: Record<string, unknown> = {
+  const rowBase: Record<string, unknown> = {
     nome: d.nome,
     telefone: d.telefone,
     email: d.email,
@@ -201,7 +214,10 @@ export async function POST(request: NextRequest) {
     pessoa_id,
     criado_em: now,
     atualizado_em: now,
+    metadata: { origem_cadastro: "crm_manual" },
   };
+
+  const row = await prepararRowHubLeadInsert(supabase, rowBase, { pessoa_codigo });
 
   const { data: created, error } = await insertHubLead(supabase, row, tenantId);
 

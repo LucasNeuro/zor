@@ -1,11 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { excluirEmpresaCrm } from "@/lib/crm/excluir-cadastro-crm";
+import {
+  actorFromRequestHeaders,
+  registrarAuditoriaCrm,
+} from "@/lib/crm/registrar-auditoria-crm";
+import { normalizarIdUuid } from "@/lib/crm/uuid-crm";
 
 const EMPRESA_SELECT =
-  "id, codigo, razao_social, nome_fantasia, cnpj, email, telefone, segmento, prefixo_mercado, cep, logradouro, bairro, cidade, estado, ativo, acesso_habilitado, acesso_habilitado_em, criado_em, atualizado_em";
+  "id, codigo, razao_social, nome_fantasia, cnpj, email, telefone, segmento, prefixo_mercado, cep, logradouro, numero, complemento, bairro, cidade, estado, ativo, acesso_habilitado, acesso_habilitado_em, criado_em, atualizado_em";
 
 function db() {
   return createClient(
@@ -36,8 +39,9 @@ export async function GET(
     );
   }
 
-  const { id } = await params;
-  if (!UUID_RE.test(id)) {
+  const { id: rawId } = await params;
+  const id = normalizarIdUuid(rawId);
+  if (!id) {
     return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
@@ -70,8 +74,9 @@ export async function PATCH(
     );
   }
 
-  const { id } = await params;
-  if (!UUID_RE.test(id)) {
+  const { id: rawId } = await params;
+  const id = normalizarIdUuid(rawId);
+  if (!id) {
     return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
@@ -96,6 +101,8 @@ export async function PATCH(
     "prefixo_mercado",
     "cep",
     "logradouro",
+    "numero",
+    "complemento",
     "bairro",
     "cidade",
     "estado",
@@ -138,7 +145,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const err = configError();
@@ -149,15 +156,16 @@ export async function DELETE(
     );
   }
 
-  const { id } = await params;
-  if (!UUID_RE.test(id)) {
+  const { id: rawId } = await params;
+  const id = normalizarIdUuid(rawId);
+  if (!id) {
     return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
   const supabase = db();
   const { data: existente } = await supabase
     .from("hub_empresas")
-    .select("id, razao_social, codigo")
+    .select("id, razao_social, codigo, cnpj, email, telefone, prefixo_mercado")
     .eq("id", id)
     .maybeSingle();
 
@@ -165,22 +173,26 @@ export async function DELETE(
     return NextResponse.json({ error: "Empresa não encontrada." }, { status: 404 });
   }
 
-  const { error } = await supabase.from("hub_empresas").delete().eq("id", id);
+  const actor = actorFromRequestHeaders(request.headers);
 
-  if (error) {
-    const code = "code" in error ? String(error.code) : "";
-    if (code === "23503") {
-      return NextResponse.json(
-        {
-          error:
-            "Não é possível excluir: esta empresa está vinculada a outros registros do sistema.",
-        },
-        { status: 409 }
-      );
-    }
-    const msg = "message" in error ? String(error.message) : "Falha ao excluir.";
-    return NextResponse.json({ error: msg }, { status: 500 });
+  const { result, httpStatus } = await excluirEmpresaCrm(supabase, id);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error || "Falha ao excluir." },
+      { status: httpStatus }
+    );
   }
+
+  await registrarAuditoriaCrm(supabase, {
+    tabela: "hub_empresas",
+    operacao: "deletar",
+    motivo: `Exclusão de empresa ${existente.codigo || id}`,
+    actor,
+    metadata: {
+      registro_id: id,
+      snapshot: existente,
+    },
+  });
 
   return NextResponse.json({
     ok: true,

@@ -8,6 +8,7 @@ import {
   type MistralChatMessagePayload,
   type MistralChatToolDefinition,
 } from "@/lib/ia/mistral-chat-tools";
+import { blocoInstrucoesFerramentasCrmWhatsapp } from "@/lib/ia/bloco-ferramentas-crm-whatsapp";
 
 const MAX_TOOL_ROUNDS = 6;
 
@@ -57,11 +58,10 @@ export async function completarChatComFerramentasMistral(params: {
   const nomesFerramentas = new Set(params.tools.map((t) => t.function.name));
   const menuWhatsappAtivo = nomesFerramentas.has("hub_whatsapp_menu");
 
-  let systemExtra = `\n\n═══ FERRAMENTAS ═══\nTem ferramentas para ler e actualizar o CRM desta conversa. Use hub_lead_resumo antes de afirmar estágio ou valores; use hub_atualizar_lead quando o cliente der dados novos (orçamento, interesse, follow-up); não invente factos não confirmados.`;
-  if (menuWhatsappAtivo) {
-    systemExtra +=
-      "\nQuando o cliente precisar escolher entre opções (menu, botões, lista, enquete, carrossel), chame hub_whatsapp_menu primeiro e só depois responda em texto curto para orientar a escolha.";
-  }
+  let systemExtra = `\n\n${blocoInstrucoesFerramentasCrmWhatsapp({
+    temMenuWhatsapp: menuWhatsappAtivo,
+    temAtualizarLead: nomesFerramentas.has("hub_atualizar_lead"),
+  })}`;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const out = await mistralChatCompletionToolRound({

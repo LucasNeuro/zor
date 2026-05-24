@@ -31,6 +31,8 @@ const EMPRESA_OPTIONAL_COLUMNS = [
   "tenant_id",
   "cep",
   "logradouro",
+  "numero",
+  "complemento",
   "bairro",
   "nome_fantasia",
   "segmento",
@@ -102,27 +104,63 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const busca = searchParams.get("busca") || "";
   const atoParam = searchParams.get("ativo");
-  const ativo = atoParam !== "false";
-  const offset = parseInt(searchParams.get("offset") || "0");
-  const limit = 20;
+  const ativo = atoParam === "" ? null : atoParam !== "false";
+  const segmento = searchParams.get("segmento") || "";
+  const prefixo_mercado = searchParams.get("prefixo_mercado") || "";
+  const estado = searchParams.get("estado") || "";
+  const offset = parseInt(searchParams.get("offset") || "0", 10);
+  const limit = Math.min(parseInt(searchParams.get("limit") || "200", 10), 500);
 
-  let query = supabase
-    .from("hub_empresas")
-    .select(
-      "id, codigo, razao_social, nome_fantasia, cnpj, email, telefone, cidade, estado, segmento, prefixo_mercado, ativo, acesso_habilitado, criado_em",
-      { count: "exact" }
-    )
-    .eq("ativo", ativo)
-    .order("criado_em", { ascending: false })
-    .range(offset, offset + limit - 1);
+  const EMPRESA_SELECT_LIST =
+    "id, codigo, razao_social, nome_fantasia, cnpj, email, telefone, segmento, prefixo_mercado, cep, logradouro, numero, complemento, bairro, cidade, estado, ativo, acesso_habilitado, acesso_habilitado_em, tenant_id, criado_em, atualizado_em";
+  const EMPRESA_SELECT_FALLBACK =
+    "id, codigo, razao_social, nome_fantasia, cnpj, email, telefone, segmento, prefixo_mercado, cidade, estado, ativo, criado_em";
 
-  if (busca) {
-    query = query.or(
-      `razao_social.ilike.%${busca}%,nome_fantasia.ilike.%${busca}%,cnpj.ilike.%${busca}%,email.ilike.%${busca}%`
-    );
+  const runList = (select: string) => {
+    let query = supabase
+      .from("hub_empresas")
+      .select(select, { count: "exact" })
+      .order("criado_em", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (ativo !== null) {
+      query = query.eq("ativo", ativo);
+    }
+    if (segmento) {
+      query = query.eq("segmento", segmento);
+    }
+    if (prefixo_mercado) {
+      query = query.eq("prefixo_mercado", prefixo_mercado);
+    }
+    if (estado) {
+      query = query.eq("estado", estado);
+    }
+    if (busca) {
+      const b = busca.replace(/%/g, "");
+      query = query.or(
+        `razao_social.ilike.%${b}%,nome_fantasia.ilike.%${b}%,cnpj.ilike.%${b}%,email.ilike.%${b}%,codigo.ilike.%${b}%`
+      );
+    }
+    return query;
+  };
+
+  let { data, error, count } = await runList(EMPRESA_SELECT_LIST);
+  if (error) {
+    const retryCols = [
+      "acesso_habilitado",
+      "acesso_habilitado_em",
+      "tenant_id",
+      "atualizado_em",
+      "cep",
+      "logradouro",
+      "numero",
+      "complemento",
+      "bairro",
+    ];
+    if (retryCols.some((c) => isMissingPgColumn(error, c))) {
+      ({ data, error, count } = await runList(EMPRESA_SELECT_FALLBACK));
+    }
   }
-
-  const { data, error, count } = await query;
 
   if (error) {
     const code = "code" in error ? String(error.code) : "";
@@ -216,6 +254,8 @@ export async function POST(request: NextRequest) {
     prefixo_mercado: d.prefixo_mercado,
     cep: d.cep,
     logradouro: d.logradouro,
+    numero: d.numero,
+    complemento: d.complemento,
     bairro: d.bairro,
     cidade: d.cidade,
     estado: d.estado,

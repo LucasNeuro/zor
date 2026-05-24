@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AREAS_ATUACAO } from "@/lib/crm/areas-atuacao";
+import { gerarCodigoSequencial, HUB_PREFIXO_CODIGO } from "@/lib/crm/codigos-rastreio";
 
 export const MERCADOS_PREFIXO = ["IMB", "ARQ", "RFM", "MRC", "ENG", "SRV", "PRO", "FOR"] as const;
 
@@ -136,8 +137,5 @@ export function validarNegocioCadastro(
 }
 
 export async function gerarCodigoNegocio(supabase: SupabaseClient): Promise<string> {
-  const year = new Date().getFullYear();
-  const { count } = await supabase.from("hub_negocios").select("*", { count: "exact", head: true });
-  const seq = String((count || 0) + 1).padStart(4, "0");
-  return `NEG-${year}-${seq}`;
+  return gerarCodigoSequencial(supabase, "hub_negocios", HUB_PREFIXO_CODIGO.negocio);
 }

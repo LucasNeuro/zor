@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { gerarCodigoSequencial, HUB_PREFIXO_CODIGO } from "@/lib/crm/codigos-rastreio";
 import {
   documentoCompleto,
   mensagemDocumentoInvalido,
@@ -40,6 +41,8 @@ export type EmpresaCadastroPayload = {
   prefixo_mercado: PrefixoMercado;
   cep: string | null;
   logradouro: string | null;
+  numero?: string | null;
+  complemento?: string | null;
   bairro: string | null;
   cidade: string | null;
   estado: string | null;
@@ -74,9 +77,11 @@ export function validarEmpresaCadastro(
     telefone?: string | null;
     segmento?: string | null;
     prefixo_mercado?: string;
-    cep?: string | null;
-    logradouro?: string | null;
-    bairro?: string | null;
+  cep?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
     cidade?: string | null;
     estado?: string | null;
   }>
@@ -144,6 +149,8 @@ export function validarEmpresaCadastro(
       prefixo_mercado: prefixo,
       cep,
       logradouro: (body.logradouro || "").trim().slice(0, 200) || null,
+      numero: (body.numero || "").trim().slice(0, 20) || null,
+      complemento: (body.complemento || "").trim().slice(0, 80) || null,
       bairro: (body.bairro || "").trim().slice(0, 120) || null,
       cidade: (body.cidade || "").trim().slice(0, 120) || null,
       estado: estado || null,
@@ -152,8 +159,5 @@ export function validarEmpresaCadastro(
 }
 
 export async function gerarCodigoEmpresa(supabase: SupabaseClient): Promise<string> {
-  const year = new Date().getFullYear();
-  const { count } = await supabase.from("hub_empresas").select("*", { count: "exact", head: true });
-  const seq = String((count || 0) + 1).padStart(4, "0");
-  return `EMP-${year}-${seq}`;
+  return gerarCodigoSequencial(supabase, "hub_empresas", HUB_PREFIXO_CODIGO.empresa);
 }

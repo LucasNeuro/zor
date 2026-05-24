@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { prepararRowHubLeadInsert } from "@/lib/crm/lead-cadastro";
 
 function db() {
   return createClient(
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json() as Record<string, unknown>;
   if (!body.nome) return NextResponse.json({ error: "nome required" }, { status: 400 });
 
-  const { data, error } = await db().from("hub_leads_crm").insert({
+  const row = await prepararRowHubLeadInsert(db(), {
     nome: body.nome,
     telefone: body.telefone ?? null,
     email: body.email ?? null,
@@ -34,7 +35,10 @@ export async function POST(request: NextRequest) {
     valor_estimado: body.valor_estimado ?? 0,
     score: body.score ?? 50,
     tags: body.tags ?? [],
-  }).select().single();
+    metadata: { origem_cadastro: "api_leads_legacy" },
+  });
+
+  const { data, error } = await db().from("hub_leads_crm").insert(row).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });

@@ -1,3 +1,6 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { gerarCodigoSequencial, HUB_PREFIXO_CODIGO } from "@/lib/crm/codigos-rastreio";
+
 export const LEAD_ESTAGIOS = [
   "novo",
   "qualificando",
@@ -96,4 +99,58 @@ export function validarLeadCadastro(
       valor_estimado,
     },
   };
+}
+
+/** Código do lead no funil (ex.: LED-2026-0017) — distinto do PES da pessoa. */
+export async function gerarCodigoLead(supabase: SupabaseClient): Promise<string> {
+  return gerarCodigoSequencial(supabase, "hub_leads_crm", HUB_PREFIXO_CODIGO.lead);
+}
+
+export function enriquecerMetadataLeadRastreio(
+  metadata: Record<string, unknown> | undefined,
+  codigoLead: string,
+  extras?: { pessoa_codigo?: string | null }
+): Record<string, unknown> {
+  const base =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata) ? { ...metadata } : {};
+  return {
+    ...base,
+    lead_codigo: codigoLead,
+    ...(extras?.pessoa_codigo ? { pessoa_codigo: extras.pessoa_codigo } : {}),
+  };
+}
+
+/** Prepara insert em hub_leads_crm com codigo LED e metadata de rastreio. */
+export async function prepararRowHubLeadInsert(
+  supabase: SupabaseClient,
+  row: Record<string, unknown>,
+  extras?: { pessoa_codigo?: string | null }
+): Promise<Record<string, unknown>> {
+  const codigo = await gerarCodigoLead(supabase);
+  const meta =
+    typeof row.metadata === "object" && row.metadata !== null && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : undefined;
+  return {
+    ...row,
+    codigo,
+    metadata: enriquecerMetadataLeadRastreio(meta, codigo, extras),
+  };
+}
+
+/** Atribui LED a lead antigo que ainda não tem codigo (ex.: conversa WhatsApp pré-migração). */
+export async function garantirCodigoLead(
+  supabase: SupabaseClient,
+  lead: { id: string; codigo?: string | null }
+): Promise<string | null> {
+  const atual = lead.codigo != null ? String(lead.codigo).trim() : "";
+  if (atual) return atual;
+
+  const codigo = await gerarCodigoLead(supabase);
+  const { error } = await supabase.from("hub_leads_crm").update({ codigo }).eq("id", lead.id);
+  if (error) {
+    console.error("[lead] garantir codigo:", error);
+    return null;
+  }
+  return codigo;
 }

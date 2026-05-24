@@ -15,7 +15,7 @@ Passos (uma coisa por mensagem):
 
 Não depende de cadastro interno no CRM para funcionar — conduza pelo bom senso comercial da Obra10+.
 
-Quando o cliente disser nome, interesse, orçamento, cidade ou prazo, use a ferramenta hub_atualizar_lead para gravar no CRM (não espere o fim da conversa).`;
+O telefone já veio do WhatsApp no CRM — não peça número. Use hub_atualizar_lead assim que souber nome, interesse, orçamento, cidade ou prazo (na mesma resposta, sem dizer «vou salvar»).`;
   }
 
   return `═══ FLUXO OBRIGATÓRIO — CONTINUAR CONVERSA ═══
@@ -27,5 +27,5 @@ Regras:
 - Se disser profissão (pedreiro, arquiteto, etc.): conecte com o serviço Obra10+ relevante.
 - Uma pergunta por mensagem; tom de WhatsApp natural.
 - Sempre deixe claro o próximo passo.
-- Se surgir dado novo (nome, tipo de obra, valor, cidade), chame hub_atualizar_lead na mesma resposta quando fizer sentido.`;
+- Se surgir dado novo (nome, tipo de obra, valor, cidade), chame hub_atualizar_lead na mesma resposta. Use hub_lead_resumo se precisar confirmar o que já está gravado.`;
 }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { gerarCodigoSequencial, HUB_PREFIXO_CODIGO } from "@/lib/crm/codigos-rastreio";
 import {
   AREA_ATUACAO_OUTRO_VALUE,
   isAreaAtuacaoValid,
@@ -27,6 +28,8 @@ export type PessoaCadastroPayload = {
   area_atuacao_outro?: string | null;
   cep?: string | null;
   logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
   bairro?: string | null;
   cidade?: string | null;
   estado?: string | null;
@@ -55,16 +58,23 @@ export function validarUF(estado: string): boolean {
   return (UF as readonly string[]).includes(u);
 }
 
+export type ValidarPessoaOpcoes = {
+  /** Campanhas / marketing: CPF, telefone e nome opcionais; valida formato só se preenchido. */
+  flexivel?: boolean;
+};
+
 export function validarPessoaCadastro(
-  body: Partial<PessoaCadastroPayload>
+  body: Partial<PessoaCadastroPayload>,
+  opcoes?: ValidarPessoaOpcoes
 ): { ok: true; data: PessoaCadastroPayload } | { ok: false; erro: string } {
+  const flexivel = opcoes?.flexivel === true;
   const tipo = body.tipo_pessoa;
   if (tipo !== "PF" && tipo !== "PJ") {
     return { ok: false, erro: "Selecione Pessoa Física (PF) ou Jurídica (PJ)." };
   }
 
   const nome = (body.nome || "").trim();
-  if (!nome || nome.length < 2) {
+  if (!flexivel && (!nome || nome.length < 2)) {
     return {
       ok: false,
       erro: tipo === "PJ" ? "Razão social é obrigatória (mín. 2 caracteres)." : "Nome é obrigatório (mín. 2 caracteres).",
@@ -72,7 +82,10 @@ export function validarPessoaCadastro(
   }
 
   const telefone = normalizarTelefone(body.telefone || "");
-  if (telefone.length < 10 || telefone.length > 13) {
+  if (telefone.length > 0 && (telefone.length < 10 || telefone.length > 15)) {
+    return { ok: false, erro: "Telefone inválido (informe DDD + número)." };
+  }
+  if (!flexivel && telefone.length < 10) {
     return { ok: false, erro: "Telefone inválido (informe DDD + número)." };
   }
 
@@ -84,18 +97,26 @@ export function validarPessoaCadastro(
   const documentoRaw = (body.documento || "").trim();
   const documento = documentoRaw ? normalizarDocumento(documentoRaw) : null;
   if (tipo === "PF") {
-    if (!documento || !documentoCompleto("PF", documento)) {
+    if (documento) {
+      if (!documentoCompleto("PF", documento)) {
+        return { ok: false, erro: "CPF incompleto (11 dígitos)." };
+      }
+      if (!validarCpf(documento)) {
+        return { ok: false, erro: mensagemDocumentoInvalido("PF") };
+      }
+    } else if (!flexivel) {
       return { ok: false, erro: "CPF é obrigatório (11 dígitos)." };
     }
-    if (!validarCpf(documento)) {
-      return { ok: false, erro: mensagemDocumentoInvalido("PF") };
-    }
   } else {
-    if (!documento || !documentoCompleto("PJ", documento)) {
+    if (documento) {
+      if (!documentoCompleto("PJ", documento)) {
+        return { ok: false, erro: "CNPJ incompleto (14 dígitos)." };
+      }
+      if (!validarCnpj(documento)) {
+        return { ok: false, erro: mensagemDocumentoInvalido("PJ") };
+      }
+    } else if (!flexivel) {
       return { ok: false, erro: "CNPJ é obrigatório (14 dígitos)." };
-    }
-    if (!validarCnpj(documento)) {
-      return { ok: false, erro: mensagemDocumentoInvalido("PJ") };
     }
   }
 
@@ -108,13 +129,13 @@ export function validarPessoaCadastro(
   const areaOutroTexto = (body.area_atuacao_outro || "").trim();
   let area_atuacao: string | null = null;
   if (areaSelect === AREA_ATUACAO_OUTRO_VALUE) {
-    if (!areaOutroTexto || areaOutroTexto.length < 2) {
+    if (!flexivel && (!areaOutroTexto || areaOutroTexto.length < 2)) {
       return {
         ok: false,
         erro: "Especifique a área de atuação (mín. 2 caracteres).",
       };
     }
-    area_atuacao = areaOutroTexto.slice(0, 80);
+    area_atuacao = areaOutroTexto.length >= 2 ? areaOutroTexto.slice(0, 80) : null;
   } else if (areaSelect) {
     const norm = normalizarAreaAtuacao(areaSelect);
     if (!norm && !isAreaAtuacaoValid(areaSelect)) {
@@ -133,14 +154,16 @@ export function validarPessoaCadastro(
     ok: true,
     data: {
       tipo_pessoa: tipo,
-      nome: nome.slice(0, 200),
+      nome: nome.length >= 2 ? nome.slice(0, 200) : "",
       documento,
       email: email || null,
-      telefone,
+      telefone: telefone || "",
       empresa: (body.empresa || "").trim().slice(0, 200) || null,
       area_atuacao,
       cep: cepDigits ? cepDigits : null,
       logradouro: (body.logradouro || "").trim().slice(0, 200) || null,
+      numero: (body.numero || "").trim().slice(0, 20) || null,
+      complemento: (body.complemento || "").trim().slice(0, 80) || null,
       bairro: (body.bairro || "").trim().slice(0, 120) || null,
       cidade: (body.cidade || "").trim().slice(0, 120) || null,
       estado: estado || null,
@@ -150,8 +173,5 @@ export function validarPessoaCadastro(
 }
 
 export async function gerarCodigoPessoa(supabase: SupabaseClient): Promise<string> {
-  const year = new Date().getFullYear();
-  const { count } = await supabase.from("hub_pessoas").select("*", { count: "exact", head: true });
-  const seq = String((count || 0) + 1).padStart(4, "0");
-  return `PES-${year}-${seq}`;
+  return gerarCodigoSequencial(supabase, "hub_pessoas", HUB_PREFIXO_CODIGO.pessoa);
 }

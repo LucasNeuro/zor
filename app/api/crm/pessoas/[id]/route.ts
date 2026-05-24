@@ -7,9 +7,12 @@ import {
   HUB_PESSOA_SELECT_EXTENDED,
 } from "@/lib/crm/hub-pessoas-compat";
 import { isMissingPgColumn } from "@/lib/tenant-default";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { excluirPessoaCrm } from "@/lib/crm/excluir-cadastro-crm";
+import {
+  actorFromRequestHeaders,
+  registrarAuditoriaCrm,
+} from "@/lib/crm/registrar-auditoria-crm";
+import { normalizarIdUuid } from "@/lib/crm/uuid-crm";
 
 function db() {
   return createClient(
@@ -40,8 +43,9 @@ export async function GET(
     );
   }
 
-  const { id } = await params;
-  if (!UUID_RE.test(id)) {
+  const { id: rawId } = await params;
+  const id = normalizarIdUuid(rawId);
+  if (!id) {
     return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
@@ -82,8 +86,9 @@ export async function PATCH(
     );
   }
 
-  const { id } = await params;
-  if (!UUID_RE.test(id)) {
+  const { id: rawId } = await params;
+  const id = normalizarIdUuid(rawId);
+  if (!id) {
     return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
@@ -106,6 +111,8 @@ export async function PATCH(
     "area_atuacao",
     "cep",
     "logradouro",
+    "numero",
+    "complemento",
     "bairro",
     "cidade",
     "estado",
@@ -116,13 +123,22 @@ export async function PATCH(
     if (key in body) updates[key] = body[key];
   }
 
-  const enderecoKeys = ["area_atuacao", "cep", "logradouro", "bairro"] as const;
+  const enderecoKeys = [
+    "area_atuacao",
+    "cep",
+    "logradouro",
+    "numero",
+    "complemento",
+    "bairro",
+  ] as const;
   const temEndereco = enderecoKeys.some((k) => k in body);
   if (temEndereco) {
     const extrasPatch = dadosExtrasEndereco({
       area_atuacao: (body.area_atuacao as string) ?? null,
       cep: (body.cep as string) ?? null,
       logradouro: (body.logradouro as string) ?? null,
+      numero: (body.numero as string) ?? null,
+      complemento: (body.complemento as string) ?? null,
       bairro: (body.bairro as string) ?? null,
     });
     const { data: atual } = await db()
@@ -169,7 +185,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
@@ -179,8 +195,9 @@ export async function DELETE(
     );
   }
 
-  const { id } = await params;
-  if (!UUID_RE.test(id)) {
+  const { id: rawId } = await params;
+  const id = normalizarIdUuid(rawId);
+  if (!id) {
     return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
@@ -188,7 +205,7 @@ export async function DELETE(
 
   const { data: existente } = await supabase
     .from("hub_pessoas")
-    .select("id, nome, codigo")
+    .select("id, nome, codigo, telefone, email, tipo_pessoa, documento")
     .eq("id", id)
     .maybeSingle();
 
@@ -196,24 +213,26 @@ export async function DELETE(
     return NextResponse.json({ error: "Pessoa não encontrada." }, { status: 404 });
   }
 
-  await supabase.from("hub_leads_crm").update({ pessoa_id: null }).eq("pessoa_id", id);
+  const actor = actorFromRequestHeaders(request.headers);
 
-  const { error } = await supabase.from("hub_pessoas").delete().eq("id", id);
-
-  if (error) {
-    const code = "code" in error ? String(error.code) : "";
-    if (code === "23503") {
-      return NextResponse.json(
-        {
-          error:
-            "Não é possível excluir: este cadastro está vinculado a outros registros do sistema.",
-        },
-        { status: 409 }
-      );
-    }
-    const msg = "message" in error ? String(error.message) : "Falha ao excluir.";
-    return NextResponse.json({ error: msg }, { status: 500 });
+  const { result, httpStatus } = await excluirPessoaCrm(supabase, id);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error || "Falha ao excluir." },
+      { status: httpStatus }
+    );
   }
+
+  await registrarAuditoriaCrm(supabase, {
+    tabela: "hub_pessoas",
+    operacao: "deletar",
+    motivo: `Exclusão de contacto ${existente.codigo || id}`,
+    actor,
+    metadata: {
+      registro_id: id,
+      snapshot: existente,
+    },
+  });
 
   return NextResponse.json({
     ok: true,

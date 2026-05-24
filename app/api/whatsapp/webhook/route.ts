@@ -11,6 +11,14 @@ import {
 } from "@/lib/whatsapp/webhook-inbound";
 import { webhookSecretQueryParam } from "@/lib/whatsapp/webhook-auth";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
+import {
+  mergeMetadataWhatsapp,
+  montarPatchContatoWhatsapp,
+  pushNameParaNomeExibicao,
+} from "@/lib/crm/sincronizar-contato-whatsapp";
+import { telefoneConversaId } from "@/lib/crm/isolamento-conversa-lead";
+import { garantirCodigoLead, prepararRowHubLeadInsert } from "@/lib/crm/lead-cadastro";
+import { gerarCodigoPessoa } from "@/lib/crm/pessoa-cadastro";
 import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
 import { dispararProcessamentoJobsWhatsapp } from "@/lib/whatsapp/trigger-job-processor";
 import { supersedeJobsAntigosMesmoTelefone } from "@/lib/whatsapp/supersede-jobs-antigos";
@@ -104,17 +112,15 @@ async function encontrarOuCriarPessoa(telefone: string, nome: string, origem: st
 
   if (pessoaExistente) return pessoaExistente;
 
-  const { count } = await supabase
-    .from("hub_pessoas")
-    .select("*", { count: "exact", head: true });
-  const seq = String((count || 0) + 1).padStart(4, "0");
-  const codigo = `PES-${new Date().getFullYear()}-${seq}`;
+  const codigo = await gerarCodigoPessoa(supabase);
+
+  const nomePessoa = pushNameParaNomeExibicao(nome) || nome?.trim() || "Lead WhatsApp";
 
   const { data: novaPessoa } = await supabase
     .from("hub_pessoas")
     .insert({
       codigo,
-      nome: nome || `Lead WhatsApp`,
+      nome: nomePessoa,
       telefone,
       whatsapp_id: telefone,
       tipo: "lead",
@@ -174,21 +180,39 @@ async function mensagemWebhookJaProcessada(
 
 async function encontrarOuCriarLead(telefone: string, nome: string, mercado: string, mensagem: string) {
   const supabase = db();
+  const tel = telefoneConversaId(telefone);
+  if (tel.length < 10) {
+    return { lead: null, isNovo: false as const, pessoaId: null as string | null };
+  }
 
-  const pessoa = await encontrarOuCriarPessoa(telefone, nome, "whatsapp");
+  const pessoa = await encontrarOuCriarPessoa(tel, nome, "whatsapp");
 
   const { data: leadExistente } = await supabase
     .from("hub_leads_crm")
     .select("*")
-    .eq("telefone", telefone)
+    .eq("telefone", tel)
     .maybeSingle();
 
   if (leadExistente) {
+    const waPatch = montarPatchContatoWhatsapp(leadExistente as Record<string, unknown>, {
+      telefone: tel,
+      pushName: nome,
+      mercado,
+    });
     const leadUpdate = {
-      atualizado_em: new Date().toISOString(),
-      ultimo_contato: new Date().toISOString(),
+      ...waPatch,
       pessoa_id: pessoa?.id ?? leadExistente.pessoa_id,
       tenant_id: leadExistente.tenant_id || defaultTenantId(),
+      metadata: mergeMetadataWhatsapp(
+        {
+          ...(typeof leadExistente.metadata === "object" && leadExistente.metadata !== null
+            ? (leadExistente.metadata as Record<string, unknown>)
+            : {}),
+          mercado,
+          fase_atendimento: "conversa_ia",
+        },
+        { telefone: tel, pushName: nome, mercado }
+      ),
     };
     let upd = await supabase.from("hub_leads_crm").update(leadUpdate).eq("id", leadExistente.id);
     if (upd.error && isMissingPgColumn(upd.error, "tenant_id")) {
@@ -196,16 +220,39 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
       upd = await supabase.from("hub_leads_crm").update(semTenant).eq("id", leadExistente.id);
     }
 
-    return { lead: leadExistente, isNovo: false, pessoaId: pessoa?.id ?? leadExistente.pessoa_id };
+    const { data: leadAtualizado } = await supabase
+      .from("hub_leads_crm")
+      .select("*")
+      .eq("id", leadExistente.id)
+      .maybeSingle();
+
+    const leadFinal = leadAtualizado ?? leadExistente;
+    await garantirCodigoLead(supabase, {
+      id: leadFinal.id as string,
+      codigo: (leadFinal as { codigo?: string | null }).codigo,
+    });
+
+    return {
+      lead: leadFinal,
+      isNovo: false,
+      pessoaId: pessoa?.id ?? leadExistente.pessoa_id,
+    };
   }
 
   const agenteResponsavel = mercado === "imobiliario" || mercado === "arquitetura" ? "atendente" : "sdr";
 
-  const { data: novoLead, error } = await supabase
-    .from("hub_leads_crm")
-    .insert({
-      nome: nome || `Lead ${telefone.slice(-4)}`,
-      telefone,
+  const nomeLead = pushNameParaNomeExibicao(nome) || `Lead ${tel.slice(-4)}`;
+
+  const pessoaCodigo =
+    pessoa && typeof pessoa === "object" && "codigo" in pessoa && pessoa.codigo != null
+      ? String(pessoa.codigo)
+      : null;
+
+  const rowNovoLead = await prepararRowHubLeadInsert(
+    supabase,
+    {
+      nome: nomeLead,
+      telefone: tel,
       origem: "whatsapp",
       estagio: "novo",
       score: 10,
@@ -213,12 +260,21 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
       agente_responsavel: agenteResponsavel,
       pessoa_id: pessoa?.id ?? null,
       tenant_id: defaultTenantId(),
-      metadata: {
-        mercado,
-        fase_atendimento: "conversa_ia",
-        primeira_mensagem: mensagem.slice(0, 200),
-      },
-    })
+      metadata: mergeMetadataWhatsapp(
+        {
+          mercado,
+          fase_atendimento: "conversa_ia",
+          primeira_mensagem: mensagem.slice(0, 200),
+        },
+        { telefone: tel, pushName: nome, mercado }
+      ),
+    },
+    { pessoa_codigo: pessoaCodigo }
+  );
+
+  const { data: novoLead, error } = await supabase
+    .from("hub_leads_crm")
+    .insert(rowNovoLead)
     .select()
     .single();
 
@@ -373,15 +429,20 @@ export async function POST(request: NextRequest) {
       return trace.json({ status: "ignored", event: inbound.event }, 200, "unknown_event");
     }
 
+    const inboundRaw = inbound.value;
+    const telefone = telefoneConversaId(inboundRaw.telefone);
     const {
-      telefone,
       pushName,
       messageId,
       timestamp,
       tipoMidia,
       mensagemFinal,
       instance,
-    } = inbound.value;
+    } = inboundRaw;
+
+    if (telefone.length < 10) {
+      return trace.json({ status: "ignored", reason: "invalid_phone" }, 200, "invalid_phone");
+    }
 
     const refs = extractWebhookInstanceRefs(body);
     const instanceKey = instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);

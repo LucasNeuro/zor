@@ -304,6 +304,23 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
     if (leadRow?.pessoa_id) contexto.lead.pessoa_id = String(leadRow.pessoa_id);
   }
 
+  const { validarLeadTelefoneSessao } = await import("@/lib/crm/isolamento-conversa-lead");
+  const isolamento = await validarLeadTelefoneSessao(supabase, contexto.lead.id, contexto.telefone);
+  if (!isolamento.ok) {
+    await updateJobStatus(supabase, job, {
+      status: "dead",
+      last_error: `${isolamento.codigo}: ${isolamento.detalhe}`.slice(0, 2000),
+      locked_at: null,
+      locked_by: null,
+    });
+    log.error("wa.worker.isolamento_lead", {
+      job_id: job.id,
+      lead_id: contexto.lead.id,
+      codigo: isolamento.codigo,
+    });
+    return;
+  }
+
   try {
     await processarMensagemInboundWhatsapp({
       supabase,

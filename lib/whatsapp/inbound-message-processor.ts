@@ -169,6 +169,20 @@ export async function processarMensagemInboundWhatsapp(params: {
   log.info("wa.processor.ia_start", { agente_slug: agenteSlug, lead_id: lead.id });
 
   try {
+    const { sincronizarContatoWhatsappNoCrm } = await import("@/lib/crm/sincronizar-contato-whatsapp");
+    await sincronizarContatoWhatsappNoCrm(supabase, {
+      leadId: lead.id,
+      pessoaId: lead.pessoa_id ?? null,
+      dados: {
+        telefone: params.telefone,
+        pushName: params.pushName,
+        messageId: params.messageId,
+        tipoMidia: params.tipoMidia,
+        timestamp: params.timestamp,
+        mercado: params.mercado,
+        instanceKey: params.instanceKey,
+      },
+    });
     const { processarMensagem } = await import("@/lib/ia/engine");
     const resultado = await processarMensagem({
       leadId: lead.id,

@@ -1,11 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { buscarPessoaPorDocumento } from "@/lib/crm/buscar-pessoa-documento";
 import {
   documentoCompleto,
+  documentoValido,
   mensagemDocumentoInvalido,
   normalizarDocumento,
-  validarCnpj,
-  validarCpf,
 } from "@/lib/crm/documento-brasil";
 
 function db() {
@@ -45,8 +45,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const valido = tipo === "PF" ? validarCpf(documento) : validarCnpj(documento);
-  if (!valido) {
+  if (!documentoValido(tipo, documento)) {
     return NextResponse.json({
       disponivel: false,
       valido: false,
@@ -55,11 +54,7 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = db();
-  const { data: existente } = await supabase
-    .from("hub_pessoas")
-    .select("id, nome, codigo, tipo_pessoa")
-    .eq("documento", documento)
-    .maybeSingle();
+  const existente = await buscarPessoaPorDocumento(supabase, tipo, documento);
 
   if (existente) {
     const label = tipo === "PF" ? "CPF" : "CNPJ";

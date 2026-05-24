@@ -60,6 +60,13 @@ export function documentoCompleto(tipo: "PF" | "PJ", valor: string): boolean {
   return tipo === "PF" ? d.length === 11 : d.length === 14;
 }
 
+/** Comprimento correto + dígitos verificadores (CPF/CNPJ). */
+export function documentoValido(tipo: "PF" | "PJ", valor: string): boolean {
+  const d = normalizarDocumento(valor);
+  if (!documentoCompleto(tipo, d)) return false;
+  return tipo === "PF" ? validarCpf(d) : validarCnpj(d);
+}
+
 export function mensagemDocumentoInvalido(tipo: "PF" | "PJ"): string {
   return tipo === "PF"
     ? "CPF inválido. Confira os 11 dígitos (validação oficial)."

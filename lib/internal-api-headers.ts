@@ -16,3 +16,16 @@ export function internalApiHeaders(): Record<string, string> {
   if (tenantId) h["x-tenant-id"] = tenantId;
   return h;
 }
+
+/** Inclui identidade do utilizador CRM para auditoria (exclusões, etc.). */
+export function internalApiHeadersWithActor(actor?: {
+  id?: string | null;
+  email?: string | null;
+  name?: string | null;
+}): Record<string, string> {
+  const h = internalApiHeaders();
+  if (actor?.id) h["x-user-id"] = actor.id;
+  if (actor?.email) h["x-user-email"] = actor.email;
+  if (actor?.name) h["x-user-name"] = actor.name;
+  return h;
+}

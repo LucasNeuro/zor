@@ -2,7 +2,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 
@@ -29,6 +28,7 @@ type Lead = {
   criado_em: string;
   atualizado_em: string;
   pessoa_id?: string | null;
+  codigo?: string | null;
   /** Enriquecimento (hub_pessoas) — só leitura na UI */
   _pessoa_codigo?: string | null;
   _email_exibicao?: string | null;
@@ -122,7 +122,6 @@ export default function LeadsPage() {
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [busca, setBusca] = useState("");
   const [filtroEstagio, setFiltroEstagio] = useState("");
-  const [novoAberto, setNovoAberto] = useState(false);
   const [detalhe, setDetalhe] = useState<Lead | null>(null);
   const [tabDetalhe, setTabDetalhe] = useState<"info" | "timeline" | "notas" | "memorias">("info");
   const [atividades, setAtividades] = useState<Atividade[]>([]);
@@ -131,9 +130,6 @@ export default function LeadsPage() {
   const [novaNota, setNovaNota] = useState("");
   const [motivoPerda, setMotivoPerda] = useState("");
   const [confirmandoPerda, setConfirmandoPerda] = useState(false);
-  const [form, setForm] = useState({ nome: "", telefone: "", origem: "whatsapp", valor_estimado: "", estagio: "novo" });
-  const [salvando, setSalvando] = useState(false);
-  const [erroForm, setErroForm] = useState("");
   const [leadDragId, setLeadDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -226,41 +222,6 @@ export default function LeadsPage() {
     setMemorias((m || []) as Memoria[]);
   }
 
-  async function criarLead() {
-    if (!form.nome.trim()) return;
-    setErroForm("");
-    setSalvando(true);
-    try {
-      const res = await fetch("/api/crm/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
-        body: JSON.stringify({
-          nome: form.nome.trim(),
-          telefone: form.telefone || null,
-          origem: form.origem,
-          valor_estimado: form.valor_estimado,
-          estagio: form.estagio,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
-      if (!res.ok) {
-        const base = data.error || "Não foi possível criar o lead.";
-        const detail = data.detail?.trim();
-        setErroForm(
-          process.env.NODE_ENV === "development" && detail ? `${base} — ${detail}` : base
-        );
-        return;
-      }
-      setNovoAberto(false);
-      setForm({ nome: "", telefone: "", origem: "whatsapp", valor_estimado: "", estagio: "novo" });
-      await carregar();
-    } catch {
-      setErroForm("Erro de rede. Tente novamente.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
   async function moverEstagio(leadId: string, novoEstagio: string) {
     await supabase.from("hub_leads_crm").update({ estagio: novoEstagio, atualizado_em: new Date().toISOString() }).eq("id", leadId);
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estagio: novoEstagio as Estagio } : l));
@@ -297,6 +258,7 @@ export default function LeadsPage() {
       busca &&
       !l.nome.toLowerCase().includes(busca.toLowerCase()) &&
       !(l.telefone || "").includes(busca) &&
+      !(l.codigo || "").toLowerCase().includes(busca.toLowerCase()) &&
       !(l._pessoa_codigo || "").toLowerCase().includes(busca.toLowerCase())
     ) {
       return false;
@@ -354,13 +316,6 @@ export default function LeadsPage() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={() => { setErroForm(""); setNovoAberto(true); }}
-            className="min-h-11 w-full touch-manipulation rounded-lg bg-[#c9a24a] px-4 py-2 text-sm font-bold text-[#003b26] transition-colors hover:bg-[#e0b86a] min-[480px]:min-h-10 min-[480px]:w-auto"
-          >
-            + Novo Lead
-          </button>
         </>
       ),
     });
@@ -403,15 +358,6 @@ export default function LeadsPage() {
           </option>
         ))}
       </select>
-      {!isMobile && (
-        <button
-          type="button"
-          onClick={() => { setErroForm(""); setNovoAberto(true); }}
-          className="min-h-11 w-full touch-manipulation rounded-lg bg-[#c9a24a] px-4 py-2 text-sm font-bold text-[#003b26] transition-colors hover:bg-[#e0b86a] min-[480px]:min-h-10 min-[480px]:w-auto"
-        >
-          + Novo Lead
-        </button>
-      )}
     </>
   );
 
@@ -428,17 +374,6 @@ export default function LeadsPage() {
           </div>
           <div className="flex flex-col gap-2">{headerControls}</div>
         </div>
-      )}
-
-      {isMobile && (
-        <button
-          type="button"
-          onClick={() => { setErroForm(""); setNovoAberto(true); }}
-          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,8px))] right-4 z-30 flex h-11 min-w-11 items-center justify-center rounded-full bg-[#c9a24a] px-4 text-sm font-bold text-[#003b26] shadow-lg"
-          aria-label="Novo lead"
-        >
-          + Novo
-        </button>
       )}
 
       {/* ─── METRICS ─── */}
@@ -495,8 +430,13 @@ export default function LeadsPage() {
                         className="cursor-pointer rounded-xl border border-[#30363d] bg-[#161b22] p-3 transition-all hover:bg-[#21262d] active:cursor-grabbing"
                         style={{ borderLeftWidth: 3, borderLeftColor: borderColor(lead.atualizado_em), opacity: leadDragId === lead.id ? 0.5 : 1 }}>
                         <p className="text-white text-xs font-bold truncate leading-tight">{lead.nome}</p>
-                        {lead._pessoa_codigo && (
-                          <p className="text-[10px] font-mono text-[#c9a24a]/90 truncate mt-0.5">{lead._pessoa_codigo}</p>
+                        {(lead.codigo || lead._pessoa_codigo) && (
+                          <p className="text-[10px] font-mono text-[#c9a24a]/90 truncate mt-0.5">
+                            {lead.codigo || lead._pessoa_codigo}
+                            {lead.codigo && lead._pessoa_codigo && lead.codigo !== lead._pessoa_codigo && (
+                              <span className="text-white/35"> · {lead._pessoa_codigo}</span>
+                            )}
+                          </p>
                         )}
                         {lead.valor_estimado > 0 && <p className="text-xs font-bold mt-1" style={{ color: "#22C55E" }}>{moeda(lead.valor_estimado)}</p>}
                         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
@@ -597,8 +537,13 @@ export default function LeadsPage() {
                       className="border-b border-gray-800/50 hover:bg-gray-900/60 cursor-pointer transition-colors">
                       <td className="px-4 py-3">
                         <p className="text-white font-bold">{lead.nome}</p>
-                        {lead._pessoa_codigo && (
-                          <p className="text-[#c9a24a] font-mono text-xs mt-0.5">{lead._pessoa_codigo}</p>
+                        {(lead.codigo || lead._pessoa_codigo) && (
+                          <p className="text-[#c9a24a] font-mono text-xs mt-0.5">
+                            {lead.codigo || lead._pessoa_codigo}
+                            {lead.codigo && lead._pessoa_codigo && lead.codigo !== lead._pessoa_codigo && (
+                              <span className="text-white/40"> · {lead._pessoa_codigo}</span>
+                            )}
+                          </p>
                         )}
                         {lead.telefone && <p className="text-gray-500 text-xs">{lead.telefone}</p>}
                       </td>
@@ -638,57 +583,6 @@ export default function LeadsPage() {
           </div>
         )}
       </div>
-
-      {/* ─── NEW LEAD SLIDE-OVER ─── */}
-      {novoAberto && (
-        <div className="fixed inset-0 z-50 flex">
-          {!isMobile && <div className="flex-1 bg-black/50" onClick={() => setNovoAberto(false)} />}
-          <div className={`flex h-full max-h-[100dvh] flex-col border-[#30363d] bg-[#161b22] shadow-2xl ${isMobile ? "w-full" : "w-96 border-l"}`}>
-            <div className="flex flex-shrink-0 items-center justify-between border-b border-[#30363d] px-5 py-4">
-              <p className="font-bold text-[#e6edf3]">Novo Lead</p>
-              <button type="button" onClick={() => setNovoAberto(false)} className="min-h-11 min-w-11 text-xl text-[#8b949e]">×</button>
-            </div>
-            <div className="flex-1 min-h-0 p-5 space-y-4 overflow-y-auto">
-              {[
-                { label: "Nome *", key: "nome", type: "text", placeholder: "Nome do lead" },
-                { label: "Telefone", key: "telefone", type: "tel", placeholder: "(11) 99999-9999" },
-                { label: "Valor estimado (R$)", key: "valor_estimado", type: "number", placeholder: "0" },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-gray-400 text-xs font-bold uppercase block mb-1.5">{f.label}</label>
-                  <input type={f.type} value={(form as Record<string, string>)[f.key]}
-                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="w-full bg-gray-800 text-white text-sm rounded-lg px-3 py-2.5 border border-gray-700 focus:border-[#c9a24a] outline-none placeholder:text-gray-600" />
-                </div>
-              ))}
-              <div>
-                <label className="text-gray-400 text-xs font-bold uppercase block mb-1.5">Origem</label>
-                <select value={form.origem} onChange={e => setForm(p => ({ ...p, origem: e.target.value }))}
-                  className="w-full bg-gray-800 text-white text-sm rounded-lg px-3 py-2.5 border border-gray-700 outline-none">
-                  {Object.keys(ORIGENS_LABEL).map(o => <option key={o} value={o}>{ORIGENS_LABEL[o]}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-gray-400 text-xs font-bold uppercase block mb-1.5">Estágio inicial</label>
-                <select value={form.estagio} onChange={e => setForm(p => ({ ...p, estagio: e.target.value }))}
-                  className="w-full bg-gray-800 text-white text-sm rounded-lg px-3 py-2.5 border border-gray-700 outline-none">
-                  {ESTAGIOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
-                </select>
-              </div>
-              {erroForm && (
-                <p className="text-red-400 text-xs">{erroForm}</p>
-              )}
-            </div>
-            <div className="px-5 py-4 border-t border-gray-800 flex-shrink-0 bg-gray-900">
-              <button onClick={() => void criarLead()} disabled={salvando || !form.nome.trim()}
-                className="w-full bg-[#c9a24a] hover:bg-[#e0b86a] disabled:opacity-50 text-white font-bold text-sm py-3 rounded-xl transition-colors">
-                {salvando ? "Criando..." : "+ Criar Lead"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─── LEAD DETAIL SLIDE-OVER ─── */}
       {detalhe && (

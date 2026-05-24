@@ -14,6 +14,14 @@ function headerUuidValido(s: string): boolean {
 
 
 /** PostgREST / Postgres sem coluna (migração ainda não aplicada no Supabase). */
+export function isTenantFkError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  if (e.code !== "23503") return false;
+  const m = (e.message || "").toLowerCase();
+  return m.includes("tenant") || m.includes("hub_tenants");
+}
+
 export function isMissingPgColumn(err: unknown, column?: string): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { code?: string; message?: string };
@@ -34,6 +42,19 @@ export function isMissingPgColumn(err: unknown, column?: string): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * Filtro PostgREST: tenant actual + registos legados (tenant_id NULL ou Obra10 padrão).
+ * Parceiros antigos foram gravados sem tenant antes da migração multi-tenant.
+ */
+export function tenantScopeOrFilter(tenantId: string): string {
+  const tid = tenantId?.trim() || DEFAULT_OBRA10_TENANT_ID;
+  const parts = new Set<string>([`tenant_id.eq.${tid}`, "tenant_id.is.null"]);
+  if (tid !== DEFAULT_OBRA10_TENANT_ID) {
+    parts.add(`tenant_id.eq.${DEFAULT_OBRA10_TENANT_ID}`);
+  }
+  return [...parts].join(",");
 }
 
 export function tenantIdFromRequest(headers: Headers): string {

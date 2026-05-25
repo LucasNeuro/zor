@@ -5,7 +5,9 @@ import {
   validarNegocioCadastro,
   type NegocioCadastroPayload,
 } from "@/lib/crm/negocio-cadastro";
-import { defaultTenantId, isMissingPgColumn, tenantIdFromRequest } from "@/lib/tenant-default";
+import { prepararRowHubLeadInsert } from "@/lib/crm/lead-cadastro";
+import { criarVinculosNegocio } from "@/lib/crm/negocio-vinculos";
+import { defaultTenantId, isMissingPgColumn, isTenantFkError, tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
@@ -24,30 +26,114 @@ function supabaseConfigError(): string | null {
   return null;
 }
 
-const NEGOCIO_INSERT_SELECT =
-  "id, codigo, titulo, prefixo_mercado, status, etapa, valor_estimado, valor_fechado, data_previsao_fechamento, lead_id, pessoa_id, criado_em";
+const NEGOCIO_OPTIONAL_COLUMNS = [
+  "tenant_id",
+  "lead_id",
+  "pessoa_id",
+  "empresa_id",
+  "descricao",
+  "tipo",
+  "pipeline_id",
+] as const;
 
-const NEGOCIO_OPTIONAL_COLUMNS = ["tenant_id", "lead_id", "pessoa_id", "descricao", "tipo"] as const;
+const LEGACY_LEAD_INSERT_SELECT = "id, codigo, nome";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type EntidadeCodigo = {
+  id: string;
+  codigo: string | null;
+};
+
+function isLegacyLeadRequiredError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  if (String(e.code || "") !== "23502") return false;
+  const message = String(e.message || "").toLowerCase();
+  return message.includes("lead_id") && message.includes("null value");
+}
+
+function parseUuidList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of value) {
+    const id = typeof item === "string" ? item.trim() : "";
+    if (!id || !UUID_RE.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+}
+
+function mergeIds(...lists: Array<(string | null | undefined)[] | string[]>) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const list of lists) {
+    for (const raw of list) {
+      const id = String(raw || "").trim();
+      if (!id || !UUID_RE.test(id) || seen.has(id)) continue;
+      seen.add(id);
+      result.push(id);
+    }
+  }
+  return result;
+}
+
+async function carregarCodigosEntidade(
+  supabase: SupabaseClient,
+  table: "hub_leads_crm" | "hub_pessoas" | "hub_empresas" | "hub_parceiros",
+  ids: string[],
+  erroLabel: string
+): Promise<EntidadeCodigo[]> {
+  if (!ids.length) return [];
+  const { data, error } = await supabase.from(table).select("id, codigo").in("id", ids);
+  if (error) throw new Error(error.message);
+
+  const rows = ((data ?? []) as Array<{ id: string; codigo?: string | null }>).map((row) => ({
+    id: String(row.id),
+    codigo: row.codigo != null ? String(row.codigo) : null,
+  }));
+
+  const encontrados = new Set(rows.map((row) => row.id));
+  const faltantes = ids.filter((id) => !encontrados.has(id));
+  if (faltantes.length) {
+    throw new Error(`${erroLabel} não encontrado(s).`);
+  }
+  return rows;
+}
 
 async function insertHubNegocio(
   supabase: SupabaseClient,
   row: Record<string, unknown>,
   tenantId: string
 ) {
-  let payload: Record<string, unknown> = { ...row, tenant_id: tenantId };
   const baseRow = { ...row };
+  let withTenant = !!tenantId;
+  let payload: Record<string, unknown> = withTenant ? { ...baseRow, tenant_id: tenantId } : { ...baseRow };
+  let lastError: { message?: string; code?: string } | null = null;
 
-  for (let attempt = 0; attempt < NEGOCIO_OPTIONAL_COLUMNS.length + 3; attempt++) {
+  for (let attempt = 0; attempt < NEGOCIO_OPTIONAL_COLUMNS.length + 5; attempt++) {
     const { data, error } = await supabase
       .from("hub_negocios")
       .insert(payload)
-      .select(NEGOCIO_INSERT_SELECT)
+      .select("*")
       .single();
 
     if (!error) return { data, error: null };
 
+    lastError = error;
+
+    if (isTenantFkError(error)) {
+      withTenant = false;
+      delete (baseRow as Record<string, unknown>).tenant_id;
+      payload = { ...baseRow };
+      continue;
+    }
+
     if (isMissingPgColumn(error, "tenant_id")) {
-      delete (payload as Record<string, unknown>).tenant_id;
+      withTenant = false;
       delete (baseRow as Record<string, unknown>).tenant_id;
       payload = { ...baseRow };
       continue;
@@ -55,10 +141,8 @@ async function insertHubNegocio(
 
     const missing = NEGOCIO_OPTIONAL_COLUMNS.find((col) => isMissingPgColumn(error, col));
     if (missing) {
-      delete (payload as Record<string, unknown>)[missing];
       delete (baseRow as Record<string, unknown>)[missing];
-      payload =
-        missing === "tenant_id" ? { ...baseRow } : { ...baseRow, tenant_id: tenantId };
+      payload = withTenant ? { ...baseRow, tenant_id: tenantId } : { ...baseRow };
       continue;
     }
 
@@ -77,7 +161,115 @@ async function insertHubNegocio(
     return { data: null, error };
   }
 
-  return { data: null, error: { message: "Falha ao gravar hub_negocios." } };
+  return {
+    data: null,
+    error: {
+      message: lastError?.message?.trim() || "Falha ao gravar hub_negocios.",
+      code: lastError?.code,
+    },
+  };
+}
+
+async function insertHubLeadCompat(
+  supabase: SupabaseClient,
+  row: Record<string, unknown>,
+  tenantId: string
+) {
+  const variants: Record<string, unknown>[] = [
+    { ...row, tenant_id: tenantId },
+    { ...row, tenant_id: tenantId, pessoa_id: undefined },
+    { ...row },
+  ];
+  const noPessoa = { ...row };
+  delete noPessoa.pessoa_id;
+  variants.push({ ...noPessoa, tenant_id: tenantId }, { ...noPessoa });
+
+  let lastError: { message?: string; code?: string } | null = null;
+
+  for (const payload of variants) {
+    const clean = { ...payload };
+    if (clean.pessoa_id === undefined) delete clean.pessoa_id;
+
+    const { data, error } = await supabase
+      .from("hub_leads_crm")
+      .insert(clean)
+      .select(LEGACY_LEAD_INSERT_SELECT)
+      .single();
+
+    if (!error) return { data, error: null };
+
+    lastError = error;
+    const code = "code" in error ? String(error.code) : "";
+    const msg = "message" in error ? String(error.message) : "";
+    if (code === "PGRST205" || msg.includes("hub_leads_crm")) {
+      return {
+        data: null,
+        error: {
+          message:
+            "Tabela hub_leads_crm nao existe no Supabase. Execute a migracao 20260522130000_ensure_hub_leads_crm.sql no SQL Editor.",
+          code,
+        },
+      };
+    }
+    if (
+      !isMissingPgColumn(error, "tenant_id") &&
+      !isMissingPgColumn(error, "pessoa_id") &&
+      !isMissingPgColumn(error, "codigo")
+    ) {
+      return { data: null, error };
+    }
+  }
+
+  return {
+    data: null,
+    error: lastError ?? { message: "Falha ao gravar hub_leads_crm." },
+  };
+}
+
+async function criarLeadCompatParaNegocio(
+  supabase: SupabaseClient,
+  opts: {
+    titulo: string;
+    etapa: string;
+    prefixo_mercado: string;
+    valor_estimado: number | null;
+    pessoa_id?: string | null;
+    tenantId: string;
+  }
+): Promise<EntidadeCodigo> {
+  const now = new Date().toISOString();
+  const rowBase: Record<string, unknown> = {
+    nome: `Negócio direto · ${opts.titulo}`.slice(0, 200),
+    telefone: null,
+    email: null,
+    origem: "outro",
+    estagio: opts.etapa || "qualificado",
+    valor_estimado: opts.valor_estimado ?? 0,
+    score: 60,
+    pessoa_id: opts.pessoa_id || null,
+    criado_em: now,
+    atualizado_em: now,
+    metadata: {
+      origem_cadastro: "negocio_direto",
+      lead_proxy_legacy: true,
+      negocio_titulo: opts.titulo,
+      negocio_mercado: opts.prefixo_mercado,
+    },
+  };
+
+  const row = await prepararRowHubLeadInsert(supabase, rowBase);
+  const { data, error } = await insertHubLeadCompat(supabase, row, opts.tenantId);
+  if (error || !data?.id) {
+    throw new Error(
+      ("message" in (error || {}) && error?.message) ||
+        "Não foi possível criar o lead de apoio exigido pelo schema legado."
+    );
+  }
+
+  return {
+    id: String(data.id),
+    codigo: data.codigo != null ? String(data.codigo) : null,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -87,13 +279,14 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status") || "";
   const etapa = searchParams.get("etapa") || "";
   const prefixo = searchParams.get("prefixo_mercado") || "";
+  const pipelineId = searchParams.get("pipeline_id") || "";
   const offset = parseInt(searchParams.get("offset") || "0");
   const limit = 20;
 
   let query = supabase
     .from("hub_negocios")
     .select(
-      "id, codigo, titulo, prefixo_mercado, status, etapa, valor_estimado, valor_fechado, data_previsao_fechamento, criado_em",
+      "id, codigo, titulo, prefixo_mercado, status, etapa, valor_estimado, valor_fechado, data_previsao_fechamento, pipeline_id, criado_em",
       { count: "exact" }
     )
     .order("criado_em", { ascending: false })
@@ -102,6 +295,7 @@ export async function GET(request: NextRequest) {
   if (status) query = query.eq("status", status);
   if (etapa) query = query.eq("etapa", etapa);
   if (prefixo) query = query.eq("prefixo_mercado", prefixo);
+  if (pipelineId) query = query.eq("pipeline_id", pipelineId);
   if (busca) {
     query = query.or(`titulo.ilike.%${busca}%,codigo.ilike.%${busca}%`);
   }
@@ -127,7 +321,15 @@ export async function POST(request: NextRequest) {
   const supabase = db();
   const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
 
-  let body: Partial<NegocioCadastroPayload>;
+  let body: Partial<NegocioCadastroPayload> & {
+    pipeline_id?: string | null;
+    empresa_id?: string | null;
+    parceiro_id?: string | null;
+    lead_ids?: string[];
+    pessoa_ids?: string[];
+    empresa_ids?: string[];
+    parceiro_ids?: string[];
+  };
   try {
     body = await request.json();
   } catch {
@@ -140,19 +342,40 @@ export async function POST(request: NextRequest) {
   }
 
   const d = validacao.data;
+  const pipeline_id =
+    typeof body.pipeline_id === "string" && body.pipeline_id.trim()
+      ? body.pipeline_id.trim()
+      : null;
+  const empresa_id =
+    typeof body.empresa_id === "string" && body.empresa_id.trim()
+      ? body.empresa_id.trim()
+      : null;
+  const parceiro_id =
+    typeof body.parceiro_id === "string" && body.parceiro_id.trim()
+      ? body.parceiro_id.trim()
+      : null;
 
-  if (d.lead_id) {
-    const { data: lead } = await supabase.from("hub_leads_crm").select("id").eq("id", d.lead_id).maybeSingle();
-    if (!lead) {
-      return NextResponse.json({ error: "Lead vinculado não encontrado." }, { status: 400 });
-    }
-  }
+  const leadIds = mergeIds(parseUuidList(body.lead_ids), d.lead_id ? [d.lead_id] : []);
+  const pessoaIds = mergeIds(parseUuidList(body.pessoa_ids), d.pessoa_id ? [d.pessoa_id] : []);
+  const empresaIds = mergeIds(parseUuidList(body.empresa_ids), empresa_id ? [empresa_id] : []);
+  const parceiroIds = mergeIds(parseUuidList(body.parceiro_ids), parceiro_id ? [parceiro_id] : []);
 
-  if (d.pessoa_id) {
-    const { data: pessoa } = await supabase.from("hub_pessoas").select("id").eq("id", d.pessoa_id).maybeSingle();
-    if (!pessoa) {
-      return NextResponse.json({ error: "Pessoa vinculada não encontrada." }, { status: 400 });
-    }
+  let leadsSelecionados: EntidadeCodigo[] = [];
+  let pessoasSelecionadas: EntidadeCodigo[] = [];
+  let empresasSelecionadas: EntidadeCodigo[] = [];
+  let parceirosSelecionados: EntidadeCodigo[] = [];
+
+  try {
+    [leadsSelecionados, pessoasSelecionadas, empresasSelecionadas, parceirosSelecionados] =
+      await Promise.all([
+        carregarCodigosEntidade(supabase, "hub_leads_crm", leadIds, "Lead"),
+        carregarCodigosEntidade(supabase, "hub_pessoas", pessoaIds, "Pessoa"),
+        carregarCodigosEntidade(supabase, "hub_empresas", empresaIds, "Empresa"),
+        carregarCodigosEntidade(supabase, "hub_parceiros", parceiroIds, "Parceiro"),
+      ]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro ao validar vínculos do negócio.";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   const codigo = await gerarCodigoNegocio(supabase);
@@ -166,13 +389,49 @@ export async function POST(request: NextRequest) {
     status: d.status,
     valor_estimado: d.valor_estimado,
     data_previsao_fechamento: d.data_previsao_fechamento,
-    lead_id: d.lead_id,
-    pessoa_id: d.pessoa_id,
+    lead_id: leadsSelecionados[0]?.id ?? null,
+    pessoa_id: pessoasSelecionadas[0]?.id ?? null,
+    empresa_id: empresasSelecionadas[0]?.id ?? null,
+    pipeline_id,
     criado_em: now,
     atualizado_em: now,
   };
 
-  const { data: created, error } = await insertHubNegocio(supabase, row, tenantId);
+  let compatWarning: string | null = null;
+  let insertResult = await insertHubNegocio(supabase, row, tenantId);
+
+  if (insertResult.error && isLegacyLeadRequiredError(insertResult.error) && !leadsSelecionados[0]?.id) {
+    try {
+      const leadCompat = await criarLeadCompatParaNegocio(supabase, {
+        titulo: d.titulo,
+        etapa: d.etapa,
+        prefixo_mercado: d.prefixo_mercado,
+        valor_estimado: d.valor_estimado,
+        pessoa_id: pessoasSelecionadas[0]?.id ?? null,
+        tenantId,
+      });
+      leadsSelecionados = [leadCompat, ...leadsSelecionados];
+      row.lead_id = leadCompat.id;
+      compatWarning =
+        "Schema legado exigia lead principal; foi criado um lead de apoio automaticamente para o negócio.";
+      insertResult = await insertHubNegocio(supabase, row, tenantId);
+    } catch (err) {
+      const detail =
+        err instanceof Error
+          ? err.message
+          : "Não foi possível criar o lead de apoio exigido pelo schema legado.";
+      return NextResponse.json(
+        {
+          error:
+            "O seu banco ainda exige lead principal em hub_negocios. Selecione um lead no wizard ou aplique a migracao 20260522120000_ensure_hub_negocios.sql.",
+          detail,
+        },
+        { status: 400 }
+      );
+    }
+  }
+
+  const { data: created, error } = insertResult;
 
   if (error) {
     const detail = "message" in error ? String(error.message) : "Erro desconhecido";
@@ -181,5 +440,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: detail, detail }, { status });
   }
 
-  return NextResponse.json({ data: created }, { status: 201 });
+  try {
+    await criarVinculosNegocio(supabase, {
+      negocio_id: String(created.id),
+      leads: leadsSelecionados,
+      pessoas: pessoasSelecionadas,
+      empresas: empresasSelecionadas,
+      parceiros: parceirosSelecionados,
+      tenant_id: tenantId,
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "Falha ao gravar vínculos do negócio.";
+    return NextResponse.json(
+      {
+        error: `Negócio criado, mas vínculos falharam: ${detail}`,
+        data: created,
+        detail,
+        warning: compatWarning,
+      },
+      { status: 207 }
+    );
+  }
+
+  return NextResponse.json({ data: created, warning: compatWarning }, { status: 201 });
 }

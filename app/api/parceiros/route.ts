@@ -2,12 +2,42 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { gerarCodigoParceiro } from "@/lib/crm/parceiro-cadastro";
 import { HUB_PARCEIRO_LIST_SELECT } from "@/lib/crm/parceiro-list-fetch";
-import { defaultTenantId, tenantIdFromRequest, tenantScopeOrFilter } from "@/lib/tenant-default";
+import { defaultTenantId, isMissingPgColumn, tenantIdFromRequest, tenantScopeOrFilter } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
+
+const HUB_PARCEIRO_LIST_FALLBACK = `
+  id,
+  codigo,
+  nome,
+  telefone,
+  email,
+  especialidade,
+  mercado,
+  cidade,
+  estado,
+  status,
+  criado_em
+`;
+
+function isParceiroCompatError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  const message = String(e.message || "").toLowerCase();
+  return (
+    isMissingPgColumn(err, "tenant_id") ||
+    isMissingPgColumn(err, "modulo_atual") ||
+    isMissingPgColumn(err, "recebe_leads") ||
+    isMissingPgColumn(err, "total_leads_recebidos") ||
+    isMissingPgColumn(err, "total_leads_convertidos") ||
+    message.includes("hub_parceiros_captacao") ||
+    message.includes("hub_parceiros_homologacao") ||
+    message.includes("schema cache")
   );
 }
 
@@ -19,18 +49,28 @@ export async function GET(request: NextRequest) {
   const busca = searchParams.get("busca");
   const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
 
-  let query = supabase
-    .from("hub_parceiros")
-    .select(HUB_PARCEIRO_LIST_SELECT)
-    .order("criado_em", { ascending: false });
+  const runList = (select: string, withTenantFilter: boolean) => {
+    let query = supabase
+      .from("hub_parceiros")
+      .select(select)
+      .order("criado_em", { ascending: false });
 
-  query = query.or(tenantScopeOrFilter(tenantId));
+    if (withTenantFilter) {
+      query = query.or(tenantScopeOrFilter(tenantId));
+    }
 
-  if (status) query = query.eq("status", status);
-  if (mercado) query = query.eq("mercado", mercado);
-  if (busca) query = query.or(`nome.ilike.%${busca}%,email.ilike.%${busca}%,telefone.ilike.%${busca}%`);
+    if (status) query = query.eq("status", status);
+    if (mercado) query = query.eq("mercado", mercado);
+    if (busca) query = query.or(`nome.ilike.%${busca}%,email.ilike.%${busca}%,telefone.ilike.%${busca}%`);
 
-  const { data, error } = await query;
+    return query;
+  };
+
+  let { data, error } = await runList(HUB_PARCEIRO_LIST_SELECT, true);
+  if (error && isParceiroCompatError(error)) {
+    ({ data, error } = await runList(HUB_PARCEIRO_LIST_FALLBACK, !isMissingPgColumn(error, "tenant_id")));
+  }
+
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
 
   return NextResponse.json({ parceiros: data || [] });

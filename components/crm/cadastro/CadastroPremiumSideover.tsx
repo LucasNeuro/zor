@@ -1,7 +1,7 @@
 "use client";
 
-import type { LucideIcon, ReactNode } from "react";
-import { X } from "lucide-react";
+import type { ReactNode } from "react";
+import { X, type LucideIcon } from "lucide-react";
 import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
 
 type Props = {

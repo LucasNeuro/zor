@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
@@ -18,22 +18,13 @@ import {
   type EmpresaListaRow,
   type PessoaListaRow,
 } from "@/lib/crm/cadastro-list-columns";
-import {
-  colunasParceiroLista,
-  ESTAGIO_CAPTACAO_LABEL,
-} from "@/lib/crm/parceiro-list-columns";
 import { crmQueryKeys } from "@/lib/crm/crm-query-keys";
 import { prependPessoaListaCache } from "@/lib/crm/cadastro-cache-update";
 import type { HubPessoaRow } from "@/lib/crm/hub-pessoas-compat";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CrmTelefoneCell } from "@/components/crm/CrmTelefoneCell";
-import {
-  useCrmEmpresasList,
-  useCrmParceirosList,
-  useCrmPessoasList,
-  type ParceiroListaRow,
-} from "@/hooks/useCrmListQueries";
+import { useCrmEmpresasList, useCrmPessoasList } from "@/hooks/useCrmListQueries";
 import { isCrmListInitialLoad } from "@/hooks/useCrmListQueryUi";
 import { useCrmHeaderSlotConfig } from "@/hooks/useCrmHeaderSlotConfig";
 
@@ -58,19 +49,10 @@ const CadastroEmpresaSideover = dynamic(
     })),
   { ssr: false }
 );
-const ParceiroLinkWizard = dynamic(
-  () =>
-    import("@/components/crm/parceiros/ParceiroLinkWizard").then((m) => ({
-      default: m.ParceiroLinkWizard,
-    })),
-  { ssr: false }
-);
-
 const COLUNAS_PESSOAS = colunasPessoaLista();
 const COLUNAS_EMPRESAS = colunasEmpresaLista();
-const COLUNAS_PARCEIROS = colunasParceiroLista();
 
-type RegistoId = "contactos" | "empresas" | "parceiros";
+type RegistoId = "contactos" | "empresas";
 type SideoverMode = "view" | "edit" | null;
 
 const UFS = [
@@ -88,21 +70,13 @@ const ORIGENS_PESSOA = [
 ];
 
 const REGISTO_OPTIONS = [
-  { value: "contactos", label: "Cadastros (PF/PJ)" },
+  { value: "contactos", label: "Contactos" },
   { value: "empresas", label: "Empresas" },
-  { value: "parceiros", label: "Parceiros" },
-];
-
-const STATUS_PARCEIRO_OPTIONS = [
-  { value: "", label: "Todos status" },
-  { value: "captacao", label: "Captação" },
-  { value: "em_homologacao", label: "Homologação" },
-  { value: "homologado", label: "Homologados" },
 ];
 
 function registoFromSearchParams(sp: URLSearchParams): RegistoId {
   const raw = sp.get("registo") || sp.get("tab");
-  if (raw === "empresas" || raw === "parceiros") return raw;
+  if (raw === "empresas") return "empresas";
   return "contactos";
 }
 
@@ -126,7 +100,7 @@ export default function CadastroPage() {
 
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [busca, setBusca] = useState("");
-  const buscaDebounced = useDebouncedValue(busca, 320);
+  const buscaDebounced = useDebouncedValue(busca);
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroUf, setFiltroUf] = useState("");
   const [filtroOrigem, setFiltroOrigem] = useState("");
@@ -134,14 +108,11 @@ export default function CadastroPage() {
   const [filtroSegmento, setFiltroSegmento] = useState("");
   const [filtroMercado, setFiltroMercado] = useState("");
   const [filtroAtivo, setFiltroAtivo] = useState("");
-  const [filtroStatusParceiro, setFiltroStatusParceiro] = useState("");
-  const [filtroEstagioParceiro, setFiltroEstagioParceiro] = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [excluindoMassa, setExcluindoMassa] = useState(false);
   const [erroMassa, setErroMassa] = useState("");
   const [sucessoCadastro, setSucessoCadastro] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [parceiroWizardOpen, setParceiroWizardOpen] = useState(false);
   const [tipoWizard, setTipoWizard] = useState<"PF" | "PJ">("PF");
 
   const [contactoId, setContactoId] = useState<string | null>(null);
@@ -149,62 +120,36 @@ export default function CadastroPage() {
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [empresaMode, setEmpresaMode] = useState<SideoverMode>(null);
 
-  const pessoasFiltros = {
-    busca: buscaDebounced,
-    tipo_pessoa: filtroTipo,
-    estado: filtroUf,
-    origem: filtroOrigem,
-    area_atuacao: filtroArea,
-  };
-  const empresasFiltros = {
-    busca: buscaDebounced,
-    segmento: filtroSegmento,
-    prefixo_mercado: filtroMercado,
-    estado: filtroUf,
-    ativo: filtroAtivo,
-  };
+  const pessoasFiltros = useMemo(
+    () => ({
+      busca: buscaDebounced,
+      tipo_pessoa: filtroTipo,
+      estado: filtroUf,
+      origem: filtroOrigem,
+      area_atuacao: filtroArea,
+    }),
+    [buscaDebounced, filtroTipo, filtroUf, filtroOrigem, filtroArea]
+  );
+
+  const empresasFiltros = useMemo(
+    () => ({
+      busca: buscaDebounced,
+      segmento: filtroSegmento,
+      prefixo_mercado: filtroMercado,
+      estado: filtroUf,
+      ativo: filtroAtivo,
+    }),
+    [buscaDebounced, filtroSegmento, filtroMercado, filtroUf, filtroAtivo]
+  );
 
   const pessoasQuery = useCrmPessoasList(pessoasFiltros, filtroRegisto === "contactos");
   const empresasQuery = useCrmEmpresasList(empresasFiltros, filtroRegisto === "empresas");
-  const parceirosQuery = useCrmParceirosList(filtroRegisto === "parceiros");
 
   const pessoas = (pessoasQuery.data ?? []) as PessoaListaRow[];
   const empresas = (empresasQuery.data ?? []) as EmpresaListaRow[];
-  const parceirosTodos: ParceiroListaRow[] = parceirosQuery.data ?? [];
-
-  const parceirosFiltrados = useMemo(() => {
-    return parceirosTodos.filter((p) => {
-      if (filtroStatusParceiro && p.status !== filtroStatusParceiro) return false;
-      if (buscaDebounced) {
-        const q = buscaDebounced.toLowerCase();
-        const match =
-          p.nome.toLowerCase().includes(q) ||
-          (p.codigo || "").toLowerCase().includes(q) ||
-          p.telefone.includes(buscaDebounced.replace(/\D/g, "")) ||
-          (p.email || "").toLowerCase().includes(q) ||
-          (p.especialidade || "").toLowerCase().includes(q);
-        if (!match) return false;
-      }
-      if (filtroUf && p.estado !== filtroUf) return false;
-      if (filtroMercado && p.mercado !== filtroMercado) return false;
-      if (filtroEstagioParceiro) {
-        const est = p.hub_parceiros_captacao?.estagio || "interessado";
-        if (est !== filtroEstagioParceiro) return false;
-      }
-      return true;
-    });
-  }, [
-    parceirosTodos,
-    filtroStatusParceiro,
-    buscaDebounced,
-    filtroUf,
-    filtroMercado,
-    filtroEstagioParceiro,
-  ]);
 
   const pessoasCarregando = isCrmListInitialLoad(pessoasQuery);
   const empresasCarregando = isCrmListInitialLoad(empresasQuery);
-  const parceirosCarregando = isCrmListInitialLoad(parceirosQuery);
 
   const actor = actorFromUser(authUser);
 
@@ -220,8 +165,6 @@ export default function CadastroPage() {
     filtroSegmento,
     filtroMercado,
     filtroAtivo,
-    filtroStatusParceiro,
-    filtroEstagioParceiro,
   ]);
 
   useEffect(() => {
@@ -233,15 +176,18 @@ export default function CadastroPage() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get("convidar") === "1" && filtroRegisto === "parceiros") {
-      setParceiroWizardOpen(true);
-      const p = new URLSearchParams(searchParams.toString());
-      p.delete("convidar");
-      p.delete("tab");
-      const q = p.toString();
-      router.replace(q ? `/crm/cadastro?${q}` : "/crm/cadastro?registo=parceiros");
-    }
-  }, [searchParams, router, filtroRegisto]);
+    const raw = searchParams.get("registo") || searchParams.get("tab");
+    if (raw !== "parceiros") return;
+    const p = new URLSearchParams(searchParams.toString());
+    p.delete("registo");
+    p.delete("tab");
+    const convidar = p.get("convidar") === "1";
+    p.delete("convidar");
+    const q = p.toString();
+    let dest = convidar ? "/crm/parceiros?convidar=1" : "/crm/parceiros";
+    if (q) dest += `${dest.includes("?") ? "&" : "?"}${q}`;
+    router.replace(dest);
+  }, [searchParams, router]);
 
   function setRegisto(id: RegistoId) {
     const p = new URLSearchParams(searchParams.toString());
@@ -260,12 +206,12 @@ export default function CadastroPage() {
   }
 
   const filtrosSelects = useMemo(() => {
-    const registo = {
-      id: "registo",
+    const lista = {
+      id: "lista",
       value: filtroRegisto,
       onChange: (v: string) => setRegisto(v as RegistoId),
-      label: "Tipo de registo",
-      minWidth: "12rem",
+      label: "Lista",
+      minWidth: "10rem",
       options: REGISTO_OPTIONS,
     };
 
@@ -279,7 +225,7 @@ export default function CadastroPage() {
 
     if (filtroRegisto === "empresas") {
       return [
-        registo,
+        lista,
         {
           id: "mercado",
           value: filtroMercado,
@@ -315,56 +261,13 @@ export default function CadastroPage() {
       ];
     }
 
-    if (filtroRegisto === "parceiros") {
-      const estagioOpts = [
-        { value: "", label: "Todos estágios" },
-        ...Object.entries(ESTAGIO_CAPTACAO_LABEL).map(([value, label]) => ({ value, label })),
-      ];
-      return [
-        registo,
-        {
-          id: "status",
-          value: filtroStatusParceiro,
-          onChange: (v: string) => {
-            setFiltroStatusParceiro(v);
-            if (v !== "captacao" && v !== "") setFiltroEstagioParceiro("");
-          },
-          label: "Status",
-          options: STATUS_PARCEIRO_OPTIONS,
-        },
-        ...(filtroStatusParceiro === "" || filtroStatusParceiro === "captacao"
-          ? [
-              {
-                id: "estagio",
-                value: filtroEstagioParceiro,
-                onChange: setFiltroEstagioParceiro,
-                label: "Estágio captação",
-                minWidth: "11rem",
-                options: estagioOpts,
-              },
-            ]
-          : []),
-        {
-          id: "mercado",
-          value: filtroMercado,
-          onChange: setFiltroMercado,
-          label: "Mercado",
-          options: [
-            { value: "", label: "Todos mercados" },
-            ...MERCADOS_PREFIXO_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
-          ],
-        },
-        uf,
-      ];
-    }
-
     return [
-      registo,
+      lista,
       {
         id: "tipo",
         value: filtroTipo,
         onChange: setFiltroTipo,
-        label: "Tipo",
+        label: "Tipo pessoa",
         options: [
           { value: "", label: "PF e PJ" },
           { value: "PF", label: "PF" },
@@ -403,62 +306,35 @@ export default function CadastroPage() {
     filtroSegmento,
     filtroMercado,
     filtroAtivo,
-    filtroStatusParceiro,
-    filtroEstagioParceiro,
   ]);
 
-  const buscaPlaceholder = useMemo(() => {
-    if (filtroRegisto === "empresas") {
-      return "Buscar razão social, código, CNPJ ou email…";
-    }
-    if (filtroRegisto === "parceiros") {
-      return "Buscar nome, código, telefone, email ou especialidade…";
-    }
-    return "Buscar nome, código, CPF/CNPJ, email ou telefone…";
-  }, [filtroRegisto]);
+  const buscaPlaceholder =
+    filtroRegisto === "empresas"
+      ? "Buscar razão social, código, CNPJ ou email…"
+      : "Buscar nome, código, CPF/CNPJ, email ou telefone…";
 
   const headerActions = useMemo(
-    () =>
-      filtroRegisto === "parceiros" ? (
-        <button
-          type="button"
-          onClick={() => setParceiroWizardOpen(true)}
-          style={{
-            background: "#003b26",
-            color: "#c9a24a",
-            border: "none",
-            borderRadius: 8,
-            padding: "10px 20px",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          + Convidar parceiro
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setTipoWizard(
-              filtroRegisto === "empresas" || filtroTipo === "PJ" ? "PJ" : "PF"
-            );
-            setWizardOpen(true);
-          }}
-          style={{
-            background: "#003b26",
-            color: "#c9a24a",
-            border: "none",
-            borderRadius: 8,
-            padding: "10px 20px",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          + Novo cadastro
-        </button>
-      ),
+    () => (
+      <button
+        type="button"
+        onClick={() => {
+          setTipoWizard(filtroRegisto === "empresas" || filtroTipo === "PJ" ? "PJ" : "PF");
+          setWizardOpen(true);
+        }}
+        style={{
+          background: "#003b26",
+          color: "#c9a24a",
+          border: "none",
+          borderRadius: 8,
+          padding: "10px 20px",
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        + Novo cadastro
+      </button>
+    ),
     [filtroRegisto, filtroTipo]
   );
 
@@ -476,8 +352,6 @@ export default function CadastroPage() {
     setFiltroSegmento("");
     setFiltroMercado("");
     setFiltroAtivo("");
-    setFiltroStatusParceiro("");
-    setFiltroEstagioParceiro("");
   }
 
   function toggleSelecao(id: string) {
@@ -498,7 +372,7 @@ export default function CadastroPage() {
 
   async function excluirSelecionados() {
     const ids = [...selecionados];
-    if (ids.length === 0 || filtroRegisto === "parceiros") return;
+    if (ids.length === 0) return;
     const label = filtroRegisto === "empresas" ? "empresa(s)" : "cadastro(s)";
     if (!window.confirm(`Excluir ${ids.length} ${label}? Esta ação não pode ser desfeita.`)) return;
 
@@ -576,13 +450,6 @@ export default function CadastroPage() {
     }
   }
 
-  const abrirParceiro = useCallback(
-    (p: ParceiroListaRow) => {
-      router.push(`/crm/parceiros/${p.id}`);
-    },
-    [router]
-  );
-
   const pessoaPrimaryColumn = useMemo(
     () => ({
       title: (p: PessoaListaRow) => String(p.nome),
@@ -618,25 +485,6 @@ export default function CadastroPage() {
     }),
     []
   );
-
-  const parceiroPrimaryColumn = useMemo(
-    () => ({
-      label: (p: ParceiroListaRow) => p.nome,
-      title: (p: ParceiroListaRow) => p.nome,
-      meta: (p: ParceiroListaRow) =>
-        p.recebe_leads ? (
-          <span
-            className="mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold"
-            style={{ background: "#003b2630", color: "#34d399" }}
-          >
-            Recebe leads
-          </span>
-        ) : null,
-    }),
-    []
-  );
-
-  const parceirosHomologados = parceirosTodos.filter((p) => p.status === "homologado").length;
 
   return (
     <div
@@ -700,16 +548,9 @@ export default function CadastroPage() {
           buscaPlaceholder={buscaPlaceholder}
           onLimpar={limparFiltros}
           selects={filtrosSelects}
-          trailing={
-            filtroRegisto === "parceiros" && parceirosTodos.length > 0 ? (
-              <span className="text-xs text-[#6e7781]">
-                {parceirosTodos.length} cadastrados · {parceirosHomologados} homologados
-              </span>
-            ) : undefined
-          }
         />
 
-        {selecionados.size > 0 && filtroRegisto !== "parceiros" && (
+        {selecionados.size > 0 && (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[#c9a24a]/30 bg-[#c9a24a]/10 px-4 py-2.5">
             <span className="text-sm font-semibold text-[#c9a24a]">
               {selecionados.size} selecionado(s)
@@ -735,14 +576,6 @@ export default function CadastroPage() {
         {erroMassa && (
           <p className="rounded-lg border border-[#EF4444]/40 bg-[#EF4444]/10 px-3 py-2 text-xs text-[#fca5a5]">
             {erroMassa}
-          </p>
-        )}
-
-        {parceirosQuery.isError && filtroRegisto === "parceiros" && (
-          <p className="rounded-lg border border-[#EF4444]/40 bg-[#EF4444]/10 px-3 py-2 text-xs text-[#fca5a5]">
-            {parceirosQuery.error instanceof Error
-              ? parceirosQuery.error.message
-              : "Não foi possível carregar parceiros."}
           </p>
         )}
 
@@ -816,30 +649,6 @@ export default function CadastroPage() {
           </>
         )}
 
-        {filtroRegisto === "parceiros" && (
-          <>
-            {parceirosCarregando && (
-              <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando…</p>
-            )}
-            {!parceirosCarregando && parceirosFiltrados.length === 0 && (
-              <EmptyState message="Nenhum parceiro com estes filtros. Use «+ Convidar parceiro» para gerar um link." />
-            )}
-            {!parceirosCarregando && parceirosFiltrados.length > 0 && (
-              <CadastroListaTable<ParceiroListaRow>
-                rows={parceirosFiltrados}
-                columns={COLUNAS_PARCEIROS}
-                selectedIds={selecionados}
-                onToggleRow={toggleSelecao}
-                onToggleAll={() => toggleSelecionarTodos(parceirosFiltrados.map((p) => p.id))}
-                stickyPrimary
-                nameColWidth={240}
-                primaryColumn={parceiroPrimaryColumn}
-                onRowClick={abrirParceiro}
-                onView={abrirParceiro}
-              />
-            )}
-          </>
-        )}
       </div>
 
       {wizardOpen && (
@@ -848,13 +657,6 @@ export default function CadastroPage() {
           onClose={() => setWizardOpen(false)}
           tipoInicial={tipoWizard}
           onSaved={aposSalvar}
-        />
-      )}
-
-      {parceiroWizardOpen && (
-        <ParceiroLinkWizard
-          open={parceiroWizardOpen}
-          onClose={() => setParceiroWizardOpen(false)}
         />
       )}
 

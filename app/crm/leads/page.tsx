@@ -4,12 +4,31 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+import { PipelineTabsBar } from "@/components/crm/pipelines/PipelineTabsBar";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
+import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { ESTAGIOS_FALLBACK_UI } from "@/lib/crm/pipeline-defaults";
 
 const LeadRapidoSideover = dynamic(
   () =>
     import("@/components/crm/leads/LeadRapidoSideover").then((m) => ({
       default: m.LeadRapidoSideover,
+    })),
+  { ssr: false }
+);
+
+const LeadKanbanCard = dynamic(
+  () =>
+    import("@/components/crm/leads/LeadKanbanCard").then((m) => ({
+      default: m.LeadKanbanCard,
+    })),
+  { ssr: false }
+);
+
+const PipelineConfigSideover = dynamic(
+  () =>
+    import("@/components/crm/leads/PipelineConfigSideover").then((m) => ({
+      default: m.PipelineConfigSideover,
     })),
   { ssr: false }
 );
@@ -38,9 +57,25 @@ type Lead = {
   atualizado_em: string;
   pessoa_id?: string | null;
   codigo?: string | null;
-  /** Enriquecimento (hub_pessoas) — só leitura na UI */
+  metadata?: unknown;
+  pipeline_id?: string | null;
+  /** Enriquecimento (hub_pessoas / view) */
   _pessoa_codigo?: string | null;
   _email_exibicao?: string | null;
+  ultima_mensagem_fila?: string | null;
+  ultima_mensagem_fila_em?: string | null;
+  pessoa_cidade?: string | null;
+  pessoa_estado?: string | null;
+};
+
+type EstagioUi = { id: string; label: string; color: string };
+
+type PipelineUi = {
+  id: string;
+  slug: string;
+  nome: string;
+  mercado_sigla: string | null;
+  estagios: { slug: string; label: string; cor: string; ativo: boolean; ordem?: number }[];
 };
 
 type Atividade = {
@@ -69,16 +104,11 @@ type Memoria = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ESTAGIOS = [
-  { id: "novo",         label: "Novos",        color: "#6B7280" },
-  { id: "qualificando", label: "Qualificando",  color: "#3B82F6" },
-  { id: "qualificado",  label: "Qualificado",   color: "#06B6D4" },
-  { id: "proposta",     label: "Proposta",      color: "#EAB308" },
-  { id: "negociando",   label: "Negociando",    color: "#F97316" },
-  { id: "fechamento",   label: "Fechamento",    color: "#A855F7" },
-  { id: "ganho",        label: "✓ Ganhos",      color: "#22C55E" },
-  { id: "perdido",      label: "✗ Perdidos",    color: "#EF4444" },
-] as const;
+const ESTAGIOS_FALLBACK: EstagioUi[] = ESTAGIOS_FALLBACK_UI.map((e) => ({
+  id: e.id,
+  label: e.label,
+  color: e.color,
+}));
 
 const ORIGENS_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp", instagram: "Instagram", meta_ads: "Meta Ads",
@@ -118,6 +148,15 @@ function borderColor(iso: string) {
   return "#EF4444";
 }
 
+function isPipelineGlobal(pipe: PipelineUi | null): boolean {
+  if (!pipe) return true;
+  return (
+    pipe.slug === "leads-global" ||
+    pipe.slug === "lead-global" ||
+    /^leads?\s+[—-]\s+pipeline global$/i.test(pipe.nome)
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LeadsPage() {
@@ -142,7 +181,33 @@ export default function LeadsPage() {
   const [leadDragId, setLeadDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [leadRapidoOpen, setLeadRapidoOpen] = useState(false);
+  const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
+  const [pipelines, setPipelines] = useState<PipelineUi[]>([]);
+  const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [estagiosKanban, setEstagiosKanban] = useState<EstagioUi[]>(ESTAGIOS_FALLBACK);
   const [sucessoLead, setSucessoLead] = useState<string | null>(null);
+
+  const carregarPipeline = useCallback(async () => {
+    try {
+      const res = await fetch("/api/crm/pipelines?tipo=lead", {
+        headers: internalApiHeaders(),
+      });
+      const json = await res.json();
+      const list = (json.data || []) as PipelineUi[];
+      if (!list.length) return;
+      setPipelines(list);
+      setPipelineId((prev) => {
+        if (prev && list.some((p) => p.id === prev)) return prev;
+        return (
+          list.find((p) => p.slug === "leads-global" || p.slug === "lead-global")?.id ||
+          list[0]?.id ||
+          null
+        );
+      });
+    } catch {
+      /* fallback ESTAGIOS_FALLBACK */
+    }
+  }, []);
 
   const carregar = useCallback(async () => {
     const vw = await supabase
@@ -151,17 +216,30 @@ export default function LeadsPage() {
       .order("criado_em", { ascending: false });
 
     if (!vw.error && vw.data) {
-      const merged: Lead[] = (vw.data as Record<string, unknown>[]).map((r) => {
+      const rawRows = vw.data as Record<string, unknown>[];
+      const ids = rawRows
+        .map((r) => (r.id != null ? String(r.id) : null))
+        .filter(Boolean) as string[];
+      const pipelineMap = new Map<string, string | null>();
+
+      if (ids.length) {
+        const { data: baseRows } = await supabase
+          .from("hub_leads_crm")
+          .select("id, pipeline_id")
+          .in("id", ids);
+        for (const row of baseRows || []) {
+          pipelineMap.set(String(row.id), row.pipeline_id != null ? String(row.pipeline_id) : null);
+        }
+      }
+
+      const merged: Lead[] = rawRows.map((r) => {
         const {
           pessoa_codigo,
           pessoa_nome_completo: _pn,
           email_exibicao,
-          pessoa_cidade: _pc,
-          pessoa_estado: _pe,
-          ultima_mensagem_fila: _umf,
-          ultima_mensagem_fila_em: _umfe,
           ...base
         } = r;
+        const leadId = r.id != null ? String(r.id) : null;
         const emailDisp =
           email_exibicao != null && String(email_exibicao).trim()
             ? String(email_exibicao).trim()
@@ -170,6 +248,17 @@ export default function LeadsPage() {
           ...(base as Omit<Lead, "_pessoa_codigo" | "_email_exibicao">),
           _pessoa_codigo: pessoa_codigo != null ? String(pessoa_codigo) : null,
           _email_exibicao: emailDisp,
+          pipeline_id:
+            r.pipeline_id != null
+              ? String(r.pipeline_id)
+              : (leadId ? pipelineMap.get(leadId) ?? null : null),
+          ultima_mensagem_fila:
+            r.ultima_mensagem_fila != null ? String(r.ultima_mensagem_fila) : null,
+          ultima_mensagem_fila_em:
+            r.ultima_mensagem_fila_em != null ? String(r.ultima_mensagem_fila_em) : null,
+          pessoa_cidade: r.pessoa_cidade != null ? String(r.pessoa_cidade) : null,
+          pessoa_estado: r.pessoa_estado != null ? String(r.pessoa_estado) : null,
+          metadata: r.metadata,
         };
       });
       setLeads(merged);
@@ -216,6 +305,24 @@ export default function LeadsPage() {
       router.replace(q ? `/crm/leads?${q}` : "/crm/leads");
     }
   }, [searchParams, isMobile, router]);
+
+  useEffect(() => {
+    void carregarPipeline();
+  }, [carregarPipeline]);
+
+  const pipelineAtivo = useMemo(
+    () => pipelines.find((p) => p.id === pipelineId) ?? null,
+    [pipelines, pipelineId]
+  );
+
+  useEffect(() => {
+    const cols =
+      pipelineAtivo?.estagios
+        ?.filter((e) => e.ativo !== false)
+        .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+        .map((e) => ({ id: e.slug, label: e.label, color: e.cor || "#6B7280" })) ?? [];
+    setEstagiosKanban(cols.length ? cols : ESTAGIOS_FALLBACK);
+  }, [pipelineAtivo]);
 
   useEffect(() => {
     carregar();
@@ -271,7 +378,13 @@ export default function LeadsPage() {
     setNovaNota("");
   }
 
-  const filtrados = leads.filter(l => {
+  const leadsDoPipeline = leads.filter((l) => {
+    if (!pipelineAtivo) return true;
+    if (isPipelineGlobal(pipelineAtivo)) return true;
+    return l.pipeline_id === pipelineAtivo.id;
+  });
+
+  const filtrados = leadsDoPipeline.filter(l => {
     if (
       busca &&
       !l.nome.toLowerCase().includes(busca.toLowerCase()) &&
@@ -286,9 +399,9 @@ export default function LeadsPage() {
   });
 
   const hoje = new Date().toDateString();
-  const semResposta = leads.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 86_400_000).length;
-  const emRisco = leads.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 3_600_000).reduce((s, l) => s + l.valor_estimado, 0);
-  const pipeline = leads.filter(l => !["ganho", "perdido"].includes(l.estagio)).reduce((s, l) => s + l.valor_estimado, 0);
+  const semResposta = leadsDoPipeline.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 86_400_000).length;
+  const emRisco = leadsDoPipeline.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 3_600_000).reduce((s, l) => s + l.valor_estimado, 0);
+  const pipeline = leadsDoPipeline.filter(l => !["ganho", "perdido"].includes(l.estagio)).reduce((s, l) => s + l.valor_estimado, 0);
 
   const botaoNovoLead = useMemo(
     () => (
@@ -311,7 +424,7 @@ export default function LeadsPage() {
     }
     setSlot({
       path: pathname,
-      subtitle: `${leads.length} leads · tempo real`,
+      subtitle: `${pipelineAtivo?.nome || "Pipeline de Leads"} · ${leadsDoPipeline.length} leads`,
       actions: (
         <>
           {botaoNovoLead}
@@ -343,17 +456,25 @@ export default function LeadsPage() {
             className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
           >
             <option value="">Todos os estágios</option>
-            {ESTAGIOS.map(e => (
+            {estagiosKanban.map(e => (
               <option key={e.id} value={e.id}>
                 {e.label}
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setPipelineConfigOpen(true)}
+            className="min-h-11 shrink-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-xs font-bold text-[#8b949e] hover:text-[#e6edf3] min-[480px]:min-h-10"
+            title="Configurar pipeline"
+          >
+            Pipeline
+          </button>
         </>
       ),
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, leads.length, view, busca, filtroEstagio, isMobile, botaoNovoLead]);
+  }, [pathname, setSlot, pipelineAtivo, leadsDoPipeline.length, view, busca, filtroEstagio, isMobile, botaoNovoLead, estagiosKanban]);
 
   const headerControls = (
     <>
@@ -386,14 +507,29 @@ export default function LeadsPage() {
         className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
       >
         <option value="">Todos os estágios</option>
-        {ESTAGIOS.map(e => (
+        {estagiosKanban.map(e => (
           <option key={e.id} value={e.id}>
             {e.label}
           </option>
         ))}
       </select>
+      <button
+        type="button"
+        onClick={() => setPipelineConfigOpen(true)}
+        className="min-h-11 shrink-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-xs font-bold text-[#8b949e] hover:text-[#e6edf3] min-[480px]:min-h-10"
+      >
+        Pipeline
+      </button>
     </>
   );
+
+  const pipelineTabs = pipelines.length > 0 ? (
+    <PipelineTabsBar
+      pipelines={pipelines}
+      activePipelineId={pipelineId}
+      onSelect={setPipelineId}
+    />
+  ) : null;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
@@ -415,11 +551,13 @@ export default function LeadsPage() {
         </div>
       )}
 
+      {pipelineTabs}
+
       {isMobile && (
         <div className="sticky top-0 z-20 shrink-0 space-y-2 border-b border-[#30363d] bg-[#161b22] px-3 py-3">
           <div>
-            <h1 className="text-base font-bold text-[#e6edf3]">Leads</h1>
-            <p className="text-[11px] text-[#8b949e]">{leads.length} leads · tempo real</p>
+            <h1 className="text-base font-bold text-[#e6edf3]">{pipelineAtivo?.nome || "Leads"}</h1>
+            <p className="text-[11px] text-[#8b949e]">{leadsDoPipeline.length} leads · tempo real</p>
           </div>
           <div className="flex flex-col gap-2">{headerControls}</div>
         </div>
@@ -428,7 +566,7 @@ export default function LeadsPage() {
       {/* ─── METRICS ─── */}
       <div className="grid grid-cols-2 gap-px sm:grid-cols-4 flex-shrink-0 bg-[#30363d]">
         {[
-          { label: "Leads Hoje", value: String(leads.filter(l => new Date(l.criado_em).toDateString() === hoje).length), cor: "#F97316" },
+          { label: "Leads Hoje", value: String(leadsDoPipeline.filter(l => new Date(l.criado_em).toDateString() === hoje).length), cor: "#F97316" },
           { label: "Sem Resposta +24h", value: String(semResposta), cor: semResposta > 0 ? "#EF4444" : "#22C55E" },
           { label: "Em Risco +1h", value: emRisco > 0 ? moeda(emRisco) : "—", cor: emRisco > 0 ? "#EAB308" : "#6B7280" },
           { label: "Pipeline Total", value: moeda(pipeline), cor: "#22C55E" },
@@ -448,13 +586,13 @@ export default function LeadsPage() {
           <div
             className={`flex h-full overflow-x-auto ${isMobile ? "snap-x snap-mandatory scroll-pl-3 gap-2.5 px-3 py-3 scrollbar-none" : "gap-3 p-4"}`}
           >
-            {ESTAGIOS.map(est => {
+            {estagiosKanban.map(est => {
               const col = filtrados.filter(l => l.estagio === est.id);
               const total = col.reduce((s, l) => s + l.valor_estimado, 0);
               return (
                 <div
                   key={est.id}
-                  className={`flex flex-shrink-0 flex-col ${isMobile ? "w-[clamp(9rem,50vw,11.5rem)] snap-start" : "w-[230px]"}`}
+                  className={`flex flex-shrink-0 flex-col ${isMobile ? "w-[clamp(11rem,72vw,18rem)] snap-start" : "min-w-[300px] w-[300px]"}`}
                 >
                   {/* Column header */}
                   <div className="rounded-t-xl px-3 py-2.5" style={{ backgroundColor: est.color + "1A", borderLeft: `3px solid ${est.color}`, borderTop: `1px solid ${est.color}40`, borderRight: `1px solid ${est.color}40` }}>
@@ -471,46 +609,27 @@ export default function LeadsPage() {
                     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
                     onDrop={e => { e.preventDefault(); const lid = e.dataTransfer.getData("leadId"); if (lid) moverEstagio(lid, est.id); setLeadDragId(null); setDragOver(null); }}>
                     {col.map(lead => (
-                      <div key={lead.id}
+                      <LeadKanbanCard
+                        key={lead.id}
+                        lead={lead}
+                        dragging={leadDragId === lead.id}
+                        isMobile={isMobile}
                         draggable={!isMobile}
-                        onDragStart={e => { e.dataTransfer.setData("leadId", lead.id); setLeadDragId(lead.id); }}
-                        onDragEnd={() => { setLeadDragId(null); setDragOver(null); }}
-                        onClick={() => (isMobile ? abrirDetalhe(lead) : router.push(`/crm/leads/${lead.id}`))}
-                        className="cursor-pointer rounded-xl border border-[#30363d] bg-[#161b22] p-3 transition-all hover:bg-[#21262d] active:cursor-grabbing"
-                        style={{ borderLeftWidth: 3, borderLeftColor: borderColor(lead.atualizado_em), opacity: leadDragId === lead.id ? 0.5 : 1 }}>
-                        <p className="text-white text-xs font-bold truncate leading-tight">{lead.nome}</p>
-                        {(lead.codigo || lead._pessoa_codigo) && (
-                          <p className="text-[10px] font-mono text-[#c9a24a]/90 truncate mt-0.5">
-                            {lead.codigo || lead._pessoa_codigo}
-                            {lead.codigo && lead._pessoa_codigo && lead.codigo !== lead._pessoa_codigo && (
-                              <span className="text-white/35"> · {lead._pessoa_codigo}</span>
-                            )}
-                          </p>
-                        )}
-                        {lead.valor_estimado > 0 && <p className="text-xs font-bold mt-1" style={{ color: "#22C55E" }}>{moeda(lead.valor_estimado)}</p>}
-                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                          {lead.origem && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: (ORIGENS_COLOR[lead.origem] || "#6B7280") + "25", color: ORIGENS_COLOR[lead.origem] || "#9CA3AF" }}>
-                              {ORIGENS_LABEL[lead.origem] || lead.origem}
-                            </span>
-                          )}
-                          {lead.agente_responsavel && (
-                            <span className="truncate text-xs text-[#8b949e]">{lead.agente_responsavel}</span>
-                          )}
-                          <span className="ml-auto text-xs text-[#8b949e]">{tempo(lead.atualizado_em)}</span>
-                        </div>
-                        {isMobile && lead.telefone && (
-                          <a
-                            href={`https://wa.me/55${lead.telefone.replace(/\D/g, "")}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="mt-2 flex min-h-11 w-full items-center justify-center rounded-lg bg-[#25D366] text-xs font-bold text-white"
-                          >
-                            WhatsApp
-                          </a>
-                        )}
-                      </div>
+                        onDragStart={e => {
+                          e.dataTransfer.setData("leadId", lead.id);
+                          setLeadDragId(lead.id);
+                        }}
+                        onDragEnd={() => {
+                          setLeadDragId(null);
+                          setDragOver(null);
+                        }}
+                        onOpen={() =>
+                          isMobile ? abrirDetalhe(lead) : router.push(`/crm/leads/${lead.id}`)
+                        }
+                        onEdit={() =>
+                          isMobile ? abrirDetalhe(lead) : router.push(`/crm/leads/${lead.id}`)
+                        }
+                      />
                     ))}
                     {col.length === 0 && <p className="py-4 text-center text-xs text-[#484f58]">vazio</p>}
                   </div>
@@ -526,7 +645,7 @@ export default function LeadsPage() {
             {isMobile ? (
               <ul className="space-y-2 p-3 pb-24">
                 {filtrados.map(lead => {
-                  const est = ESTAGIOS.find(e => e.id === lead.estagio);
+                  const est = estagiosKanban.find(e => e.id === lead.estagio);
                   return (
                     <li key={lead.id}>
                       <button
@@ -580,7 +699,7 @@ export default function LeadsPage() {
               </thead>
               <tbody>
                 {filtrados.map(lead => {
-                  const est = ESTAGIOS.find(e => e.id === lead.estagio);
+                  const est = estagiosKanban.find(e => e.id === lead.estagio);
                   return (
                     <tr key={lead.id} onClick={() => router.push(`/crm/leads/${lead.id}`)}
                       className="border-b border-gray-800/50 hover:bg-gray-900/60 cursor-pointer transition-colors">
@@ -661,7 +780,7 @@ export default function LeadsPage() {
 
               {/* Stage selector */}
               <div className="flex gap-1 flex-wrap">
-                {ESTAGIOS.map(e => (
+                {estagiosKanban.map(e => (
                   <button key={e.id} onClick={() => moverEstagio(detalhe.id, e.id)}
                     className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
                     style={{
@@ -844,6 +963,17 @@ export default function LeadsPage() {
           }}
         />
       )}
+
+      <PipelineConfigSideover
+        open={pipelineConfigOpen}
+        onClose={() => setPipelineConfigOpen(false)}
+        tipo="lead"
+        pipelineId={pipelineId}
+        onSelectPipeline={(id) => setPipelineId(id)}
+        onUpdated={() => {
+          void carregarPipeline();
+        }}
+      />
     </div>
   );
 }

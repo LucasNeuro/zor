@@ -22,7 +22,17 @@ export function labelMercadoPrefixo(sigla: string | null | undefined): string {
   return LABEL_POR_SIGLA.get(key) ?? sigla;
 }
 
-export const NEGOCIO_ETAPAS = ["briefing", "match", "sit-down", "concluido"] as const;
+/** Alinhado ao funil de leads (hub_pipeline_estagios). */
+export const NEGOCIO_ETAPAS = [
+  "novo",
+  "qualificando",
+  "qualificado",
+  "proposta",
+  "negociando",
+  "fechamento",
+  "ganho",
+  "perdido",
+] as const;
 
 export type NegocioEtapa = (typeof NEGOCIO_ETAPAS)[number];
 
@@ -76,7 +86,7 @@ export function validarNegocioCadastro(
     return { ok: false, erro: "Selecione um mercado válido." };
   }
 
-  const etapa = (body.etapa || "briefing").trim() as NegocioEtapa;
+  const etapa = (body.etapa || "novo").trim() as NegocioEtapa;
   if (!NEGOCIO_ETAPAS.includes(etapa)) {
     return { ok: false, erro: "Etapa inválida." };
   }

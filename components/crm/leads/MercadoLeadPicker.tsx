@@ -1,28 +1,8 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
-import {
-  Building2,
-  Factory,
-  Hammer,
-  HardHat,
-  Layers,
-  Package,
-  Wrench,
-} from "lucide-react";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
+import { mercadoIcon } from "@/lib/crm/mercado-visual";
 import { MERCADOS_PREFIXO_OPTIONS } from "@/lib/crm/negocio-cadastro";
-
-const MERCADO_ICON: Record<string, LucideIcon> = {
-  IMB: Building2,
-  ARQ: Layers,
-  RFM: Hammer,
-  MRC: Package,
-  ENG: HardHat,
-  SRV: Wrench,
-  PRO: Factory,
-  FOR: Package,
-};
 
 type Props = {
   mercados: string[];
@@ -41,7 +21,7 @@ export function MercadoLeadPicker({ mercados, onToggle, disabled }: Props) {
       {MERCADOS_PREFIXO_OPTIONS.map((m) => {
         const sigla = m.value;
         const ativo = mercados.includes(sigla);
-        const Icon = MERCADO_ICON[sigla] ?? Building2;
+        const Icon = mercadoIcon(sigla);
         const labelId = `lead-mercado-${sigla}`;
         return (
           <div

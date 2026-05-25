@@ -202,7 +202,7 @@ export default function NegocioDetalhePage() {
       )}
 
       <div style={{ marginTop: 24, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {["briefing", "match", "sit-down", "concluido"].map((e) => (
+        {["novo", "qualificando", "qualificado", "proposta", "negociando", "fechamento", "ganho", "perdido"].map((e) => (
           <button
             key={e}
             type="button"

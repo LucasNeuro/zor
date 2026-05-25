@@ -1,14 +1,14 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
-import { KpiBar } from "@/components/crm/KpiBar";
-import { SearchBar } from "@/components/crm/SearchBar";
-import { FilterPills } from "@/components/crm/FilterPills";
-import { EmptyState } from "@/components/crm/EmptyState";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { NegocioFormDrawer } from "@/components/crm/NegocioFormDrawer";
+import { PipelineConfigSideover } from "@/components/crm/leads/PipelineConfigSideover";
+import { NegocioKanbanCard } from "@/components/crm/negocios/NegocioKanbanCard";
 import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
+import { ESTAGIOS_FALLBACK_UI } from "@/lib/crm/pipeline-defaults";
 
 const LIMIT = 20;
 
@@ -17,6 +17,7 @@ type Negocio = {
   codigo: string;
   titulo: string;
   prefixo_mercado: string;
+  pipeline_id?: string | null;
   status: string;
   etapa: string;
   valor_estimado: number | null;
@@ -25,19 +26,25 @@ type Negocio = {
   criado_em: string | null;
 };
 
-const ETAPAS = [
-  { id: "", label: "Todas" },
-  { id: "briefing", label: "Briefing" },
-  { id: "match", label: "Match" },
-  { id: "sit-down", label: "Sit-down" },
-  { id: "concluido", label: "Concluído" },
-];
+type PipelineUi = {
+  id: string;
+  slug: string;
+  nome: string;
+  mercado_sigla: string | null;
+  estagios: { slug: string; label: string; cor: string; ativo: boolean; ordem?: number }[];
+};
+
+type EtapaUi = { id: string; label: string; color: string };
 
 const ETAPA_COR: Record<string, string> = {
-  briefing: "#3b82f6",
-  match: "#f59e0b",
-  "sit-down": "#a855f7",
-  concluido: "#22c55e",
+  novo: "#6b7280",
+  qualificando: "#3b82f6",
+  qualificado: "#06b6d4",
+  proposta: "#eab308",
+  negociando: "#f97316",
+  fechamento: "#a855f7",
+  ganho: "#22c55e",
+  perdido: "#ef4444",
 };
 
 const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }> = {
@@ -48,49 +55,55 @@ const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }>
   cancelado: { label: "Cancelado", color: "#8b949e", bg: "#8b949e22" },
 };
 
+const ETAPAS_FALLBACK: EtapaUi[] = ESTAGIOS_FALLBACK_UI.map((e) => ({
+  id: e.id,
+  label: e.label,
+  color: e.color,
+}));
+
+function moeda(v: number | null) {
+  if (v == null || v <= 0) return "—";
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 0,
+  }).format(v);
+}
+
+function tempo(iso: string | null) {
+  if (!iso) return "—";
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "agora";
+  if (m < 60) return `${m}min`;
+  if (m < 1440) return `${Math.floor(m / 60)}h`;
+  return `${Math.floor(m / 1440)}d`;
+}
+
 function formatData(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 
-function formatCurrency(val: number | null): string {
-  if (val === null || val === undefined) return "—";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(val);
+function totalAberto(negocios: Negocio[]) {
+  return negocios
+    .filter((n) => !["ganho", "perdido"].includes(n.etapa))
+    .reduce((s, n) => s + (n.valor_fechado ?? n.valor_estimado ?? 0), 0);
 }
-
-const TH: React.CSSProperties = {
-  textAlign: "left",
-  padding: "10px 12px",
-  color: "#8b949e",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  whiteSpace: "nowrap",
-  borderBottom: "1px solid #30363d",
-};
-
-const TD: React.CSSProperties = {
-  padding: "10px 12px",
-  fontSize: 13,
-  color: "#e6edf3",
-  whiteSpace: "nowrap",
-};
-
-const KANBAN_ETAPAS = [
-  { id: "briefing", label: "Briefing", color: "#3b82f6" },
-  { id: "match", label: "Match", color: "#f59e0b" },
-  { id: "sit-down", label: "Sit-down", color: "#a855f7" },
-  { id: "concluido", label: "Concluído", color: "#22c55e" },
-] as const;
 
 export default function NegociosPage() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setSlot } = useCrmHeaderSlot();
+  const narrow = useNarrowViewport();
+  const isMobile = narrow !== false;
+
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [negocios, setNegocios] = useState<Negocio[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [busca, setBusca] = useState("");
   const [etapa, setEtapa] = useState("");
@@ -98,56 +111,86 @@ export default function NegociosPage() {
   const [carregando, setCarregando] = useState(true);
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [drawerAberto, setDrawerAberto] = useState(false);
+  const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
+  const [pipelines, setPipelines] = useState<PipelineUi[]>([]);
+  const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [etapasKanban, setEtapasKanban] = useState<EtapaUi[]>(ETAPAS_FALLBACK);
 
-  const carregarLista = useCallback(() => {
-    setCarregando(true);
-    const p = new URLSearchParams({ offset: "0" });
-    if (busca) p.set("busca", busca);
-    if (etapa) p.set("etapa", etapa);
+  const carregarPipelines = useCallback(async () => {
+    const res = await fetch("/api/crm/pipelines?tipo=negocio", {
+      headers: internalApiHeaders(),
+    });
+    const json = await res.json().catch(() => ({ data: [] }));
+    const list = (json.data || []) as PipelineUi[];
+    if (!list.length) return;
+    const globais = list.filter((p) => !p.mercado_sigla);
+    const visiveis = globais.length ? globais : list;
+    setPipelines(visiveis);
+    setPipelineId((prev) =>
+      prev && visiveis.some((p) => p.id === prev)
+        ? prev
+        : (visiveis.find((p) => p.slug === "negocios-global")?.id || visiveis[0]?.id || null)
+    );
+  }, []);
 
-    return fetch(`/api/crm/negocios?${p}`, { headers: internalApiHeaders() })
-      .then((r) => r.json())
-      .then((d) => {
-        setNegocios(d.data ?? []);
-        setTotal(d.total ?? 0);
-        setOffset(LIMIT);
-      })
-      .catch(() => {})
-      .finally(() => setCarregando(false));
-  }, [busca, etapa]);
+  const pipelineAtivo = useMemo(
+    () => pipelines.find((p) => p.id === pipelineId) ?? null,
+    [pipelines, pipelineId]
+  );
+
+  useEffect(() => {
+    void carregarPipelines();
+  }, [carregarPipelines]);
+
+  useEffect(() => {
+    const cols =
+      pipelineAtivo?.estagios
+        ?.filter((e) => e.ativo !== false)
+        .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+        .map((e) => ({ id: e.slug, label: e.label, color: e.cor || "#6B7280" })) ?? [];
+    setEtapasKanban(cols.length ? cols : ETAPAS_FALLBACK);
+  }, [pipelineAtivo]);
+
+  const carregarLista = useCallback(
+    (nextOffset = 0, append = false) => {
+      if (append) setCarregandoMais(true);
+      else setCarregando(true);
+
+      const p = new URLSearchParams({ offset: String(nextOffset) });
+      if (busca) p.set("busca", busca);
+      if (etapa) p.set("etapa", etapa);
+      if (pipelineAtivo && pipelineAtivo.slug !== "negocios-global") {
+        p.set("pipeline_id", pipelineAtivo.id);
+      }
+
+      return fetch(`/api/crm/negocios?${p}`, { headers: internalApiHeaders() })
+        .then((r) => r.json())
+        .then((d) => {
+          const rows = (d.data ?? []) as Negocio[];
+          setNegocios((prev) => (append ? [...prev, ...rows] : rows));
+          setTotal(d.total ?? 0);
+          setOffset(nextOffset + LIMIT);
+        })
+        .catch(() => {})
+        .finally(() => {
+          setCarregando(false);
+          setCarregandoMais(false);
+        });
+    },
+    [busca, etapa, pipelineAtivo]
+  );
 
   useEffect(() => {
     const et = searchParams.get("etapa");
     const v = searchParams.get("view");
     if (et) setEtapa(et);
     if (v === "kanban" || v === "lista") setView(v);
-  }, [searchParams]);
+    else if (isMobile) setView("lista");
+  }, [searchParams, isMobile]);
 
   useEffect(() => {
-    void carregarLista();
+    void carregarLista(0, false);
   }, [carregarLista]);
-
-  function carregarMais() {
-    setCarregandoMais(true);
-    const p = new URLSearchParams({ offset: String(offset) });
-    if (busca) p.set("busca", busca);
-    if (etapa) p.set("etapa", etapa);
-
-    fetch(`/api/crm/negocios?${p}`, { headers: internalApiHeaders() })
-      .then((r) => r.json())
-      .then((d) => {
-        setNegocios((prev) => [...prev, ...(d.data ?? [])]);
-        setOffset((prev) => prev + LIMIT);
-      })
-      .catch(() => {})
-      .finally(() => setCarregandoMais(false));
-  }
-
-  const briefingCount = negocios.filter((n) => n.etapa === "briefing").length;
-  const matchCount = negocios.filter((n) => n.etapa === "match").length;
-  const sitdownCount = negocios.filter((n) => n.etapa === "sit-down").length;
-  const concluidoCount = negocios.filter((n) => n.etapa === "concluido").length;
-  const temMais = negocios.length < total;
 
   async function moverEtapa(negocioId: string, novaEtapa: string) {
     await fetch(`/api/crm/negocios/${negocioId}`, {
@@ -155,220 +198,450 @@ export default function NegociosPage() {
       headers: { "Content-Type": "application/json", ...internalApiHeaders() },
       body: JSON.stringify({ etapa: novaEtapa }),
     });
-    setNegocios((prev) => prev.map((n) => (n.id === negocioId ? { ...n, etapa: novaEtapa } : n)));
+    setNegocios((prev) =>
+      prev.map((n) => (n.id === negocioId ? { ...n, etapa: novaEtapa } : n))
+    );
   }
 
+  const qualificadosCount = negocios.filter((n) => n.etapa === "qualificado").length;
+  const negociandoCount = negocios.filter((n) => n.etapa === "negociando").length;
+  const pipelineTotal = totalAberto(negocios);
+  const temMais = negocios.length < total;
+  const hoje = new Date().toDateString();
+  const negociosHoje = negocios.filter((n) =>
+    n.criado_em ? new Date(n.criado_em).toDateString() === hoje : false
+  ).length;
+
+  const botaoNovoNegocio = useMemo(
+    () => (
+      <button
+        type="button"
+        onClick={() => setDrawerAberto(true)}
+        className="min-h-11 shrink-0 rounded-lg px-4 py-2 text-sm font-bold min-[480px]:min-h-10"
+        style={{ background: "#003b26", color: "#c9a24a", border: "none", cursor: "pointer" }}
+      >
+        + Novo negócio
+      </button>
+    ),
+    []
+  );
+
   useEffect(() => {
+    if (isMobile) {
+      setSlot(null);
+      return;
+    }
     setSlot({
       path: pathname,
+      subtitle: `${pipelineAtivo?.nome || "Negócios"} · ${total} negócios`,
       actions: (
-        <button
-          type="button"
-          onClick={() => setDrawerAberto(true)}
-          style={{
-            background: "#003b26",
-            color: "#c9a24a",
-            border: "none",
-            borderRadius: 8,
-            padding: "10px 20px",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          + Novo
-        </button>
+        <>
+          {botaoNovoNegocio}
+          <div className="inline-flex w-full rounded-lg bg-[#21262d] p-0.5 min-[480px]:w-auto">
+            <button
+              type="button"
+              onClick={() => setView("kanban")}
+              className={`min-h-11 flex-1 rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${
+                view === "kanban" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"
+              }`}
+            >
+              Kanban
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("lista")}
+              className={`min-h-11 flex-1 rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${
+                view === "lista" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"
+              }`}
+            >
+              Lista
+            </button>
+          </div>
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por título ou código..."
+            className="w-full min-h-11 min-w-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-52"
+          />
+          <select
+            value={etapa}
+            onChange={(e) => setEtapa(e.target.value)}
+            className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
+          >
+            <option value="">Todas as etapas</option>
+            {etapasKanban.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setPipelineConfigOpen(true)}
+            className="min-h-11 shrink-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-xs font-bold text-[#8b949e] hover:text-[#e6edf3] min-[480px]:min-h-10"
+          >
+            Pipeline
+          </button>
+        </>
       ),
     });
     return () => setSlot(null);
-  }, [pathname, setSlot]);
+  }, [pathname, setSlot, total, pipelineAtivo, view, busca, etapa, etapasKanban, isMobile, botaoNovoNegocio]);
+
+  const headerControls = (
+    <>
+      {botaoNovoNegocio}
+      <div className="inline-flex w-full rounded-lg bg-[#21262d] p-0.5 min-[480px]:w-auto">
+        <button
+          type="button"
+          onClick={() => setView("kanban")}
+          className={`min-h-11 flex-1 rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${
+            view === "kanban" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"
+          }`}
+        >
+          Kanban
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("lista")}
+          className={`min-h-11 flex-1 rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${
+            view === "lista" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"
+          }`}
+        >
+          Lista
+        </button>
+      </div>
+      <input
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        placeholder="Buscar por título ou código..."
+        className="w-full min-h-11 min-w-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-52"
+      />
+      <select
+        value={etapa}
+        onChange={(e) => setEtapa(e.target.value)}
+        className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
+      >
+        <option value="">Todas as etapas</option>
+        {etapasKanban.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => setPipelineConfigOpen(true)}
+        className="min-h-11 shrink-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-xs font-bold text-[#8b949e] hover:text-[#e6edf3] min-[480px]:min-h-10"
+      >
+        Pipeline
+      </button>
+    </>
+  );
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: "24px" }}>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
       <NegocioFormDrawer
         open={drawerAberto}
         onClose={() => setDrawerAberto(false)}
-        onSaved={carregarLista}
+        onSaved={() => {
+          void carregarLista(0, false);
+        }}
+        pipelineId={pipelineAtivo?.id ?? null}
+        defaultMercado={pipelineAtivo?.mercado_sigla ?? null}
       />
 
-      {/* KPI Bar — by etapa */}
-      <KpiBar kpis={[
-        { label: "Total", value: total, color: "#c9a24a" },
-        { label: "Briefing", value: briefingCount, color: "#3b82f6" },
-        { label: "Match", value: matchCount, color: "#f59e0b" },
-        { label: "Sit-down", value: sitdownCount, color: "#a855f7" },
-        { label: "Concluído", value: concluidoCount, color: "#22c55e" },
-      ]} />
+      <PipelineConfigSideover
+        open={pipelineConfigOpen}
+        onClose={() => setPipelineConfigOpen(false)}
+        tipo="negocio"
+        pipelineId={pipelineId}
+        onSelectPipeline={setPipelineId}
+        showPipelineAdmin={false}
+        onUpdated={() => {
+          void carregarPipelines();
+          void carregarLista(0, false);
+        }}
+      />
 
-      {/* Search */}
-      <div style={{ marginBottom: 12 }}>
-        <SearchBar
-          value={busca}
-          onChange={setBusca}
-          placeholder="Buscar por título ou código..."
-        />
-      </div>
-
-      {/* Filter Pills — by etapa */}
-      <div style={{ marginBottom: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <FilterPills pills={ETAPAS} active={etapa} onChange={setEtapa} />
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {(["kanban", "lista"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #30363d",
-                background: view === v ? "#003b26" : "transparent",
-                color: view === v ? "#c9a24a" : "#8b949e",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              {v === "kanban" ? "Kanban" : "Lista"}
-            </button>
-          ))}
+      {isMobile && (
+        <div className="sticky top-0 z-20 shrink-0 space-y-2 border-b border-[#30363d] bg-[#161b22] px-3 py-3">
+          <div>
+            <h1 className="text-base font-bold text-[#e6edf3]">Negócios</h1>
+            <p className="text-[11px] text-[#8b949e]">
+              {pipelineAtivo?.nome || "Pipeline global"} · {total} negócios
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">{headerControls}</div>
         </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-px bg-[#30363d] sm:grid-cols-4">
+        {[
+          { label: "Negócios Hoje", value: String(negociosHoje), cor: "#F97316" },
+          { label: "Qualificados", value: String(qualificadosCount), cor: "#06B6D4" },
+          { label: "Negociando", value: String(negociandoCount), cor: "#F59E0B" },
+          { label: "Pipeline Total", value: moeda(pipelineTotal), cor: "#22C55E" },
+        ].map((m) => (
+          <div key={m.label} className="bg-[#161b22] px-3 py-2.5 sm:px-5">
+            <p className="mb-0.5 text-xs text-[#8b949e]">{m.label}</p>
+            <p className="text-base font-black sm:text-lg" style={{ color: m.cor }}>
+              {m.value}
+            </p>
+          </div>
+        ))}
       </div>
 
-      {/* Content */}
-      {carregando ? (
-        <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando...</p>
-      ) : negocios.length === 0 ? (
-        <EmptyState message="Nenhum negócio encontrado." />
-      ) : view === "kanban" ? (
-        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
-          {KANBAN_ETAPAS.map((col) => {
-            const cards = negocios.filter((n) => n.etapa === col.id);
-            return (
-              <div
-                key={col.id}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  if (dragId) void moverEtapa(dragId, col.id);
-                  setDragId(null);
-                }}
-                style={{
-                  minWidth: 240,
-                  flex: "1 0 240px",
-                  background: "#161b22",
-                  borderRadius: 10,
-                  border: "1px solid #30363d",
-                  padding: 10,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: col.color }}>{col.label}</span>
-                  <span style={{ fontSize: 11, color: "#8b949e" }}>{cards.length}</span>
-                </div>
-                {cards.map((n) => (
+      <div className="flex-1 overflow-hidden">
+        {carregando && negocios.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-4 text-sm text-[#8b949e]">
+            Carregando negócios...
+          </div>
+        ) : view === "kanban" ? (
+          <div
+            className={`flex h-full overflow-x-auto ${
+              isMobile ? "snap-x snap-mandatory scroll-pl-3 gap-2.5 px-3 py-3 scrollbar-none" : "gap-3 p-4"
+            }`}
+          >
+            {etapasKanban.map((est) => {
+              const col = negocios.filter((n) => n.etapa === est.id);
+              const totalCol = col.reduce(
+                (s, n) => s + (n.valor_fechado ?? n.valor_estimado ?? 0),
+                0
+              );
+              return (
+                <div
+                  key={est.id}
+                  className={`flex flex-shrink-0 flex-col ${
+                    isMobile ? "w-[clamp(11rem,72vw,18rem)] snap-start" : "min-w-[300px] w-[300px]"
+                  }`}
+                >
                   <div
-                    key={n.id}
-                    draggable
-                    onDragStart={() => setDragId(n.id)}
-                    onClick={() => router.push(`/crm/negocios/${n.id}`)}
+                    className="rounded-t-xl px-3 py-2.5"
                     style={{
-                      background: "#0d1117",
-                      border: "1px solid #21262d",
-                      borderRadius: 8,
-                      padding: 10,
-                      marginBottom: 8,
-                      cursor: "pointer",
+                      backgroundColor: est.color + "1A",
+                      borderLeft: `3px solid ${est.color}`,
+                      borderTop: `1px solid ${est.color}40`,
+                      borderRight: `1px solid ${est.color}40`,
                     }}
                   >
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{n.titulo}</p>
-                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "#8b949e", fontFamily: "monospace" }}>{n.codigo}</p>
-                    <p style={{ margin: "6px 0 0", fontSize: 12, color: "#c9a24a" }}>{formatCurrency(n.valor_estimado)}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white">{est.label}</span>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-xs font-bold text-white"
+                        style={{ backgroundColor: est.color + "40" }}
+                      >
+                        {col.length}
+                      </span>
+                    </div>
+                    {totalCol > 0 ? (
+                      <p className="mt-0.5 text-xs font-bold" style={{ color: est.color }}>
+                        {moeda(totalCol)}
+                      </p>
+                    ) : null}
                   </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
-              <thead>
-                <tr>
-                  <th style={TH}>Código</th>
-                  <th style={TH}>Título</th>
-                  <th style={TH}>Mercado</th>
-                  <th style={TH}>Etapa</th>
-                  <th style={TH}>Status</th>
-                  <th style={TH}>Valor Est.</th>
-                  <th style={TH}>Previsão</th>
-                  <th style={TH}>Cadastro</th>
-                </tr>
-              </thead>
-              <tbody>
-                {negocios.map((n) => {
-                  const etapaCor = ETAPA_COR[n.etapa] ?? "#8b949e";
-                  const statusInfo = STATUS_LABEL[n.status] ?? { label: n.status, color: "#8b949e", bg: "#8b949e22" };
+
+                  <div
+                    className="flex-1 space-y-2 overflow-y-auto rounded-b-xl border border-t-0 border-[#30363d] bg-[#161b22]/60 p-2 transition-colors"
+                    style={{
+                      minHeight: 80,
+                      backgroundColor: dragOver === est.id ? est.color + "12" : undefined,
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOver(est.id);
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const id = e.dataTransfer.getData("negocioId");
+                      if (id) void moverEtapa(id, est.id);
+                      setDragId(null);
+                      setDragOver(null);
+                    }}
+                  >
+                    {col.map((negocio) => (
+                      <NegocioKanbanCard
+                        key={negocio.id}
+                        negocio={negocio}
+                        dragging={dragId === negocio.id}
+                        draggable={!isMobile}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("negocioId", negocio.id);
+                          setDragId(negocio.id);
+                        }}
+                        onDragEnd={() => {
+                          setDragId(null);
+                          setDragOver(null);
+                        }}
+                        onOpen={() => router.push(`/crm/negocios/${negocio.id}`)}
+                        onEdit={() => router.push(`/crm/negocios/${negocio.id}`)}
+                      />
+                    ))}
+                    {col.length === 0 ? (
+                      <p className="py-4 text-center text-xs text-[#484f58]">vazio</p>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="h-full overflow-y-auto">
+            {isMobile ? (
+              <ul className="space-y-2 p-3 pb-24">
+                {negocios.map((negocio) => {
+                  const etapaAtiva = etapasKanban.find((e) => e.id === negocio.etapa);
                   return (
-                    <tr
-                      key={n.id}
-                      onClick={() => router.push(`/crm/negocios/${n.id}`)}
-                      style={{ borderBottom: "1px solid #21262d", cursor: "pointer" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#161b22"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
-                    >
-                      <td style={{ ...TD, color: "#8b949e", fontSize: 12, fontFamily: "monospace" }}>{n.codigo}</td>
-                      <td style={{ ...TD, fontWeight: 600, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {n.titulo}
-                      </td>
-                      <td style={TD}>
-                        <span style={{
-                          fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20,
-                          background: "#c9a24a22", color: "#c9a24a", border: "1px solid #c9a24a44",
-                        }}>
-                          {labelMercadoPrefixo(n.prefixo_mercado)}
-                        </span>
-                      </td>
-                      <td style={TD}>
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                          background: `${etapaCor}22`, color: etapaCor, border: `1px solid ${etapaCor}44`,
-                          textTransform: "capitalize",
-                        }}>
-                          {n.etapa}
-                        </span>
-                      </td>
-                      <td style={TD}>
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                          background: statusInfo.bg, color: statusInfo.color,
-                          border: `1px solid ${statusInfo.color}44`,
-                        }}>
-                          {statusInfo.label}
-                        </span>
-                      </td>
-                      <td style={{ ...TD, color: "#c9a24a", fontSize: 12, fontWeight: 700 }}>{formatCurrency(n.valor_estimado)}</td>
-                      <td style={{ ...TD, color: "#8b949e", fontSize: 12 }}>{formatData(n.data_previsao_fechamento)}</td>
-                      <td style={{ ...TD, color: "#8b949e", fontSize: 12 }}>{formatData(n.criado_em)}</td>
-                    </tr>
+                    <li key={negocio.id}>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/crm/negocios/${negocio.id}`)}
+                        className="flex w-full min-h-14 flex-col gap-2 rounded-xl border border-[#30363d] bg-[#161b22] p-3 text-left"
+                        style={{
+                          borderLeftWidth: 3,
+                          borderLeftColor: ETAPA_COR[negocio.etapa] || "#6b7280",
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-[#e6edf3]">{negocio.titulo}</p>
+                            <p className="font-mono text-xs text-[#c9a24a]">{negocio.codigo}</p>
+                          </div>
+                          {etapaAtiva ? (
+                            <span
+                              className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                              style={{
+                                backgroundColor: etapaAtiva.color + "25",
+                                color: etapaAtiva.color,
+                              }}
+                            >
+                              {etapaAtiva.label}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#22C55E]">
+                            {moeda(negocio.valor_fechado ?? negocio.valor_estimado)}
+                          </span>
+                          <span className="ml-auto text-xs text-[#8b949e]">{tempo(negocio.criado_em)}</span>
+                        </div>
+                      </button>
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+                {negocios.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-[#8b949e]">Nenhum negócio encontrado</p>
+                ) : null}
+              </ul>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 border-b border-gray-800 bg-gray-900">
+                  <tr>
+                    {["Título", "Mercado", "Etapa", "Status", "Valor", "Previsão", "Atualizado", ""].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-500"
+                        >
+                          {h}
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {negocios.map((negocio) => {
+                    const etapaCor = ETAPA_COR[negocio.etapa] ?? "#8b949e";
+                    const statusInfo = STATUS_LABEL[negocio.status] ?? {
+                      label: negocio.status,
+                      color: "#8b949e",
+                      bg: "#8b949e22",
+                    };
+                    return (
+                      <tr
+                        key={negocio.id}
+                        onClick={() => router.push(`/crm/negocios/${negocio.id}`)}
+                        className="cursor-pointer border-b border-gray-800/50 transition-colors hover:bg-gray-900/60"
+                      >
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-white">{negocio.titulo}</p>
+                          <p className="mt-0.5 font-mono text-xs text-[#c9a24a]">{negocio.codigo}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="rounded-full px-2 py-1 text-xs font-medium"
+                            style={{
+                              backgroundColor: "#c9a24a25",
+                              color: "#c9a24a",
+                            }}
+                          >
+                            {labelMercadoPrefixo(negocio.prefixo_mercado)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="rounded-full px-2 py-1 text-xs font-bold"
+                            style={{ backgroundColor: etapaCor + "20", color: etapaCor }}
+                          >
+                            {negocio.etapa}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="rounded-full px-2 py-1 text-xs font-bold"
+                            style={{
+                              backgroundColor: statusInfo.bg,
+                              color: statusInfo.color,
+                            }}
+                          >
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-bold text-green-400">
+                            {moeda(negocio.valor_fechado ?? negocio.valor_estimado)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {formatData(negocio.data_previsao_fechamento)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">
+                          {tempo(negocio.criado_em)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button className="text-xs text-[#c9a24a] hover:text-[#e0b86a]">Ver →</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {negocios.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-600">
+                        Nenhum negócio encontrado
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            )}
 
-          {temMais && (
-            <div style={{ textAlign: "center", marginTop: 20 }}>
-              <button
-                onClick={carregarMais}
-                disabled={carregandoMais}
-                style={{ padding: "10px 24px", borderRadius: 8, background: "#161b22", border: "1px solid #30363d", color: "#8b949e", fontSize: 13, cursor: "pointer", fontWeight: 600 }}
-              >
-                {carregandoMais ? "Carregando..." : `Carregar mais (${total - negocios.length} restantes)`}
-              </button>
-            </div>
-          )}
-        </>
-      )}
+            {temMais && view === "lista" ? (
+              <div className="px-4 py-5 text-center">
+                <button
+                  onClick={() => void carregarLista(offset, true)}
+                  disabled={carregandoMais}
+                  className="rounded-lg border border-[#30363d] bg-[#161b22] px-5 py-2 text-sm font-semibold text-[#8b949e]"
+                >
+                  {carregandoMais ? "Carregando..." : `Carregar mais (${total - negocios.length} restantes)`}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

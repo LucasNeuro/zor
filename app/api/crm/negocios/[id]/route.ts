@@ -5,7 +5,7 @@ import { tenantIdFromRequest } from "@/lib/tenant-default";
 type Params = { params: Promise<{ id: string }> };
 
 const NEGOCIO_SELECT =
-  "id, codigo, titulo, descricao, tipo, prefixo_mercado, lead_id, pessoa_id, empresa_id, valor_estimado, valor_fechado, percentual_comissao, status, etapa, data_previsao_fechamento, data_fechamento, tenant_id, criado_em, atualizado_em";
+  "id, codigo, titulo, descricao, tipo, prefixo_mercado, lead_id, pessoa_id, empresa_id, pipeline_id, valor_estimado, valor_fechado, percentual_comissao, status, etapa, data_previsao_fechamento, data_fechamento, tenant_id, criado_em, atualizado_em";
 
 export async function GET(_request: NextRequest, { params }: Params) {
   const configErr = crmConfigError();
@@ -58,6 +58,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     "pessoa_id",
     "empresa_id",
     "lead_id",
+    "pipeline_id",
     "valor_estimado",
     "valor_fechado",
     "percentual_comissao",

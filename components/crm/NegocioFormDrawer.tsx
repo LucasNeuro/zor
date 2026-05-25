@@ -120,11 +120,11 @@ const ETAPA_LABEL: Record<string, string> = {
   perdido: "Perdidos",
 };
 
-const WIZARD_STEPS: Array<{ id: WizardStepId; short: string; label: string }> = [
+const WIZARD_STEPS: Array<{ id: WizardStepId; short: string; label: string; optional?: boolean }> = [
   { id: "essenciais", short: "01", label: "Essenciais" },
   { id: "envolvidos", short: "02", label: "Envolvidos" },
   { id: "comercial", short: "03", label: "Comercial" },
-  { id: "copiloto", short: "04", label: "Copiloto IA" },
+  { id: "copiloto", short: "IA", label: "Copiloto IA", optional: true },
 ];
 
 const QUICK_PROMPTS = [
@@ -195,7 +195,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content:
-          "Sou o copiloto do wizard de negócios. Posso revisar o draft, sugerir título, apontar lacunas e orientar quais envolvidos vincular para garantir rastreio completo.",
+          "Sou o copiloto opcional do wizard de negócios. Posso revisar o draft, sugerir título, apontar lacunas e orientar quais envolvidos vincular para garantir rastreio completo, mas você pode criar o negócio sem usar esta ajuda.",
       },
     ]);
     setCarregandoOpts(true);
@@ -317,6 +317,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
   }
 
   const stepIndex = WIZARD_STEPS.findIndex((item) => item.id === step);
+  const lastRequiredStepIndex = WIZARD_STEPS.findIndex((item) => item.id === "comercial");
   const podeSalvar = form.titulo.trim().length >= 2;
   const totalVinculos =
     form.lead_ids.length +
@@ -458,7 +459,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
       onClose={onClose}
       kindLabel="Negócio"
       title="Novo negócio"
-      subtitle="Wizard inteligente com etapas guiadas, vínculos múltiplos e copiloto IA."
+      subtitle="Wizard com etapas guiadas, vínculos múltiplos e copiloto IA opcional."
       Icon={BriefcaseBusiness}
       badge={<CadastroTipoBadge label="CRM Negócios" tone="gold" />}
       footer={
@@ -506,7 +507,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
               Voltar
             </button>
           ) : null}
-          {stepIndex < WIZARD_STEPS.length - 1 ? (
+          {stepIndex < lastRequiredStepIndex ? (
             <button
               type="button"
               onClick={proximoPasso}
@@ -529,6 +530,26 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
             >
               Próximo
               <ChevronRight size={14} />
+            </button>
+          ) : null}
+          {step !== "copiloto" && stepIndex >= lastRequiredStepIndex ? (
+            <button
+              type="button"
+              onClick={() => setStep("copiloto")}
+              disabled={loading || chatLoading}
+              style={{
+                minWidth: 152,
+                padding: "12px 16px",
+                borderRadius: 10,
+                border: "1px solid #22c55e55",
+                background: "#05281466",
+                color: "#86efac",
+                fontSize: 13,
+                fontWeight: 800,
+                cursor: loading || chatLoading ? "not-allowed" : "pointer",
+              }}
+            >
+              IA opcional
             </button>
           ) : null}
           <button
@@ -598,6 +619,18 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                 >
                   {item.label}
                 </p>
+                {item.optional ? (
+                  <p
+                    style={{
+                      margin: "4px 0 0",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: active ? "#86efac" : "#8b949e",
+                    }}
+                  >
+                    opcional
+                  </p>
+                ) : null}
               </button>
             );
           })}
@@ -1016,7 +1049,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                   </ul>
                 ) : (
                   <p style={{ margin: 0, color: "#86efac", fontSize: 12, fontWeight: 700 }}>
-                    Draft bem preenchido. Próximo passo: validar no copiloto e salvar.
+                    Draft bem preenchido. Próximo passo: salvar o negócio ou usar a IA opcional para
+                    revisar antes.
                   </p>
                 )}
                 <div
@@ -1062,11 +1096,12 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                 </div>
                 <div>
                   <p style={{ margin: 0, color: "#e6edf3", fontSize: 13, fontWeight: 800 }}>
-                    Copiloto de criação
+                    Copiloto opcional de criação
                   </p>
                   <p style={{ ...HINT, marginTop: 6 }}>
-                    Converse com a IA para revisar o draft, sugerir título, apontar lacunas e
-                    decidir os envolvidos do negócio.
+                    Use a IA apenas se quiser ajuda extra para revisar o draft, sugerir título,
+                    apontar lacunas e decidir os envolvidos do negócio. Ela não é obrigatória para
+                    criar o negócio.
                   </p>
                 </div>
               </div>

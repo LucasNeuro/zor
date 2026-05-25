@@ -6,7 +6,8 @@ const TIMEOUT_MS = 35_000;
 
 export type VerificarDocumentoResult =
   | { disponivel: true }
-  | { disponivel: false; error: string; cancelled?: boolean; timeout?: boolean };
+  | { disponivel: false; cancelled: true }
+  | { disponivel: false; error: string; timeout?: boolean };
 
 /** Verifica duplicidade no servidor (não trata abort de debounce como erro). */
 export async function verificarDocumentoDisponivel(
@@ -67,6 +68,6 @@ export async function verificarDocumentoDisponivel(
 
 export function erroVerificacaoDocumento(result: VerificarDocumentoResult): string | null {
   if (result.disponivel) return null;
-  if (result.cancelled) return null;
+  if ("cancelled" in result) return null;
   return result.error;
 }

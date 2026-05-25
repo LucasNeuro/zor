@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { gerarCodigoParceiro } from "@/lib/crm/parceiro-cadastro";
+import {
+  insertParceiroCaptacaoCompat,
+  insertParceiroCompat,
+  insertParceiroLogCompat,
+} from "@/lib/crm/parceiro-compat";
 import { HUB_PARCEIRO_LIST_SELECT } from "@/lib/crm/parceiro-list-fetch";
 import { defaultTenantId, isMissingPgColumn, tenantIdFromRequest, tenantScopeOrFilter } from "@/lib/tenant-default";
 
@@ -39,6 +44,30 @@ function isParceiroCompatError(err: unknown): boolean {
     message.includes("hub_parceiros_homologacao") ||
     message.includes("schema cache")
   );
+}
+
+async function buscarParceiroDuplicado(
+  supabase: ReturnType<typeof db>,
+  params: { field: "cpf" | "cnpj" | "telefone"; value: string; tenantScope: string }
+) {
+  let query = supabase
+    .from("hub_parceiros")
+    .select("id, nome")
+    .or(params.tenantScope)
+    .eq(params.field, params.value)
+    .maybeSingle();
+
+  let { data, error } = await query;
+  if (error && isMissingPgColumn(error, "tenant_id")) {
+    ({ data, error } = await supabase
+      .from("hub_parceiros")
+      .select("id, nome")
+      .eq(params.field, params.value)
+      .maybeSingle());
+  }
+
+  if (error) throw error;
+  return data as { id: string; nome: string | null } | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -91,34 +120,31 @@ export async function POST(request: NextRequest) {
     // Duplicate detection
     const tenantScope = tenantScopeOrFilter(tenantId || defaultTenantId());
     if (cpf) {
-      const { data: dup } = await supabase
-        .from("hub_parceiros")
-        .select("id, nome")
-        .or(tenantScope)
-        .eq("cpf", cpf.replace(/\D/g, ""))
-        .maybeSingle();
+      const dup = await buscarParceiroDuplicado(supabase, {
+        field: "cpf",
+        value: cpf.replace(/\D/g, ""),
+        tenantScope,
+      });
       if (dup) return NextResponse.json({ erro: "CPF já cadastrado", parceiro_id: dup.id }, { status: 409 });
     }
     if (cnpj) {
-      const { data: dup } = await supabase
-        .from("hub_parceiros")
-        .select("id, nome")
-        .or(tenantScope)
-        .eq("cnpj", cnpj.replace(/\D/g, ""))
-        .maybeSingle();
+      const dup = await buscarParceiroDuplicado(supabase, {
+        field: "cnpj",
+        value: cnpj.replace(/\D/g, ""),
+        tenantScope,
+      });
       if (dup) return NextResponse.json({ erro: "CNPJ já cadastrado", parceiro_id: dup.id }, { status: 409 });
     }
-    const { data: dupTel } = await supabase
-      .from("hub_parceiros")
-      .select("id, nome")
-      .or(tenantScope)
-      .eq("telefone", telefone.replace(/\D/g, ""))
-      .maybeSingle();
+    const dupTel = await buscarParceiroDuplicado(supabase, {
+      field: "telefone",
+      value: telefone.replace(/\D/g, ""),
+      tenantScope,
+    });
     if (dupTel) return NextResponse.json({ erro: "Telefone já cadastrado", parceiro_id: dupTel.id }, { status: 409 });
 
     const codigo = await gerarCodigoParceiro(supabase);
 
-    const { data: parceiro, error: errP } = await supabase.from("hub_parceiros").insert({
+    const { data: parceiro, error: errP } = await insertParceiroCompat(supabase, {
       codigo,
       nome,
       telefone: telefone.replace(/\D/g, ""),
@@ -132,13 +158,11 @@ export async function POST(request: NextRequest) {
       comissao_pct: comissao_pct || 5,
       indicado_por: indicado_por || null,
       status: "captacao",
-      tenant_id: tenantId || defaultTenantId(),
-    }).select().single();
+    }, tenantId || defaultTenantId());
 
     if (errP || !parceiro) return NextResponse.json({ erro: errP?.message || "Erro ao criar parceiro" }, { status: 500 });
 
-    // Auto-create captacao entry
-    await supabase.from("hub_parceiros_captacao").insert({
+    const captacaoWarn = await insertParceiroCaptacaoCompat(supabase, {
       parceiro_id: parceiro.id,
       estagio: "interessado",
       origem: origem || "direto",
@@ -148,8 +172,7 @@ export async function POST(request: NextRequest) {
       utm_campaign: utm_campaign || null,
     });
 
-    // Immutable log
-    await supabase.from("hub_parceiros_log").insert({
+    const logWarn = await insertParceiroLogCompat(supabase, {
       parceiro_id: parceiro.id,
       evento: "parceiro_cadastrado",
       descricao: `Parceiro ${nome} cadastrado via ${origem || "direto"}`,
@@ -158,8 +181,15 @@ export async function POST(request: NextRequest) {
       dados: { nome, telefone, email, especialidade, mercado, origem, canal },
     });
 
+    const warnings = [captacaoWarn, logWarn].filter(Boolean);
+
     return NextResponse.json(
-      { parceiro_id: parceiro.id, codigo: parceiro.codigo ?? codigo, status: "criado" },
+      {
+        parceiro_id: parceiro.id,
+        codigo: parceiro.codigo ?? codigo,
+        status: "criado",
+        warning: warnings.length ? warnings.join(" | ") : null,
+      },
       { status: 201 }
     );
   } catch (err) {

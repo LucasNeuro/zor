@@ -5,10 +5,25 @@ import {
   actorFromRequestHeaders,
   registrarAuditoriaCrm,
 } from "@/lib/crm/registrar-auditoria-crm";
+import { isMissingPgColumn } from "@/lib/tenant-default";
 import { normalizarIdUuid } from "@/lib/crm/uuid-crm";
 
 const EMPRESA_SELECT =
   "id, codigo, razao_social, nome_fantasia, cnpj, email, telefone, segmento, prefixo_mercado, cep, logradouro, numero, complemento, bairro, cidade, estado, ativo, acesso_habilitado, acesso_habilitado_em, criado_em, atualizado_em";
+const EMPRESA_SELECT_FALLBACK =
+  "id, codigo, razao_social, nome_fantasia, cnpj, email, telefone, segmento, prefixo_mercado, cidade, estado, ativo, criado_em";
+const EMPRESA_PATCH_OPTIONAL_COLUMNS = [
+  "nome_fantasia",
+  "segmento",
+  "cep",
+  "logradouro",
+  "numero",
+  "complemento",
+  "bairro",
+  "acesso_habilitado",
+  "acesso_habilitado_em",
+  "atualizado_em",
+] as const;
 
 function db() {
   return createClient(
@@ -46,11 +61,19 @@ export async function GET(
   }
 
   const supabase = db();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("hub_empresas")
     .select(EMPRESA_SELECT)
     .eq("id", id)
     .maybeSingle();
+
+  if (error && isMissingPgColumn(error)) {
+    ({ data, error } = await supabase
+      .from("hub_empresas")
+      .select(EMPRESA_SELECT_FALLBACK)
+      .eq("id", id)
+      .maybeSingle());
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -127,21 +150,39 @@ export async function PATCH(
   }
 
   const supabase = db();
-  const { data, error } = await supabase
+  let result = await supabase
     .from("hub_empresas")
     .update(updates)
     .eq("id", id)
     .select(EMPRESA_SELECT)
     .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (result.error && isMissingPgColumn(result.error)) {
+    const fallbackUpdates = { ...updates };
+    for (const key of EMPRESA_PATCH_OPTIONAL_COLUMNS) {
+      if (isMissingPgColumn(result.error, key)) delete fallbackUpdates[key];
+    }
+
+    if (Object.keys(fallbackUpdates).length === 0) {
+      return NextResponse.json({ error: "Nenhum campo compatível para atualizar." }, { status: 400 });
+    }
+
+    result = await supabase
+      .from("hub_empresas")
+      .update(fallbackUpdates)
+      .eq("id", id)
+      .select(EMPRESA_SELECT_FALLBACK)
+      .maybeSingle();
   }
-  if (!data) {
+
+  if (result.error) {
+    return NextResponse.json({ error: result.error.message }, { status: 500 });
+  }
+  if (!result.data) {
     return NextResponse.json({ error: "Empresa não encontrada." }, { status: 404 });
   }
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ data: result.data });
 }
 
 export async function DELETE(

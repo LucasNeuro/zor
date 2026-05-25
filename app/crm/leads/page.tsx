@@ -1,9 +1,18 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
+
+const LeadRapidoSideover = dynamic(
+  () =>
+    import("@/components/crm/leads/LeadRapidoSideover").then((m) => ({
+      default: m.LeadRapidoSideover,
+    })),
+  { ssr: false }
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,6 +141,8 @@ export default function LeadsPage() {
   const [confirmandoPerda, setConfirmandoPerda] = useState(false);
   const [leadDragId, setLeadDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [leadRapidoOpen, setLeadRapidoOpen] = useState(false);
+  const [sucessoLead, setSucessoLead] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     const vw = await supabase
@@ -197,7 +208,14 @@ export default function LeadsPage() {
     if (est) setFiltroEstagio(est);
     if (v === "kanban" || v === "lista") setView(v);
     else if (isMobile) setView("lista");
-  }, [searchParams, isMobile]);
+    if (searchParams.get("novo") === "1") {
+      setLeadRapidoOpen(true);
+      const p = new URLSearchParams(searchParams.toString());
+      p.delete("novo");
+      const q = p.toString();
+      router.replace(q ? `/crm/leads?${q}` : "/crm/leads");
+    }
+  }, [searchParams, isMobile, router]);
 
   useEffect(() => {
     carregar();
@@ -272,6 +290,20 @@ export default function LeadsPage() {
   const emRisco = leads.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 3_600_000).reduce((s, l) => s + l.valor_estimado, 0);
   const pipeline = leads.filter(l => !["ganho", "perdido"].includes(l.estagio)).reduce((s, l) => s + l.valor_estimado, 0);
 
+  const botaoNovoLead = useMemo(
+    () => (
+      <button
+        type="button"
+        onClick={() => setLeadRapidoOpen(true)}
+        className="min-h-11 shrink-0 rounded-lg px-4 py-2 text-sm font-bold min-[480px]:min-h-10"
+        style={{ background: "#003b26", color: "#c9a24a", border: "none", cursor: "pointer" }}
+      >
+        + Novo lead
+      </button>
+    ),
+    []
+  );
+
   useEffect(() => {
     if (isMobile) {
       setSlot(null);
@@ -282,6 +314,7 @@ export default function LeadsPage() {
       subtitle: `${leads.length} leads · tempo real`,
       actions: (
         <>
+          {botaoNovoLead}
           <div className="inline-flex w-full rounded-lg bg-[#21262d] p-0.5 min-[480px]:w-auto">
             <button
               type="button"
@@ -320,10 +353,11 @@ export default function LeadsPage() {
       ),
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, leads.length, view, busca, filtroEstagio, isMobile]);
+  }, [pathname, setSlot, leads.length, view, busca, filtroEstagio, isMobile, botaoNovoLead]);
 
   const headerControls = (
     <>
+      {botaoNovoLead}
       <div className="inline-flex w-full rounded-lg bg-[#21262d] p-0.5 min-[480px]:w-auto">
         <button
           type="button"
@@ -364,13 +398,28 @@ export default function LeadsPage() {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
 
+      {sucessoLead && (
+        <div
+          role="status"
+          className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.12)] px-3 py-2 text-sm text-[#3fb950]"
+        >
+          <span>{sucessoLead}</span>
+          <button
+            type="button"
+            onClick={() => setSucessoLead(null)}
+            className="border-0 bg-transparent text-lg leading-none text-[#8b949e] hover:text-white"
+            aria-label="Fechar aviso"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {isMobile && (
         <div className="sticky top-0 z-20 shrink-0 space-y-2 border-b border-[#30363d] bg-[#161b22] px-3 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h1 className="text-base font-bold text-[#e6edf3]">Leads</h1>
-              <p className="text-[11px] text-[#8b949e]">{leads.length} leads · tempo real</p>
-            </div>
+          <div>
+            <h1 className="text-base font-bold text-[#e6edf3]">Leads</h1>
+            <p className="text-[11px] text-[#8b949e]">{leads.length} leads · tempo real</p>
           </div>
           <div className="flex flex-col gap-2">{headerControls}</div>
         </div>
@@ -782,6 +831,18 @@ export default function LeadsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {leadRapidoOpen && (
+        <LeadRapidoSideover
+          open={leadRapidoOpen}
+          onClose={() => setLeadRapidoOpen(false)}
+          onSaved={(lead) => {
+            const cod = lead.codigo ? ` (${lead.codigo})` : "";
+            setSucessoLead(`Lead criado${cod}.`);
+            void carregar();
+          }}
+        />
       )}
     </div>
   );

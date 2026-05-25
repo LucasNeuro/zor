@@ -1,7 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { gerarCodigoPessoa } from "@/lib/crm/pessoa-cadastro";
-import { prepararRowHubLeadInsert, validarLeadCadastro } from "@/lib/crm/lead-cadastro";
+import {
+  montarMetadataLeadMercados,
+  prepararRowHubLeadInsert,
+  validarLeadCadastro,
+} from "@/lib/crm/lead-cadastro";
 import { defaultTenantId, isMissingPgColumn, tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
@@ -28,7 +32,8 @@ async function vincularPessoaPorTelefone(
   supabase: SupabaseClient,
   telefone: string,
   nome: string,
-  origem: string
+  origem: string,
+  mercados: string[]
 ): Promise<string | null> {
   const { data: existente } = await supabase
     .from("hub_pessoas")
@@ -48,6 +53,7 @@ async function vincularPessoaPorTelefone(
       telefone,
       tipo: "lead",
       origem: origem || "crm_manual",
+      dados_extras: { mercados },
     })
     .select("id")
     .single();
@@ -187,9 +193,20 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const indicadoPor =
+    typeof body.indicado_por === "string" && body.indicado_por.trim()
+      ? body.indicado_por.trim()
+      : null;
+
   let pessoa_id: string | null = null;
   if (d.telefone) {
-    pessoa_id = await vincularPessoaPorTelefone(supabase, d.telefone, d.nome, d.origem);
+    pessoa_id = await vincularPessoaPorTelefone(
+      supabase,
+      d.telefone,
+      d.nome,
+      d.origem,
+      d.mercados
+    );
   }
 
   let pessoa_codigo: string | null = null;
@@ -214,7 +231,11 @@ export async function POST(request: NextRequest) {
     pessoa_id,
     criado_em: now,
     atualizado_em: now,
-    metadata: { origem_cadastro: "crm_manual" },
+    metadata: montarMetadataLeadMercados({
+      mercados: d.mercados,
+      origem_cadastro: "crm_manual",
+      indicado_por: indicadoPor,
+    }),
   };
 
   const row = await prepararRowHubLeadInsert(supabase, rowBase, { pessoa_codigo });

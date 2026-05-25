@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { mercadosLeadComPadrao } from "@/lib/crm/cadastro-flexivel";
 import { gerarCodigoSequencial, HUB_PREFIXO_CODIGO } from "@/lib/crm/codigos-rastreio";
+import { MERCADOS_PREFIXO, type PrefixoMercado } from "@/lib/crm/negocio-cadastro";
 
 export const LEAD_ESTAGIOS = [
   "novo",
@@ -34,7 +36,31 @@ export type LeadCadastroPayload = {
   origem: LeadOrigem;
   estagio: LeadEstagio;
   valor_estimado: number;
+  mercados: PrefixoMercado[];
+  mercado_principal: PrefixoMercado;
 };
+
+/** Metadata de lead alinhada ao super cadastro (mercados + rastreio). */
+export function montarMetadataLeadMercados(opts: {
+  mercados: string[];
+  origem_cadastro?: string;
+  indicado_por?: string | null;
+}): Record<string, unknown> {
+  const mercados = mercadosLeadComPadrao(opts.mercados);
+  return {
+    origem_cadastro: opts.origem_cadastro ?? "crm_manual",
+    mercados,
+    mercado_principal: mercados[0],
+    ...(opts.indicado_por ? { indicado_por: opts.indicado_por } : {}),
+  };
+}
+
+function parseMercadosBody(body: unknown): string[] {
+  if (!Array.isArray(body)) return [];
+  return body
+    .map((x) => String(x).trim().toUpperCase())
+    .filter((s): s is PrefixoMercado => (MERCADOS_PREFIXO as readonly string[]).includes(s));
+}
 
 export function normalizarTelefoneLead(t: string): string {
   return t.replace(/\D/g, "");
@@ -48,6 +74,7 @@ export function validarLeadCadastro(
     origem?: string;
     estagio?: string;
     valor_estimado?: number | string;
+    mercados?: unknown;
   }>
 ): { ok: true; data: LeadCadastroPayload } | { ok: false; erro: string } {
   const nome = (body.nome || "").trim();
@@ -88,6 +115,8 @@ export function validarLeadCadastro(
     valor_estimado = v;
   }
 
+  const mercados = mercadosLeadComPadrao(parseMercadosBody(body.mercados));
+
   return {
     ok: true,
     data: {
@@ -97,6 +126,8 @@ export function validarLeadCadastro(
       origem,
       estagio,
       valor_estimado,
+      mercados,
+      mercado_principal: mercados[0],
     },
   };
 }

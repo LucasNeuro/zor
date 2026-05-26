@@ -12,6 +12,7 @@ import {
   resolveMistralAgentsModelId,
 } from "@/lib/ia/hub-model-defaults";
 import { loadAgentPlaybookSnapshot } from "@/lib/playbook/agent-snapshot";
+import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
 import { buildUnifiedProductionPrompt } from "@/lib/playbook/render-deterministic";
 import { defaultTenantId } from "@/lib/tenant-default";
 
@@ -24,6 +25,10 @@ type IdentRow = {
   modelo_padrao: string | null;
   mistral_agent_id: string | null;
   uso_ferramentas_ia: unknown;
+  playbook_generated_at?: string | null;
+  playbook_object_path?: string | null;
+  playbook_public_url?: string | null;
+  playbook_source_hash?: string | null;
   tenant_id?: string | null;
 };
 
@@ -35,10 +40,15 @@ function truncarInstrucoes(s: string, max = 32000): string {
 /** Mesmo texto que a engine usa em produção (identidade + conhecimento + regras). */
 async function resolverInstrucoesMistral(
   supabase: SupabaseClient,
-  agenteSlug: string,
+  ident: IdentRow,
   fallback: string
 ): Promise<string> {
-  const loaded = await loadAgentPlaybookSnapshot(supabase, agenteSlug);
+  const published = await loadPublishedPlaybookRuntimeSource(supabase, ident.agente_slug, ident);
+  if (published.ok) {
+    return truncarInstrucoes(published.prompt);
+  }
+
+  const loaded = await loadAgentPlaybookSnapshot(supabase, ident.agente_slug);
   if ("error" in loaded) {
     return truncarInstrucoes(fallback);
   }
@@ -46,7 +56,7 @@ async function resolverInstrucoesMistral(
     const unified = buildUnifiedProductionPrompt(loaded.snapshot).trim();
     if (unified) return truncarInstrucoes(unified);
   } catch (e) {
-    console.warn("[mistral-agents] buildUnifiedProductionPrompt:", agenteSlug, e);
+    console.warn("[mistral-agents] buildUnifiedProductionPrompt:", ident.agente_slug, e);
   }
   return truncarInstrucoes(fallback);
 }
@@ -70,7 +80,7 @@ export async function syncHubAgenteParaMistral(
   const { data: row, error } = await supabase
     .from("hub_agente_identidade")
     .select(
-      "agente_slug, nome, system_prompt_base, modelo_padrao, mistral_agent_id, uso_ferramentas_ia, mistral_agent_sync_habilitado, tenant_id"
+      "agente_slug, nome, system_prompt_base, modelo_padrao, mistral_agent_id, uso_ferramentas_ia, mistral_agent_sync_habilitado, playbook_generated_at, playbook_object_path, playbook_public_url, playbook_source_hash, tenant_id"
     )
     .eq("agente_slug", agenteSlug)
     .maybeSingle();
@@ -86,7 +96,7 @@ export async function syncHubAgenteParaMistral(
   const model = resolveMistralAgentsModelId(String(r.modelo_padrao || ""));
   const name = `hub-${r.agente_slug}`.slice(0, 64);
   const fallbackInstr = String(r.system_prompt_base || r.nome || r.agente_slug);
-  const instructions = await resolverInstrucoesMistral(supabase, agenteSlug, fallbackInstr);
+  const instructions = await resolverInstrucoesMistral(supabase, r, fallbackInstr);
   const uso = mergeUsoFerramentasComPadraoPreservandoCustom(r.uso_ferramentas_ia);
   const tenantId = String(r.tenant_id || "").trim() || defaultTenantId();
   let customDefs: FerramentaCustomParaMistral[] = [];

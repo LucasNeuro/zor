@@ -15,6 +15,7 @@ import {
   substituirPlaceholdersSaudacao,
   type TurnoMinimo,
 } from "@/lib/ia/perguntas-essenciais-cargo";
+import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
 
 function db() {
   return createClient(
@@ -71,16 +72,22 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
 
   if (!agente) return null;
 
+  const playbookPublicado = await loadPublishedPlaybookRuntimeSource(supabase, params.agenteSlug, {
+    playbook_generated_at: typeof agente.playbook_generated_at === "string" ? agente.playbook_generated_at : null,
+    playbook_object_path: typeof agente.playbook_object_path === "string" ? agente.playbook_object_path : null,
+    playbook_public_url: typeof agente.playbook_public_url === "string" ? agente.playbook_public_url : null,
+    playbook_source_hash: typeof agente.playbook_source_hash === "string" ? agente.playbook_source_hash : null,
+  });
+  const usarPlaybookPublicado = playbookPublicado.ok;
+
   const cargoCatalogo = await resolverCargoCatalogoParaAgente(supabase, {
     cargo: agente.cargo as string | null,
   });
 
   // 2. Busca personalidade
-  const { data: personalidade } = await supabase
-    .from("hub_personalidade")
-    .select("*")
-    .eq("agente_slug", params.agenteSlug)
-    .single();
+  const { data: personalidade } = usarPlaybookPublicado
+    ? { data: null }
+    : await supabase.from("hub_personalidade").select("*").eq("agente_slug", params.agenteSlug).single();
 
   // 3. Busca memórias do lead (top 5) e do agente (top 6)
   let memorias: Array<{ chave: string; valor: string }> = [];
@@ -104,12 +111,14 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
   }
 
   // 4. Busca regras de IA do agente
-  const { data: regras } = await supabase
-    .from("hub_regras_ia")
-    .select("instrucao, prioridade")
-    .eq("agente_slug", params.agenteSlug)
-    .eq("ativo", true)
-    .order("prioridade", { ascending: false });
+  const { data: regras } = usarPlaybookPublicado
+    ? { data: null }
+    : await supabase
+        .from("hub_regras_ia")
+        .select("instrucao, prioridade")
+        .eq("agente_slug", params.agenteSlug)
+        .eq("ativo", true)
+        .order("prioridade", { ascending: false });
 
   // 5. Seleciona modelo baseado no contexto
   const modelo = selecionarModelo(agente, params.mercado);
@@ -117,17 +126,27 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
   // 6. Monta o prompt em camadas
   const secoes: string[] = [];
 
-  // CAMADA 1 — IDENTIDADE
-  const humorLabel = personalidade?.humor_label || "Profissional";
-  const personalidadeLabel = personalidade?.personalidade_label || "Direto";
-  const tomComunicacao = personalidade?.tom_comunicacao || "profissional";
+  // CAMADA 1 — FONTE PRINCIPAL ESTÁTICA
+  if (usarPlaybookPublicado) {
+    secoes.push(`═══ PLAYBOOK PUBLICADO (FONTE PRINCIPAL) ═══
+Siga o conteúdo abaixo como a fonte principal das instruções estáticas deste agente.
+Origem publicada: ${playbookPublicado.path}
+Modo de extração: ${playbookPublicado.mode}
+Se alguma configuração genérica do runtime conflitar com este playbook, priorize o playbook publicado.
 
-  secoes.push(`═══ IDENTIDADE ═══
+${playbookPublicado.prompt}`);
+  } else {
+    const humorLabel = personalidade?.humor_label || "Profissional";
+    const personalidadeLabel = personalidade?.personalidade_label || "Direto";
+    const tomComunicacao = personalidade?.tom_comunicacao || "profissional";
+
+    secoes.push(`═══ IDENTIDADE ═══
 ${agente.system_prompt_base}
 
 COMPORTAMENTO: Humor ${humorLabel} + Personalidade ${personalidadeLabel}.
 Tom de comunicação: ${tomComunicacao}.
 ${personalidade?.descricao_comportamento || ""}`);
+  }
 
   const turnosAnteriores = params.sessaoReiniciada
     ? 0
@@ -159,15 +178,21 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
 - Siga o POP: saudação, pedir nome se faltar, menu de triagem quando aplicável.`);
   }
 
-  // CAMADA 2 — OPERAÇÃO DO CARGO (externo / WhatsApp)
+  // CAMADA 2 — EXECUÇÃO DESTE TURNO (externo / WhatsApp)
   if (cargoCatalogo) {
     const linhas: string[] = [];
     const saudacao = String(cargoCatalogo.saudacao_cliente ?? "").trim();
     const comprimentoPadrao = String(cargoCatalogo.comprimento_padrao ?? "").trim();
     const nomeAgente = String(agente.nome ?? params.agenteSlug);
 
-    linhas.push("- Não mencionar cargo/função interna ao cliente (ex.: SDR, qualificador, closer).");
-    linhas.push("- Fazer perguntas de qualificação naturalmente, sem anunciar processo interno.");
+    if (usarPlaybookPublicado) {
+      linhas.push(
+        "- Esta camada só ajusta a execução deste turno com base no canal, histórico e próxima pergunta operacional."
+      );
+    } else {
+      linhas.push("- Não mencionar cargo/função interna ao cliente (ex.: SDR, qualificador, closer).");
+      linhas.push("- Fazer perguntas de qualificação naturalmente, sem anunciar processo interno.");
+    }
 
     if (usarPerguntasCargo) {
       if (!conversaEmAndamento) {
@@ -205,7 +230,7 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
       );
     }
 
-    secoes.push(`═══ OPERAÇÃO DO CARGO ═══\n${linhas.join("\n")}`);
+    secoes.push(`═══ EXECUÇÃO DESTE TURNO ═══\n${linhas.join("\n")}`);
   }
 
   // CAMADA 2.5 — RAG do agente (documentos anexados no wizard)
@@ -249,25 +274,27 @@ Você está atendendo um lead do segmento ${params.mercado}.
 Adapte sua linguagem e conhecimento para este contexto específico.`);
   }
 
-  // CAMADA 4 — REGRAS (toggles e configurações)
-  const naoPodeFazer = (agente.nao_pode_fazer as string[]) || [];
-  const sempreDizer = (agente.sempre_dizer as string[]) || [];
-  const nuncaDizer = (agente.nunca_dizer as string[]) || [];
+  // CAMADA 4 — REGRAS (fallback quando ainda não existe playbook publicado)
+  if (!usarPlaybookPublicado) {
+    const naoPodeFazer = (agente.nao_pode_fazer as string[]) || [];
+    const sempreDizer = (agente.sempre_dizer as string[]) || [];
+    const nuncaDizer = (agente.nunca_dizer as string[]) || [];
 
-  let regrasTexto = "";
-  if (naoPodeFazer.length > 0) {
-    regrasTexto += `VOCÊ NUNCA PODE:\n${naoPodeFazer.map(r => `• ${r.replace(/_/g, " ")}`).join("\n")}`;
+    let regrasTexto = "";
+    if (naoPodeFazer.length > 0) {
+      regrasTexto += `VOCÊ NUNCA PODE:\n${naoPodeFazer.map(r => `• ${r.replace(/_/g, " ")}`).join("\n")}`;
+    }
+    if (sempreDizer.length > 0) {
+      regrasTexto += `\n\nSEMPRE USAR:\n${sempreDizer.map(r => `• "${r}"`).join("\n")}`;
+    }
+    if (nuncaDizer.length > 0) {
+      regrasTexto += `\n\nNUNCA DIZER:\n${nuncaDizer.map(r => `• "${r}"`).join("\n")}`;
+    }
+    if (regras && regras.length > 0) {
+      regrasTexto += `\n\nREGRAS ESPECÍFICAS:\n${regras.map(r => `• ${r.instrucao}`).join("\n")}`;
+    }
+    if (regrasTexto) secoes.push(`═══ REGRAS ═══\n${regrasTexto}`);
   }
-  if (sempreDizer.length > 0) {
-    regrasTexto += `\n\nSEMPRE USAR:\n${sempreDizer.map(r => `• "${r}"`).join("\n")}`;
-  }
-  if (nuncaDizer.length > 0) {
-    regrasTexto += `\n\nNUNCA DIZER:\n${nuncaDizer.map(r => `• "${r}"`).join("\n")}`;
-  }
-  if (regras && regras.length > 0) {
-    regrasTexto += `\n\nREGRAS ESPECÍFICAS:\n${regras.map(r => `• ${r.instrucao}`).join("\n")}`;
-  }
-  if (regrasTexto) secoes.push(`═══ REGRAS ═══\n${regrasTexto}`);
 
   // CAMADA 5 — MEMÓRIAS DO LEAD
   if (memorias.length > 0) {
@@ -291,6 +318,9 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
     "Se não souber, diga que vai verificar — nunca invente",
     "Nunca encerre sem indicar o próximo passo",
   ];
+  if (usarPlaybookPublicado) {
+    regrasUniversais.unshift("Considere o playbook publicado acima como a fonte principal das regras estáticas.");
+  }
   if ((params.canal ?? "").toLowerCase() === "whatsapp") {
     regrasUniversais.unshift("Máximo 3 linhas por mensagem no WhatsApp — prefira 1 ou 2");
     regrasUniversais.push("Não mencionar cargo/função interna ao cliente (ex.: SDR, qualificador, closer).");

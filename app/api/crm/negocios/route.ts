@@ -46,12 +46,41 @@ type EntidadeCodigo = {
   codigo: string | null;
 };
 
+function legacyNegocioTipoFromMercado(prefixo: string): string {
+  switch (String(prefixo || "").trim().toUpperCase()) {
+    case "IMB":
+      return "mercado_imobiliario";
+    case "RFM":
+      return "reforma";
+    case "FOR":
+      return "fornecedor_homologacao";
+    default:
+      return "produto_servico";
+  }
+}
+
 function isLegacyLeadRequiredError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { code?: string; message?: string };
   if (String(e.code || "") !== "23502") return false;
   const message = String(e.message || "").toLowerCase();
   return message.includes("lead_id") && message.includes("null value");
+}
+
+function isLegacyTipoRequiredError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  if (String(e.code || "") !== "23502") return false;
+  const message = String(e.message || "").toLowerCase();
+  return message.includes("tipo") && message.includes("null value");
+}
+
+function isLegacyTipoCheckError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  if (String(e.code || "") !== "23514") return false;
+  const message = String(e.message || "").toLowerCase();
+  return message.includes("tipo");
 }
 
 function parseUuidList(value: unknown): string[] {
@@ -384,6 +413,7 @@ export async function POST(request: NextRequest) {
   const row: Record<string, unknown> = {
     codigo,
     titulo: d.titulo,
+    tipo: legacyNegocioTipoFromMercado(d.prefixo_mercado),
     prefixo_mercado: d.prefixo_mercado,
     etapa: d.etapa,
     status: d.status,
@@ -399,6 +429,20 @@ export async function POST(request: NextRequest) {
 
   let compatWarning: string | null = null;
   let insertResult = await insertHubNegocio(supabase, row, tenantId);
+
+  if (insertResult.error && isLegacyTipoRequiredError(insertResult.error)) {
+    row.tipo = legacyNegocioTipoFromMercado(d.prefixo_mercado);
+    compatWarning =
+      "Schema legado exigia o campo tipo; foi aplicado um tipo compatível automaticamente.";
+    insertResult = await insertHubNegocio(supabase, row, tenantId);
+  }
+
+  if (insertResult.error && isLegacyTipoCheckError(insertResult.error)) {
+    row.tipo = "negocio";
+    compatWarning =
+      "Schema legado exigia um tipo diferente; foi aplicado um fallback genérico automaticamente.";
+    insertResult = await insertHubNegocio(supabase, row, tenantId);
+  }
 
   if (insertResult.error && isLegacyLeadRequiredError(insertResult.error) && !leadsSelecionados[0]?.id) {
     try {

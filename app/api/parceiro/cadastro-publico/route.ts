@@ -1,13 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { gerarCodigoParceiro } from "@/lib/crm/parceiro-cadastro";
-import { defaultTenantId } from "@/lib/tenant-default";
+import {
+  insertParceiroCaptacaoCompat,
+  insertParceiroCompat,
+  insertParceiroLogCompat,
+} from "@/lib/crm/parceiro-compat";
+import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+}
+
+async function buscarParceiroDuplicadoPublico(
+  supabase: ReturnType<typeof db>,
+  params: { field: "telefone" | "cpf" | "cnpj"; value: string }
+) {
+  let { data, error } = await supabase
+    .from("hub_parceiros")
+    .select("id, nome, codigo")
+    .eq(params.field, params.value)
+    .maybeSingle();
+
+  if (error && isMissingPgColumn(error, "codigo")) {
+    ({ data, error } = await supabase
+      .from("hub_parceiros")
+      .select("id, nome")
+      .eq(params.field, params.value)
+      .maybeSingle());
+  }
+
+  if (error) throw error;
+  return data as { id: string; nome?: string | null; codigo?: string | null } | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -44,11 +71,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: dupTel } = await supabase
-      .from("hub_parceiros")
-      .select("id, nome, codigo")
-      .eq("telefone", tel)
-      .maybeSingle();
+    const dupTel = await buscarParceiroDuplicadoPublico(supabase, {
+      field: "telefone",
+      value: tel,
+    });
 
     if (dupTel) {
       return NextResponse.json(
@@ -65,11 +91,10 @@ export async function POST(request: NextRequest) {
     const cnpjDigits = cnpj ? String(cnpj).replace(/\D/g, "") : null;
 
     if (cpfDigits) {
-      const { data: dup } = await supabase
-        .from("hub_parceiros")
-        .select("id, codigo")
-        .eq("cpf", cpfDigits)
-        .maybeSingle();
+      const dup = await buscarParceiroDuplicadoPublico(supabase, {
+        field: "cpf",
+        value: cpfDigits,
+      });
       if (dup) {
         return NextResponse.json(
           { erro: "CPF já cadastrado.", codigo: dup.codigo, parceiro_id: dup.id },
@@ -78,11 +103,10 @@ export async function POST(request: NextRequest) {
       }
     }
     if (cnpjDigits) {
-      const { data: dup } = await supabase
-        .from("hub_parceiros")
-        .select("id, codigo")
-        .eq("cnpj", cnpjDigits)
-        .maybeSingle();
+      const dup = await buscarParceiroDuplicadoPublico(supabase, {
+        field: "cnpj",
+        value: cnpjDigits,
+      });
       if (dup) {
         return NextResponse.json(
           { erro: "CNPJ já cadastrado.", codigo: dup.codigo, parceiro_id: dup.id },
@@ -94,9 +118,7 @@ export async function POST(request: NextRequest) {
     const codigo = await gerarCodigoParceiro(supabase);
     const especialidade = String(body.especialidade || "").trim() || null;
 
-    const { data: parceiro, error: errP } = await supabase
-      .from("hub_parceiros")
-      .insert({
+    const { data: parceiro, error: errP } = await insertParceiroCompat(supabase, {
         codigo,
         nome: nomeFinal,
         telefone: tel,
@@ -109,10 +131,7 @@ export async function POST(request: NextRequest) {
         estado: estado?.trim()?.toUpperCase() || null,
         comissao_pct: 5,
         status: "captacao",
-        tenant_id: tenantId,
-      })
-      .select("id, codigo")
-      .single();
+      }, tenantId);
 
     if (errP || !parceiro) {
       return NextResponse.json(
@@ -121,24 +140,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await supabase.from("hub_parceiros_captacao").insert({
+    const captacaoWarn = await insertParceiroCaptacaoCompat(supabase, {
       parceiro_id: parceiro.id,
       estagio: "interessado",
       origem: "link_publico_rede",
       canal: "formulario_web",
     });
 
-    await supabase.from("hub_parceiros_log").insert({
+    const logWarn = await insertParceiroLogCompat(supabase, {
       parceiro_id: parceiro.id,
       evento: "cadastro_link_publico",
       descricao: `Cadastro via link da rede — ${codigo} (${tipo_pessoa}, ${perfil}, ${mercado || "—"})`,
       feito_por: "parceiro",
     });
 
+    const warnings = [captacaoWarn, logWarn].filter(Boolean);
+
     return NextResponse.json({
       parceiro_id: parceiro.id,
       codigo: parceiro.codigo ?? codigo,
       status: "criado",
+      warning: warnings.length ? warnings.join(" | ") : null,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro desconhecido";

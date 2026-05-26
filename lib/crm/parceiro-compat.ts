@@ -34,6 +34,17 @@ const PARCEIRO_LOG_OPTIONAL_COLUMNS = [
   "tenant_id",
 ] as const;
 
+type ParceiroCompatRow = {
+  id: string;
+  codigo?: string | null;
+  nome?: string | null;
+};
+
+type ParceiroCompatError = {
+  message?: string;
+  code?: string;
+};
+
 function isMissingTable(err: unknown, table: string): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { code?: string; message?: string };
@@ -45,7 +56,7 @@ export async function insertParceiroCompat(
   supabase: SupabaseClient,
   row: Record<string, unknown>,
   tenantId?: string | null
-) {
+): Promise<{ data: ParceiroCompatRow | null; error: ParceiroCompatError | null }> {
   const baseRow = { ...row };
   let withTenant = !!tenantId;
   let payload: Record<string, unknown> =
@@ -60,7 +71,7 @@ export async function insertParceiroCompat(
       .select(selectCols)
       .single();
 
-    if (!error) return { data, error: null };
+    if (!error) return { data: data as ParceiroCompatRow, error: null };
     lastError = error;
 
     if (isTenantFkError(error) || isMissingPgColumn(error, "tenant_id")) {

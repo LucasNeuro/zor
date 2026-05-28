@@ -60,7 +60,7 @@ async function selectSimple(
       .limit(LIMIT);
 
     if (!error) {
-      return { rows: (data ?? []) as Record<string, unknown>[] };
+      return { rows: (data ?? []) as unknown as Record<string, unknown>[] };
     }
 
     lastError = error;

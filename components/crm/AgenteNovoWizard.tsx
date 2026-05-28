@@ -257,6 +257,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [passo, setPasso] = useState(1);
   const [dialogFecharAssistente, setDialogFecharAssistente] = useState(false);
   const [cargoSelecionado, setCargoSelecionado] = useState<Cargo | null>(null);
+  /** Sem cargo no catálogo — instruções só do playbook publicado no bucket. */
+  const [somentePlaybook, setSomentePlaybook] = useState(false);
   const [nome, setNome] = useState("");
   const [mercados, setMercados] = useState<string[]>([]);
   const [valores, setValores] = useState<number[]>([3, 3, 3, 3, 3]);
@@ -536,8 +538,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     setRagPosCriacaoAviso("");
     try {
       if (!agenteSlugCriado) {
-        if (!cargoSelecionado || !nome.trim()) {
-          setRagPendenteErro("Preencha cargo e nome antes de processar embeddings.");
+        if ((!somentePlaybook && !cargoSelecionado) || !nome.trim()) {
+          setRagPendenteErro("Preencha cargo (ou modo só playbook) e nome antes de processar embeddings.");
           return;
         }
         setRagPreparados(true);
@@ -728,7 +730,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
   async function criarAgente(opts?: { avancarPasso?: boolean }) {
     const avancarPasso = opts?.avancarPasso ?? true;
-    if (!cargoSelecionado) return;
+    if (!somentePlaybook && !cargoSelecionado) return;
     setCriando(true);
     setErro("");
     setRagPosCriacaoAviso("");
@@ -740,7 +742,6 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       }
 
       const payload: Record<string, unknown> = {
-        cargo_slug: cargoSelecionado.slug,
         nome,
         prefixo_mercado: mercados.join(","),
         personalidade: gerarPersonalidade(valores),
@@ -753,6 +754,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         mistral_agent_sync_habilitado: mistralProvisionar,
         uso_ferramentas_ia: usoFerramentasIa,
       };
+      if (somentePlaybook) {
+        payload.playbook_only = true;
+      } else if (cargoSelecionado) {
+        payload.cargo_slug = cargoSelecionado.slug;
+      }
 
       if (hubCicloEstrategia === "somente_vincular") {
         payload.omit_hub_ciclo_padrao = true;
@@ -1058,16 +1064,60 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           {passo === 1 && (
             <div>
               <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
-                Qual é o cargo deste agente?
+                Como este agente será instruído?
               </h2>
-              <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 20px" }}>
-                O cargo define nível e regras; a inferência usa <strong style={{ color: "#8b949e" }}>Mistral</strong> (Agno) via{" "}
-                <code style={{ fontSize: 11 }}>MISTRAL_MODEL</code> no servidor.
+              <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 16px" }}>
+                Escolha um cargo do catálogo ou opere só com o playbook publicado no bucket{" "}
+                <code style={{ fontSize: 11 }}>hub-agent-playbooks</code>.
               </p>
 
-              {carregando ? (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSomentePlaybook(false);
+                  }}
+                  style={chip(!somentePlaybook)}
+                >
+                  Cargo do catálogo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSomentePlaybook(true);
+                    setCargoSelecionado(null);
+                  }}
+                  style={chip(somentePlaybook, "#c9a24a")}
+                >
+                  Só playbook (sem cargo)
+                </button>
+              </div>
+
+              {somentePlaybook ? (
+                <div
+                  style={{
+                    background: "#161b22",
+                    border: "1px solid #30363d",
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 8,
+                  }}
+                >
+                  <p style={{ color: "#e6edf3", fontSize: 13, margin: "0 0 8px", lineHeight: 1.55 }}>
+                    Nenhuma regra do <strong>hub_cargos_catalogo</strong> entra no prompt nem no fluxo WhatsApp.
+                    Publique o Markdown em{" "}
+                    <code style={{ fontSize: 11 }}>{`{tenant_id}/{agente_slug}.md`}</code> e defina{" "}
+                    <code style={{ fontSize: 11 }}>playbook_object_path</code> na ficha do agente (ou gere após criar).
+                  </p>
+                  <p style={{ color: "#8b949e", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+                    No passo seguinte informe o nome; depois da criação, envie o playbook e configure o modo WhatsApp.
+                  </p>
+                </div>
+              ) : null}
+
+              {!somentePlaybook && carregando ? (
                 <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando cargos...</p>
-              ) : erroCargos ? (
+              ) : !somentePlaybook && erroCargos ? (
                 <div>
                   <p style={{ color: "#ef4444", fontSize: 13, margin: "0 0 10px" }}>Erro ao carregar cargos.</p>
                   <button
@@ -1087,7 +1137,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     Tentar novamente
                   </button>
                 </div>
-              ) : (
+              ) : !somentePlaybook ? (
                 <>
                   <div style={{ marginBottom: 12 }}>
                     <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>SEGMENTO</p>
@@ -1219,21 +1269,24 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     </div>
                   )}
                 </>
-              )}
+              ) : null}
             </div>
           )}
 
-          {passo === 2 && cargoSelecionado && (
+          {passo === 2 && (cargoSelecionado || somentePlaybook) && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
                 <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                   Identidade do agente
                 </h2>
                 <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
-                  Campos fixos do cargo, nome e mercados.
+                  {somentePlaybook
+                    ? "Nome e mercados — comportamento vem do playbook no bucket."
+                    : "Campos fixos do cargo, nome e mercados."}
                 </p>
               </div>
 
+              {!somentePlaybook && cargoSelecionado ? (
               <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
                 <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 12px" }}>
                   Fixo do cargo 🔒
@@ -1268,6 +1321,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   </p>
                 </div>
               </div>
+              ) : null}
 
               <div>
                 <label
@@ -1278,7 +1332,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 <input
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
-                  placeholder="Ex: Marina, SDR Apex, Analista Comercial..."
+                  placeholder={somentePlaybook ? "Ex: Maria, Mari..." : "Ex: Marina, SDR Apex, Analista Comercial..."}
                   style={{
                     width: "100%",
                     background: "#161b22",
@@ -1780,7 +1834,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   }
                   setShowConfirm(true);
                 }}
-                disabled={!cargoSelecionado || !nome.trim() || criando}
+                disabled={(!somentePlaybook && !cargoSelecionado) || !nome.trim() || criando}
                 style={{
                   padding: "14px 0",
                   borderRadius: 10,
@@ -1789,8 +1843,12 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   background: "#003b26",
                   border: "none",
                   color: "#c9a24a",
-                  cursor: !cargoSelecionado || !nome.trim() || criando ? "not-allowed" : "pointer",
-                  opacity: !cargoSelecionado || !nome.trim() || criando ? 0.4 : 1,
+                  cursor:
+                    (!somentePlaybook && !cargoSelecionado) || !nome.trim() || criando
+                      ? "not-allowed"
+                      : "pointer",
+                  opacity:
+                    (!somentePlaybook && !cargoSelecionado) || !nome.trim() || criando ? 0.4 : 1,
                 }}
               >
                 {criando
@@ -2625,7 +2683,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               <button
                 type="button"
                 onClick={() => setPasso((p) => p + 1)}
-                disabled={passo === 1 ? !cargoSelecionado : passo === 2 ? !nome.trim() : false}
+                disabled={
+                  passo === 1
+                    ? !somentePlaybook && !cargoSelecionado
+                    : passo === 2
+                      ? !nome.trim()
+                      : false
+                }
                 style={{
                   flex: 1,
                   padding: "12px 0",
@@ -2636,11 +2700,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   border: "none",
                   color: "#c9a24a",
                   cursor:
-                    (passo === 1 && !cargoSelecionado) || (passo === 2 && !nome.trim())
+                    (passo === 1 && !somentePlaybook && !cargoSelecionado) || (passo === 2 && !nome.trim())
                       ? "not-allowed"
                       : "pointer",
                   opacity:
-                    (passo === 1 && !cargoSelecionado) || (passo === 2 && !nome.trim()) ? 0.4 : 1,
+                    (passo === 1 && !somentePlaybook && !cargoSelecionado) || (passo === 2 && !nome.trim())
+                      ? 0.4
+                      : 1,
                 }}
               >
                 Próximo →

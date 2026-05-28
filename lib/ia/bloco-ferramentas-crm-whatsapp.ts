@@ -1,7 +1,11 @@
+import { formatarOpcoesTriagemParaPrompt } from "@/lib/ia/mari-triagem-opcoes";
+
 /** Instruções Mistral para uso fluido de ferramentas Hub no WhatsApp. */
 export function blocoInstrucoesFerramentasCrmWhatsapp(opcoes?: {
   temMenuWhatsapp?: boolean;
   temAtualizarLead?: boolean;
+  /** Playbook Unificado no bucket — triagem em 5 opções (list). */
+  playbookUnificado?: boolean;
 }): string {
   const linhas = [
     "═══ FERRAMENTAS + CRM (obrigatório no WhatsApp) ═══",
@@ -19,9 +23,23 @@ export function blocoInstrucoesFerramentasCrmWhatsapp(opcoes?: {
   ];
 
   if (opcoes?.temMenuWhatsapp) {
-    linhas.push(
-      "7. **hub_whatsapp_menu** — triagem ou próxima decisão (lista/botões); não escreva marcadores <<<UAZ_LIST>>> no texto."
-    );
+    if (opcoes.playbookUnificado) {
+      linhas.push(
+        "7. **hub_whatsapp_menu** — triagem inicial: tipo `list` com **5 opções** (após nome + agradecimento):"
+      );
+      linhas.push(...formatarOpcoesTriagemParaPrompt().split("\n").map((l) => `   ${l}`));
+      linhas.push(
+        "   Decisões com **2 opções** (vender/alugar, cadastro/parceria, faixas m²/prazo): tipo `button`. Máx. 3 botões."
+      );
+    } else {
+      linhas.push(
+        "7. **hub_whatsapp_menu** — triagem inicial: tipo `list` com 5 opções (arquitetura, imobiliário, homologação, proprietário, outro); texto = saudação Mari + pedido de nome quando aplicável."
+      );
+      linhas.push(
+        "   Decisões binárias: tipo `button`. Formato UAZAPI: «Rótulo|id». Não use texto plano quando deveria enviar menu."
+      );
+    }
+    linhas.push("   Nunca escreva <<<UAZ_LIST>>> ou <<<UAZ_BUTTONS>>> no texto da mensagem.");
   }
   if (opcoes?.temAtualizarLead !== false) {
     linhas.push(

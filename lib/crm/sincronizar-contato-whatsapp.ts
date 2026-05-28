@@ -141,7 +141,7 @@ export function blocoDadosCanalWhatsappCrm(dados: {
   if (tel) linhas.push(`- Telefone da sessão: ${tel}`);
   if (push) {
     linhas.push(
-      `- Nome no perfil WhatsApp: ${push} (use na saudação se o cliente ainda não disse outro nome; confirme com hub_atualizar_lead quando disser o nome completo).`
+      `- Nome no perfil WhatsApp (pista, pode estar errado): ${push}. Só use o primeiro nome na saudação se for claramente o contacto desta conversa. Se a mensagem for só «Olá»/«Oi», não assuma nome — pergunte conforme o playbook.`
     );
   }
   linhas.push(

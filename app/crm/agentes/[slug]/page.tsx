@@ -189,6 +189,12 @@ export default function AgentePage() {
   const [toast, setToast] = useState("");
   const [erro, setErro] = useState("");
   const [briefingOpen, setBriefingOpen] = useState(false);
+  const [showLimparMemorias, setShowLimparMemorias] = useState(false);
+  const [limpandoMemorias, setLimpandoMemorias] = useState(false);
+  const [contagemMemorias, setContagemMemorias] = useState<{ memorias: number; briefingSessoes: number } | null>(
+    null
+  );
+  const [incluirBriefingAoLimpar, setIncluirBriefingAoLimpar] = useState(true);
 
   const carregar = useCallback(async () => {
     if (!slug) return;
@@ -266,6 +272,58 @@ export default function AgentePage() {
     setDiasSemana((prev) =>
       prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()
     );
+  }
+
+  async function abrirModalLimparMemorias() {
+    setShowLimparMemorias(true);
+    setContagemMemorias(null);
+    setIncluirBriefingAoLimpar(true);
+    try {
+      const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/memorias`, {
+        headers: internalApiHeaders(),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { memorias?: number; briefingSessoes?: number };
+        setContagemMemorias({
+          memorias: typeof data.memorias === "number" ? data.memorias : 0,
+          briefingSessoes: typeof data.briefingSessoes === "number" ? data.briefingSessoes : 0,
+        });
+      }
+    } catch {
+      /* contagem opcional */
+    }
+  }
+
+  async function confirmarLimparMemorias() {
+    setLimpandoMemorias(true);
+    setErro("");
+    try {
+      const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/memorias`, {
+        method: "DELETE",
+        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ incluir_briefing: incluirBriefingAoLimpar }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        memoriasRemovidas?: number;
+        briefingSessoesRemovidas?: number;
+      };
+      if (!res.ok) {
+        setErro(data.error || "Não foi possível limpar as memórias.");
+        return;
+      }
+      const nMem = data.memoriasRemovidas ?? 0;
+      const nBrief = data.briefingSessoesRemovidas ?? 0;
+      setToast(
+        `Memórias limpas: ${nMem} operacional(is)${incluirBriefingAoLimpar ? `, ${nBrief} sessão(ões) de briefing` : ""}.`
+      );
+      setShowLimparMemorias(false);
+      setTimeout(() => setToast(""), 5000);
+    } catch {
+      setErro("Falha de rede ao limpar memórias.");
+    } finally {
+      setLimpandoMemorias(false);
+    }
   }
 
   function setValor(i: number, v: number) {
@@ -496,6 +554,121 @@ export default function AgentePage() {
         </div>
       )}
 
+      {/* MODAL LIMPAR MEMÓRIAS */}
+      {showLimparMemorias && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowLimparMemorias(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 200,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: "#161b22",
+              border: "1px solid #30363d",
+              borderRadius: 16,
+              padding: 28,
+              width: "100%",
+              maxWidth: 480,
+            }}
+          >
+            <h2 style={{ color: "#e6edf3", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
+              Limpar memórias do agente
+            </h2>
+            <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 14px", lineHeight: 1.55 }}>
+              Remove aprendizados persistentes de <strong style={{ color: "#e6edf3" }}>{agente.nome}</strong> usados
+              no prompt (tabela <code style={{ fontSize: 11 }}>hub_memorias_agente</code>). Útil para testes sem
+              contexto antigo da IA.
+            </p>
+            {contagemMemorias ? (
+              <p style={{ color: "#adbac7", fontSize: 12, margin: "0 0 12px" }}>
+                Encontrado: <strong>{contagemMemorias.memorias}</strong> memória(s) operacional(is)
+                {incluirBriefingAoLimpar ? (
+                  <>
+                    {" "}
+                    e <strong>{contagemMemorias.briefingSessoes}</strong> sessão(ões) de briefing
+                  </>
+                ) : null}
+                .
+              </p>
+            ) : (
+              <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 12px" }}>A contar registos…</p>
+            )}
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                marginBottom: 16,
+                cursor: "pointer",
+                fontSize: 12,
+                color: "#adbac7",
+                lineHeight: 1.5,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={incluirBriefingAoLimpar}
+                onChange={(e) => setIncluirBriefingAoLimpar(e.target.checked)}
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                Também apagar histórico do chat <strong>AI — Funcionários</strong> (sessões de briefing deste
+                agente).
+              </span>
+            </label>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowLimparMemorias(false)}
+                disabled={limpandoMemorias}
+                style={{
+                  flex: 1,
+                  padding: "10px 0",
+                  borderRadius: 8,
+                  background: "#21262d",
+                  border: "1px solid #30363d",
+                  color: "#8b949e",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: limpandoMemorias ? "not-allowed" : "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmarLimparMemorias()}
+                disabled={limpandoMemorias}
+                style={{
+                  flex: 1,
+                  padding: "10px 0",
+                  borderRadius: 8,
+                  background: "#7c2d12",
+                  border: "1px solid #ea580c66",
+                  color: "#fdba74",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: limpandoMemorias ? "wait" : "pointer",
+                  opacity: limpandoMemorias ? 0.7 : 1,
+                }}
+              >
+                {limpandoMemorias ? "A limpar…" : "Limpar memórias"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL CONFIRMAR SALVAR */}
       {showConfirmSalvar && (
         <div
@@ -632,6 +805,23 @@ export default function AgentePage() {
             }}
           >
             AI — Funcionários
+          </button>
+          <button
+            type="button"
+            onClick={() => void abrirModalLimparMemorias()}
+            title="Apaga memórias operacionais do agente (testes)"
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              background: "#1c1917",
+              border: "1px solid #ea580c55",
+              color: "#fdba74",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Limpar memórias
           </button>
           <button
             onClick={() => { setShowArquivar(true); setMotivoArquivamento(""); }}

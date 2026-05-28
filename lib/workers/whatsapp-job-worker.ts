@@ -112,6 +112,7 @@ type ReconstructedContext = {
   timestamp: string;
   tipoMidia: string;
   mensagemFinal: string;
+  menuChoiceId: string | null;
   mercado: string;
   instanceKey: string | null;
   isNovo: boolean;
@@ -139,6 +140,7 @@ function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
   const timestamp = toStr(payload.timestamp) || new Date().toISOString();
   const tipoMidia = toStr(payload.tipoMidia) || "texto";
   const mensagemFinal = toStr(payload.mensagemFinal);
+  const menuChoiceId = toNullableStr(payload.menuChoiceId);
   const mercado = toStr(payload.mercado) || "geral";
   const pushName = toStr(payload.pushName);
 
@@ -153,6 +155,7 @@ function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
     timestamp,
     tipoMidia,
     mensagemFinal,
+    menuChoiceId,
     mercado,
     instanceKey: toNullableStr(payload.instance),
     isNovo: toBool(payload.isNovo),
@@ -331,6 +334,7 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
       lead: contexto.lead,
       agente: contexto.agente,
       mensagemFinal: contexto.mensagemFinal,
+      menuChoiceId: contexto.menuChoiceId,
       telefone: contexto.telefone,
       pushName: contexto.pushName,
       messageId: contexto.messageId,

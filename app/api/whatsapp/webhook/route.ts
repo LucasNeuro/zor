@@ -437,6 +437,7 @@ export async function POST(request: NextRequest) {
       timestamp,
       tipoMidia,
       mensagemFinal,
+      menuChoiceId,
       instance,
     } = inboundRaw;
 
@@ -604,6 +605,7 @@ export async function POST(request: NextRequest) {
       instanceToken: waSendOpts.instanceToken ?? null,
             tipoMidia,
       mensagemFinal,
+      menuChoiceId: menuChoiceId ?? null,
             leadId: lead.id,
       pessoaId: pessoaId ?? lead.pessoa_id ?? null,
       isNovo,

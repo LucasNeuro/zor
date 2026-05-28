@@ -48,6 +48,13 @@ function formatData(v: unknown): ReactNode {
   );
 }
 
+function labelTipoPessoa(v: unknown): ReactNode {
+  const s = String(v ?? "").trim().toUpperCase();
+  if (!s) return cell(null);
+  if (s === "PJ") return cell("Emp");
+  return cell(s);
+}
+
 function formatDocumento(tipo: unknown, doc: unknown): ReactNode {
   if (!doc) return cell(null);
   const d = normalizarDocumento(String(doc));
@@ -99,7 +106,7 @@ const COLUNAS_PESSOA_LISTA: CadastroListaColumn<PessoaListaRow>[] = [
       id: "tipo_pessoa",
       label: "Tipo",
       minWidth: 56,
-      render: (p) => cell(p.tipo_pessoa),
+      render: (p) => labelTipoPessoa(p.tipo_pessoa),
     },
     {
       id: "tipo",

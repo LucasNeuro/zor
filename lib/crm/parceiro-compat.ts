@@ -71,7 +71,9 @@ export async function insertParceiroCompat(
       .select(selectCols)
       .single();
 
-    if (!error) return { data: data as ParceiroCompatRow, error: null };
+    if (!error && data && typeof data === "object" && "id" in data) {
+      return { data: data as ParceiroCompatRow, error: null };
+    }
     lastError = error;
 
     if (isTenantFkError(error) || isMissingPgColumn(error, "tenant_id")) {

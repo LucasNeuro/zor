@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { POSTGREST_LEAD_TERMINAIS } from "@/lib/crm/estagio-filters";
 import { safeCount } from "@/lib/crm/metricas-safe";
 
 export type FinanceKpis = {
@@ -132,7 +133,7 @@ export async function aggregateFinanceDashboard(
         .from("hub_leads_crm")
         .select("valor_estimado")
         .eq("tenant_id", tenantId)
-        .or("estagio.is.null,estagio.not.in.(ganho,perdido)"),
+        .not("estagio", "in", POSTGREST_LEAD_TERMINAIS),
       supabase
         .from("hub_negocios")
         .select("valor_estimado")

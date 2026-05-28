@@ -2,19 +2,30 @@
 
 export const HUB_LEADS_CRM_ESTAGIOS = [
   "novo",
+  "em_atendimento",
+  "aguardando_resposta",
   "qualificando",
+  "encaminhado",
+  "convertido_negocio",
+  "perdido",
+  "spam_invalido",
+  /** Legado (compatibilidade) */
   "qualificado",
   "proposta",
   "negociando",
   "fechamento",
   "ganho",
-  "perdido",
 ] as const;
 
 export type HubLeadsCrmEstagio = (typeof HUB_LEADS_CRM_ESTAGIOS)[number];
 
 /** Estágios que exigem confirmação humana no CRM — a IA não pode definir via tool. */
-export const HUB_LEADS_CRM_ESTAGIOS_BLOQUEADOS_IA: ReadonlySet<string> = new Set(["ganho", "perdido"]);
+export const HUB_LEADS_CRM_ESTAGIOS_BLOQUEADOS_IA: ReadonlySet<string> = new Set([
+  "ganho",
+  "perdido",
+  "convertido_negocio",
+  "spam_invalido",
+]);
 
 export type BuildLeadPatchResult =
   | { ok: true; patch: Record<string, unknown>; estagioAnterior?: string; estagioNovo?: string }

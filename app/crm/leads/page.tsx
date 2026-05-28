@@ -7,7 +7,11 @@ import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { PipelineTabsBar } from "@/components/crm/pipelines/PipelineTabsBar";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
+import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
 import { ESTAGIOS_FALLBACK_UI } from "@/lib/crm/pipeline-defaults";
+import { FUNIL_LEAD_ETAPAS, MOTIVOS_PERDA, MOTIVOS_PERDA_LABEL } from "@/lib/crm/pipelines";
+import { LeadEncaminharModal } from "@/components/crm/leads/LeadEncaminharModal";
 
 const LeadRapidoSideover = dynamic(
   () =>
@@ -35,8 +39,6 @@ const PipelineConfigSideover = dynamic(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Estagio = "novo" | "qualificando" | "qualificado" | "proposta" | "negociando" | "fechamento" | "ganho" | "perdido";
-
 type Lead = {
   id: string;
   nome: string;
@@ -44,7 +46,8 @@ type Lead = {
   email: string | null;
   origem: string | null;
   campanha: string | null;
-  estagio: Estagio;
+  estagio: string;
+  estagio_funil?: string | null;
   score: number;
   valor_estimado: number;
   agente_responsavel: string | null;
@@ -177,7 +180,11 @@ export default function LeadsPage() {
   const [memorias, setMemorias] = useState<Memoria[]>([]);
   const [novaNota, setNovaNota] = useState("");
   const [motivoPerda, setMotivoPerda] = useState("");
+  const [motivoPerdaOutro, setMotivoPerdaOutro] = useState("");
   const [confirmandoPerda, setConfirmandoPerda] = useState(false);
+  const [perdaComoSpam, setPerdaComoSpam] = useState(false);
+  const [encaminharLead, setEncaminharLead] = useState<Lead | null>(null);
+  const [convertendoNegocio, setConvertendoNegocio] = useState(false);
   const [leadDragId, setLeadDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [leadRapidoOpen, setLeadRapidoOpen] = useState(false);
@@ -347,27 +354,62 @@ export default function LeadsPage() {
     setMemorias((m || []) as Memoria[]);
   }
 
-  async function moverEstagio(leadId: string, novoEstagio: string) {
-    await supabase.from("hub_leads_crm").update({ estagio: novoEstagio, atualizado_em: new Date().toISOString() }).eq("id", leadId);
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estagio: novoEstagio as Estagio } : l));
-    if (detalhe?.id === leadId) setDetalhe(d => d ? { ...d, estagio: novoEstagio as Estagio } : null);
+  async function moverEstagio(leadId: string, novoEstagio: string, extra?: Record<string, unknown>) {
+    const leadAtual = leads.find((l) => l.id === leadId);
+    const res = await patchLeadCrm(leadId, {
+      estagio: novoEstagio,
+      _estagio_anterior: leadAtual?.estagio,
+      ...extra,
+    });
+    if (!res.ok) {
+      alert(res.error);
+      return false;
+    }
+    const data = res.data as { estagio?: string; estagio_funil?: string };
+    const est = String(data.estagio_funil ?? data.estagio ?? novoEstagio);
+    setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, estagio: est, estagio_funil: est } : l)));
+    if (detalhe?.id === leadId) setDetalhe((d) => (d ? { ...d, estagio: est, estagio_funil: est } : null));
+    return true;
+  }
+
+  async function converterNegocio(lead: Lead) {
+    setConvertendoNegocio(true);
+    const res = await fetch(`/api/crm/leads/${encodeURIComponent(lead.id)}/converter-negocio`, {
+      method: "POST",
+      credentials: "include",
+      headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const json = await res.json().catch(() => ({}));
+    setConvertendoNegocio(false);
+    if (!res.ok) {
+      alert(typeof json?.error === "string" ? json.error : "Não foi possível criar o negócio.");
+      return;
+    }
+    const negocioId = json?.data?.id as string | undefined;
+    await moverEstagio(lead.id, "convertido_negocio");
+    void carregar();
+    if (negocioId) router.push(`/crm/negocios/${negocioId}`);
+    setDetalhe(null);
   }
 
   async function marcarGanho() {
     if (!detalhe) return;
-    await moverEstagio(detalhe.id, "ganho");
-    await supabase.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "status_change", descricao: "Lead marcado como GANHO", feito_por: "humano", feito_por_tipo: "humano" });
-    setDetalhe(null);
+    await converterNegocio(detalhe);
   }
 
   async function marcarPerdido() {
-    if (!detalhe || !motivoPerda.trim()) return;
-    await supabase.from("hub_leads_crm").update({ motivo_perda: motivoPerda }).eq("id", detalhe.id);
-    await moverEstagio(detalhe.id, "perdido");
-    await supabase.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "status_change", descricao: `Lead perdido: ${motivoPerda}`, feito_por: "humano", feito_por_tipo: "humano" });
+    const motivo =
+      motivoPerda === "outro" ? motivoPerdaOutro.trim() : motivoPerda.trim();
+    if (!detalhe || !motivo) return;
+    const estagio = perdaComoSpam ? "spam_invalido" : "perdido";
+    const ok = await moverEstagio(detalhe.id, estagio, { motivo_perda: motivo });
+    if (!ok) return;
     setDetalhe(null);
     setMotivoPerda("");
     setConfirmandoPerda(false);
+    setPerdaComoSpam(false);
+    void carregar();
   }
 
   async function adicionarNota() {
@@ -394,7 +436,7 @@ export default function LeadsPage() {
     ) {
       return false;
     }
-    if (filtroEstagio && l.estagio !== filtroEstagio) return false;
+    if (filtroEstagio && estagioParaColunaKanban(l.estagio) !== filtroEstagio) return false;
     return true;
   });
 
@@ -587,7 +629,7 @@ export default function LeadsPage() {
             className={`flex h-full overflow-x-auto ${isMobile ? "snap-x snap-mandatory scroll-pl-3 gap-2.5 px-3 py-3 scrollbar-none" : "gap-3 p-4"}`}
           >
             {estagiosKanban.map(est => {
-              const col = filtrados.filter(l => l.estagio === est.id);
+              const col = filtrados.filter((l) => estagioParaColunaKanban(l.estagio) === est.id);
               const total = col.reduce((s, l) => s + l.valor_estimado, 0);
               return (
                 <div
@@ -645,7 +687,7 @@ export default function LeadsPage() {
             {isMobile ? (
               <ul className="space-y-2 p-3 pb-24">
                 {filtrados.map(lead => {
-                  const est = estagiosKanban.find(e => e.id === lead.estagio);
+                  const est = estagiosKanban.find((e) => e.id === estagioParaColunaKanban(lead.estagio));
                   return (
                     <li key={lead.id}>
                       <button
@@ -699,7 +741,7 @@ export default function LeadsPage() {
               </thead>
               <tbody>
                 {filtrados.map(lead => {
-                  const est = estagiosKanban.find(e => e.id === lead.estagio);
+                  const est = estagiosKanban.find((e) => e.id === estagioParaColunaKanban(lead.estagio));
                   return (
                     <tr key={lead.id} onClick={() => router.push(`/crm/leads/${lead.id}`)}
                       className="border-b border-gray-800/50 hover:bg-gray-900/60 cursor-pointer transition-colors">
@@ -781,12 +823,12 @@ export default function LeadsPage() {
               {/* Stage selector */}
               <div className="flex gap-1 flex-wrap">
                 {estagiosKanban.map(e => (
-                  <button key={e.id} onClick={() => moverEstagio(detalhe.id, e.id)}
+                  <button key={e.id} onClick={() => void moverEstagio(detalhe.id, e.id)}
                     className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
                     style={{
-                      backgroundColor: detalhe.estagio === e.id ? e.color : e.color + "18",
-                      color: detalhe.estagio === e.id ? "#fff" : e.color,
-                      border: `1px solid ${detalhe.estagio === e.id ? e.color : e.color + "40"}`,
+                      backgroundColor: estagioParaColunaKanban(detalhe.estagio) === e.id ? e.color : e.color + "18",
+                      color: estagioParaColunaKanban(detalhe.estagio) === e.id ? "#fff" : e.color,
+                      border: `1px solid ${estagioParaColunaKanban(detalhe.estagio) === e.id ? e.color : e.color + "40"}`,
                     }}>
                     {e.label}
                   </button>
@@ -798,10 +840,11 @@ export default function LeadsPage() {
             <div className="flex gap-2 px-5 py-3 border-b border-gray-800 flex-shrink-0 overflow-x-auto">
               {[
                 { label: "📞 Ligar", action: () => {} },
-                { label: "📅 Agendar", action: () => setTabDetalhe("notas") },
+                { label: "↗ Encaminhar", action: () => setEncaminharLead(detalhe) },
+                { label: "💼 Negócio", action: () => void converterNegocio(detalhe) },
                 { label: "📝 Nota", action: () => setTabDetalhe("notas") },
-                { label: "🏆 Ganho", action: marcarGanho },
-                { label: "❌ Perdido", action: () => setConfirmandoPerda(true) },
+                { label: "❌ Perdido", action: () => { setPerdaComoSpam(false); setConfirmandoPerda(true); } },
+                { label: "🚫 Spam", action: () => { setPerdaComoSpam(true); setConfirmandoPerda(true); } },
               ].map(a => (
                 <button key={a.label} onClick={a.action}
                   className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 flex-shrink-0 transition-colors">
@@ -938,13 +981,38 @@ export default function LeadsPage() {
             {/* Marcar perdido */}
             {confirmandoPerda && (
               <div className="flex-shrink-0 p-4 border-t border-red-900 bg-[#1a0000]">
-                <p className="text-red-400 text-xs font-bold mb-2">Motivo da perda (obrigatório):</p>
-                <input value={motivoPerda} onChange={e => setMotivoPerda(e.target.value)}
-                  placeholder="Ex: Preço alto, foi para concorrente..."
-                  className="w-full bg-red-900 text-white text-sm rounded-lg px-3 py-2 border border-red-700 outline-none placeholder:text-red-400 mb-2" />
+                <p className="text-red-400 text-xs font-bold mb-2">
+                  {perdaComoSpam ? "Motivo (spam/inválido):" : "Motivo da perda (obrigatório):"}
+                </p>
+                <select
+                  value={motivoPerda}
+                  onChange={(e) => setMotivoPerda(e.target.value)}
+                  className="w-full bg-red-900 text-white text-sm rounded-lg px-3 py-2 border border-red-700 outline-none mb-2"
+                >
+                  <option value="">Selecione…</option>
+                  {MOTIVOS_PERDA.map((m) => (
+                    <option key={m} value={m}>
+                      {MOTIVOS_PERDA_LABEL[m] ?? m}
+                    </option>
+                  ))}
+                </select>
+                {motivoPerda === "outro" && (
+                  <input
+                    value={motivoPerdaOutro}
+                    onChange={(e) => setMotivoPerdaOutro(e.target.value)}
+                    placeholder="Descreva o motivo…"
+                    className="w-full bg-red-900 text-white text-sm rounded-lg px-3 py-2 border border-red-700 outline-none placeholder:text-red-400 mb-2"
+                  />
+                )}
                 <div className="flex gap-2">
-                  <button onClick={() => setConfirmandoPerda(false)} className="flex-1 bg-gray-800 text-gray-400 text-sm py-2 rounded-lg font-bold hover:text-white transition-colors">Cancelar</button>
-                  <button onClick={marcarPerdido} disabled={!motivoPerda.trim()} className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg font-bold transition-colors">Confirmar</button>
+                  <button onClick={() => { setConfirmandoPerda(false); setPerdaComoSpam(false); }} className="flex-1 bg-gray-800 text-gray-400 text-sm py-2 rounded-lg font-bold hover:text-white transition-colors">Cancelar</button>
+                  <button
+                    onClick={() => void marcarPerdido()}
+                    disabled={!motivoPerda.trim() || (motivoPerda === "outro" && !motivoPerdaOutro.trim())}
+                    className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg font-bold transition-colors"
+                  >
+                    Confirmar
+                  </button>
                 </div>
               </div>
             )}
@@ -960,6 +1028,20 @@ export default function LeadsPage() {
             const cod = lead.codigo ? ` (${lead.codigo})` : "";
             setSucessoLead(`Lead criado${cod}.`);
             void carregar();
+          }}
+        />
+      )}
+
+      {encaminharLead && (
+        <LeadEncaminharModal
+          open
+          leadId={encaminharLead.id}
+          leadNome={encaminharLead.nome}
+          onClose={() => setEncaminharLead(null)}
+          onSuccess={() => {
+            void moverEstagio(encaminharLead.id, "encaminhado");
+            void carregar();
+            setEncaminharLead(null);
           }}
         />
       )}

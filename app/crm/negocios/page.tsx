@@ -6,6 +6,7 @@ import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { NegocioFormDrawer } from "@/components/crm/NegocioFormDrawer";
 import { PipelineConfigSideover } from "@/components/crm/leads/PipelineConfigSideover";
+import { PipelineTabsBar } from "@/components/crm/pipelines/PipelineTabsBar";
 import { NegocioKanbanCard } from "@/components/crm/negocios/NegocioKanbanCard";
 import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
 import { ESTAGIOS_FALLBACK_UI } from "@/lib/crm/pipeline-defaults";
@@ -123,13 +124,16 @@ export default function NegociosPage() {
     const json = await res.json().catch(() => ({ data: [] }));
     const list = (json.data || []) as PipelineUi[];
     if (!list.length) return;
-    const globais = list.filter((p) => !p.mercado_sigla);
-    const visiveis = globais.length ? globais : list;
+    const porMercado = list.filter((p) => p.mercado_sigla);
+    const visiveis = porMercado.length ? porMercado : list.filter((p) => !p.mercado_sigla);
     setPipelines(visiveis);
     setPipelineId((prev) =>
       prev && visiveis.some((p) => p.id === prev)
         ? prev
-        : (visiveis.find((p) => p.slug === "negocios-global")?.id || visiveis[0]?.id || null)
+        : (visiveis.find((p) => p.slug === "negocios-imb")?.id ||
+            visiveis.find((p) => p.slug === "negocios-global")?.id ||
+            visiveis[0]?.id ||
+            null)
     );
   }, []);
 
@@ -193,11 +197,17 @@ export default function NegociosPage() {
   }, [carregarLista]);
 
   async function moverEtapa(negocioId: string, novaEtapa: string) {
-    await fetch(`/api/crm/negocios/${negocioId}`, {
+    const res = await fetch(`/api/crm/negocios/${negocioId}`, {
       method: "PATCH",
+      credentials: "include",
       headers: { "Content-Type": "application/json", ...internalApiHeaders() },
       body: JSON.stringify({ etapa: novaEtapa }),
     });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(typeof json?.error === "string" ? json.error : "Não foi possível mover o negócio.");
+      return;
+    }
     setNegocios((prev) =>
       prev.map((n) => (n.id === negocioId ? { ...n, etapa: novaEtapa } : n))
     );
@@ -339,6 +349,11 @@ export default function NegociosPage() {
     </>
   );
 
+  const pipelineTabs =
+    pipelines.length > 0 ? (
+      <PipelineTabsBar pipelines={pipelines} activePipelineId={pipelineId} onSelect={setPipelineId} />
+    ) : null;
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
       <NegocioFormDrawer
@@ -363,6 +378,8 @@ export default function NegociosPage() {
           void carregarLista(0, false);
         }}
       />
+
+      {pipelineTabs}
 
       {isMobile && (
         <div className="sticky top-0 z-20 shrink-0 space-y-2 border-b border-[#30363d] bg-[#161b22] px-3 py-3">

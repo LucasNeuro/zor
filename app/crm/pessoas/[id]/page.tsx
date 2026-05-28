@@ -9,6 +9,11 @@ import {
   formatarCpfMascara,
 } from "@/lib/crm/documento-brasil";
 import { formatarCepMascara } from "@/lib/crm/viacep";
+import {
+  CadastroFichaTabs,
+  type CadastroFichaTabId,
+} from "@/components/crm/cadastro/CadastroFichaTabs";
+import Link from "next/link";
 
 type PessoaDetalhe = {
   id: string;
@@ -81,6 +86,17 @@ export default function PessoaDetalhePage() {
   const [carregando, setCarregando] = useState(true);
   const [editando, setEditando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [tab, setTab] = useState<CadastroFichaTabId>("resumo");
+  const [vinculos, setVinculos] = useState<{
+    empresas: Array<{
+      empresa_id: string;
+      codigo: string | null;
+      razao_social: string;
+      cargo: string | null;
+    }>;
+    leads: Array<{ id: string; nome: string; estagio: string | null }>;
+    negocios: Array<{ id: string; codigo: string | null; titulo: string }>;
+  } | null>(null);
 
   const carregar = useCallback(async () => {
     setErro("");
@@ -110,6 +126,17 @@ export default function PessoaDetalhePage() {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  useEffect(() => {
+    if (tab !== "vinculos" && tab !== "relacionados") return;
+    void (async () => {
+      const res = await fetch(`/api/crm/pessoas/${encodeURIComponent(id)}/vinculos`, {
+        headers: internalApiHeaders(),
+      });
+      const json = (await res.json().catch(() => ({}))) as { data?: typeof vinculos };
+      if (res.ok && json.data) setVinculos(json.data);
+    })();
+  }, [id, tab]);
 
   async function salvarEdicao() {
     if (!pessoa) return;
@@ -271,47 +298,138 @@ export default function PessoaDetalhePage() {
         </div>
       </div>
 
-      <div
-        style={{
-          padding: "20px 24px 32px",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-          gap: 20,
-          maxWidth: 960,
-        }}
-      >
-        <Campo label="Tipo" value={labelTipoPessoa(pessoa.tipo_pessoa)} />
-        <Campo label={docLabel} value={formatDocumento(pessoa)} />
-        <Campo label="E-mail" value={pessoa.email || "—"} />
-        <Campo label="Telefone" value={pessoa.telefone || "—"} />
-        {pessoa.tipo_pessoa === "PJ" && (
-          <Campo label="Empresa (razão social)" value={pessoa.empresa || "—"} />
-        )}
-        <Campo label="Área de atuação" value={labelAreaAtuacao(pessoa.area_atuacao || "")} />
-        <Campo label="Origem" value={pessoa.origem || "—"} />
-        <Campo label="Perfil" value={pessoa.tipo || "—"} />
-        <Campo label="Cadastrado em" value={formatData(pessoa.criado_em)} />
-        <Campo label="Atualizado em" value={formatData(pessoa.atualizado_em)} />
-      </div>
-
-      <div style={{ padding: "0 24px 32px", maxWidth: 640 }}>
-        <h2 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#e6edf3" }}>
-          Endereço
-        </h2>
-        <div
-          style={{
-            padding: 16,
-            borderRadius: 10,
-            border: "1px solid #30363d",
-            background: "#161b22",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
-          <Campo label="CEP" value={pessoa.cep ? formatarCepMascara(pessoa.cep) : "—"} />
-          <Campo label="Endereço completo" value={endereco || "—"} />
-        </div>
+      <div style={{ padding: "12px 24px 32px", maxWidth: 960 }}>
+        <CadastroFichaTabs active={tab} onChange={setTab}>
+          {tab === "resumo" && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                gap: 20,
+              }}
+            >
+              <Campo label="Código" value={pessoa.codigo || "—"} />
+              <Campo label="Tipo" value={labelTipoPessoa(pessoa.tipo_pessoa)} />
+              <Campo label={docLabel} value={formatDocumento(pessoa)} />
+              <Campo label="E-mail" value={pessoa.email || "—"} />
+              <Campo label="Telefone" value={pessoa.telefone || "—"} />
+              <Campo label="Área de atuação" value={labelAreaAtuacao(pessoa.area_atuacao || "")} />
+            </div>
+          )}
+          {tab === "dados" && (
+            <>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                  gap: 20,
+                  marginBottom: 24,
+                }}
+              >
+                <Campo label="Origem" value={pessoa.origem || "—"} />
+                <Campo label="Perfil" value={pessoa.tipo || "—"} />
+                {pessoa.tipo_pessoa === "PJ" && (
+                  <Campo label="Empresa (razão social)" value={pessoa.empresa || "—"} />
+                )}
+                <Campo label="Cadastrado em" value={formatData(pessoa.criado_em)} />
+                <Campo label="Atualizado em" value={formatData(pessoa.atualizado_em)} />
+              </div>
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 10,
+                  border: "1px solid #30363d",
+                  background: "#161b22",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e6edf3" }}>Endereço</p>
+                <Campo label="CEP" value={pessoa.cep ? formatarCepMascara(pessoa.cep) : "—"} />
+                <Campo label="Endereço completo" value={endereco || "—"} />
+              </div>
+            </>
+          )}
+          {tab === "vinculos" && (
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {(vinculos?.empresas ?? []).length === 0 ? (
+                <li style={{ color: "#8b949e", fontSize: 13 }}>Nenhum vínculo com empresa.</li>
+              ) : (
+                vinculos?.empresas.map((e) => (
+                  <li
+                    key={e.empresa_id}
+                    style={{
+                      padding: "12px 0",
+                      borderBottom: "1px solid #30363d",
+                    }}
+                  >
+                    <Link
+                      href={`/crm/empresas/${e.empresa_id}`}
+                      style={{ color: "#c9a24a", fontWeight: 600, textDecoration: "none" }}
+                    >
+                      {e.codigo ? `${e.codigo} · ` : ""}
+                      {e.razao_social}
+                    </Link>
+                    {e.cargo ? (
+                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#8b949e" }}>{e.cargo}</p>
+                    ) : null}
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+          {tab === "relacionados" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              <div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#8b949e" }}>
+                  LEADS
+                </p>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                  {(vinculos?.leads ?? []).length === 0 ? (
+                    <li style={{ color: "#8b949e", fontSize: 13 }}>Nenhum lead vinculado.</li>
+                  ) : (
+                    vinculos?.leads.map((l) => (
+                      <li key={l.id} style={{ padding: "8px 0", borderBottom: "1px solid #30363d" }}>
+                        <Link
+                          href={`/crm/leads/${l.id}`}
+                          style={{ color: "#c9a24a", textDecoration: "none", fontWeight: 600 }}
+                        >
+                          {l.nome}
+                        </Link>
+                        <span style={{ marginLeft: 8, fontSize: 11, color: "#8b949e" }}>
+                          {l.estagio}
+                        </span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+              <div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#8b949e" }}>
+                  NEGÓCIOS
+                </p>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                  {(vinculos?.negocios ?? []).length === 0 ? (
+                    <li style={{ color: "#8b949e", fontSize: 13 }}>Nenhum negócio vinculado.</li>
+                  ) : (
+                    vinculos?.negocios.map((n) => (
+                      <li key={n.id} style={{ padding: "8px 0", borderBottom: "1px solid #30363d" }}>
+                        <Link
+                          href={`/crm/negocios?destaque=${n.id}`}
+                          style={{ color: "#c9a24a", textDecoration: "none", fontWeight: 600 }}
+                        >
+                          {n.codigo ? `${n.codigo} · ` : ""}
+                          {n.titulo}
+                        </Link>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
+        </CadastroFichaTabs>
       </div>
     </div>
   );

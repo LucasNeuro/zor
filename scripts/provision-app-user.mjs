@@ -115,7 +115,6 @@ async function main() {
         name,
         role,
         status: "Ativo",
-        atualizado_em: new Date().toISOString(),
       },
       { onConflict: "auth_id" }
     )

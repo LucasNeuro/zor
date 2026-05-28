@@ -6,14 +6,19 @@
  * `npm run dev` usa este script por defeito. Para verificação TLS normal: `npm run dev:strict-tls`.
  * Nunca uses NODE_TLS_REJECT_UNAUTHORIZED=0 em produção (`next start`).
  */
+const port = process.env.PORT || "3001";
 console.warn(
   "\n[dev] NODE_TLS_REJECT_UNAUTHORIZED=0 (só este processo; use npm run dev:strict-tls se não precisares)\n"
+);
+console.warn(
+  `[dev] URL deste projeto (porta ${port}, não 3000): http://localhost:${port}\n` +
+    `     Com servidor a correr: npm run open:dev\n`
 );
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 const { spawn } = require("child_process");
 const child = spawn(
   process.execPath,
-  [require.resolve("next/dist/bin/next"), "dev", "--webpack", "-p", process.env.PORT || "3001"],
+  [require.resolve("next/dist/bin/next"), "dev", "--webpack", "-p", port],
   { stdio: "inherit", env: process.env, cwd: require("path").join(__dirname, "..") }
 );
 child.on("exit", (code) => process.exit(code ?? 0));

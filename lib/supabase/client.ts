@@ -1,12 +1,24 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { installCrmAuthBridge } from "@/lib/supabase/crm-auth-bridge";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+/** Host `.invalid` (RFC 6761) — só usado para não quebrar o import/SSR se o .env faltar. */
+const SUPABASE_ENV_PLACEHOLDER_URL = "https://env-ausente.invalid";
+const SUPABASE_ENV_PLACEHOLDER_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.obra10-env-ausente";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Variáveis de ambiente do Supabase não encontradas. Verifique o .env.local");
+function resolveSupabaseBrowserEnv(): { url: string; anonKey: string } {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
+  if (url && anonKey) return { url, anonKey };
+  if (process.env.NODE_ENV === "development") {
+    console.warn(
+      "[supabase/client] NEXT_PUBLIC_SUPABASE_URL e/ou NEXT_PUBLIC_SUPABASE_ANON_KEY ausentes no .env.local — defina-as e reinicie o servidor; até lá o login/API falharão ao contactar o Supabase.",
+    );
+  }
+  return { url: SUPABASE_ENV_PLACEHOLDER_URL, anonKey: SUPABASE_ENV_PLACEHOLDER_ANON_KEY };
 }
+
+const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseBrowserEnv();
 
 /** Uma instância por contexto browser; reutiliza em HMR para evitar avisos GoTrueClient duplicados. */
 const globalForSupabase = globalThis as unknown as { __supabaseBrowser?: SupabaseClient };
@@ -35,10 +47,6 @@ export type HubPessoa = {
   tipo: 'lead' | 'parceiro' | 'cliente' | 'fornecedor' | 'prospect'
   documento: string | null
   empresa: string | null
-  area_atuacao: string | null
-  cep: string | null
-  logradouro: string | null
-  bairro: string | null
   cidade: string | null
   estado: string | null
   origem: string | null

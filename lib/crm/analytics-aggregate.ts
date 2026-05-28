@@ -1,8 +1,43 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { FUNIL_LEADS, FUNIL_NEGOCIOS } from "@/lib/crm/pipeline-funil";
-import { safeCount } from "@/lib/crm/metricas-safe";
+import { legacyToFunil } from "@/lib/crm/estagio-map";
+import { metricasLeadsFromRows } from "@/lib/crm/estagio-filters";
+import { safeCount, safeSelectRows } from "@/lib/crm/metricas-safe";
 import type { AnalyticsPeriodo } from "@/lib/crm/analytics-period";
 import { sinceFromPeriodo } from "@/lib/crm/analytics-period";
+import { FUNIL_LEAD_ETAPAS } from "@/lib/crm/pipelines";
+import {
+  buildFunilNegociosPorMercado,
+  type EstagioPipelineRef,
+} from "@/lib/crm/funil-analytics";
+
+async function loadEstagiosPipelineNegocio(
+  supabase: SupabaseClient,
+  mercadoPrefixo: string
+): Promise<EstagioPipelineRef[] | undefined> {
+  const { data, error } = await supabase
+    .from("hub_pipelines")
+    .select("hub_pipeline_estagios(slug, label, cor, ordem, ativo)")
+    .eq("tipo", "negocio")
+    .eq("mercado_sigla", mercadoPrefixo.toUpperCase())
+    .eq("ativo", true)
+    .maybeSingle();
+
+  if (error || !data) return undefined;
+
+  const raw = data as Record<string, unknown>;
+  const estagios = (raw.hub_pipeline_estagios as Record<string, unknown>[] | null) ?? [];
+  const sorted = [...estagios]
+    .filter((e) => e.ativo !== false)
+    .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0));
+
+  if (sorted.length === 0) return undefined;
+
+  return sorted.map((e) => ({
+    slug: String(e.slug),
+    label: String(e.label ?? e.slug),
+    cor: e.cor != null ? String(e.cor) : null,
+  }));
+}
 
 export const KPI_METAS_DEFAULT: Record<string, number | null> = {
   taxa_qualificacao: 40,
@@ -40,7 +75,9 @@ export type AnalyticsPayload = {
     taxaEncaminhamento: number;
   };
   funilLeads: { id: string; label: string; count: number; color: string }[];
+  /** Preenchido apenas quando GET /api/crm/analytics inclui ?mercado=PREFIXO */
   funilNegocios: { id: string; label: string; count: number; color: string }[];
+  funilNegociosMercado?: string;
   leadsPorDia: { dia: string; label: string; count: number }[];
   atendimento: {
     filaPendente: number;
@@ -97,20 +134,6 @@ function progressoPct(valor: number, meta: number | null, slug: string): number 
   return Math.min(100, Math.round((valor / meta) * 100));
 }
 
-async function safeSelect<T>(
-  promise: PromiseLike<{ data: T | null; error: { code?: string; message?: string } | null }>
-): Promise<T> {
-  const { data, error } = await promise;
-  if (error) {
-    const msg = (error.message ?? "").toLowerCase();
-    if (error.code === "PGRST205" || msg.includes("does not exist") || msg.includes("schema cache")) {
-      return [] as T;
-    }
-    throw error;
-  }
-  return (data ?? []) as T;
-}
-
 function agruparLeadsPorDia(rows: { criado_em: string }[], sinceMs: number): AnalyticsPayload["leadsPorDia"] {
   const buckets = new Map<string, number>();
   const now = new Date();
@@ -140,7 +163,8 @@ function agruparLeadsPorDia(rows: { criado_em: string }[], sinceMs: number): Ana
 export async function aggregateAnalytics(
   supabase: SupabaseClient,
   tenantId: string,
-  periodo: AnalyticsPeriodo
+  periodo: AnalyticsPeriodo,
+  mercadoPrefixo?: string
 ): Promise<AnalyticsPayload> {
   const since = sinceFromPeriodo(periodo);
   const sinceMs = Date.now() - new Date(since).getTime();
@@ -154,8 +178,6 @@ export async function aggregateAnalytics(
     leadsRes,
     negRes,
     leadsPeriodoRes,
-    totalLeads,
-    qualificados,
     comNegocio,
     negociosAbertos,
     leadsHoje,
@@ -176,24 +198,15 @@ export async function aggregateAnalytics(
       .order("criado_em", { ascending: false })
       .limit(200),
     supabase.from("hub_leads_crm").select("estagio").eq("tenant_id", tenantId),
-    supabase.from("hub_negocios").select("etapa, status").eq("tenant_id", tenantId),
+    supabase
+      .from("hub_negocios")
+      .select("etapa, status, prefixo_mercado")
+      .eq("tenant_id", tenantId),
     supabase
       .from("hub_leads_crm")
       .select("criado_em")
       .eq("tenant_id", tenantId)
       .gte("criado_em", since),
-    safeCount(
-      supabase.from("hub_leads_crm").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId)
-    ),
-    safeCount(
-      supabase
-        .from("hub_leads_crm")
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .not("estagio", "is", null)
-        .neq("estagio", "")
-        .not("estagio", "in", "(novo,perdido)")
-    ),
     safeCount(
       supabase
         .from("hub_negocios")
@@ -261,7 +274,7 @@ export async function aggregateAnalytics(
   ]);
 
   const [alertasRows, mlRows, ciclosRows] = await Promise.all([
-    safeSelect(
+    safeSelectRows(
       supabase
         .from("hub_alertas")
         .select("id, titulo, tipo, criado_em")
@@ -269,24 +282,24 @@ export async function aggregateAnalytics(
         .order("criado_em", { ascending: false })
         .limit(5)
     ),
-    safeSelect(
+    safeSelectRows(
       supabase
         .from("hub_ml_observacoes")
         .select("tipo, descricao, amostras")
         .order("criado_em", { ascending: false })
         .limit(5)
     ),
-    safeSelect(supabase.from("hub_ciclos_ia").select("ultimo_status").eq("ativo", true)),
+    safeSelectRows(supabase.from("hub_ciclos_ia").select("ultimo_status").eq("ativo", true)),
   ]);
 
-  const aguardando = await safeCount(
-    supabase
-      .from("hub_leads_crm")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .or("estagio.is.null,estagio.not.in.(ganho,perdido)")
-      .or("humano_responsavel.is.null,humano_responsavel.eq.")
-  );
+  if (leadsRes.error) {
+    console.warn("[analytics] hub_leads_crm", leadsRes.error.message ?? leadsRes.error);
+  }
+  const leadsRows = (leadsRes.error ? [] : (leadsRes.data ?? [])) as { estagio: string | null }[];
+  const leadMetricas = metricasLeadsFromRows(leadsRows, (e) => String(legacyToFunil(e)));
+  const totalLeads = leadMetricas.total;
+  const qualificados = leadMetricas.qualificados;
+  const aguardando = leadMetricas.aguardando;
 
   const taxaQual = totalLeads > 0 ? Math.round((qualificados / totalLeads) * 100) : 0;
   const taxaConv = totalLeads > 0 ? Math.round((comNegocio / totalLeads) * 100) : 0;
@@ -353,19 +366,22 @@ export async function aggregateAnalytics(
   });
 
   const leadCounts: Record<string, number> = {};
-  for (const s of FUNIL_LEADS) leadCounts[s.id] = 0;
-  for (const r of leadsRes.data ?? []) {
-    const e = String((r as { estagio: string | null }).estagio || "novo");
-    leadCounts[e] = (leadCounts[e] ?? 0) + 1;
-  }
+  for (const s of FUNIL_LEAD_ETAPAS) leadCounts[s.slug] = leadMetricas.counts[s.slug] ?? 0;
 
-  const negCounts: Record<string, number> = {};
-  for (const s of FUNIL_NEGOCIOS) negCounts[s.id] = 0;
-  for (const r of negRes.data ?? []) {
-    const row = r as { etapa: string; status: string };
-    if (!["aberto", "em_negociacao"].includes(row.status)) continue;
-    const e = String(row.etapa || "briefing");
-    negCounts[e] = (negCounts[e] ?? 0) + 1;
+  const negRows = (negRes.data ?? []) as {
+    etapa: string;
+    status: string;
+    prefixo_mercado?: string | null;
+  }[];
+
+  let funilNegocios: AnalyticsPayload["funilNegocios"] = [];
+  let funilNegociosMercado: string | undefined;
+
+  if (mercadoPrefixo) {
+    const prefixo = mercadoPrefixo.trim().toUpperCase();
+    const estagiosDb = await loadEstagiosPipelineNegocio(supabase, prefixo);
+    funilNegocios = buildFunilNegociosPorMercado(negRows, prefixo, estagiosDb);
+    funilNegociosMercado = prefixo;
   }
 
   const ciclosComFalha = ciclosRows.filter(
@@ -416,18 +432,14 @@ export async function aggregateAnalytics(
       taxaQualificacao: taxaQual,
       taxaEncaminhamento: taxaEnc,
     },
-    funilLeads: FUNIL_LEADS.map((s) => ({
-      id: s.id,
-      label: s.short,
-      count: leadCounts[s.id] ?? 0,
-      color: s.color,
-    })),
-    funilNegocios: FUNIL_NEGOCIOS.map((s) => ({
-      id: s.id,
+    funilLeads: FUNIL_LEAD_ETAPAS.map((s) => ({
+      id: s.slug,
       label: s.label,
-      count: negCounts[s.id] ?? 0,
-      color: s.color,
+      count: leadCounts[s.slug] ?? 0,
+      color: s.cor,
     })),
+    funilNegocios,
+    ...(funilNegociosMercado ? { funilNegociosMercado } : {}),
     leadsPorDia: agruparLeadsPorDia(
       (leadsPeriodoRes.data ?? []) as { criado_em: string }[],
       sinceMs

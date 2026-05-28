@@ -5,6 +5,12 @@ import { Building2, UserPlus } from "lucide-react";
 import { CadastroPremiumSideover } from "@/components/crm/cadastro/CadastroPremiumSideover";
 import { MercadoLeadPicker } from "@/components/crm/leads/MercadoLeadPicker";
 import { LEAD_ORIGENS } from "@/lib/crm/lead-cadastro";
+import {
+  CAMPOS_POR_TIPO,
+  prefixoMercadoFromTipoInteresse,
+  TIPOS_INTERESSE_LEAD,
+  type TipoInteresseLeadId,
+} from "@/lib/crm/lead-campos-por-tipo";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 
 const ORIGEM_LABEL: Record<string, string> = {
@@ -45,6 +51,8 @@ const formInicial = {
   valor_estimado: "",
   indicado_por: "",
   mercados: ["IMB"] as string[],
+  tipo_interesse: "comprar_imovel" as TipoInteresseLeadId,
+  extras: {} as Record<string, string>,
 };
 
 export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
@@ -92,14 +100,20 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
 
     setSalvando(true);
     try {
+      const prefixo = prefixoMercadoFromTipoInteresse(form.tipo_interesse);
       const body: Record<string, unknown> = {
         nome,
         telefone: form.telefone.trim(),
         email: form.email.trim() || null,
         origem: form.origem,
         estagio: "novo",
+        estagio_funil: "novo",
+        tipo_interesse: form.tipo_interesse,
         valor_estimado: form.valor_estimado.trim() || 0,
-        mercados: form.mercados,
+        mercados: [prefixo, ...form.mercados.filter((m) => m !== prefixo)],
+        cidade: form.extras.cidade?.trim() || null,
+        bairro: form.extras.bairro?.trim() || null,
+        metadata: { ...form.extras, tipo_interesse: form.tipo_interesse },
       };
       if (form.origem === "indicacao" && form.indicado_por.trim()) {
         body.indicado_por = form.indicado_por.trim();
@@ -171,6 +185,63 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
           Mesma matriz do cadastro: mercado(s), contacto e origem. O lead entra em{" "}
           <strong className="text-[#e6edf3]">Novos</strong> e gera vínculo PES pelo telefone.
         </p>
+
+        <section>
+          <p className={`${secaoCls} mb-3`}>Tipo de interesse</p>
+          <select
+            value={form.tipo_interesse}
+            onChange={(e) => {
+              set("tipo_interesse", e.target.value as TipoInteresseLeadId);
+              set("extras", {});
+              set("mercados", [prefixoMercadoFromTipoInteresse(e.target.value as TipoInteresseLeadId)]);
+            }}
+            className={inputCls}
+          >
+            {TIPOS_INTERESSE_LEAD.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </section>
+
+        <section>
+          <p className={`${secaoCls} mb-3`}>Dados do interesse</p>
+          <div className="flex flex-col gap-3">
+            {(CAMPOS_POR_TIPO[form.tipo_interesse] ?? []).map((campo) => (
+              <div key={campo.key}>
+                <label className={labelCls}>
+                  {campo.label}
+                  {campo.obrigatorio ? " *" : ""}
+                </label>
+                {campo.type === "select" && campo.options ? (
+                  <select
+                    className={inputCls}
+                    value={form.extras[campo.key] ?? ""}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, extras: { ...p.extras, [campo.key]: e.target.value } }))
+                    }
+                  >
+                    <option value="">Selecione…</option>
+                    {campo.options.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={inputCls}
+                    value={form.extras[campo.key] ?? ""}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, extras: { ...p.extras, [campo.key]: e.target.value } }))
+                    }
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section>
           <p className={`${secaoCls} mb-3 flex items-center gap-2`}>

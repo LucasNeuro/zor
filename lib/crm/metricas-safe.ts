@@ -8,10 +8,20 @@ export async function safeCount(
   if (error) {
     const code = error.code ?? "";
     const msg = (error.message ?? "").toLowerCase();
-    if (code === "PGRST205" || code === "PGRST204" || msg.includes("does not exist") || msg.includes("schema cache")) {
+    if (
+      code === "PGRST205" ||
+      code === "PGRST204" ||
+      code === "22P02" ||
+      code === "42703" ||
+      msg.includes("does not exist") ||
+      msg.includes("schema cache") ||
+      msg.includes("invalid input")
+    ) {
+      console.warn("[crm safeCount]", code, error.message ?? "");
       return 0;
     }
-    throw error;
+    console.warn("[crm safeCount]", code, error.message ?? "");
+    return 0;
   }
   return count ?? 0;
 }
@@ -36,4 +46,28 @@ export async function safeSum(
   }
   const row = data as { sum?: number | null } | null;
   return Number(row?.sum ?? 0);
+}
+
+/** Select que devolve [] se a tabela/coluna não existir ou houver erro de permissão. */
+export async function safeSelectRows<T>(
+  promise: PromiseLike<{ data: T | null; error: { code?: string; message?: string } | null }>
+): Promise<T> {
+  const { data, error } = await promise;
+  if (error) {
+    const code = error.code ?? "";
+    const msg = (error.message ?? "").toLowerCase();
+    if (
+      code === "PGRST205" ||
+      code === "PGRST204" ||
+      code === "42501" ||
+      msg.includes("does not exist") ||
+      msg.includes("schema cache") ||
+      msg.includes("permission denied")
+    ) {
+      return [] as T;
+    }
+    console.warn("[crm safeSelectRows]", error.message ?? error);
+    return [] as T;
+  }
+  return (data ?? []) as T;
 }

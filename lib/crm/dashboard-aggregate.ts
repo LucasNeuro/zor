@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { legacyToFunil } from "@/lib/crm/estagio-map";
+import { ESTAGIOS_LEAD_TERMINAIS, metricasLeadsFromRows } from "@/lib/crm/estagio-filters";
 import { safeCount } from "@/lib/crm/metricas-safe";
 
 export type CrmMetricas = {
@@ -62,10 +64,7 @@ export async function fetchCrmMetricas(
 
   const [
     leadsHoje,
-    aguardando,
-    pipelineRowsRes,
-    total,
-    qualificados,
+    leadsRowsRes,
     aprovs,
     msgs,
     agentes,
@@ -79,31 +78,10 @@ export async function fetchCrmMetricas(
         .eq("tenant_id", tenantId)
         .gte("criado_em", sinceIso)
     ),
-    safeCount(
-      supabase
-        .from("hub_leads_crm")
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .or("estagio.is.null,estagio.not.in.(ganho,perdido)")
-        .or("humano_responsavel.is.null,humano_responsavel.eq.")
-    ),
     supabase
       .from("hub_leads_crm")
-      .select("valor_estimado")
-      .eq("tenant_id", tenantId)
-      .or("estagio.is.null,estagio.not.in.(ganho,perdido)"),
-    safeCount(
-      supabase.from("hub_leads_crm").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId)
-    ),
-    safeCount(
-      supabase
-        .from("hub_leads_crm")
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .not("estagio", "is", null)
-        .neq("estagio", "")
-        .not("estagio", "in", "(novo,perdido)")
-    ),
+      .select("estagio, valor_estimado")
+      .eq("tenant_id", tenantId),
     safeCount(supabase.from("hub_aprovacoes").select("id", { count: "exact", head: true }).eq("status", "pendente")),
     safeCount(
       supabase
@@ -128,11 +106,19 @@ export async function fetchCrmMetricas(
       .gte("encaminhado_em", sinceIso),
   ]);
 
-  const pipelineRows = pipelineRowsRes.error ? [] : (pipelineRowsRes.data ?? []);
-  const receitaPotencial = pipelineRows.reduce(
-    (s, r) => s + Number((r as { valor_estimado?: number | null }).valor_estimado ?? 0),
-    0
-  );
+  const leadsRows = (leadsRowsRes.error ? [] : (leadsRowsRes.data ?? [])) as {
+    estagio: string | null;
+    valor_estimado?: number | null;
+  }[];
+  const leadMetricas = metricasLeadsFromRows(leadsRows, (e) => String(legacyToFunil(e)));
+  const total = leadMetricas.total;
+  const qualificados = leadMetricas.qualificados;
+  const aguardando = leadMetricas.aguardando;
+  const terminaisSet = new Set<string>(ESTAGIOS_LEAD_TERMINAIS);
+
+  const receitaPotencial = leadsRows
+    .filter((r) => !terminaisSet.has(String(legacyToFunil(r.estagio))))
+    .reduce((s, r) => s + Number(r.valor_estimado ?? 0), 0);
 
   const encRows = encRowsRes.error ? [] : (encRowsRes.data ?? []) as { lead_id: string | null }[];
   const encaminhamentosHoje = encRows.length;

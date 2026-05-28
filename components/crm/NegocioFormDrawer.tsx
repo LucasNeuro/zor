@@ -93,7 +93,7 @@ type ChatMsg = {
 const emptyForm = (): FormState => ({
   titulo: "",
   prefixo_mercado: "IMB",
-  etapa: "novo",
+  etapa: "novo_negocio",
   valor_estimado: "",
   data_previsao_fechamento: "",
   lead_ids: [],
@@ -121,10 +121,10 @@ const ETAPA_LABEL: Record<string, string> = {
 };
 
 const WIZARD_STEPS: Array<{ id: WizardStepId; short: string; label: string; optional?: boolean }> = [
-  { id: "essenciais", short: "01", label: "Essenciais" },
-  { id: "envolvidos", short: "02", label: "Envolvidos" },
-  { id: "comercial", short: "03", label: "Comercial" },
-  { id: "copiloto", short: "IA", label: "Copiloto IA", optional: true },
+  { id: "essenciais", short: "01", label: "Origem e mercado" },
+  { id: "envolvidos", short: "02", label: "Participantes" },
+  { id: "comercial", short: "03", label: "Objeto e financeiro" },
+  { id: "copiloto", short: "04", label: "Próxima ação (IA)", optional: true },
 ];
 
 const QUICK_PROMPTS = [

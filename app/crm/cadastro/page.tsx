@@ -1,8 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { PARCEIRO_LINK_TOKEN_REDE } from "@/lib/crm/parceiro-link-publico";
 import type { User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
@@ -70,7 +72,7 @@ const ORIGENS_PESSOA = [
 ];
 
 const REGISTO_OPTIONS = [
-  { value: "contactos", label: "Contactos" },
+  { value: "contactos", label: "Contatos" },
   { value: "empresas", label: "Empresas" },
 ];
 
@@ -269,9 +271,9 @@ export default function CadastroPage() {
         onChange: setFiltroTipo,
         label: "Tipo pessoa",
         options: [
-          { value: "", label: "PF e PJ" },
+          { value: "", label: "PF e Emp" },
           { value: "PF", label: "PF" },
-          { value: "PJ", label: "PJ" },
+          { value: "PJ", label: "Emp" },
         ],
       },
       uf,
@@ -315,25 +317,46 @@ export default function CadastroPage() {
 
   const headerActions = useMemo(
     () => (
-      <button
-        type="button"
-        onClick={() => {
-          setTipoWizard(filtroRegisto === "empresas" || filtroTipo === "PJ" ? "PJ" : "PF");
-          setWizardOpen(true);
-        }}
-        style={{
-          background: "#003b26",
-          color: "#c9a24a",
-          border: "none",
-          borderRadius: 8,
-          padding: "10px 20px",
-          fontSize: 13,
-          fontWeight: 700,
-          cursor: "pointer",
-        }}
-      >
-        + Novo cadastro
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={`/parceiro/cadastro/${PARCEIRO_LINK_TOKEN_REDE}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            background: "#003b26",
+            color: "#c9a24a",
+            border: "none",
+            borderRadius: 8,
+            padding: "10px 20px",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            textDecoration: "none",
+            display: "inline-block",
+          }}
+        >
+          + Convidar
+        </Link>
+        <button
+          type="button"
+          onClick={() => {
+            setTipoWizard(filtroRegisto === "empresas" || filtroTipo === "PJ" ? "PJ" : "PF");
+            setWizardOpen(true);
+          }}
+          style={{
+            background: "#003b26",
+            color: "#c9a24a",
+            border: "none",
+            borderRadius: 8,
+            padding: "10px 20px",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          + Novo cadastro
+        </button>
+      </div>
     ),
     [filtroRegisto, filtroTipo]
   );

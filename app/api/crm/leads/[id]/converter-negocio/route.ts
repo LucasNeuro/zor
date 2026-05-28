@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildLeadEstagioPatch } from "@/lib/crm/estagio-map";
 import { gerarCodigoNegocio } from "@/lib/crm/negocio-cadastro";
 import {
   criarVinculosNegocioFromLead,
   prefixoMercadoFromLead,
 } from "@/lib/crm/negocio-vinculos";
+import { MERCADOS_NEGOCIO } from "@/lib/crm/pipelines";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
@@ -39,14 +41,38 @@ export async function POST(request: NextRequest, { params }: Params) {
   const titulo = String(body.titulo || `Negócio — ${lead.nome}`).trim();
   const codigo = await gerarCodigoNegocio(supabase);
 
+  const mercadoSlug =
+    MERCADOS_NEGOCIO.find((m) => m.prefixo === prefixo_mercado)?.slug ?? "imobiliario";
+  const pipelineSiglaMap: Record<string, string> = {
+    IMB: "imb",
+    ARQ: "arq",
+    OBR: "rfm",
+    RFM: "rfm",
+    ENG: "eng",
+    MRC: "mrc",
+    SRV: "srv",
+    PRO: "pro",
+    FOR: "for",
+  };
+  const pipelineSlug = `negocios-${pipelineSiglaMap[prefixo_mercado] ?? prefixo_mercado.toLowerCase()}`;
+
   let pipelineNegId: string | null = null;
-  const { data: pipeNeg } = await supabase
+  const { data: pipeMercado } = await supabase
     .from("hub_pipelines")
     .select("id")
-    .eq("slug", "negocios-global")
-    .is("mercado_sigla", null)
+    .eq("slug", pipelineSlug)
     .maybeSingle();
-  if (pipeNeg?.id) pipelineNegId = String(pipeNeg.id);
+  if (pipeMercado?.id) {
+    pipelineNegId = String(pipeMercado.id);
+  } else {
+    const { data: pipeNeg } = await supabase
+      .from("hub_pipelines")
+      .select("id")
+      .eq("slug", "negocios-global")
+      .is("mercado_sigla", null)
+      .maybeSingle();
+    if (pipeNeg?.id) pipelineNegId = String(pipeNeg.id);
+  }
 
   let pessoaCodigo: string | null = null;
   let empresaId: string | null = null;
@@ -72,21 +98,17 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
   }
 
-  const etapaInicial =
-    lead.estagio && lead.estagio !== "ganho" && lead.estagio !== "perdido"
-      ? lead.estagio
-      : "negociando";
-
   const row = {
     codigo,
     titulo,
     prefixo_mercado,
+    mercado_slug: mercadoSlug,
     lead_id,
     pessoa_id: lead.pessoa_id,
     empresa_id: empresaId,
     valor_estimado: lead.valor_estimado ?? 0,
     status: "aberto",
-    etapa: etapaInicial,
+    etapa: "novo_negocio",
     pipeline_id: pipelineNegId,
     tenant_id: tenantId,
   };
@@ -125,12 +147,14 @@ export async function POST(request: NextRequest, { params }: Params) {
     tenant_id: tenantId,
   });
 
-  if (!["ganho", "perdido", "negociando"].includes(lead.estagio)) {
-    await supabase
-      .from("hub_leads_crm")
-      .update({ estagio: "negociando", atualizado_em: new Date().toISOString() })
-      .eq("id", lead_id);
-  }
+  await supabase
+    .from("hub_leads_crm")
+    .update({
+      ...buildLeadEstagioPatch("convertido_negocio"),
+      negocio_id: negocio.id,
+      atualizado_em: new Date().toISOString(),
+    })
+    .eq("id", lead_id);
 
   return NextResponse.json({ data: negocio }, { status: 201 });
 }

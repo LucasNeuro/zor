@@ -534,7 +534,7 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <WizardSection
-              title="Pessoa física ou jurídica"
+              title="Pessoa física ou empresa"
               description="Campos abaixo adaptam-se ao tipo seleccionado."
             >
               <div style={{ display: "flex", gap: 10, maxWidth: 480 }}>
@@ -563,7 +563,7 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                       }}
                     >
                       <Icon size={18} strokeWidth={2} style={{ color: ativo ? OB.dourado : OB.texto2 }} />
-                      {t === "PF" ? "Pessoa física" : "Pessoa jurídica"}
+                      {t === "PF" ? "Pessoa física" : "Empresa"}
                     </button>
                   );
                 })}

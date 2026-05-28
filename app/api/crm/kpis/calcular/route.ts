@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
+import { legacyToFunil } from "@/lib/crm/estagio-map";
+import { ESTAGIOS_LEAD_NAO_QUALIFICADOS } from "@/lib/crm/estagio-filters";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+
+const NAO_QUAL_SET = new Set<string>(ESTAGIOS_LEAD_NAO_QUALIFICADOS);
 
 /**
  * Popula hub_kpis_resultados com métricas do funil comercial (doc débito #9).
@@ -24,13 +28,8 @@ export async function POST(request: NextRequest) {
   const since = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())).toISOString();
   const now = new Date().toISOString();
 
-  const [totalLeads, qualificados, comNegocio, negociosAbertos, leadsHoje, aprovPend, filaPend] = await Promise.all([
-    supabase.from("hub_leads_crm").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
-    supabase
-      .from("hub_leads_crm")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .not("estagio", "in", "(novo,perdido)"),
+  const [leadsEstagioRes, comNegocio, negociosAbertos, leadsHoje, aprovPend, filaPend] = await Promise.all([
+    supabase.from("hub_leads_crm").select("estagio").eq("tenant_id", tenantId),
     supabase.from("hub_negocios").select("lead_id", { count: "exact", head: true }).eq("tenant_id", tenantId).not("lead_id", "is", null),
     supabase
       .from("hub_negocios")
@@ -46,8 +45,9 @@ export async function POST(request: NextRequest) {
       .eq("status", "pendente"),
   ]);
 
-  const total = totalLeads.count ?? 0;
-  const qual = qualificados.count ?? 0;
+  const leadsEstagio = leadsEstagioRes.data ?? [];
+  const total = leadsEstagio.length;
+  const qual = leadsEstagio.filter((r) => !NAO_QUAL_SET.has(String(legacyToFunil(r.estagio)))).length;
   const taxaQual = total > 0 ? (qual / total) * 100 : 0;
   const taxaConv = total > 0 ? ((comNegocio.count ?? 0) / total) * 100 : 0;
   const pipeline = (negociosAbertos.data ?? []).reduce((s, r) => s + Number(r.valor_estimado ?? 0), 0);

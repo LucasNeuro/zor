@@ -20,7 +20,9 @@
     "process:jobs": "node scripts/process-whatsapp-jobs-once.cjs",
     "validar:whatsapp": "node scripts/validar-agentes-whatsapp.cjs",
     "validar:whatsapp:fix": "node scripts/validar-agentes-whatsapp.cjs --fix",
-    "provision:user": "node scripts/provision-app-user.mjs"
+    "provision:user": "node scripts/provision-app-user.mjs",
+    "verify:regression": "node scripts/verify-regression-plan.mjs",
+    "open:dev": "node scripts/open-dev-url.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

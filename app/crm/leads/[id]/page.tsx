@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
+import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
+import { FUNIL_LEAD_ETAPAS } from "@/lib/crm/pipelines";
 import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
 import { LeadPropostasPanel } from "@/components/crm/LeadPropostasPanel";
 import {
@@ -28,26 +31,9 @@ import {
   X,
 } from "lucide-react";
 
-const ESTAGIOS = [
-  "novo",
-  "qualificando",
-  "qualificado",
-  "proposta",
-  "negociando",
-  "fechamento",
-  "ganho",
-  "perdido",
-];
-const ESTAGIO_COR: Record<string, string> = {
-  novo: "#fbbf24",
-  qualificando: "#60a5fa",
-  qualificado: "#34d399",
-  proposta: "#a78bfa",
-  negociando: "#fb923c",
-  fechamento: "#f4cf72",
-  ganho: "#10b981",
-  perdido: "#ef4444",
-};
+const ESTAGIO_COR: Record<string, string> = Object.fromEntries(
+  FUNIL_LEAD_ETAPAS.map((e) => [e.slug, e.cor])
+);
 
 /** Fundo mais escuro (timelapse / OLED-ish), alinhado ao pedido */
 const BG_DEEP = "#05080e";
@@ -394,6 +380,7 @@ export default function LeadFichaPage() {
   async function criarNegocio() {
     const res = await fetch(`/api/crm/leads/${id}/converter-negocio`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json", ...internalApiHeaders() },
       body: JSON.stringify({}),
     });
@@ -405,18 +392,16 @@ export default function LeadFichaPage() {
     if (json.data?.id) router.push(`/crm/negocios/${json.data.id}`);
   }
 
-  async function moverEstagio(estagioNovo: string) {
-    await supabase
-      .from("hub_leads_crm")
-      .update({ estagio: estagioNovo, atualizado_em: new Date().toISOString() })
-      .eq("id", id);
-    await supabase.from("hub_atividades").insert({
-      lead_id: id,
-      tipo: "status_change",
-      descricao: `Estágio movido para: ${estagioNovo}`,
-      feito_por: "wendel",
-      feito_por_tipo: "humano",
+  async function moverEstagio(estagioNovo: string, extra?: Record<string, unknown>) {
+    const res = await patchLeadCrm(id, {
+      estagio: estagioNovo,
+      _estagio_anterior: lead?.estagio as string,
+      ...extra,
     });
+    if (!res.ok) {
+      alert(res.error);
+      return;
+    }
     carregar();
   }
 
@@ -431,7 +416,7 @@ export default function LeadFichaPage() {
     );
   }
 
-  const estagio = lead.estagio as string;
+  const estagio = estagioParaColunaKanban(lead.estagio as string);
   const corEstagio = ESTAGIO_COR[estagio] || "#888";
   const meta = (lead.metadata as Record<string, unknown>) || {};
   const mercadoMeta =
@@ -563,25 +548,25 @@ export default function LeadFichaPage() {
         className="flex flex-shrink-0 gap-1 overflow-x-auto border-b px-3 py-2 md:px-4"
         style={{ borderColor: BORDER_SUBTLE, backgroundColor: "rgba(5, 8, 14, 0.92)" }}
       >
-        {ESTAGIOS.map((e) => (
+        {FUNIL_LEAD_ETAPAS.map((e) => (
           <button
-            key={e}
+            key={e.slug}
             type="button"
-            onClick={() => moverEstagio(e)}
+            onClick={() => void moverEstagio(e.slug)}
             className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors md:text-xs ${
-              estagio === e ? "font-semibold" : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-300"
+              estagio === e.slug ? "font-semibold" : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-300"
             }`}
             style={
-              estagio === e
+              estagio === e.slug
                 ? {
-                    backgroundColor: `${corEstagio}22`,
-                    color: corEstagio,
-                    border: `1px solid ${corEstagio}55`,
+                    backgroundColor: `${e.cor}22`,
+                    color: e.cor,
+                    border: `1px solid ${e.cor}55`,
                   }
                 : { border: `1px solid transparent` }
             }
           >
-            {e}
+            {e.label}
           </button>
         ))}
       </div>
@@ -872,7 +857,7 @@ export default function LeadFichaPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => moverEstagio("ganho")}
+                      onClick={() => void criarNegocio()}
                       className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 border-r px-2 text-xs font-medium text-gray-200 transition-colors hover:bg-white/[0.06] sm:flex-initial sm:px-3"
                       style={{
                         borderColor: BORDER_SUBTLE,
@@ -880,7 +865,7 @@ export default function LeadFichaPage() {
                       }}
                     >
                       <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" strokeWidth={2} />
-                      Ganho
+                      Negócio
                     </button>
                     <button
                       type="button"

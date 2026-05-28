@@ -13,7 +13,13 @@ import {
   periodoLabel,
 } from "@/lib/crm/analytics-period";
 import { CrmLeadsEntradaPeriodo } from "@/components/crm/CrmLeadsEntradaPeriodo";
+import { FunilOperacionalChart } from "@/components/crm/FunilOperacionalChart";
+import {
+  PipelineTabsBar,
+  type PipelineTabItem,
+} from "@/components/crm/pipelines/PipelineTabsBar";
 import { moedaPipeline } from "@/lib/crm/pipeline-funil";
+import type { PrefixoMercado } from "@/lib/crm/negocio-cadastro";
 
 function SectionTitle({ children }: { children: string }) {
   return (
@@ -90,36 +96,7 @@ function KpiCardView({ kpi }: { kpi: KpiCard }) {
   );
 }
 
-function BarChart({
-  items,
-  max,
-}: {
-  items: { label: string; count: number; color: string }[];
-  max: number;
-}) {
-  const topo = max || 1;
-  return (
-    <div className="space-y-2">
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2">
-          <span className="w-16 shrink-0 text-right text-[10px] font-bold text-[#8b949e]">{item.label}</span>
-          <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-[#21262d]">
-            <div
-              className="flex h-full items-center rounded-md px-2 text-[10px] font-bold text-white transition-all duration-700"
-              style={{
-                width: `${Math.max(8, Math.round((item.count / topo) * 100))}%`,
-                background: item.color,
-                minWidth: item.count > 0 ? "2rem" : 0,
-              }}
-            >
-              {item.count > 0 ? item.count : ""}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+type FunilNegocioBar = AnalyticsPayload["funilNegocios"][number];
 
 function MetricMini({
   label,
@@ -170,12 +147,68 @@ export function CrmAnalyticsDashboard() {
   const [atualizandoKpis, setAtualizandoKpis] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [kpiFeedback, setKpiFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
+  const [pipelines, setPipelines] = useState<PipelineTabItem[]>([]);
+  const [mercadoSelecionado, setMercadoSelecionado] = useState<PrefixoMercado | null>(null);
+  const [funilNegocios, setFunilNegocios] = useState<FunilNegocioBar[]>([]);
+  const [carregandoFunilNeg, setCarregandoFunilNeg] = useState(false);
+  const [erroFunilNeg, setErroFunilNeg] = useState<string | null>(null);
+
+  const carregarPipelines = useCallback(async () => {
+    try {
+      const res = await fetch("/api/crm/pipelines?tipo=negocio", {
+        credentials: "include",
+        headers: internalApiHeaders(),
+      });
+      const json = (await res.json().catch(() => ({ data: [] }))) as { data?: PipelineTabItem[] };
+      const list = json.data ?? [];
+      const porMercado = list.filter((p) => p.mercado_sigla);
+      setPipelines(porMercado.length ? porMercado : list);
+    } catch {
+      setPipelines([]);
+    }
+  }, []);
+
+  const carregarFunilNegocios = useCallback(
+    async (mercado: PrefixoMercado) => {
+      setCarregandoFunilNeg(true);
+      setErroFunilNeg(null);
+      try {
+        const res = await fetch(`/api/crm/analytics?periodo=${periodo}&mercado=${mercado}`, {
+          credentials: "include",
+          headers: internalApiHeaders(),
+        });
+        if (!res.ok) {
+          const j = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(j.error ?? `HTTP ${res.status}`);
+        }
+        const payload = (await res.json()) as AnalyticsPayload;
+        setFunilNegocios(payload.funilNegocios ?? []);
+      } catch (e) {
+        setErroFunilNeg(e instanceof Error ? e.message : "Erro ao carregar funil de negócios");
+        setFunilNegocios([]);
+      } finally {
+        setCarregandoFunilNeg(false);
+      }
+    },
+    [periodo]
+  );
+
+  const onSelectPipeline = useCallback(
+    (pipelineId: string) => {
+      const pipe = pipelines.find((p) => p.id === pipelineId);
+      const sigla = pipe?.mercado_sigla?.trim().toUpperCase() as PrefixoMercado | undefined;
+      if (!sigla) return;
+      setMercadoSelecionado(sigla);
+    },
+    [pipelines]
+  );
 
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
     try {
       const res = await fetch(`/api/crm/analytics?periodo=${periodo}`, {
+        credentials: "include",
         headers: internalApiHeaders(),
       });
       if (!res.ok) {
@@ -222,8 +255,18 @@ export function CrmAnalyticsDashboard() {
   }, [carregar]);
 
   useEffect(() => {
+    void carregarPipelines();
+  }, [carregarPipelines]);
+
+  useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  useEffect(() => {
+    if (mercadoSelecionado) {
+      void carregarFunilNegocios(mercadoSelecionado);
+    }
+  }, [periodo, mercadoSelecionado, carregarFunilNegocios]);
 
   useEffect(() => {
     setSlot({
@@ -262,8 +305,10 @@ export function CrmAnalyticsDashboard() {
     return () => setSlot(null);
   }, [pathname, setSlot, periodo, atualizarKpis, atualizandoKpis, carregando]);
 
-  const maxFunilLeads = data ? Math.max(...data.funilLeads.map((f) => f.count), 1) : 1;
-  const maxFunilNeg = data ? Math.max(...data.funilNegocios.map((f) => f.count), 1) : 1;
+  const activePipelineId =
+    mercadoSelecionado != null
+      ? (pipelines.find((p) => p.mercado_sigla?.toUpperCase() === mercadoSelecionado)?.id ?? null)
+      : null;
 
   return (
     <div className="flex min-h-full flex-col bg-[#0d1117]">
@@ -289,6 +334,22 @@ export function CrmAnalyticsDashboard() {
           <div className="mb-4 rounded-xl border border-[#f8514966] bg-[#1a0a0a] p-4 text-sm text-[#ff7b72]">
             {erro}
             <button type="button" onClick={() => void carregar()} className="ml-3 text-xs underline">
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
+        {!carregando && !data && !erro && (
+          <div className="mt-12 rounded-xl border border-[#30363d] bg-[#161b22] p-8 text-center">
+            <p className="font-bold text-[#e6edf3]">Nenhum dado de analytics</p>
+            <p className="mt-2 text-sm text-[#8b949e]">
+              Reinicie o servidor de desenvolvimento (porta 3001) para carregar o código atualizado.
+            </p>
+            <button
+              type="button"
+              onClick={() => void carregar()}
+              className="mt-4 rounded-lg bg-[#c9a24a] px-4 py-2 text-xs font-bold text-[#0d1117]"
+            >
               Tentar novamente
             </button>
           </div>
@@ -321,18 +382,47 @@ export function CrmAnalyticsDashboard() {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-4 lg:col-span-1">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8b949e]">Funil de leads</p>
-                <BarChart
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-[#8b949e]">Funil de leads</p>
+                <p className="mb-3 text-[10px] leading-snug text-[#6e7681]">
+                  Distribuição actual por estágio (snapshot operacional, não taxa de conversão entre etapas).
+                </p>
+                <FunilOperacionalChart
                   items={data.funilLeads.map((f) => ({ label: f.label, count: f.count, color: f.color }))}
-                  max={maxFunilLeads}
                 />
               </div>
               <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-4 lg:col-span-1">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8b949e]">Funil de negócios</p>
-                <BarChart
-                  items={data.funilNegocios.map((f) => ({ label: f.label, count: f.count, color: f.color }))}
-                  max={maxFunilNeg}
-                />
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[#8b949e]">
+                  Funil de negócios
+                  {mercadoSelecionado ? ` — ${mercadoSelecionado}` : ""}
+                </p>
+                {pipelines.length > 0 && (
+                  <div className="mb-3">
+                    <PipelineTabsBar
+                      pipelines={pipelines}
+                      activePipelineId={activePipelineId}
+                      onSelect={onSelectPipeline}
+                    />
+                  </div>
+                )}
+                {mercadoSelecionado == null ? (
+                  <p className="rounded-lg border border-dashed border-[#30363d] bg-[#0d1117] px-3 py-6 text-center text-xs text-[#8b949e]">
+                    Selecione um mercado para ver o funil de negócios conforme o pipeline PDF.
+                  </p>
+                ) : carregandoFunilNeg ? (
+                  <p className="py-6 text-center text-xs text-[#8b949e]">Carregando funil…</p>
+                ) : erroFunilNeg ? (
+                  <p className="rounded-lg border border-[#f8514966] bg-[#1a0a0a] px-3 py-4 text-center text-xs text-[#ff7b72]">
+                    {erroFunilNeg}
+                  </p>
+                ) : (
+                  <FunilOperacionalChart
+                    items={funilNegocios.map((f) => ({
+                      label: f.label,
+                      count: f.count,
+                      color: f.color,
+                    }))}
+                  />
+                )}
               </div>
               <div className="lg:col-span-1">
                 <CrmLeadsEntradaPeriodo pontos={data.leadsPorDia} periodo={periodo} />

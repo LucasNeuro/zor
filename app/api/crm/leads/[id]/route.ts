@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { registrarLogCrm } from "@/lib/crm/audit-log";
+import { buildLeadEstagioPatch } from "@/lib/crm/estagio-map";
+import { validarMudancaEstagioLead } from "@/lib/crm/lead-rules";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { tenantIdFromRequest } from "@/lib/tenant-default";
 
 type Params = { params: Promise<{ id: string }> };
 
 const LEAD_SELECT =
-  "id, nome, telefone, email, origem, campanha, estagio, score, valor_estimado, agente_responsavel, humano_responsavel, proxima_acao, data_proxima_acao, motivo_perda, tags, metadata, pessoa_id, tenant_id, ultimo_contato, criado_em, atualizado_em";
+  "id, nome, telefone, email, origem, campanha, estagio, estagio_funil, score, valor_estimado, agente_responsavel, humano_responsavel, proxima_acao, data_proxima_acao, motivo_perda, tags, metadata, pessoa_id, tenant_id, ultimo_contato, criado_em, atualizado_em";
 
 export async function GET(_request: NextRequest, { params }: Params) {
   const configErr = crmConfigError();
@@ -63,12 +66,52 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
+  const supabase = crmDb();
+  const tenantId = tenantIdFromRequest(request.headers);
+
+  const { data: atual, error: fetchErr } = await supabase
+    .from("hub_leads_crm")
+    .select(LEAD_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (!atual) return NextResponse.json({ error: "Lead não encontrado" }, { status: 404 });
+
+  const novoEstagioRaw =
+    typeof body.estagio_funil === "string"
+      ? body.estagio_funil
+      : typeof body.estagio === "string"
+        ? body.estagio
+        : null;
+
+  const estagioPatch = novoEstagioRaw ? buildLeadEstagioPatch(novoEstagioRaw) : {};
+
+  const merged = {
+    estagio: (estagioPatch.estagio ?? atual.estagio) as string,
+    estagio_funil: (estagioPatch.estagio_funil ?? atual.estagio_funil ?? atual.estagio) as string,
+    motivo_perda:
+      body.motivo_perda !== undefined ? (body.motivo_perda as string | null) : (atual.motivo_perda as string | null),
+    proxima_acao:
+      body.proxima_acao !== undefined
+        ? (body.proxima_acao as string | null)
+        : (atual.proxima_acao as string | null),
+    data_proxima_acao:
+      body.data_proxima_acao !== undefined
+        ? (body.data_proxima_acao as string | null)
+        : (atual.data_proxima_acao as string | null),
+  };
+
+  if (novoEstagioRaw || body.motivo_perda !== undefined) {
+    const check = validarMudancaEstagioLead(merged);
+    if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
+  }
+
   const allowed = [
     "nome",
     "telefone",
     "email",
     "origem",
-    "estagio",
     "score",
     "valor_estimado",
     "agente_responsavel",
@@ -79,32 +122,50 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     "tags",
     "pessoa_id",
     "metadata",
+    "tipo_interesse",
+    "cidade",
+    "bairro",
+    "canal_origem",
   ] as const;
 
-  const patch: Record<string, unknown> = { atualizado_em: new Date().toISOString() };
+  const patch: Record<string, unknown> = {
+    atualizado_em: new Date().toISOString(),
+    ...estagioPatch,
+  };
+
   for (const key of allowed) {
     if (key in body) patch[key] = body[key];
   }
 
-  if (Object.keys(patch).length === 1) {
+  if (Object.keys(patch).length <= 1) {
     return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 });
   }
 
-  const supabase = crmDb();
-  const estagioAnterior = typeof body.estagio === "string" ? body._estagio_anterior : undefined;
+  const estagioAnterior = String(atual.estagio_funil ?? atual.estagio ?? "");
 
   const { data, error } = await supabase.from("hub_leads_crm").update(patch).eq("id", id).select(LEAD_SELECT).single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (body.estagio && body.estagio !== estagioAnterior) {
+  const estagioNovo = String(data.estagio_funil ?? data.estagio ?? "");
+  if (novoEstagioRaw && estagioNovo !== estagioAnterior) {
     await supabase.from("hub_atividades").insert({
       lead_id: id,
       tipo: "status_change",
-      descricao: `Estágio alterado para ${body.estagio}`,
+      descricao: `Estágio alterado: ${estagioAnterior || "—"} → ${estagioNovo}`,
       feito_por: "humano",
       feito_por_tipo: "humano",
-      tenant_id: tenantIdFromRequest(request.headers),
+      tenant_id: tenantId,
+    });
+
+    await registrarLogCrm(supabase, {
+      entidade: "lead",
+      entidade_id: id,
+      acao: "estagio_alterado",
+      valor_anterior: estagioAnterior || null,
+      valor_novo: estagioNovo,
+      motivo: merged.motivo_perda,
+      tenant_id: tenantId,
     });
   }
 

@@ -27,6 +27,7 @@ import {
   omitHubAgenteFerramentasMigrationKeys,
 } from "@/lib/hub/hub-agente-ferramentas-columns";
 import { sanitizarAgenteHubParaCliente } from "@/lib/hub/sanitize-agente-hub-public";
+import { PROMPT_BASE_PLAYBOOK_ONLY } from "@/lib/hub/agente-instrucao-modo";
 import { slugifyCargoSlug } from "@/lib/hub/cargo-slug";
 
 function parseBoolFerr(v: unknown, defaultVal: boolean): boolean {
@@ -313,6 +314,10 @@ export async function POST(request: NextRequest) {
     tom_voz,
     estilo_comunicacao,
     avatar_url,
+    playbook_only,
+    modo_instrucao,
+    playbook_object_path,
+    playbook_public_url,
   } = body as {
     cargo_slug?: string;
     nome?: string;
@@ -326,69 +331,34 @@ export async function POST(request: NextRequest) {
     tom_voz?: string;
     estilo_comunicacao?: string;
     avatar_url?: string;
+    playbook_only?: boolean;
+    modo_instrucao?: string;
+    playbook_object_path?: string;
+    playbook_public_url?: string;
   };
 
-  if (!cargo_slug || !nome) {
+  const playbookOnly =
+    playbook_only === true ||
+    modo_instrucao === "playbook_only" ||
+    modo_instrucao === "playbook-only";
+  const cargoSlugTrim = cargo_slug != null ? String(cargo_slug).trim() : "";
+  const nomeTrim = nome != null ? String(nome).trim() : "";
+
+  if (!nomeTrim) {
+    return NextResponse.json({ error: "nome é obrigatório." }, { status: 400 });
+  }
+  if (playbookOnly && cargoSlugTrim) {
     return NextResponse.json(
-      { error: "cargo_slug e nome são obrigatórios." },
+      { error: "Modo playbook-only: não envie cargo_slug." },
       { status: 400 }
     );
   }
-
-  const { data: cat, error: catErr } = await supabase
-    .from("hub_cargos_catalogo")
-    .select(
-      "slug, titulo, descricao_curta, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao, saudacao_cliente, usar_perguntas_essenciais, ordem_perguntas_essenciais, perguntas_essenciais, comprimento_padrao"
-    )
-    .eq("slug", cargo_slug)
-    .eq("ativo", true)
-    .maybeSingle();
-
-  if (catErr) {
-    return NextResponse.json({ error: catErr.message }, { status: 500 });
-  }
-  if (!cat) {
+  if (!playbookOnly && !cargoSlugTrim) {
     return NextResponse.json(
-      { error: `Cargo "${cargo_slug}" não encontrado em hub_cargos_catalogo (ativo).` },
+      { error: "cargo_slug é obrigatório (ou envie playbook_only: true)." },
       { status: 400 }
     );
   }
-
-  const nivel = typeof cat.nivel === "number" ? cat.nivel : Number(cat.nivel) || 3;
-  const promptBase =
-    (system_prompt_base && String(system_prompt_base).trim()) ||
-    montarPromptBaseDoCargo({
-      nomeAgente: String(nome).trim(),
-      tituloCargo: String(cat.titulo ?? "").trim(),
-      promptTemplate: cat.prompt_template,
-      descricao: cat.descricao,
-      saudacaoCliente: cat.saudacao_cliente,
-      usarPerguntasEssenciais: cat.usar_perguntas_essenciais,
-      ordemPerguntasEssenciais: cat.ordem_perguntas_essenciais,
-      perguntasEssenciais: cat.perguntas_essenciais,
-      comprimentoPadrao: cat.comprimento_padrao,
-    });
-
-  // Gerar slug único
-  const baseSlug = slugifyCargoSlug(nome);
-  let agente_slug = baseSlug;
-  let sufixo = 2;
-
-  while (true) {
-    const { data: existing } = await supabase
-      .from("hub_agente_identidade")
-      .select("agente_slug")
-      .eq("agente_slug", agente_slug)
-      .maybeSingle();
-
-    if (!existing) break;
-
-    agente_slug = `${baseSlug.slice(0, 37)}_${sufixo}`;
-    sufixo++;
-  }
-
-  const podeFazer = Array.isArray(cat.pode_fazer_padrao) ? cat.pode_fazer_padrao : [];
-  const naoPode = Array.isArray(cat.nao_pode_fazer_padrao) ? cat.nao_pode_fazer_padrao : [];
 
   const diaLabels = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
   const rawDias = Array.isArray(dias_semana) ? (dias_semana as unknown[]) : [0, 1, 2, 3, 4, 5, 6];
@@ -400,11 +370,102 @@ export async function POST(request: NextRequest) {
     .filter((x): x is string => x != null);
   const diasTexto = [...new Set(diasParsed)];
 
+  const baseSlug = slugifyCargoSlug(nomeTrim);
+  let agente_slug = baseSlug;
+  let sufixo = 2;
+  while (true) {
+    const { data: existing } = await supabase
+      .from("hub_agente_identidade")
+      .select("agente_slug")
+      .eq("agente_slug", agente_slug)
+      .maybeSingle();
+    if (!existing) break;
+    agente_slug = `${baseSlug.slice(0, 37)}_${sufixo}`;
+    sufixo++;
+  }
+
+  let row: Record<string, unknown>;
+
+  if (playbookOnly) {
+    const playbookPath =
+      playbook_object_path != null ? String(playbook_object_path).trim() : "";
+    const playbookUrl =
+      playbook_public_url != null ? String(playbook_public_url).trim() : "";
+    const promptBasePlaybook =
+      (system_prompt_base && String(system_prompt_base).trim()) || PROMPT_BASE_PLAYBOOK_ONLY;
+
+    row = {
+      agente_slug,
+      nome: nomeTrim,
+      cargo: null,
+      area: "playbook",
+      nivel: 3,
+      personalidade:
+        (personalidade && String(personalidade).trim()) ||
+        "## Tom\n\nTom alinhado ao playbook publicado no bucket.",
+      tom_voz: (tom_voz && String(tom_voz).trim()) || "profissional e cordial",
+      estilo_comunicacao: (estilo_comunicacao && String(estilo_comunicacao).trim()) || "Direto",
+      system_prompt_base: promptBasePlaybook,
+      ...forceMistralModeloTripleForDb(),
+      pode_fazer: [],
+      nao_pode_fazer: [],
+      sempre_dizer: [],
+      nunca_dizer: [],
+      prefixo_mercado: (prefixo_mercado && String(prefixo_mercado).trim()) || "GRL",
+      bio:
+        (bio && String(bio).trim()) ||
+        "Agente operado pelo playbook publicado em hub-agent-playbooks (sem catálogo de cargo).",
+      horario_inicio: horario_inicio || "08:00:00",
+      horario_fim: horario_fim || "22:00:00",
+      dias_semana: diasTexto.length > 0 ? diasTexto : ["seg", "ter", "qua", "qui", "sex"],
+      ativo: true,
+      tenant_id: tenantId || defaultTenantId(),
+    };
+    if (playbookPath) row.playbook_object_path = playbookPath;
+    if (playbookUrl) row.playbook_public_url = playbookUrl;
+  } else {
+  const { data: cat, error: catErr } = await supabase
+    .from("hub_cargos_catalogo")
+    .select(
+      "slug, titulo, descricao_curta, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao, saudacao_cliente, usar_perguntas_essenciais, ordem_perguntas_essenciais, perguntas_essenciais, comprimento_padrao"
+    )
+    .eq("slug", cargoSlugTrim)
+    .eq("ativo", true)
+    .maybeSingle();
+
+  if (catErr) {
+    return NextResponse.json({ error: catErr.message }, { status: 500 });
+  }
+  if (!cat) {
+    return NextResponse.json(
+      { error: `Cargo "${cargoSlugTrim}" não encontrado em hub_cargos_catalogo (ativo).` },
+      { status: 400 }
+    );
+  }
+
+  const nivel = typeof cat.nivel === "number" ? cat.nivel : Number(cat.nivel) || 3;
+  const promptBase =
+    (system_prompt_base && String(system_prompt_base).trim()) ||
+    montarPromptBaseDoCargo({
+      nomeAgente: nomeTrim,
+      tituloCargo: String(cat.titulo ?? "").trim(),
+      promptTemplate: cat.prompt_template,
+      descricao: cat.descricao,
+      saudacaoCliente: cat.saudacao_cliente,
+      usarPerguntasEssenciais: cat.usar_perguntas_essenciais,
+      ordemPerguntasEssenciais: cat.ordem_perguntas_essenciais,
+      perguntasEssenciais: cat.perguntas_essenciais,
+      comprimentoPadrao: cat.comprimento_padrao,
+    });
+
+  const podeFazer = Array.isArray(cat.pode_fazer_padrao) ? cat.pode_fazer_padrao : [];
+  const naoPode = Array.isArray(cat.nao_pode_fazer_padrao) ? cat.nao_pode_fazer_padrao : [];
+
   const modeloCols = modeloColumnsForAgenteIdentidadeInsert(cat as Record<string, unknown>);
 
-  const row: Record<string, unknown> = {
+  row = {
     agente_slug,
-    nome: nome.trim(),
+    nome: nomeTrim,
     cargo: cat.titulo as string,
     area: (cat.area as string) || "geral",
     nivel,
@@ -431,6 +492,7 @@ export async function POST(request: NextRequest) {
     ativo: true,
     tenant_id: tenantId || defaultTenantId(),
   };
+  }
 
   const ciclo_modoCliente = normCicloExecucao(body.ciclo_execucao);
   const modoOperacaoBody = isModoOperacaoAgente(body.modo_operacao)

@@ -18,6 +18,8 @@ export type PublishedPlaybookLoadResult =
       path: string;
       hash: string | null;
       mode: PublishedPlaybookMode;
+      /** Recorte leve de secções 2–5 e 9 do markdown (útil em full_markdown). */
+      flowHints: string | null;
     }
   | {
       ok: false;
@@ -53,6 +55,45 @@ function trimMarkdownBody(md: string): string {
   return stripFrontmatter(md).replace(/^\s+|\s+$/g, "");
 }
 
+/**
+ * Remove rodapé administrativo e neutraliza placeholders de exemplo
+ * para o modelo não confundir autor/responsável com o nome do cliente.
+ */
+export function sanitizePlaybookForRuntime(text: string): string {
+  let body = text.replace(/\r\n/g, "\n");
+
+  const metaStart = body.search(
+    /\n---\s*\n\s*(?:Vers[aã]o|Version|Data:|Organiza[cç][aã]o|Respons[aá]vel:)/i
+  );
+  if (metaStart >= 0) {
+    body = body.slice(0, metaStart).trim();
+  } else {
+    const respIdx = body.search(/\nRespons[aá]vel:\s*.+/i);
+    if (respIdx >= 0 && respIdx > body.length * 0.55) {
+      body = body.slice(0, respIdx).trim();
+    }
+  }
+
+  body = body.replace(
+    /\[Nome\]/gi,
+    "(nome do cliente — só use após o cliente informar ou confirmar no canal)"
+  );
+
+  body = body
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (/^Respons[aá]vel:\s*.+/i.test(t)) return false;
+      if (/^Vers[aã]o:\s*.+/i.test(t)) return false;
+      if (/^Organiza[cç][aã]o:\s*.+/i.test(t)) return false;
+      if (/^Data:\s*\d/i.test(t)) return false;
+      return true;
+    })
+    .join("\n");
+
+  return body.trim();
+}
+
 function extractPromptUnificado(md: string): string | null {
   const body = trimMarkdownBody(md);
   const headingRe =
@@ -83,23 +124,65 @@ function extractRuntimeCore(md: string): string | null {
   return null;
 }
 
+const FLOW_HINT_SECTION_RE =
+  /^##\s+(?:([2-5]|9)[\.\)\s]|.*\b(comum|triagem|arquitetura|imobili[aá]rio|regras?\s*(gerais|operacionais|whatsapp)|cards?\s*e\s*crm|encerramento)\b)/i;
+
+const FLOW_HINTS_MAX_CHARS = 4_500;
+
+/**
+ * Extrai cabeçalhos e corpo inicial das secções operacionais do playbook unificado.
+ * Não altera o modo full_markdown — só fornece índice para o prompt-builder.
+ */
+export function extractRuntimeFlowHints(md: string): string | null {
+  const lines = trimMarkdownBody(md).split("\n");
+  const chunks: string[] = [];
+  let buf: string[] = [];
+  let capturing = false;
+
+  const flush = () => {
+    if (!capturing || buf.length === 0) return;
+    const block = buf.join("\n").trim();
+    if (block) chunks.push(block);
+    buf = [];
+    capturing = false;
+  };
+
+  for (const line of lines) {
+    if (/^##\s+/.test(line)) {
+      flush();
+      capturing = FLOW_HINT_SECTION_RE.test(line);
+      if (capturing) buf.push(line);
+      continue;
+    }
+    if (capturing) buf.push(line);
+  }
+  flush();
+
+  if (chunks.length === 0) return null;
+  let joined = chunks.join("\n\n---\n\n").trim();
+  if (joined.length > FLOW_HINTS_MAX_CHARS) {
+    joined = `${joined.slice(0, FLOW_HINTS_MAX_CHARS)}\n\n[… secções truncadas para runtime …]`;
+  }
+  return joined;
+}
+
 function selectPromptFromMarkdown(md: string): {
   prompt: string;
   mode: PublishedPlaybookMode;
 } | null {
   const promptUnificado = extractPromptUnificado(md);
   if (promptUnificado) {
-    return { prompt: promptUnificado, mode: "prompt_unificado" };
+    return { prompt: sanitizePlaybookForRuntime(promptUnificado), mode: "prompt_unificado" };
   }
 
   const runtimeCore = extractRuntimeCore(md);
   if (runtimeCore) {
-    return { prompt: runtimeCore, mode: "runtime_core" };
+    return { prompt: sanitizePlaybookForRuntime(runtimeCore), mode: "runtime_core" };
   }
 
   const full = trimMarkdownBody(md);
   if (full) {
-    return { prompt: full, mode: "full_markdown" };
+    return { prompt: sanitizePlaybookForRuntime(full), mode: "full_markdown" };
   }
 
   return null;
@@ -159,6 +242,8 @@ export async function loadPublishedPlaybookRuntimeSource(
     return { ok: false, reason: "empty_file", detail: "Playbook publicado está vazio." };
   }
 
+  const flowHints = extractRuntimeFlowHints(downloaded.markdown);
+
   const result: Extract<PublishedPlaybookLoadResult, { ok: true }> = {
     ok: true,
     prompt: selected.prompt,
@@ -166,6 +251,7 @@ export async function loadPublishedPlaybookRuntimeSource(
     path: downloaded.path,
     hash: meta.playbook_source_hash != null ? String(meta.playbook_source_hash) : null,
     mode: selected.mode,
+    flowHints,
   };
   publishedPlaybookCache.set(key, {
     expireAt: Date.now() + CACHE_TTL_MS,

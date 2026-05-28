@@ -12,6 +12,8 @@ export type NormalizedWhatsappInbound = {
   tipoMidia: string;
   texto: string;
   mensagemFinal: string;
+  /** ID da opção em menu botão/lista (UAZAPI/WhatsApp), quando disponível */
+  menuChoiceId?: string;
   instance?: string;
 };
 
@@ -105,16 +107,72 @@ function pickStr(data: Record<string, unknown>, ...keys: string[]): string {
   return "";
 }
 
+function extrairMenuChoiceIdDeContentObj(o: Record<string, unknown>): string {
+  const btn = o.buttonsResponseMessage;
+  if (btn && typeof btn === "object" && !Array.isArray(btn)) {
+    const id = pickStr(
+      btn as Record<string, unknown>,
+      "selectedButtonId",
+      "selectedId",
+      "buttonId",
+      "id"
+    );
+    if (id) return id;
+  }
+  const list = o.listResponseMessage;
+  if (list && typeof list === "object" && !Array.isArray(list)) {
+    const lr = list as Record<string, unknown>;
+    const single = lr.singleSelectReply ?? lr.single_select_reply;
+    if (single && typeof single === "object" && !Array.isArray(single)) {
+      const id = pickStr(
+        single as Record<string, unknown>,
+        "selectedRowId",
+        "selectedId",
+        "rowId",
+        "id"
+      );
+      if (id) return id;
+    }
+    const idRoot = pickStr(lr, "selectedRowId", "selectedId", "rowId", "id");
+    if (idRoot) return idRoot;
+  }
+  const template = o.templateButtonReplyMessage;
+  if (template && typeof template === "object" && !Array.isArray(template)) {
+    const id = pickStr(
+      template as Record<string, unknown>,
+      "selectedId",
+      "selectedDisplayText",
+      "id"
+    );
+    if (id) return id;
+  }
+  return "";
+}
+
 function extrairTextoDeContentObj(o: Record<string, unknown>): string {
   for (const k of ["conversation", "text", "caption", "body", "displayText"]) {
     const v = o[k];
     if (typeof v === "string" && v.trim()) return v.trim();
   }
-  const nested = ["extendedTextMessage", "imageMessage", "videoMessage", "buttonsResponseMessage"];
+  const nested = [
+    "extendedTextMessage",
+    "imageMessage",
+    "videoMessage",
+    "buttonsResponseMessage",
+    "listResponseMessage",
+  ];
   for (const nk of nested) {
     const block = o[nk];
     if (block && typeof block === "object" && !Array.isArray(block)) {
-      const t = pickStr(block as Record<string, unknown>, "text", "caption", "contentText", "selectedDisplayText");
+      const t = pickStr(
+        block as Record<string, unknown>,
+        "text",
+        "caption",
+        "contentText",
+        "selectedDisplayText",
+        "title",
+        "description"
+      );
       if (t) return t;
     }
   }
@@ -260,6 +318,24 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
     "texto";
 
   const texto = extrairTextoMensagem(data);
+  let menuChoiceId = "";
+  const content = data.content;
+  if (content && typeof content === "object" && !Array.isArray(content)) {
+    menuChoiceId = extrairMenuChoiceIdDeContentObj(content as Record<string, unknown>);
+  } else if (typeof content === "string" && content.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(content) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        menuChoiceId = extrairMenuChoiceIdDeContentObj(parsed as Record<string, unknown>);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const msg = data.message;
+  if (!menuChoiceId && msg && typeof msg === "object" && !Array.isArray(msg)) {
+    menuChoiceId = extrairMenuChoiceIdDeContentObj(msg as Record<string, unknown>);
+  }
 
   if (fromMe) return { kind: "ignored", status: "outgoing_ignored" };
   if (!telefone || telefone.length < 10 || isGroup) {
@@ -281,6 +357,7 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
       tipoMidia,
       texto,
       mensagemFinal,
+      ...(menuChoiceId ? { menuChoiceId } : {}),
       instance: normalizeWebhookInstanceId(body),
     },
   };

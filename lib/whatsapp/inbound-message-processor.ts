@@ -112,6 +112,7 @@ export async function processarMensagemInboundWhatsapp(params: {
   instanceKey: string | null;
   isNovo: boolean;
   tipoMidia: string;
+  menuChoiceId?: string | null;
   waSendOpts?: { instanceToken?: string | null };
 }) {
   const { supabase, trace } = params;
@@ -168,7 +169,83 @@ export async function processarMensagemInboundWhatsapp(params: {
   const iaStarted = Date.now();
   log.info("wa.processor.ia_start", { agente_slug: agenteSlug, lead_id: lead.id });
 
+  let menuEnviadoDeterministico = false;
+
   try {
+    const { mensagemEhSaudacaoSimples, mensagemPedeMenuOuOpcoes, leadJaRecebeuMenuTriagem } =
+      await import("@/lib/whatsapp/menu-triagem-uazapi");
+    const { agenteUsaPlaybookMaria, processarPlaybookMariaInbound } = await import(
+      "@/lib/whatsapp/playbook-flow-maria"
+    );
+
+    const { data: leadMetaRow } = await supabase
+      .from("hub_leads_crm")
+      .select("metadata, nome")
+      .eq("id", lead.id)
+      .maybeSingle();
+
+    let instanceToken = String(params.waSendOpts?.instanceToken || "").trim();
+    if (!instanceToken) {
+      const tokenDb =
+        typeof agente.uazapi_instance_token === "string" ? agente.uazapi_instance_token.trim() : "";
+      instanceToken = tokenDb;
+    }
+
+    if (instanceToken && agenteUsaPlaybookMaria(agenteSlug)) {
+      const playbookOut = await processarPlaybookMariaInbound({
+        supabase,
+        leadId: lead.id,
+        telefone: params.telefone,
+        mensagem: params.mensagemFinal,
+        menuChoiceId: params.menuChoiceId,
+        tipoMidia: params.tipoMidia,
+        agenteSlug,
+        instanceToken,
+        isNovo: params.isNovo,
+        leadNome: typeof leadMetaRow?.nome === "string" ? leadMetaRow.nome : null,
+        metadata: leadMetaRow?.metadata,
+      });
+      if (playbookOut.handled) {
+        log.info("wa.processor.playbook_maria", {
+          telefone: trace.maskTelefone(params.telefone),
+          step: playbookOut.step ?? null,
+          skip_ia: playbookOut.skipIa,
+        });
+        if (playbookOut.skipIa) {
+          return;
+        }
+      }
+    }
+
+    const pedeMenuAntesIa = mensagemPedeMenuOuOpcoes(params.mensagemFinal);
+    if (pedeMenuAntesIa && !menuEnviadoDeterministico) {
+      let tokenMenu = String(params.waSendOpts?.instanceToken || "").trim();
+      if (!tokenMenu) {
+        tokenMenu =
+          typeof agente.uazapi_instance_token === "string" ? agente.uazapi_instance_token.trim() : "";
+      }
+      if (tokenMenu) {
+        const { enviarMenuTriagemInicialUazapi, marcarMenuTriagemEnviado } = await import(
+          "@/lib/whatsapp/menu-triagem-uazapi"
+        );
+        const menuPre = await enviarMenuTriagemInicialUazapi({
+          telefone: params.telefone,
+          instanceToken: tokenMenu,
+          variante: "playbook_triagem",
+        });
+        if (menuPre.ok) {
+          await marcarMenuTriagemEnviado(supabase, lead.id);
+          menuEnviadoDeterministico = true;
+          log.info("wa.processor.menu_triagem_pre_ia", { motivo: "pedido_menu_texto" });
+          return;
+        }
+        log.warn("wa.processor.menu_triagem_pre_ia_failed", {
+          erro: menuPre.erro,
+          detalhe: menuPre.detalhe || null,
+        });
+      }
+    }
+
     const { sincronizarContatoWhatsappNoCrm } = await import("@/lib/crm/sincronizar-contato-whatsapp");
     await sincronizarContatoWhatsappNoCrm(supabase, {
       leadId: lead.id,
@@ -226,7 +303,8 @@ export async function processarMensagemInboundWhatsapp(params: {
       return;
     }
 
-    const menuJaEnviado = toolResultIndicaMenuEnviado(resultado.toolCallsExecutadas);
+    const menuJaEnviado =
+      menuEnviadoDeterministico || toolResultIndicaMenuEnviado(resultado.toolCallsExecutadas);
     log.info("wa.processor.ia_ok", {
       agente_slug: resultado.agenteSlug || agenteSlug,
       modelo: resultado.modelo || null,
@@ -242,6 +320,52 @@ export async function processarMensagemInboundWhatsapp(params: {
     if (resultado.agenteSlug && agenteResponsavelLead !== resultado.agenteSlug) {
       await supabase.from("hub_leads_crm").update({ agente_responsavel: resultado.agenteSlug }).eq("id", lead.id);
       agenteResponsavelLead = resultado.agenteSlug;
+    }
+
+    const pedeMenuOpcoes = mensagemPedeMenuOuOpcoes(params.mensagemFinal);
+    const usaPlaybookMaria = agenteUsaPlaybookMaria(agenteSlug);
+    const menuTriagemNuncaEnviado = !leadJaRecebeuMenuTriagem(leadMetaRow?.metadata);
+    const deveFallbackMenu =
+      pedeMenuOpcoes ||
+      (!usaPlaybookMaria &&
+        (params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal))) ||
+      (usaPlaybookMaria &&
+        menuTriagemNuncaEnviado &&
+        (params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal)));
+
+    if (!menuJaEnviado && deveFallbackMenu) {
+      const { enviarMenuTriagemInicialUazapi, marcarMenuTriagemEnviado } = await import(
+        "@/lib/whatsapp/menu-triagem-uazapi"
+      );
+      let instanceTokenFb = String(params.waSendOpts?.instanceToken || "").trim();
+      if (!instanceTokenFb) {
+        instanceTokenFb =
+          typeof agente.uazapi_instance_token === "string" ? agente.uazapi_instance_token.trim() : "";
+      }
+      if (instanceTokenFb) {
+        const menuFb = await enviarMenuTriagemInicialUazapi({
+          telefone: params.telefone,
+          instanceToken: instanceTokenFb,
+          variante: "playbook_triagem",
+        });
+        if (menuFb.ok) {
+          await marcarMenuTriagemEnviado(supabase, lead.id);
+          log.info("wa.processor.menu_triagem_fallback_sent", {
+            variante: "playbook_triagem",
+            motivo: pedeMenuOpcoes ? "pedido_menu_texto" : "saudacao_ou_novo",
+          });
+          return;
+        }
+        log.warn("wa.processor.menu_triagem_fallback_failed", {
+          erro: menuFb.erro,
+          detalhe: menuFb.detalhe || null,
+        });
+      } else if (pedeMenuOpcoes) {
+        log.warn("wa.processor.menu_triagem_sem_token", {
+          agente_slug: agenteSlug,
+          telefone: trace.maskTelefone(params.telefone),
+        });
+      }
     }
 
     if (!menuJaEnviado) {

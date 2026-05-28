@@ -313,6 +313,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
           modeloFromDb: modelo,
           tools: mistralTools,
           maxTokens: 1024,
+          playbookPublicado: promptData.playbookPublicado === true,
           executarTool: (nome, argumentosSerializados) =>
             executarFerramentaHub(nome, argumentosSerializados, {
               leadId: ctx.leadId!,

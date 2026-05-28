@@ -24,6 +24,8 @@ export async function completarChatComFerramentasMistral(params: {
   modeloFromDb: string;
   tools: MistralChatToolDefinition[];
   maxTokens?: number;
+  /** Playbook Unificado no bucket — menus list (5) / button (2). */
+  playbookPublicado?: boolean;
   executarTool: (nome: string, argumentosSerializados: string) => Promise<string>;
 }): Promise<
   | {
@@ -61,6 +63,7 @@ export async function completarChatComFerramentasMistral(params: {
   let systemExtra = `\n\n${blocoInstrucoesFerramentasCrmWhatsapp({
     temMenuWhatsapp: menuWhatsappAtivo,
     temAtualizarLead: nomesFerramentas.has("hub_atualizar_lead"),
+    playbookUnificado: params.playbookPublicado === true,
   })}`;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {

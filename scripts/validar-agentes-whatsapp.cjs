@@ -62,7 +62,7 @@ const USO_WHATSAPP_PADRAO = {
   hub_metricas_escritorio: false,
   hub_relatorio_html_simples: false,
   hub_registar_nota_lead: true,
-  hub_whatsapp_menu: false,
+  hub_whatsapp_menu: true,
 };
 
 function coalesceBool(v) {

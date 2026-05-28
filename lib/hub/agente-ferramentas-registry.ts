@@ -445,7 +445,10 @@ export function mergeUsoFerramentasComPadrao(
   return base;
 }
 
-/** Primeiro atendimento WhatsApp: ferramentas de leitura/escrita no CRM activadas por defeito. */
+/**
+ * Primeiro atendimento WhatsApp: ferramentas de leitura/escrita no CRM activadas por defeito.
+ * `hub_whatsapp_menu` permanece activo salvo desligado explicitamente no agente (triagem list/button).
+ */
 export function mergeUsoFerramentasWhatsappCanal(
   uso: Partial<Record<HubAgenteFerramentaId, boolean>>,
   modoOperacao?: string | null
@@ -455,6 +458,8 @@ export function mergeUsoFerramentasWhatsappCanal(
     if (coalesceFerramentaBool(uso.hub_atualizar_lead) !== false) base.hub_atualizar_lead = true;
     if (coalesceFerramentaBool(uso.hub_lead_memorias) !== false) base.hub_lead_memorias = true;
     if (coalesceFerramentaBool(uso.hub_lead_resumo) !== false) base.hub_lead_resumo = true;
+    if (coalesceFerramentaBool(uso.hub_whatsapp_menu) !== false) base.hub_whatsapp_menu = true;
+    if (coalesceFerramentaBool(uso.hub_registar_nota_lead) !== false) base.hub_registar_nota_lead = true;
   }
   return base;
 }

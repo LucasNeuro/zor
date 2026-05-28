@@ -7,6 +7,7 @@ import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import { buscarTrechosRag } from "@/lib/hub/rag";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
+import { blocoRegrasFluxoSequencialPlaybook } from "@/lib/ia/playbook-mari-runtime";
 import { cutoffSessaoConversaMs } from "@/lib/ia/sessao-conversa-ttl";
 import { resolverCargoCatalogoParaAgente } from "@/lib/hub/resolver-cargo-catalogo";
 import {
@@ -15,6 +16,10 @@ import {
   substituirPlaceholdersSaudacao,
   type TurnoMinimo,
 } from "@/lib/ia/perguntas-essenciais-cargo";
+import {
+  deveUsarCargoCatalogoNoPrompt,
+  isPlaybookOnlyAgent,
+} from "@/lib/hub/agente-instrucao-modo";
 import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
 
 function db() {
@@ -57,6 +62,8 @@ export interface PromptCompleto {
   temperatura: number;
   agenteNome: string;
   fluxoAtual?: string;
+  /** Playbook no bucket hub-agent-playbooks (ex.: maria.md). */
+  playbookPublicado?: boolean;
 }
 
 export async function construirPrompt(params: PromptParams): Promise<PromptCompleto | null> {
@@ -79,10 +86,20 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     playbook_source_hash: typeof agente.playbook_source_hash === "string" ? agente.playbook_source_hash : null,
   });
   const usarPlaybookPublicado = playbookPublicado.ok;
-
-  const cargoCatalogo = await resolverCargoCatalogoParaAgente(supabase, {
+  const playbookOnly = isPlaybookOnlyAgent({
     cargo: agente.cargo as string | null,
+    playbook_object_path: typeof agente.playbook_object_path === "string" ? agente.playbook_object_path : null,
+    playbook_public_url: typeof agente.playbook_public_url === "string" ? agente.playbook_public_url : null,
   });
+
+  const cargoCatalogo = deveUsarCargoCatalogoNoPrompt(
+    { cargo: agente.cargo as string | null },
+    usarPlaybookPublicado
+  )
+    ? await resolverCargoCatalogoParaAgente(supabase, {
+        cargo: agente.cargo as string | null,
+      })
+    : null;
 
   // 2. Busca personalidade
   const { data: personalidade } = usarPlaybookPublicado
@@ -132,9 +149,20 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
 Siga o conteúdo abaixo como a fonte principal das instruções estáticas deste agente.
 Origem publicada: ${playbookPublicado.path}
 Modo de extração: ${playbookPublicado.mode}
-Se alguma configuração genérica do runtime conflitar com este playbook, priorize o playbook publicado.
+${playbookOnly ? "Modo playbook-only: este agente não usa catálogo de cargo — ignore qualquer regra externa de SDR/cargo." : "Se alguma configuração genérica do runtime conflitar com este playbook, priorize o playbook publicado."}
 
 ${playbookPublicado.prompt}`);
+
+    secoes.push(`═══ REGRAS DE NOME (CRÍTICO) ═══
+- Nunca use nomes de rodapé, responsável técnico ou metadados do documento do playbook como nome do cliente.
+- Os marcadores [Nome] nos exemplos do playbook são modelos — não são o nome real de quem está a escrever agora.
+- Se o cliente só disse «Olá», «Oi» ou equivalente e ainda não confirmou o nome nesta conversa, NÃO invente nem assuma um nome na saudação.
+- Siga o playbook: apresente a Mari, acolha e pergunte o nome («Me fale qual é o seu nome, por gentileza?») antes de personalizar.
+- Só use nome na saudação se vier confirmado em «DADOS DO CANAL (WhatsApp → CRM)» para este número ou se o cliente tiver dito o nome nesta sessão.`);
+
+    secoes.push(blocoRegrasFluxoSequencialPlaybook(playbookPublicado.flowHints));
+
+    // Fluxo determinístico no inbound pode enviar menus antes da IA; ver inbound-message-processor + menu-triagem-uazapi.
   } else {
     const humorLabel = personalidade?.humor_label || "Profissional";
     const personalidadeLabel = personalidade?.personalidade_label || "Direto";
@@ -168,7 +196,11 @@ ${personalidade?.descricao_comportamento || ""}`);
     : null;
 
   if (canalWhatsapp && !usarPerguntasCargo) {
-    secoes.push(blocoFluxoPrimeiroAtendimentoWhatsapp(turnosAnteriores));
+    secoes.push(
+      blocoFluxoPrimeiroAtendimentoWhatsapp(turnosAnteriores, {
+        playbookPublicado: usarPlaybookPublicado,
+      })
+    );
   }
 
   if (params.sessaoReiniciada && canalWhatsapp) {
@@ -178,8 +210,8 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
 - Siga o POP: saudação, pedir nome se faltar, menu de triagem quando aplicável.`);
   }
 
-  // CAMADA 2 — EXECUÇÃO DESTE TURNO (externo / WhatsApp)
-  if (cargoCatalogo) {
+  // CAMADA 2 — EXECUÇÃO DESTE TURNO (só com catálogo de cargo, sem playbook publicado)
+  if (cargoCatalogo && !usarPlaybookPublicado) {
     const linhas: string[] = [];
     const saudacao = String(cargoCatalogo.saudacao_cliente ?? "").trim();
     const comprimentoPadrao = String(cargoCatalogo.comprimento_padrao ?? "").trim();
@@ -345,6 +377,7 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
     temperatura: 0.7,
     agenteNome: agente.nome as string,
     fluxoAtual: params.etapaFluxo,
+    playbookPublicado: usarPlaybookPublicado,
   };
 }
 

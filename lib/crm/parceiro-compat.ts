@@ -1,6 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isMissingPgColumn, isTenantFkError } from "@/lib/tenant-default";
 
+type CompatError = {
+  message: string;
+  code?: string;
+};
+
+export type ParceiroCompatRow = {
+  id: string;
+  codigo?: string | null;
+  nome?: string | null;
+};
+
+type ParceiroCompatInsertResult =
+  | { data: ParceiroCompatRow; error: null }
+  | { data: null; error: CompatError };
+
 const PARCEIRO_INSERT_OPTIONAL_COLUMNS = [
   "tenant_id",
   "codigo",
@@ -34,17 +49,6 @@ const PARCEIRO_LOG_OPTIONAL_COLUMNS = [
   "tenant_id",
 ] as const;
 
-type ParceiroCompatRow = {
-  id: string;
-  codigo?: string | null;
-  nome?: string | null;
-};
-
-type ParceiroCompatError = {
-  message?: string;
-  code?: string;
-};
-
 function isMissingTable(err: unknown, table: string): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { code?: string; message?: string };
@@ -52,11 +56,23 @@ function isMissingTable(err: unknown, table: string): boolean {
   return String(e.code || "") === "PGRST205" || msg.includes(table);
 }
 
+function normalizeParceiroCompatRow(data: unknown): ParceiroCompatRow | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Record<string, unknown>;
+  const id = typeof row.id === "string" ? row.id : null;
+  if (!id) return null;
+  return {
+    id,
+    codigo: typeof row.codigo === "string" ? row.codigo : null,
+    nome: typeof row.nome === "string" ? row.nome : null,
+  };
+}
+
 export async function insertParceiroCompat(
   supabase: SupabaseClient,
   row: Record<string, unknown>,
   tenantId?: string | null
-): Promise<{ data: ParceiroCompatRow | null; error: ParceiroCompatError | null }> {
+): Promise<ParceiroCompatInsertResult> {
   const baseRow = { ...row };
   let withTenant = !!tenantId;
   let payload: Record<string, unknown> =
@@ -71,8 +87,15 @@ export async function insertParceiroCompat(
       .select(selectCols)
       .single();
 
-    if (!error && data && typeof data === "object" && "id" in data) {
-      return { data: data as ParceiroCompatRow, error: null };
+    if (!error) {
+      const normalized = normalizeParceiroCompatRow(data);
+      if (normalized) return { data: normalized, error: null };
+      return {
+        data: null,
+        error: {
+          message: "Resposta invalida ao gravar hub_parceiros.",
+        },
+      };
     }
     lastError = error;
 
@@ -108,7 +131,13 @@ export async function insertParceiroCompat(
       };
     }
 
-    return { data: null, error };
+    return {
+      data: null,
+      error: {
+        message: String(error.message || "Falha ao gravar hub_parceiros."),
+        code: error.code,
+      },
+    };
   }
 
   return {

@@ -114,4 +114,54 @@ describe("parseWhatsappWebhookBody UAZAPI", () => {
       expect(r.value.mensagemFinal).toBe("olá com lid");
     }
   });
+
+  it("webhook global UAZAPI: clique em botão (buttonOrListid + convertOptions)", () => {
+    const r = parseWhatsappWebhookBody({
+      BaseUrl: "https://example.uazapi.com",
+      EventType: "messages",
+      token: "inst-token",
+      instanceName: "mari",
+      owner: "5511999999999",
+      chat: {
+        chatid: "5511970364501@s.whatsapp.net",
+        name: "Lucas",
+      },
+      message: {
+        fromMe: false,
+        isGroup: false,
+        messageid: "btn-triagem-arq",
+        messageTimestamp: 1_700_000_000_000,
+        messageType: "buttonsResponseMessage",
+        text: "",
+        buttonOrListid: "triagem_arq",
+        convertOptions: "Projeto arquitetura / design",
+      },
+    });
+    expect(r.kind).toBe("ok");
+    if (r.kind === "ok") {
+      expect(r.value.telefone).toBe("5511970364501");
+      expect(r.value.menuChoiceId).toBe("triagem_arq");
+      expect(r.value.mensagemFinal).toBe("Projeto arquitetura / design");
+      expect(r.value.pushName).toBe("Lucas");
+    }
+  });
+
+  it("aceita clique só com buttonOrListid (sem convertOptions)", () => {
+    const r = parseWhatsappWebhookBody({
+      EventType: "messages",
+      message: {
+        fromMe: false,
+        chatid: `${PNG}@s.whatsapp.net`,
+        messageid: "btn-id-only",
+        messageTimestamp: 1_700_000_000,
+        text: "",
+        buttonOrListid: "triagem_imob",
+      },
+    });
+    expect(r.kind).toBe("ok");
+    if (r.kind === "ok") {
+      expect(r.value.menuChoiceId).toBe("triagem_imob");
+      expect(r.value.mensagemFinal).toBe("triagem_imob");
+    }
+  });
 });

@@ -558,17 +558,19 @@ async function reenviarMenuTriagemInicial(ctx: FlowCtx): Promise<PlaybookProcess
 
 async function aposNomeEnviarTriagem(ctx: FlowCtx, nome: string): Promise<PlaybookProcessResult> {
   await atualizarLeadPlaybook(ctx.supabase, ctx.leadId, ctx.agenteSlug, { nome });
+  const primeiro = nome.split(/\s+/)[0] || nome;
   await enviarTexto(
     ctx.telefone,
-    `Obrigado pela informação, ${nome}! É um prazer te atender.`,
+    `Olá! Sou a Mari, do HUB Obra 10+. É um prazer falar com você, ${primeiro}!`,
     ctx.instanceToken
   );
   ctx.answers.nome = nome;
-  await enviarTriagemInicialLista(ctx);
+  await enviarTriagemInicialLista(ctx, "Para te orientar melhor, escolha uma opção abaixo:");
   const meta = await persistirEstado(ctx.supabase, ctx.leadId, ctx.meta, {
     step: "triagem_inicial",
     answers: { nome },
     active: true,
+    complete: false,
   });
   ctx.meta = meta;
   return { handled: true, skipIa: true, step: "triagem_inicial" };
@@ -735,6 +737,11 @@ async function processarPasso(
 
     case "triagem_inicial": {
       if (!choiceId) {
+        if (mensagemEhSaudacaoSimples(texto)) {
+          const nomeCrm = (ctx.leadNome || ctx.answers.nome || "").trim();
+          if (nomeCrm) return aposNomeEnviarTriagem(ctx, nomeCrm);
+          return iniciarSaudacao(ctx);
+        }
         if (mensagemPedeMenuOuOpcoes(texto)) {
           return reenviarMenuTriagemInicial(ctx);
         }

@@ -179,8 +179,82 @@ function extrairTextoDeContentObj(o: Record<string, unknown>): string {
   return "";
 }
 
+function extrairMenuChoiceIdDeData(data: Record<string, unknown>): string {
+  const fromRoot = pickStr(
+    data,
+    "buttonOrListid",
+    "buttonOrListId",
+    "button_or_list_id",
+    "selectedButtonId",
+    "selectedRowId",
+    "selectedId"
+  );
+  if (fromRoot) return fromRoot;
+
+  const content = data.content;
+  if (content && typeof content === "object" && !Array.isArray(content)) {
+    const id = extrairMenuChoiceIdDeContentObj(content as Record<string, unknown>);
+    if (id) return id;
+  }
+  if (typeof content === "string" && content.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(content) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const id = extrairMenuChoiceIdDeContentObj(parsed as Record<string, unknown>);
+        if (id) return id;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const msg = data.message;
+  if (msg && typeof msg === "object" && !Array.isArray(msg)) {
+    const id = extrairMenuChoiceIdDeContentObj(msg as Record<string, unknown>);
+    if (id) return id;
+  }
+
+  return "";
+}
+
+/** Webhook global UAZAPI: `message` no root + `chat` com JID/nome quando faltam no message. */
+function enriquecerDataMensagemUazapi(
+  data: Record<string, unknown>,
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  const out = { ...data };
+
+  const chat = body.chat ?? body.Chat;
+  if (chat && typeof chat === "object" && !Array.isArray(chat)) {
+    const c = chat as Record<string, unknown>;
+    if (!pickStr(out, "chatid", "chatId", "wa_chatid", "remoteJid", "remote_jid")) {
+      const cid = pickStr(c, "chatid", "chatId", "wa_chatid", "remoteJid", "remote_jid", "id", "jid");
+      if (cid) out.chatid = cid;
+    }
+    if (!pickStr(out, "sender", "from", "sender_pn", "participant", "author")) {
+      const sender = pickStr(c, "sender", "from", "chatid", "wa_chatid", "remoteJid");
+      if (sender) out.sender = sender;
+    }
+    if (!pickStr(out, "senderName", "pushName", "notifyName", "wa_contactName", "wa_name")) {
+      const name = pickStr(c, "name", "pushName", "wa_name", "wa_contactName", "senderName", "notifyName");
+      if (name) out.senderName = name;
+    }
+  }
+
+  const chatSource = body.chatSource ?? body.ChatSource;
+  if (chatSource && typeof chatSource === "object" && !Array.isArray(chatSource)) {
+    const cs = chatSource as Record<string, unknown>;
+    if (!pickStr(out, "senderName", "pushName", "notifyName", "wa_contactName", "wa_name")) {
+      const name = pickStr(cs, "name", "pushName", "wa_name", "senderName");
+      if (name) out.senderName = name;
+    }
+  }
+
+  return out;
+}
+
 function extrairTextoMensagem(data: Record<string, unknown>): string {
-  let texto = pickStr(data, "text", "body", "messageText");
+  let texto = pickStr(data, "text", "body", "messageText", "convertOptions");
   if (texto) return texto;
 
   const content = data.content;
@@ -277,8 +351,9 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
 
   if (!eventoEhMensagemInbound(eventRaw)) return null;
 
-  const data = resolverDataMensagem(body);
-  if (!data) return { kind: "ignored", status: "no_data" };
+  const rawData = resolverDataMensagem(body);
+  if (!rawData) return { kind: "ignored", status: "no_data" };
+  const data = enriquecerDataMensagemUazapi(rawData, body);
 
   const fromMe = data.fromMe === true || data.from_me === true;
   const chatid = pickStr(data, "chatid", "chatId", "wa_chatid", "remoteJid", "remote_jid");
@@ -317,33 +392,18 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
     messageType.includes("document") ? "documento" :
     "texto";
 
+  const menuChoiceId = extrairMenuChoiceIdDeData(data);
   const texto = extrairTextoMensagem(data);
-  let menuChoiceId = "";
-  const content = data.content;
-  if (content && typeof content === "object" && !Array.isArray(content)) {
-    menuChoiceId = extrairMenuChoiceIdDeContentObj(content as Record<string, unknown>);
-  } else if (typeof content === "string" && content.trim().startsWith("{")) {
-    try {
-      const parsed = JSON.parse(content) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        menuChoiceId = extrairMenuChoiceIdDeContentObj(parsed as Record<string, unknown>);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  const msg = data.message;
-  if (!menuChoiceId && msg && typeof msg === "object" && !Array.isArray(msg)) {
-    menuChoiceId = extrairMenuChoiceIdDeContentObj(msg as Record<string, unknown>);
-  }
 
   if (fromMe) return { kind: "ignored", status: "outgoing_ignored" };
   if (!telefone || telefone.length < 10 || isGroup) {
     return { kind: "ignored", status: isGroup ? "group_ignored" : "invalid_phone" };
   }
-  if (!texto && tipoMidia === "texto") return { kind: "ignored", status: "empty_message" };
+  if (!texto && !menuChoiceId && tipoMidia === "texto") {
+    return { kind: "ignored", status: "empty_message" };
+  }
 
-  const mensagemFinal = texto || `[${tipoMidia} recebido]`;
+  const mensagemFinal = texto || menuChoiceId || `[${tipoMidia} recebido]`;
 
   return {
     kind: "ok",

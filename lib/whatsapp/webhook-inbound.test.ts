@@ -164,4 +164,73 @@ describe("parseWhatsappWebhookBody UAZAPI", () => {
       expect(r.value.mensagemFinal).toBe("triagem_imob");
     }
   });
+
+  it("listResponseMessage no root do message (formato UAZAPI real)", () => {
+    const r = parseWhatsappWebhookBody({
+      EventType: "messages",
+      token: "inst-token",
+      chat: {
+        chatid: "5511970364501@s.whatsapp.net",
+        name: "Lucas",
+      },
+      message: {
+        fromMe: false,
+        isGroup: false,
+        messageid: "list-resp-1",
+        messageTimestamp: 1_700_000_000_000,
+        messageType: "listResponseMessage",
+        text: "",
+        listResponseMessage: {
+          title: "Projeto arquitetura / design",
+          singleSelectReply: { selectedRowId: "triagem_arq" },
+        },
+      },
+    });
+    expect(r.kind).toBe("ok");
+    if (r.kind === "ok") {
+      expect(r.value.menuChoiceId).toBe("triagem_arq");
+      expect(r.value.mensagemFinal).toBe("Projeto arquitetura / design");
+    }
+  });
+
+  it("listResponseMessage aninhado em message.message", () => {
+    const r = parseWhatsappWebhookBody({
+      EventType: "messages",
+      message: {
+        fromMe: false,
+        chatid: `${PNG}@s.whatsapp.net`,
+        messageid: "nested-list-1",
+        messageTimestamp: 1_700_000_000,
+        message: {
+          listResponseMessage: {
+            title: "Comprar, vender ou alugar imóvel",
+            singleSelectReply: { selectedRowId: "triagem_imob" },
+          },
+        },
+      },
+    });
+    expect(r.kind).toBe("ok");
+    if (r.kind === "ok") {
+      expect(r.value.menuChoiceId).toBe("triagem_imob");
+      expect(r.value.mensagemFinal).toContain("Comprar");
+    }
+  });
+
+  it("campo vote com id|label", () => {
+    const r = parseWhatsappWebhookBody({
+      EventType: "messages",
+      message: {
+        fromMe: false,
+        chatid: `${PNG}@s.whatsapp.net`,
+        messageid: "vote-1",
+        messageTimestamp: 1_700_000_000,
+        vote: "Projeto arquitetura / design|triagem_arq",
+      },
+    });
+    expect(r.kind).toBe("ok");
+    if (r.kind === "ok") {
+      expect(r.value.menuChoiceId).toBe("triagem_arq");
+      expect(r.value.mensagemFinal).toBe("Projeto arquitetura / design");
+    }
+  });
 });

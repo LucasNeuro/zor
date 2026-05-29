@@ -55,19 +55,47 @@ const CHAVES_METADATA_SESSAO = [
   "fluxo_arquitetura",
   "etapa",
   "triagem_feita",
+  "triagem_escolha",
   "menu_enviado",
   "potencial",
+  "fase_atendimento",
+  "lead_kind",
+  "servico_solicitado",
+  "modo_imobiliario",
+  "intencao_imobiliario",
+  "intencao_imob_sub",
+  "intencao_proprietario",
+  "tipo_imovel_projeto",
+  "tamanho_imovel",
+  "cidade_bairro_projeto",
+  "cidade_bairro_imovel",
+  "valor_imovel",
+  "caracteristicas_adicionais",
+  "primeira_mensagem",
+  "wa_playbook_complete",
+  "sessao_reiniciada_em",
 ] as const;
 
-function limparChavesSessaoMetadata(meta: Record<string, unknown>): Record<string, unknown> {
+/** Remove estado conversacional + playbook Maria + menu WhatsApp do metadata do lead. */
+export function limparMetadataConversacional(meta: Record<string, unknown>): Record<string, unknown> {
   const out = { ...meta };
   for (const k of CHAVES_METADATA_SESSAO) {
     delete out[k];
   }
   for (const key of Object.keys(out)) {
     if (/^fluxo/i.test(key) && key !== "fluxo_id") delete out[key];
+    if (/^wa_playbook_/i.test(key)) delete out[key];
+    if (/^wa_menu_triagem/i.test(key)) delete out[key];
+    if (/^arq_/i.test(key)) delete out[key];
+    if (/^imob_/i.test(key)) delete out[key];
+    if (/^prop_/i.test(key)) delete out[key];
+    if (/^parc_/i.test(key)) delete out[key];
   }
   return out;
+}
+
+function limparChavesSessaoMetadata(meta: Record<string, unknown>): Record<string, unknown> {
+  return limparMetadataConversacional(meta);
 }
 
 /** Campos do lead que alimentam contexto da IA — limpos ao reiniciar sessão (mantém nome, telefone, estágio CRM). */

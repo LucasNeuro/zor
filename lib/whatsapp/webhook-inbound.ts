@@ -146,7 +146,63 @@ function extrairMenuChoiceIdDeContentObj(o: Record<string, unknown>): string {
     );
     if (id) return id;
   }
+  const nativeFlow = o.nativeFlowResponseMessage;
+  if (nativeFlow && typeof nativeFlow === "object" && !Array.isArray(nativeFlow)) {
+    const id = pickStr(
+      nativeFlow as Record<string, unknown>,
+      "name",
+      "selectedId",
+      "id"
+    );
+    if (id) return id;
+  }
   return "";
+}
+
+function parseVoteField(vote: string): { id: string; text: string } {
+  const raw = vote.trim();
+  if (!raw) return { id: "", text: "" };
+  if (raw.startsWith("{") || raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return {
+          id: extrairMenuChoiceIdDeContentObj(parsed as Record<string, unknown>),
+          text: extrairTextoDeContentObj(parsed as Record<string, unknown>),
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (raw.includes("|")) {
+    const parts = raw.split("|").map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      return { id: parts[parts.length - 1], text: parts[0] };
+    }
+  }
+  return { id: raw, text: raw };
+}
+
+function unwrapNestedMessage(data: Record<string, unknown>): Record<string, unknown> {
+  let current: Record<string, unknown> = { ...data };
+  for (let i = 0; i < 4; i++) {
+    const nested = current.message;
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) break;
+    const n = nested as Record<string, unknown>;
+    current = {
+      ...n,
+      chatid: pickStr(current, "chatid", "chatId", "wa_chatid") || pickStr(n, "chatid", "chatId", "wa_chatid"),
+      sender: pickStr(current, "sender", "from") || pickStr(n, "sender", "from"),
+      messageid: pickStr(current, "messageid", "messageId", "id") || pickStr(n, "messageid", "messageId", "id"),
+      messageTimestamp:
+        current.messageTimestamp ?? current.message_timestamp ?? n.messageTimestamp ?? n.message_timestamp,
+      senderName: pickStr(current, "senderName", "pushName") || pickStr(n, "senderName", "pushName"),
+      fromMe: current.fromMe ?? n.fromMe,
+      isGroup: current.isGroup ?? n.isGroup,
+    };
+  }
+  return current;
 }
 
 function extrairTextoDeContentObj(o: Record<string, unknown>): string {
@@ -180,6 +236,9 @@ function extrairTextoDeContentObj(o: Record<string, unknown>): string {
 }
 
 function extrairMenuChoiceIdDeData(data: Record<string, unknown>): string {
+  const fromInteractive = extrairMenuChoiceIdDeContentObj(data);
+  if (fromInteractive) return fromInteractive;
+
   const fromRoot = pickStr(
     data,
     "buttonOrListid",
@@ -190,6 +249,12 @@ function extrairMenuChoiceIdDeData(data: Record<string, unknown>): string {
     "selectedId"
   );
   if (fromRoot) return fromRoot;
+
+  const vote = pickStr(data, "vote");
+  if (vote) {
+    const parsed = parseVoteField(vote);
+    if (parsed.id) return parsed.id;
+  }
 
   const content = data.content;
   if (content && typeof content === "object" && !Array.isArray(content)) {
@@ -254,8 +319,17 @@ function enriquecerDataMensagemUazapi(
 }
 
 function extrairTextoMensagem(data: Record<string, unknown>): string {
+  const fromInteractive = extrairTextoDeContentObj(data);
+  if (fromInteractive) return fromInteractive;
+
   let texto = pickStr(data, "text", "body", "messageText", "convertOptions");
   if (texto) return texto;
+
+  const vote = pickStr(data, "vote");
+  if (vote) {
+    const parsed = parseVoteField(vote);
+    if (parsed.text) return parsed.text;
+  }
 
   const content = data.content;
   if (typeof content === "string") {
@@ -353,7 +427,8 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
 
   const rawData = resolverDataMensagem(body);
   if (!rawData) return { kind: "ignored", status: "no_data" };
-  const data = enriquecerDataMensagemUazapi(rawData, body);
+  const unwrapped = unwrapNestedMessage(rawData);
+  const data = enriquecerDataMensagemUazapi(unwrapped, body);
 
   const fromMe = data.fromMe === true || data.from_me === true;
   const chatid = pickStr(data, "chatid", "chatId", "wa_chatid", "remoteJid", "remote_jid");

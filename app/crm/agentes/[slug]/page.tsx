@@ -191,9 +191,12 @@ export default function AgentePage() {
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [showLimparMemorias, setShowLimparMemorias] = useState(false);
   const [limpandoMemorias, setLimpandoMemorias] = useState(false);
-  const [contagemMemorias, setContagemMemorias] = useState<{ memorias: number; briefingSessoes: number } | null>(
-    null
-  );
+  const [contagemMemorias, setContagemMemorias] = useState<{
+    memorias: number;
+    briefingSessoes: number;
+    leads: number;
+    memoriasLead: number;
+  } | null>(null);
   const [incluirBriefingAoLimpar, setIncluirBriefingAoLimpar] = useState(true);
 
   const carregar = useCallback(async () => {
@@ -283,10 +286,17 @@ export default function AgentePage() {
         headers: internalApiHeaders(),
       });
       if (res.ok) {
-        const data = (await res.json()) as { memorias?: number; briefingSessoes?: number };
+        const data = (await res.json()) as {
+          memorias?: number;
+          briefingSessoes?: number;
+          leads?: number;
+          memoriasLead?: number;
+        };
         setContagemMemorias({
           memorias: typeof data.memorias === "number" ? data.memorias : 0,
           briefingSessoes: typeof data.briefingSessoes === "number" ? data.briefingSessoes : 0,
+          leads: typeof data.leads === "number" ? data.leads : 0,
+          memoriasLead: typeof data.memoriasLead === "number" ? data.memoriasLead : 0,
         });
       }
     } catch {
@@ -307,6 +317,8 @@ export default function AgentePage() {
         error?: string;
         memoriasRemovidas?: number;
         briefingSessoesRemovidas?: number;
+        leadsResetados?: number;
+        memoriasLeadRemovidas?: number;
       };
       if (!res.ok) {
         setErro(data.error || "Não foi possível limpar as memórias.");
@@ -314,8 +326,10 @@ export default function AgentePage() {
       }
       const nMem = data.memoriasRemovidas ?? 0;
       const nBrief = data.briefingSessoesRemovidas ?? 0;
+      const nLeads = data.leadsResetados ?? 0;
+      const nMemLead = data.memoriasLeadRemovidas ?? 0;
       setToast(
-        `Memórias limpas: ${nMem} operacional(is)${incluirBriefingAoLimpar ? `, ${nBrief} sessão(ões) de briefing` : ""}.`
+        `Reset completo: ${nMem} memória(s) do agente${incluirBriefingAoLimpar ? `, ${nBrief} sessão(ões) de briefing` : ""}, ${nLeads} lead(s) com fluxo WhatsApp zerado (${nMemLead} memória(s) de lead).`
       );
       setShowLimparMemorias(false);
       setTimeout(() => setToast(""), 5000);
@@ -585,9 +599,10 @@ export default function AgentePage() {
               Limpar memórias do agente
             </h2>
             <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 14px", lineHeight: 1.55 }}>
-              Remove aprendizados persistentes de <strong style={{ color: "#e6edf3" }}>{agente.nome}</strong> usados
-              no prompt (tabela <code style={{ fontSize: 11 }}>hub_memorias_agente</code>). Útil para testes sem
-              contexto antigo da IA.
+              Remove aprendizados persistentes de <strong style={{ color: "#e6edf3" }}>{agente.nome}</strong> e zera o
+              fluxo conversacional de todos os leads atribuídos a este agente — incluindo playbook WhatsApp (
+              <code style={{ fontSize: 11 }}>wa_playbook_*</code>), menu de triagem, memórias de lead e estado da
+              sessão. Útil para testar o atendimento do zero (ex.: enviar &quot;Olá&quot; de novo).
             </p>
             {contagemMemorias ? (
               <p style={{ color: "#adbac7", fontSize: 12, margin: "0 0 12px" }}>
@@ -598,7 +613,8 @@ export default function AgentePage() {
                     e <strong>{contagemMemorias.briefingSessoes}</strong> sessão(ões) de briefing
                   </>
                 ) : null}
-                .
+                ; <strong>{contagemMemorias.leads}</strong> lead(s) com estado conversacional (
+                <strong>{contagemMemorias.memoriasLead}</strong> memória(s) de lead).
               </p>
             ) : (
               <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 12px" }}>A contar registos…</p>

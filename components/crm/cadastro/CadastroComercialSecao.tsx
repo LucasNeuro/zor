@@ -212,177 +212,179 @@ export function CadastroComercialSecao({
         onToggle={(v) => {
           onComercialChange({
             criar_lead: v,
-            mercados: v ? (mercados.length ? mercados : ["IMB"]) : [],
+            mercados: v && mercados.length === 0 ? ["IMB"] : mercados,
           });
         }}
       />
 
-      {criarLead ? (
-        <>
-          <SubtituloSecao icon={Building2}>Mercado do lead</SubtituloSecao>
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: OB.texto2, lineHeight: 1.45 }}>
-            Mercados opcionais. Se não escolher nenhum, o lead entra no pipeline IMB (imobiliário).
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {MERCADOS_PREFIXO_OPTIONS.map((m) => {
-              const sigla = m.value;
-              const ativo = mercados.includes(sigla);
-              const Icon = MERCADO_ICON[sigla] ?? Building2;
-              const labelId = `mercado-${sigla}`;
-              return (
-                <div
-                  key={sigla}
-                  style={{
-                    ...ROW_BASE,
-                    borderColor: ativo ? "rgba(56, 139, 253, 0.35)" : OB.borda,
-                    background: ativo ? "rgba(56, 139, 253, 0.06)" : "#161b22",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: 10,
-                      background: ativo ? "rgba(56, 139, 253, 0.18)" : "#21262d",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      color: ativo ? "#79c0ff" : OB.texto2,
-                      marginTop: 2,
-                    }}
-                  >
-                    <Icon size={21} strokeWidth={2} aria-hidden />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                      <span id={labelId} style={{ color: OB.texto, fontSize: 13, fontWeight: 700 }}>
-                        {m.label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          fontWeight: 800,
-                          color: "#79c0ff",
-                          border: "1px solid rgba(121, 192, 255, 0.35)",
-                          borderRadius: 4,
-                          padding: "2px 6px",
-                        }}
-                      >
-                        {sigla}
-                      </span>
-                    </div>
-                    <span
-                      style={{
-                        display: "block",
-                        color: OB.texto2,
-                        fontSize: 12,
-                        lineHeight: 1.45,
-                        marginTop: 4,
-                      }}
-                    >
-                      Pipeline {sigla} — lead visível na gaveta Vendas deste mercado.
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-end",
-                      gap: 4,
-                      flexShrink: 0,
-                      paddingTop: 4,
-                    }}
-                  >
-                    <span style={{ fontSize: 10, fontWeight: 700, color: ativo ? "#3fb950" : "#6e7781" }}>
-                      {ativo ? "ACTIVO" : "INACTIVO"}
-                    </span>
-                    <CrmToggleSwitch
-                      checked={ativo}
-                      onCheckedChange={(v) => onMercadoToggle(sigla, v)}
-                      labelledBy={labelId}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 12,
-              marginTop: 4,
-            }}
-          >
-            <div>
-              <label style={LABEL}>Origem do lead</label>
-              <select
-                style={INPUT}
-                value={comercial.lead_origem || "outro"}
-                onChange={(e) => {
-                  const lead_origem = e.target
-                    .value as SuperCadastroInput["comercial"]["lead_origem"];
-                  onComercialChange({
-                    lead_origem,
-                    indicado_por:
-                      lead_origem === "indicacao" ? comercial.indicado_por ?? "" : null,
-                  });
+      <SubtituloSecao icon={Building2}>Mercado / área de interesse</SubtituloSecao>
+      <p style={{ margin: "0 0 8px", fontSize: 12, color: OB.texto2, lineHeight: 1.45 }}>
+        Opcional — fica gravado no cadastro mesmo sem lead no funil.
+        {criarLead
+          ? " Com o funil activo, define também o pipeline do lead (IMB por defeito se nenhum for escolhido)."
+          : ""}
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {MERCADOS_PREFIXO_OPTIONS.map((m) => {
+          const sigla = m.value;
+          const ativo = mercados.includes(sigla);
+          const Icon = MERCADO_ICON[sigla] ?? Building2;
+          const labelId = `mercado-${sigla}`;
+          return (
+            <div
+              key={sigla}
+              style={{
+                ...ROW_BASE,
+                borderColor: ativo ? "rgba(56, 139, 253, 0.35)" : OB.borda,
+                background: ativo ? "rgba(56, 139, 253, 0.06)" : "#161b22",
+              }}
+            >
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 10,
+                  background: ativo ? "rgba(56, 139, 253, 0.18)" : "#21262d",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  color: ativo ? "#79c0ff" : OB.texto2,
+                  marginTop: 2,
                 }}
               >
-                <option value="outro">Outro / manual</option>
-                <option value="indicacao">Indicação</option>
-                <option value="site">Site</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="meta_ads">Meta Ads</option>
-                <option value="google_ads">Google Ads</option>
+                <Icon size={21} strokeWidth={2} aria-hidden />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                  <span id={labelId} style={{ color: OB.texto, fontSize: 13, fontWeight: 700 }}>
+                    {m.label}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 800,
+                      color: "#79c0ff",
+                      border: "1px solid rgba(121, 192, 255, 0.35)",
+                      borderRadius: 4,
+                      padding: "2px 6px",
+                    }}
+                  >
+                    {sigla}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    display: "block",
+                    color: OB.texto2,
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                    marginTop: 4,
+                  }}
+                >
+                  Área {sigla} do cadastro
+                  {criarLead ? ` — lead visível na gaveta Vendas deste mercado.` : "."}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: 4,
+                  flexShrink: 0,
+                  paddingTop: 4,
+                }}
+              >
+                <span style={{ fontSize: 10, fontWeight: 700, color: ativo ? "#3fb950" : "#6e7781" }}>
+                  {ativo ? "ACTIVO" : "INACTIVO"}
+                </span>
+                <CrmToggleSwitch
+                  checked={ativo}
+                  onCheckedChange={(v) => onMercadoToggle(sigla, v)}
+                  labelledBy={labelId}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {criarLead ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 12,
+            marginTop: 4,
+          }}
+        >
+          <div>
+            <label style={LABEL}>Origem do lead</label>
+            <select
+              style={INPUT}
+              value={comercial.lead_origem || "outro"}
+              onChange={(e) => {
+                const lead_origem = e.target
+                  .value as SuperCadastroInput["comercial"]["lead_origem"];
+                onComercialChange({
+                  lead_origem,
+                  indicado_por:
+                    lead_origem === "indicacao" ? comercial.indicado_por ?? "" : null,
+                });
+              }}
+            >
+              <option value="outro">Outro / manual</option>
+              <option value="indicacao">Indicação</option>
+              <option value="site">Site</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="meta_ads">Meta Ads</option>
+              <option value="google_ads">Google Ads</option>
+            </select>
+          </div>
+          {comercial.lead_origem === "indicacao" && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={LABEL}>Quem indicou? *</label>
+              <input
+                style={INPUT}
+                value={comercial.indicado_por || ""}
+                onChange={(e) =>
+                  onComercialChange({ indicado_por: e.target.value })
+                }
+                placeholder="Nome de quem indicou este contacto"
+                autoComplete="name"
+              />
+              <p style={{ margin: "6px 0 0", fontSize: 11, color: OB.texto2, lineHeight: 1.4 }}>
+                Gravado nos extras do cadastro e no lead do funil.
+              </p>
+            </div>
+          )}
+          {tipo === "PJ" && (
+            <div>
+              <label style={LABEL}>Segmento empresa</label>
+              <select
+                style={INPUT}
+                value={comercial.segmento || "cliente"}
+                onChange={(e) =>
+                  onComercialChange({
+                    segmento: e.target.value as SuperCadastroInput["comercial"]["segmento"],
+                  })
+                }
+              >
+                {EMPRESA_SEGMENTOS.filter(
+                  (s) => s.value !== "fornecedor" && s.value !== "parceiro"
+                ).map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
               </select>
             </div>
-            {comercial.lead_origem === "indicacao" && (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={LABEL}>Quem indicou? *</label>
-                <input
-                  style={INPUT}
-                  value={comercial.indicado_por || ""}
-                  onChange={(e) =>
-                    onComercialChange({ indicado_por: e.target.value })
-                  }
-                  placeholder="Nome de quem indicou este contacto"
-                  autoComplete="name"
-                />
-                <p style={{ margin: "6px 0 0", fontSize: 11, color: OB.texto2, lineHeight: 1.4 }}>
-                  Gravado nos extras do cadastro e no lead do funil.
-                </p>
-              </div>
-            )}
-            {tipo === "PJ" && (
-              <div>
-                <label style={LABEL}>Segmento empresa</label>
-                <select
-                  style={INPUT}
-                  value={comercial.segmento || "cliente"}
-                  onChange={(e) =>
-                    onComercialChange({
-                      segmento: e.target.value as SuperCadastroInput["comercial"]["segmento"],
-                    })
-                  }
-                >
-                  {EMPRESA_SEGMENTOS.filter(
-                    (s) => s.value !== "fornecedor" && s.value !== "parceiro"
-                  ).map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-        </>
+          )}
+        </div>
       ) : (
         <p style={{ margin: 0, fontSize: 12, color: OB.texto2, lineHeight: 1.45 }}>
-          Sem lead no funil — só o registo em cadastro será criado.
+          Sem lead no funil — só o registo em cadastro será criado (área/mercado acima continua a ser gravada).
         </p>
       )}
 
@@ -408,7 +410,10 @@ export function CadastroComercialSecao({
               : ""}
           </>
         ) : (
-          " · só cadastro"
+          <>
+            {" · só cadastro"}
+            {mercados.length ? ` · áreas: ${mercados.join(", ")}` : ""}
+          </>
         )}
       </div>
     </div>

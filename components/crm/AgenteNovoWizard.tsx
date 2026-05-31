@@ -21,6 +21,11 @@ import {
 } from "@/lib/hub/agente-ferramentas-registry";
 import { isHubModeloIdDbCompatible } from "@/lib/ia/hub-model-defaults";
 import {
+  PlaybookUploadAnalisePanel,
+  type PlaybookAnaliseResultado,
+  type PlaybookUploadStatus,
+} from "@/components/crm/PlaybookUploadAnalisePanel";
+import {
   RAG_ACCEPT_ATTR,
   RAG_EXEMPLO_MD_URL,
   RAG_FORMATOS_RESUMO,
@@ -182,6 +187,9 @@ function formatBytes(n: number): string {
 }
 
 const RAG_DOCS_LIMIT = 3;
+const PLAYBOOK_MAX_BYTES = 2 * 1024 * 1024;
+const PLAYBOOK_INPUT_PRE = "playbook-upload-input-pre";
+const PLAYBOOK_INPUT_POS = "playbook-upload-input-pos";
 
 function ragDocExt(nome: string): string {
   const ext = nome.split(".").pop()?.trim().toUpperCase();
@@ -245,6 +253,76 @@ type RagFilaItem = {
   mensagem?: string;
 };
 
+function toLinhasLista(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+  if (typeof raw === "string") {
+    return raw
+      .split(/\n|•|- /)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function pickTexto(raw: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function normalizarAnalisePlaybook(raw: Record<string, unknown>): PlaybookAnaliseResultado {
+  const nested =
+    raw.analise && typeof raw.analise === "object" && !Array.isArray(raw.analise)
+      ? (raw.analise as Record<string, unknown>)
+      : raw;
+  const resumo =
+    pickTexto(nested, ["resumo_executivo", "resumo", "summary", "analise_resumo", "analysis"]) ||
+    pickTexto(raw, ["resumo", "summary"]) ||
+    "Análise concluída sem resumo estruturado.";
+  const notaRaw = nested.nota ?? raw.nota;
+  const nota =
+    typeof notaRaw === "number" && Number.isFinite(notaRaw)
+      ? Math.min(10, Math.max(0, Math.round(notaRaw * 10) / 10))
+      : typeof notaRaw === "string"
+        ? (() => {
+            const n = Number.parseFloat(notaRaw.replace(",", "."));
+            return Number.isFinite(n) ? Math.min(10, Math.max(0, Math.round(n * 10) / 10)) : null;
+          })()
+        : null;
+  const notaComentario = pickTexto(nested, ["nota_comentario", "notaComentario"]);
+  const pontosChave = toLinhasLista(
+    nested.pontos_fortes ?? nested.pontos_chave ?? nested.highlights ?? nested.insights
+  );
+  const gaps = toLinhasLista(nested.gaps ?? nested.lacunas);
+  const riscos = toLinhasLista(nested.riscos ?? nested.risks);
+  const recomendacoes = toLinhasLista(
+    nested.sugestoes ?? nested.recomendacoes ?? nested.recommendations ?? nested.proximos_passos
+  );
+  const textoBruto =
+    pickTexto(raw, ["texto", "raw_text", "resultado", "output", "content"]) ||
+    JSON.stringify(raw, null, 2);
+  const modelo = pickTexto(raw, ["model", "modelo"]) || null;
+
+  return {
+    resumo,
+    nota,
+    notaComentario,
+    pontosChave,
+    gaps,
+    riscos,
+    recomendacoes,
+    textoBruto,
+    modelo,
+    origem: "mistral",
+  };
+}
+
 export type AgenteNovoWizardProps = {
   variant: "page" | "drawer";
   onClose?: () => void;
@@ -306,6 +384,17 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [playbookGerando, setPlaybookGerando] = useState(false);
   const [playbookErro, setPlaybookErro] = useState("");
   const [playbookPublicUrl, setPlaybookPublicUrl] = useState<string | null>(null);
+  const [playbookArquivoNome, setPlaybookArquivoNome] = useState("");
+  const [playbookUploadStatus, setPlaybookUploadStatus] = useState<PlaybookUploadStatus>("idle");
+  const [playbookUploadMensagem, setPlaybookUploadMensagem] = useState("");
+  const [playbookUploadPct, setPlaybookUploadPct] = useState(0);
+  const [playbookConteudoPreview, setPlaybookConteudoPreview] = useState("");
+  const [playbookConteudoAnalise, setPlaybookConteudoAnalise] = useState("");
+  const [playbookAnaliseLoading, setPlaybookAnaliseLoading] = useState(false);
+  const [playbookAnalisePct, setPlaybookAnalisePct] = useState(0);
+  const [playbookAnaliseErro, setPlaybookAnaliseErro] = useState("");
+  const [playbookAnaliseResultado, setPlaybookAnaliseResultado] = useState<PlaybookAnaliseResultado | null>(null);
+  const [playbookArquivoPendente, setPlaybookArquivoPendente] = useState<File | null>(null);
   /** Escolhidos no passo Documentos; enviados e indexados logo após «Criar agente». */
   const [ragPendentes, setRagPendentes] = useState<RagFilaItem[]>([]);
   const [ragPendenteErro, setRagPendenteErro] = useState("");
@@ -597,10 +686,281 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     }
   }
 
+  function validarPlaybookArquivo(file: File): string | null {
+    const nomeLower = file.name.toLowerCase();
+    const tipoAceito = file.type === "text/markdown" || file.type === "text/plain";
+    const extAceita = nomeLower.endsWith(".md") || nomeLower.endsWith(".txt");
+    if (!tipoAceito && !extAceita) {
+      return "Formato inválido. Envie um arquivo .md ou .txt.";
+    }
+    if (file.size <= 0) return "Arquivo vazio. Escolha um arquivo com conteúdo.";
+    if (file.size > PLAYBOOK_MAX_BYTES) return "Arquivo acima de 2 MB. Reduza o tamanho e tente novamente.";
+    return null;
+  }
+
+  function lerArquivoTexto(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+      reader.onerror = () => reject(new Error("Falha ao ler arquivo"));
+      reader.readAsText(file, "utf-8");
+    });
+  }
+
+  async function carregarPlaybookLocal(file: File) {
+    const erroValidacao = validarPlaybookArquivo(file);
+    if (erroValidacao) {
+      setPlaybookUploadStatus("erro");
+      setPlaybookUploadMensagem(erroValidacao);
+      return;
+    }
+
+    setPlaybookArquivoNome(file.name);
+    setPlaybookArquivoPendente(file);
+    setPlaybookUploadStatus("enviando");
+    setPlaybookUploadMensagem("A ler arquivo...");
+    setPlaybookUploadPct(40);
+    setPlaybookAnaliseErro("");
+    setPlaybookAnaliseResultado(null);
+
+    try {
+      const texto = (await lerArquivoTexto(file)).trim();
+      if (!texto) {
+        setPlaybookUploadStatus("erro");
+        setPlaybookUploadMensagem("Não foi possível extrair texto do arquivo.");
+        setPlaybookUploadPct(0);
+        setPlaybookArquivoPendente(null);
+        return;
+      }
+      setPlaybookConteudoPreview(texto.slice(0, 2500));
+      setPlaybookConteudoAnalise(texto);
+      setPlaybookUploadStatus("sucesso");
+      setPlaybookUploadPct(100);
+      setPlaybookUploadMensagem("Arquivo carregado. Analise com IA Mistral antes de continuar.");
+    } catch {
+      setPlaybookUploadStatus("erro");
+      setPlaybookUploadMensagem("Falha ao ler o arquivo.");
+      setPlaybookUploadPct(0);
+      setPlaybookArquivoPendente(null);
+    }
+  }
+
+  async function salvarPlaybookPorUpload(file: File, slugOverride?: string) {
+    const slugAlvo = slugOverride || agenteSlugCriado;
+    if (!slugAlvo) {
+      setPlaybookUploadStatus("erro");
+      setPlaybookUploadMensagem("Crie o agente antes de enviar o playbook.");
+      return;
+    }
+
+    const erroValidacao = validarPlaybookArquivo(file);
+    if (erroValidacao) {
+      setPlaybookUploadStatus("erro");
+      setPlaybookUploadMensagem(erroValidacao);
+      return;
+    }
+
+    setPlaybookArquivoNome(file.name);
+    setPlaybookUploadStatus("enviando");
+    setPlaybookUploadMensagem("A enviar playbook...");
+    setPlaybookUploadPct(15);
+    setPlaybookErro("");
+    setPlaybookAnaliseErro("");
+    setPlaybookAnaliseResultado(null);
+
+    try {
+      const texto = (await lerArquivoTexto(file)).trim();
+      if (!texto) {
+        setPlaybookUploadStatus("erro");
+        setPlaybookUploadMensagem("Não foi possível extrair texto do arquivo.");
+        setPlaybookUploadPct(0);
+        return;
+      }
+      setPlaybookConteudoPreview(texto.slice(0, 2500));
+      setPlaybookConteudoAnalise(texto);
+      setPlaybookUploadPct(45);
+
+      // Endpoint principal esperado para upload manual do playbook.
+      const form = new FormData();
+      form.append("file", file);
+      form.append("content", texto);
+      form.append("source", "wizard_upload");
+      let uploadRes = await fetch(`/api/hub/agentes/${encodeURIComponent(slugAlvo)}/playbook/upload`, {
+        method: "POST",
+        headers: internalApiHeaders(),
+        body: form,
+      });
+
+      // Fallback defensivo: se o endpoint novo não existir, tenta contrato JSON no endpoint atual.
+      if (uploadRes.status === 404 || uploadRes.status === 405) {
+        uploadRes = await fetch(`/api/hub/agentes/${encodeURIComponent(slugAlvo)}/playbook`, {
+          method: "POST",
+          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({
+            force: true,
+            uploaded_markdown: texto,
+            uploaded_filename: file.name,
+            source: "wizard_upload",
+          }),
+        });
+      }
+
+      const payload = (await uploadRes.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!uploadRes.ok) {
+        const msg =
+          typeof payload.error === "string" && payload.error.trim()
+            ? payload.error.trim()
+            : `Falha no upload (HTTP ${uploadRes.status}).`;
+        setPlaybookUploadStatus("erro");
+        setPlaybookUploadMensagem(msg);
+        setPlaybookUploadPct(0);
+        return;
+      }
+
+      const retornoUrl =
+        typeof payload.playbook_public_url === "string" && payload.playbook_public_url.trim()
+          ? payload.playbook_public_url.trim()
+          : null;
+      if (retornoUrl) setPlaybookPublicUrl(retornoUrl);
+      else await gerarPlaybookNoStorage();
+
+      setPlaybookUploadStatus("sucesso");
+      setPlaybookUploadPct(100);
+      setPlaybookUploadMensagem("Playbook enviado com sucesso.");
+    } catch {
+      setPlaybookUploadStatus("erro");
+      setPlaybookUploadPct(0);
+      setPlaybookUploadMensagem("Falha de rede ao enviar playbook.");
+    }
+  }
+
+  async function analisarPlaybookComMistral() {
+    if (!playbookConteudoAnalise.trim()) {
+      setPlaybookAnaliseErro("Carregue um playbook antes de solicitar análise.");
+      return;
+    }
+
+    setPlaybookAnaliseLoading(true);
+    setPlaybookAnaliseErro("");
+    setPlaybookAnaliseResultado(null);
+    setPlaybookAnalisePct(6);
+
+    const tick = window.setInterval(() => {
+      setPlaybookAnalisePct((p) => {
+        if (p >= 92) return p;
+        const step = Math.max(1, Math.round((92 - p) * (0.06 + Math.random() * 0.06)));
+        return Math.min(92, p + step);
+      });
+    }, 180);
+
+    let analiseOk = false;
+    try {
+      const body = {
+        content: playbookConteudoAnalise,
+        filename: playbookArquivoNome || "playbook.md",
+        source: "wizard_upload",
+      };
+
+      let res: Response;
+      if (agenteSlugCriado) {
+        res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}/playbook/analisar`, {
+          method: "POST",
+          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } else {
+        res = await fetch(`/api/hub/playbook/analisar-conteudo`, {
+          method: "POST",
+          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
+
+      if (res.ok) {
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        setPlaybookAnaliseResultado(normalizarAnalisePlaybook(data));
+        analiseOk = true;
+        return;
+      }
+
+      if (res.status === 503 && !agenteSlugCriado) {
+        setPlaybookAnaliseErro("Configure MISTRAL_API_KEY no servidor para análise com nota.");
+        return;
+      }
+
+      // Fallback final apenas com agente já criado.
+      if (agenteSlugCriado && (res.status === 404 || res.status === 405 || res.status >= 500)) {
+        const syncRes = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}/mistral-sync`, {
+          method: "POST",
+          headers: internalApiHeaders(),
+        });
+        const syncData = (await syncRes.json().catch(() => ({}))) as { error?: string; mistral_agent_id?: string };
+        const detalhes = syncRes.ok
+          ? `Sync Mistral OK${syncData.mistral_agent_id ? ` (agent: ${syncData.mistral_agent_id})` : ""}.`
+          : syncData.error || `HTTP ${syncRes.status}`;
+        const linhas = playbookConteudoAnalise
+          .split("\n")
+          .map((linha) => linha.trim())
+          .filter(Boolean)
+          .slice(0, 8);
+        setPlaybookAnaliseResultado({
+          resumo:
+            "Análise textual local concluída. Endpoint de análise Mistral ainda indisponível neste ambiente.",
+          nota: null,
+          notaComentario: "",
+          pontosChave: linhas,
+          gaps: [],
+          riscos: ["Valide no backend o endpoint POST /playbook/analisar."],
+          recomendacoes: ["Clique novamente após configurar MISTRAL_API_KEY."],
+          textoBruto: detalhes,
+          modelo: null,
+          origem: "fallback",
+        });
+        analiseOk = true;
+        return;
+      }
+
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      setPlaybookAnaliseErro(err.error || `Falha na análise (HTTP ${res.status}).`);
+    } catch {
+      setPlaybookAnaliseErro("Falha de rede ao analisar o playbook.");
+    } finally {
+      window.clearInterval(tick);
+      if (analiseOk) {
+        setPlaybookAnalisePct(100);
+        await new Promise((r) => setTimeout(r, 420));
+      }
+      setPlaybookAnaliseLoading(false);
+      setPlaybookAnalisePct(0);
+    }
+  }
+
   function concluirPosCriacao() {
     if (variant === "drawer" && onClose) onClose();
     else router.push("/crm/agentes");
   }
+
+  const playbookDropzoneBorder =
+    playbookUploadStatus === "hover"
+      ? "1px dashed #58a6ff"
+      : playbookUploadStatus === "erro"
+        ? "1px dashed #f85149"
+        : playbookUploadStatus === "sucesso"
+          ? "1px dashed #3fb950"
+          : "1px dashed #3d444d";
+
+  const playbookDropzoneBg =
+    playbookUploadStatus === "hover"
+      ? "#58a6ff14"
+      : playbookUploadStatus === "erro"
+        ? "#f8514912"
+        : playbookUploadStatus === "sucesso"
+          ? "#23863618"
+          : "#0d1117";
+
+  const passo1AvancarBloqueado = somentePlaybook
+    ? !playbookConteudoAnalise.trim() || !playbookAnaliseResultado
+    : !cargoSelecionado;
 
   useEffect(() => {
     if (passo !== 6) {
@@ -801,6 +1161,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         }
 
         if (slug) {
+          if (somentePlaybook && playbookArquivoPendente) {
+            await salvarPlaybookPorUpload(playbookArquivoPendente, slug);
+          }
           await processarFilaRagNoAgente(slug);
           const noServidor = mergeUsoFerramentasComPadraoPreservandoCustom(data.uso_ferramentas_ia);
           const noWizard = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentasIa);
@@ -1067,8 +1430,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 Como este agente será instruído?
               </h2>
               <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 16px" }}>
-                Escolha um cargo do catálogo ou opere só com o playbook publicado no bucket{" "}
-                <code style={{ fontSize: 11 }}>hub-agent-playbooks</code>.
+                Escolha um cargo do catálogo ou carregue um playbook personalizado (.md / .txt) para instruir o agente.
               </p>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
@@ -1094,25 +1456,29 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               </div>
 
               {somentePlaybook ? (
-                <div
-                  style={{
-                    background: "#161b22",
-                    border: "1px solid #30363d",
-                    borderRadius: 12,
-                    padding: 16,
-                    marginBottom: 8,
+                <PlaybookUploadAnalisePanel
+                  inputId={PLAYBOOK_INPUT_PRE}
+                  modoPreCriacao
+                  uploadStatus={playbookUploadStatus}
+                  uploadMensagem={playbookUploadMensagem}
+                  uploadPct={playbookUploadPct}
+                  arquivoNome={playbookArquivoNome}
+                  conteudoPreview={playbookConteudoPreview}
+                  conteudoCarregado={!!playbookConteudoAnalise.trim()}
+                  analiseLoading={playbookAnaliseLoading}
+                  analisePct={playbookAnalisePct}
+                  analiseErro={playbookAnaliseErro}
+                  analiseResultado={playbookAnaliseResultado}
+                  dropzoneBorder={playbookDropzoneBorder}
+                  dropzoneBg={playbookDropzoneBg}
+                  onHoverChange={(hover) => {
+                    if (playbookUploadStatus !== "enviando") {
+                      setPlaybookUploadStatus(hover ? "hover" : "idle");
+                    }
                   }}
-                >
-                  <p style={{ color: "#e6edf3", fontSize: 13, margin: "0 0 8px", lineHeight: 1.55 }}>
-                    Nenhuma regra do <strong>hub_cargos_catalogo</strong> entra no prompt nem no fluxo WhatsApp.
-                    Publique o Markdown em{" "}
-                    <code style={{ fontSize: 11 }}>{`{tenant_id}/{agente_slug}.md`}</code> e defina{" "}
-                    <code style={{ fontSize: 11 }}>playbook_object_path</code> na ficha do agente (ou gere após criar).
-                  </p>
-                  <p style={{ color: "#8b949e", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-                    No passo seguinte informe o nome; depois da criação, envie o playbook e configure o modo WhatsApp.
-                  </p>
-                </div>
+                  onFileSelect={(file) => void carregarPlaybookLocal(file)}
+                  onAnalisar={() => void analisarPlaybookComMistral()}
+                />
               ) : null}
 
               {!somentePlaybook && carregando ? (
@@ -2496,6 +2862,47 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 </p>
               ) : null}
 
+              {somentePlaybook && playbookUploadStatus === "sucesso" && playbookPublicUrl ? (
+                <p
+                  style={{
+                    color: "#3fb950",
+                    fontSize: 12,
+                    margin: 0,
+                    background: "#23863618",
+                    border: "1px solid #23863644",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Playbook publicado automaticamente ao criar o agente. Pode reenviar outro arquivo abaixo se quiser
+                  substituir.
+                </p>
+              ) : null}
+
+              <PlaybookUploadAnalisePanel
+                inputId={PLAYBOOK_INPUT_POS}
+                uploadStatus={playbookUploadStatus}
+                uploadMensagem={playbookUploadMensagem}
+                uploadPct={playbookUploadPct}
+                arquivoNome={playbookArquivoNome}
+                conteudoPreview={playbookConteudoPreview}
+                conteudoCarregado={!!playbookConteudoAnalise.trim()}
+                analiseLoading={playbookAnaliseLoading}
+                analisePct={playbookAnalisePct}
+                analiseErro={playbookAnaliseErro}
+                analiseResultado={playbookAnaliseResultado}
+                dropzoneBorder={playbookDropzoneBorder}
+                dropzoneBg={playbookDropzoneBg}
+                onHoverChange={(hover) => {
+                  if (playbookUploadStatus !== "enviando") {
+                    setPlaybookUploadStatus(hover ? "hover" : "idle");
+                  }
+                }}
+                onFileSelect={(file) => void salvarPlaybookPorUpload(file)}
+                onAnalisar={() => void analisarPlaybookComMistral()}
+              />
+
               {!playbookMetaLoading && !playbookErro && playbookPublicUrl ? (
                 <div
                   style={{
@@ -2684,11 +3091,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 type="button"
                 onClick={() => setPasso((p) => p + 1)}
                 disabled={
-                  passo === 1
-                    ? !somentePlaybook && !cargoSelecionado
-                    : passo === 2
-                      ? !nome.trim()
-                      : false
+                  passo === 1 ? passo1AvancarBloqueado : passo === 2 ? !nome.trim() : false
                 }
                 style={{
                   flex: 1,
@@ -2700,13 +3103,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   border: "none",
                   color: "#c9a24a",
                   cursor:
-                    (passo === 1 && !somentePlaybook && !cargoSelecionado) || (passo === 2 && !nome.trim())
+                    (passo === 1 && passo1AvancarBloqueado) || (passo === 2 && !nome.trim())
                       ? "not-allowed"
                       : "pointer",
                   opacity:
-                    (passo === 1 && !somentePlaybook && !cargoSelecionado) || (passo === 2 && !nome.trim())
-                      ? 0.4
-                      : 1,
+                    (passo === 1 && passo1AvancarBloqueado) || (passo === 2 && !nome.trim()) ? 0.4 : 1,
                 }}
               >
                 Próximo →

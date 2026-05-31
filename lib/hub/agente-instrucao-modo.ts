@@ -6,6 +6,8 @@
 
 export type AgenteInstrucaoIdent = {
   cargo?: string | null;
+  area?: string | null;
+  instrucao_modo?: string | null;
   playbook_object_path?: string | null;
   playbook_public_url?: string | null;
 };
@@ -20,8 +22,16 @@ export function temReferenciaPlaybookPublicado(ident: AgenteInstrucaoIdent): boo
   );
 }
 
+/** Valor gravado em hub_agente_identidade.cargo (NOT NULL no banco). */
+export const CARGO_LABEL_PLAYBOOK_ONLY = "Só playbook";
+
 /** Playbook no bucket + sem cargo → só playbook (nada do catálogo no prompt/fluxo). */
 export function isPlaybookOnlyAgent(ident: AgenteInstrucaoIdent): boolean {
+  const modo = String(ident.instrucao_modo ?? "").trim().toLowerCase();
+  if (modo === "playbook_only" || modo === "playbook-only") return true;
+  if (String(ident.area ?? "").trim().toLowerCase() === "playbook") return true;
+  const cargo = String(ident.cargo ?? "").trim();
+  if (cargo === CARGO_LABEL_PLAYBOOK_ONLY) return true;
   return temReferenciaPlaybookPublicado(ident) && !cargoAgentePreenchido(ident.cargo);
 }
 

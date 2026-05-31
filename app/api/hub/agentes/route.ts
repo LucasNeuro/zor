@@ -27,7 +27,7 @@ import {
   omitHubAgenteFerramentasMigrationKeys,
 } from "@/lib/hub/hub-agente-ferramentas-columns";
 import { sanitizarAgenteHubParaCliente } from "@/lib/hub/sanitize-agente-hub-public";
-import { PROMPT_BASE_PLAYBOOK_ONLY } from "@/lib/hub/agente-instrucao-modo";
+import { PROMPT_BASE_PLAYBOOK_ONLY, CARGO_LABEL_PLAYBOOK_ONLY } from "@/lib/hub/agente-instrucao-modo";
 import { slugifyCargoSlug } from "@/lib/hub/cargo-slug";
 
 function parseBoolFerr(v: unknown, defaultVal: boolean): boolean {
@@ -121,6 +121,15 @@ function db() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+}
+
+function isInstrucaoModoColumnMissing(message?: string): boolean {
+  const msg = String(message ?? "").toLowerCase();
+  return msg.includes("instrucao_modo") && (msg.includes("column") || msg.includes("does not exist"));
+}
+
+function isCargoCatalogoValidationError(message?: string): boolean {
+  return /catalogo ativo|hub_cargos_catalogo/i.test(String(message ?? ""));
 }
 
 function isTenantColumnMissing(message?: string): boolean {
@@ -397,8 +406,9 @@ export async function POST(request: NextRequest) {
     row = {
       agente_slug,
       nome: nomeTrim,
-      cargo: null,
+      cargo: CARGO_LABEL_PLAYBOOK_ONLY,
       area: "playbook",
+      instrucao_modo: "playbook_only",
       nivel: 3,
       personalidade:
         (personalidade && String(personalidade).trim()) ||
@@ -594,6 +604,26 @@ export async function POST(request: NextRequest) {
         .select()
         .single());
     }
+  }
+
+  if (error && isInstrucaoModoColumnMissing(error.message)) {
+    const { instrucao_modo, ...rowSemInstrucao } = rowInsert;
+    rowInsert = rowSemInstrucao;
+    ({ data, error } = await supabase
+      .from("hub_agente_identidade")
+      .insert(rowInsert)
+      .select()
+      .single());
+  }
+
+  if (error && isCargoCatalogoValidationError(error.message) && playbookOnly) {
+    return NextResponse.json(
+      {
+        error:
+          "Modo «só playbook» ainda não está liberado no Supabase. Execute a migração supabase/migrations/20260601180000_hub_agente_playbook_only_cargo.sql no SQL Editor e tente novamente.",
+      },
+      { status: 400 }
+    );
   }
 
   if (error) {

@@ -46,43 +46,48 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const err = configError();
-  if (err) {
-    return NextResponse.json(
-      { error: "CRM indisponivel: Supabase nao configurado no servidor.", detail: err },
-      { status: 503 }
-    );
-  }
+  try {
+    const err = configError();
+    if (err) {
+      return NextResponse.json(
+        { error: "CRM indisponivel: Supabase nao configurado no servidor.", detail: err },
+        { status: 503 }
+      );
+    }
 
-  const { id: rawId } = await params;
-  const id = normalizarIdUuid(rawId);
-  if (!id) {
-    return NextResponse.json({ error: "ID inválido." }, { status: 400 });
-  }
+    const { id: rawId } = await params;
+    const id = normalizarIdUuid(rawId);
+    if (!id) {
+      return NextResponse.json({ error: "ID inválido." }, { status: 400 });
+    }
 
-  const supabase = db();
-  let { data, error } = await supabase
-    .from("hub_empresas")
-    .select(EMPRESA_SELECT)
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error && isMissingPgColumn(error)) {
-    ({ data, error } = await supabase
+    const supabase = db();
+    let { data, error } = await supabase
       .from("hub_empresas")
-      .select(EMPRESA_SELECT_FALLBACK)
+      .select(EMPRESA_SELECT)
       .eq("id", id)
-      .maybeSingle());
-  }
+      .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  if (!data) {
-    return NextResponse.json({ error: "Empresa não encontrada." }, { status: 404 });
-  }
+    if (error && isMissingPgColumn(error)) {
+      ({ data, error } = await supabase
+        .from("hub_empresas")
+        .select(EMPRESA_SELECT_FALLBACK)
+        .eq("id", id)
+        .maybeSingle());
+    }
 
-  return NextResponse.json({ data });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json({ error: "Empresa não encontrada." }, { status: 404 });
+    }
+
+    return NextResponse.json({ data });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro interno ao carregar empresa.";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
 
 export async function PATCH(

@@ -1,13 +1,13 @@
 "use client";
 
 import { memo, type ReactNode } from "react";
-import { Eye, Pencil } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { CrmCheckbox } from "@/components/crm/CrmCheckbox";
 import type { CadastroListaColumn } from "@/lib/crm/cadastro-list-columns";
 
 const CHECK_COL_PX = 48;
 const DEFAULT_NAME_COL_PX = 220;
-const ACTIONS_COL_PX = 96;
+const ACTIONS_COL_PX = 128;
 
 type Props<T extends { id: string }> = {
   rows: T[];
@@ -24,6 +24,7 @@ type Props<T extends { id: string }> = {
   onRowClick?: (row: T) => void;
   onView?: (row: T) => void;
   onEdit?: (row: T) => void;
+  onDelete?: (row: T) => void;
   emptyMessage?: string;
   stickyPrimary?: boolean;
   nameColWidth?: number;
@@ -40,6 +41,7 @@ type RowProps<T extends { id: string }> = {
   onRowClick?: (row: T) => void;
   onView?: (row: T) => void;
   onEdit?: (row: T) => void;
+  onDelete?: (row: T) => void;
   onToggleRow: (id: string) => void;
 };
 
@@ -54,6 +56,7 @@ function CadastroListaTableRowInner<T extends { id: string }>({
   onRowClick,
   onView,
   onEdit,
+  onDelete,
   onToggleRow,
 }: RowProps<T>) {
   const rowBg = selected ? "bg-[#1a1608]" : "bg-[#0d1117]";
@@ -124,8 +127,20 @@ function CadastroListaTableRowInner<T extends { id: string }>({
                 onClick={() => onEdit(row)}
                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#30363d] text-[#8b949e] transition-colors hover:bg-[#21262d] hover:text-[#c9a24a]"
                 aria-label="Editar"
+                title="Editar"
               >
                 <Pencil className="h-4 w-4" />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(row)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#30363d] text-[#8b949e] transition-colors hover:border-[#f8514966] hover:bg-[#21262d] hover:text-[#f85149]"
+                aria-label="Excluir"
+                title="Excluir"
+              >
+                <Trash2 className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -147,6 +162,7 @@ function CadastroListaTableInner<T extends { id: string }>({
   onRowClick,
   onView,
   onEdit,
+  onDelete,
   emptyMessage,
   stickyPrimary = false,
   nameColWidth = DEFAULT_NAME_COL_PX,
@@ -154,7 +170,7 @@ function CadastroListaTableInner<T extends { id: string }>({
   const nameW = nameColWidth;
   const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
   const someSelected = rows.some((r) => selectedIds.has(r.id));
-  const hasActions = Boolean(onView || onEdit);
+  const hasActions = Boolean(onView || onEdit || onDelete);
 
   if (rows.length === 0 && emptyMessage) {
     return (
@@ -246,6 +262,7 @@ function CadastroListaTableInner<T extends { id: string }>({
                 onRowClick={onRowClick}
                 onView={onView}
                 onEdit={onEdit}
+                onDelete={onDelete}
                 onToggleRow={onToggleRow}
               />
             ))}

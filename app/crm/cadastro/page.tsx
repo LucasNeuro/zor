@@ -24,6 +24,7 @@ import { crmQueryKeys } from "@/lib/crm/crm-query-keys";
 import { prependPessoaListaCache } from "@/lib/crm/cadastro-cache-update";
 import type { HubPessoaRow } from "@/lib/crm/hub-pessoas-compat";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeadersWithActor } from "@/lib/internal-api-headers-client";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CrmTelefoneCell } from "@/components/crm/CrmTelefoneCell";
 import { useCrmEmpresasList, useCrmPessoasList } from "@/hooks/useCrmListQueries";
@@ -393,6 +394,55 @@ export default function CadastroPage() {
     });
   }
 
+  async function excluirRegistro(
+    id: string,
+    tipo: "pessoa" | "empresa",
+    label: string
+  ) {
+    const tipoLabel = tipo === "empresa" ? "empresa" : "cadastro";
+    if (!window.confirm(`Excluir ${tipoLabel} «${label}»? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    setErroMassa("");
+    try {
+      const path =
+        tipo === "empresa"
+          ? `/api/crm/empresas/${encodeURIComponent(id)}`
+          : `/api/crm/pessoas/${encodeURIComponent(id)}`;
+      const res = await fetch(path, {
+        method: "DELETE",
+        credentials: "include",
+        headers: await crmApiHeadersWithActor(actor),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; codigo?: string };
+      if (!res.ok) {
+        setErroMassa(data.error || "Não foi possível excluir o registo.");
+        return;
+      }
+      setSelecionados((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      if (tipo === "empresa" && empresaId === id) {
+        setEmpresaId(null);
+        setEmpresaMode(null);
+      }
+      if (tipo === "pessoa" && contactoId === id) {
+        setContactoId(null);
+        setContactoMode(null);
+      }
+      const codigo = data.codigo ? ` (${data.codigo})` : "";
+      setSucessoCadastro(`${tipo === "empresa" ? "Empresa" : "Cadastro"} excluído${codigo}.`);
+      if (tipo === "empresa") invalidarEmpresas();
+      else invalidarPessoas();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro de rede ao excluir.";
+      setErroMassa(msg);
+    }
+  }
+
   async function excluirSelecionados() {
     const ids = [...selecionados];
     if (ids.length === 0) return;
@@ -632,6 +682,10 @@ export default function CadastroPage() {
                   setContactoId(p.id);
                   setContactoMode("edit");
                 }}
+                onDelete={(p) => {
+                  const label = p.codigo ? `${p.nome} (${p.codigo})` : String(p.nome);
+                  void excluirRegistro(p.id, "pessoa", label);
+                }}
               />
             )}
           </>
@@ -666,6 +720,10 @@ export default function CadastroPage() {
                 onEdit={(e) => {
                   setEmpresaId(e.id);
                   setEmpresaMode("edit");
+                }}
+                onDelete={(e) => {
+                  const label = e.codigo ? `${e.razao_social} (${e.codigo})` : String(e.razao_social);
+                  void excluirRegistro(e.id, "empresa", label);
                 }}
               />
             )}

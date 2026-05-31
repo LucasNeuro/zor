@@ -10,7 +10,7 @@ import {
   CadastroSideoverPanel,
   CadastroTipoBadge,
 } from "@/components/crm/cadastro/CadastroPremiumSideover";
-import { internalApiHeadersWithActor } from "@/lib/internal-api-headers";
+import { crmApiHeadersWithActor } from "@/lib/internal-api-headers-client";
 import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
 import {
   formatarCnpjMascara,
@@ -124,29 +124,29 @@ export function CadastroContactoSideover({
   const [secEndereco, setSecEndereco] = useState(true);
   const [secCrm, setSecCrm] = useState(true);
 
-  const headers = () => internalApiHeadersWithActor(actor);
-
   const carregar = useCallback(async () => {
     if (!pessoaId) return;
     setLoading(true);
     setErro("");
     try {
       const res = await fetch(`/api/crm/pessoas/${encodeURIComponent(pessoaId)}`, {
-        headers: headers(),
+        credentials: "include",
+        headers: await crmApiHeadersWithActor(actor),
       });
       const data = (await res.json().catch(() => ({}))) as { data?: PessoaDetalhe; error?: string };
       if (!res.ok) {
-        setErro(data.error || "Não foi possível carregar o contato.");
+        setErro(data.error || `Não foi possível carregar o contato (${res.status}).`);
         return;
       }
       setPessoa(data.data ?? null);
       setForm(data.data ?? {});
-    } catch {
-      setErro("Erro de rede.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro de rede.";
+      setErro(msg);
     } finally {
       setLoading(false);
     }
-  }, [pessoaId, actor.id, actor.email]);
+  }, [pessoaId, actor.id, actor.email, actor.name]);
 
   useEffect(() => {
     if (!open) {
@@ -166,7 +166,11 @@ export function CadastroContactoSideover({
     try {
       const res = await fetch(`/api/crm/pessoas/${encodeURIComponent(pessoaId)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", ...headers() },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await crmApiHeadersWithActor(actor)),
+        },
         body: JSON.stringify({
           nome: form.nome,
           telefone: form.telefone,
@@ -191,8 +195,9 @@ export function CadastroContactoSideover({
       onSaved();
       onBackToView();
       void carregar();
-    } catch {
-      setErro("Erro de rede.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro de rede.";
+      setErro(msg);
     } finally {
       setSalvando(false);
     }
@@ -205,7 +210,8 @@ export function CadastroContactoSideover({
     try {
       const res = await fetch(`/api/crm/pessoas/${encodeURIComponent(pessoaId)}`, {
         method: "DELETE",
-        headers: headers(),
+        credentials: "include",
+        headers: await crmApiHeadersWithActor(actor),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -214,8 +220,9 @@ export function CadastroContactoSideover({
       }
       onDeleted();
       onClose();
-    } catch {
-      setErro("Erro de rede.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro de rede.";
+      setErro(msg);
     } finally {
       setExcluindo(false);
       setConfirmExcluir(false);
@@ -377,7 +384,24 @@ export function CadastroContactoSideover({
           }}
           role="alert"
         >
-          {erro}
+          <p style={{ margin: 0 }}>{erro}</p>
+          <button
+            type="button"
+            onClick={() => void carregar()}
+            style={{
+              marginTop: 8,
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid #7f1d1d",
+              background: "transparent",
+              color: "#fca5a5",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
 
@@ -492,7 +516,7 @@ export function CadastroContactoSideover({
         </div>
       )}
 
-      {mode === "edit" && !loading && (
+      {mode === "edit" && !loading && pessoa && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
             <label style={LABEL}>Nome</label>

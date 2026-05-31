@@ -10,7 +10,7 @@ import {
   CadastroSideoverPanel,
   CadastroTipoBadge,
 } from "@/components/crm/cadastro/CadastroPremiumSideover";
-import { internalApiHeadersWithActor } from "@/lib/internal-api-headers";
+import { crmApiHeadersWithActor } from "@/lib/internal-api-headers-client";
 import { formatarCnpjMascara, normalizarDocumento } from "@/lib/crm/documento-brasil";
 import { EMPRESA_SEGMENTOS, labelEmpresaSegmento } from "@/lib/crm/empresa-cadastro";
 import { MERCADOS_PREFIXO_OPTIONS, labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
@@ -111,29 +111,29 @@ export function CadastroEmpresaSideover({
   const [secContacto, setSecContacto] = useState(true);
   const [secEndereco, setSecEndereco] = useState(true);
 
-  const headers = () => internalApiHeadersWithActor(actor);
-
   const carregar = useCallback(async () => {
     if (!empresaId) return;
     setLoading(true);
     setErro("");
     try {
       const res = await fetch(`/api/crm/empresas/${encodeURIComponent(empresaId)}`, {
-        headers: headers(),
+        credentials: "include",
+        headers: await crmApiHeadersWithActor(actor),
       });
       const data = (await res.json().catch(() => ({}))) as { data?: EmpresaDetalhe; error?: string };
       if (!res.ok) {
-        setErro(data.error || "Não foi possível carregar a empresa.");
+        setErro(data.error || `Não foi possível carregar a empresa (${res.status}).`);
         return;
       }
       setEmpresa(data.data ?? null);
       setForm(data.data ?? {});
-    } catch {
-      setErro("Erro de rede.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro de rede.";
+      setErro(msg);
     } finally {
       setLoading(false);
     }
-  }, [empresaId, actor.id, actor.email]);
+  }, [empresaId, actor.id, actor.email, actor.name]);
 
   useEffect(() => {
     if (!open) {
@@ -153,7 +153,11 @@ export function CadastroEmpresaSideover({
     try {
       const res = await fetch(`/api/crm/empresas/${encodeURIComponent(empresaId)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", ...headers() },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await crmApiHeadersWithActor(actor)),
+        },
         body: JSON.stringify({
           razao_social: form.razao_social,
           nome_fantasia: form.nome_fantasia,
@@ -179,8 +183,9 @@ export function CadastroEmpresaSideover({
       onSaved();
       onBackToView();
       void carregar();
-    } catch {
-      setErro("Erro de rede.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro de rede.";
+      setErro(msg);
     } finally {
       setSalvando(false);
     }
@@ -193,7 +198,8 @@ export function CadastroEmpresaSideover({
     try {
       const res = await fetch(`/api/crm/empresas/${encodeURIComponent(empresaId)}`, {
         method: "DELETE",
-        headers: headers(),
+        credentials: "include",
+        headers: await crmApiHeadersWithActor(actor),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -202,8 +208,9 @@ export function CadastroEmpresaSideover({
       }
       onDeleted();
       onClose();
-    } catch {
-      setErro("Erro de rede.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro de rede.";
+      setErro(msg);
     } finally {
       setExcluindo(false);
       setConfirmExcluir(false);
@@ -361,7 +368,24 @@ export function CadastroEmpresaSideover({
           }}
           role="alert"
         >
-          {erro}
+          <p style={{ margin: 0 }}>{erro}</p>
+          <button
+            type="button"
+            onClick={() => void carregar()}
+            style={{
+              marginTop: 8,
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid #7f1d1d",
+              background: "transparent",
+              color: "#fca5a5",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
 
@@ -459,7 +483,7 @@ export function CadastroEmpresaSideover({
         </div>
       )}
 
-      {mode === "edit" && !loading && (
+      {mode === "edit" && !loading && empresa && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
             <label style={LABEL}>Razão social</label>

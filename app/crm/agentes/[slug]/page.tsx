@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { AgenteBriefingDrawer } from "@/components/crm/AgenteBriefingChatPanel";
+import { AgentePlaybookCalibracaoDrawer } from "@/components/crm/AgentePlaybookCalibracaoDrawer";
 import { AgenteFerramentasIaBlock, type CatalogoFerramentaCustomLite } from "@/components/crm/AgenteFerramentasIaBlock";
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
 import { INFERENCIA_IA_CRM_COPIA } from "@/lib/ia/hub-model-defaults";
@@ -189,6 +190,7 @@ export default function AgentePage() {
   const [toast, setToast] = useState("");
   const [erro, setErro] = useState("");
   const [briefingOpen, setBriefingOpen] = useState(false);
+  const [calibracaoOpen, setCalibracaoOpen] = useState(false);
   const [showLimparMemorias, setShowLimparMemorias] = useState(false);
   const [limpandoMemorias, setLimpandoMemorias] = useState(false);
   const [contagemMemorias, setContagemMemorias] = useState<{
@@ -824,6 +826,22 @@ export default function AgentePage() {
           </button>
           <button
             type="button"
+            onClick={() => setCalibracaoOpen(true)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              background: "#1e3a5f18",
+              border: "1px solid #388bfd66",
+              color: "#79c0ff",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Playbook — Calibração
+          </button>
+          <button
+            type="button"
             onClick={() => void abrirModalLimparMemorias()}
             title="Apaga memórias operacionais do agente (testes)"
             style={{
@@ -1208,6 +1226,12 @@ export default function AgentePage() {
       <AgenteBriefingDrawer
         open={briefingOpen}
         onClose={() => setBriefingOpen(false)}
+        agenteSlug={slug}
+        agenteNome={agente.nome}
+      />
+      <AgentePlaybookCalibracaoDrawer
+        open={calibracaoOpen}
+        onClose={() => setCalibracaoOpen(false)}
         agenteSlug={slug}
         agenteNome={agente.nome}
       />

@@ -21,6 +21,14 @@ import type { PlaybookFlowDefinition, PlaybookFlowStep } from "@/lib/playbook/fl
 import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
+import {
+  AGENTE_IDENTIDADE_PLAYBOOK_SELECT,
+  MSG_PLAYBOOK_FLUXO_INDISPONIVEL,
+  MSG_PLAYBOOK_POS_CONCLUSAO,
+  resolverRoteamentoPlaybookAgente,
+  type HubAgenteIdentidadePlaybookRow,
+} from "@/lib/hub/agente-playbook-routing";
+import { temReferenciaPlaybookPublicado } from "@/lib/hub/agente-instrucao-modo";
 
 export type PlaybookStep =
   | "aguardar_nome"
@@ -72,8 +80,8 @@ function isHardcodedStep(step: string): step is PlaybookStep {
 }
 
 export type PlaybookProcessResult =
-  | { handled: false }
-  | { handled: true; skipIa: boolean; step?: PlaybookStep };
+  | { handled: false; bloquearIa?: boolean; motivo?: string }
+  | { handled: true; skipIa: boolean; step?: PlaybookStep; bloquearIa?: boolean; motivo?: string };
 
 type PlaybookAnswers = Record<string, string>;
 
@@ -370,6 +378,7 @@ async function persistirEstado(
     answers?: PlaybookAnswers;
     active?: boolean;
     complete?: boolean;
+    resetAnswers?: boolean;
   }
 ): Promise<Record<string, unknown>> {
   const meta = { ...metaBase };
@@ -377,12 +386,16 @@ async function persistirEstado(
     if (patch.step) meta.wa_playbook_step = patch.step;
     else delete meta.wa_playbook_step;
   }
-  if (patch.answers) {
-    const prev =
-      meta.wa_playbook_answers && typeof meta.wa_playbook_answers === "object"
-        ? { ...(meta.wa_playbook_answers as Record<string, string>) }
-        : {};
-    meta.wa_playbook_answers = { ...prev, ...patch.answers };
+  if (patch.answers !== undefined) {
+    if (patch.resetAnswers) {
+      meta.wa_playbook_answers = { ...patch.answers };
+    } else {
+      const prev =
+        meta.wa_playbook_answers && typeof meta.wa_playbook_answers === "object"
+          ? { ...(meta.wa_playbook_answers as Record<string, string>) }
+          : {};
+      meta.wa_playbook_answers = { ...prev, ...patch.answers };
+    }
   }
   if (patch.active !== undefined) meta.wa_playbook_active = patch.active;
   if (patch.complete !== undefined) {
@@ -693,16 +706,12 @@ async function enviarTriagemInicialLista(
   ctx: FlowCtx,
   textoIntro?: string
 ): Promise<{ ok: boolean; erro?: string }> {
-  const nome = (ctx.answers.nome || ctx.leadNome || "").trim();
+  const nome = (ctx.answers.nome || "").trim();
   const intro =
     textoIntro?.trim() ||
     (nome
       ? `Obrigado, ${nome}! Para te orientar melhor, escolha uma opção abaixo:`
       : "Para te orientar melhor, escolha uma opção abaixo:");
-  if (nome && !ctx.answers.nome) {
-    await atualizarLeadPlaybook(ctx.supabase, ctx.leadId, ctx.agenteSlug, { nome });
-    ctx.answers.nome = nome;
-  }
   const menu = await enviarLista(ctx.telefone, ctx.instanceToken, intro, [...CHOICES_TRIAGEM_INICIAL]);
   if (menu.ok) {
     await marcarMenuTriagemEnviado(ctx.supabase, ctx.leadId);
@@ -892,10 +901,6 @@ async function processarPasso(
   switch (step) {
     case "aguardar_nome": {
       if (mensagemPedeMenuOuOpcoes(texto)) {
-        const nomeCrm = (ctx.leadNome || ctx.answers.nome || "").trim();
-        if (nomeCrm) {
-          return aposNomeEnviarTriagem(ctx, nomeCrm);
-        }
         return reenviarMenuTriagemInicial(ctx);
       }
       if (mensagemPareceNome(texto)) {
@@ -912,8 +917,6 @@ async function processarPasso(
     case "triagem_inicial": {
       if (!choiceId) {
         if (mensagemEhSaudacaoSimples(texto)) {
-          const nomeCrm = (ctx.leadNome || ctx.answers.nome || "").trim();
-          if (nomeCrm) return aposNomeEnviarTriagem(ctx, nomeCrm);
           return iniciarSaudacao(ctx);
         }
         if (mensagemPedeMenuOuOpcoes(texto)) {
@@ -1200,10 +1203,6 @@ async function processarPlaybookMariaInboundHardcoded(params: {
   if (complete && !active) {
     const saudacao = params.isNovo || mensagemEhSaudacaoSimples(params.mensagem);
     if (saudacao) {
-      const nomeCrm = (params.leadNome || answers.nome || "").trim();
-      if (nomeCrm) {
-        return aposNomeEnviarTriagem(ctx, nomeCrm);
-      }
       return iniciarSaudacao(ctx);
     }
     return { handled: false };
@@ -1211,10 +1210,6 @@ async function processarPlaybookMariaInboundHardcoded(params: {
 
   const deveIniciar = params.isNovo || mensagemEhSaudacaoSimples(params.mensagem);
   if (deveIniciar) {
-    const nomeCrm = (params.leadNome || answers.nome || "").trim();
-    if (nomeCrm && mensagemEhSaudacaoSimples(params.mensagem)) {
-      return aposNomeEnviarTriagem(ctx, nomeCrm);
-    }
     return iniciarSaudacao(ctx);
   }
 
@@ -1225,6 +1220,55 @@ type DynamicPlaybookRuntime = {
   definition: FlowEngineDefinition;
   source: "published_dynamic_flow";
 };
+
+async function carregarIdentidadeAgentePlaybook(
+  supabase: SupabaseClient,
+  agenteSlug: string
+): Promise<HubAgenteIdentidadePlaybookRow | null> {
+  const slug = agenteSlug.trim();
+  if (!slug) return null;
+  const { data, error } = await supabase
+    .from("hub_agente_identidade")
+    .select(AGENTE_IDENTIDADE_PLAYBOOK_SELECT)
+    .eq("agente_slug", slug)
+    .maybeSingle();
+  if (error) {
+    console.warn("[playbook-flow] falha ao carregar identidade do agente", {
+      agente: slug,
+      erro: error.message,
+    });
+    return null;
+  }
+  return (data as HubAgenteIdentidadePlaybookRow | null) ?? null;
+}
+
+async function responderPosConclusaoPlaybook(params: {
+  telefone: string;
+  instanceToken: string;
+}): Promise<PlaybookProcessResult> {
+  await enviarTexto(params.telefone, MSG_PLAYBOOK_POS_CONCLUSAO, params.instanceToken);
+  return {
+    handled: true,
+    skipIa: true,
+    step: "concluido",
+    bloquearIa: true,
+    motivo: "playbook_pos_conclusao",
+  };
+}
+
+async function responderFluxoPlaybookIndisponivel(params: {
+  telefone: string;
+  instanceToken: string;
+  bloquearIa: boolean;
+}): Promise<PlaybookProcessResult> {
+  await enviarTexto(params.telefone, MSG_PLAYBOOK_FLUXO_INDISPONIVEL, params.instanceToken);
+  return {
+    handled: true,
+    skipIa: true,
+    bloquearIa: params.bloquearIa,
+    motivo: "playbook_fluxo_indisponivel",
+  };
+}
 
 async function carregarDynamicPlaybookRuntime(
   supabase: SupabaseClient,
@@ -1280,27 +1324,65 @@ async function processarPlaybookMariaInboundDynamic(params: {
   instanceToken: string;
   leadNome?: string | null;
   metadata: unknown;
+  bloquearIaPosConclusao?: boolean;
 }): Promise<PlaybookProcessResult> {
   const state = lerEstadoPlaybook(params.metadata);
   let meta = lerMetadata(params.metadata);
-  const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
-  if (!runtime) return { handled: false };
 
-  const persistState = async (patch: { step?: string | null; answers?: Record<string, string>; active?: boolean; complete?: boolean }) => {
+  if (state.complete && !mensagemEhSaudacaoSimples(params.mensagem)) {
+    if (params.bloquearIaPosConclusao) {
+      return responderPosConclusaoPlaybook({
+        telefone: params.telefone,
+        instanceToken: params.instanceToken,
+      });
+    }
+    return { handled: false, motivo: "playbook_concluido_permitir_ia" };
+  }
+
+  const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
+  if (!runtime) return { handled: false, motivo: "runtime_indisponivel" };
+
+  let flowStep = state.step && !isHardcodedStep(state.step) ? state.step : null;
+  let flowAnswers =
+    flowStep || state.active ? { ...state.answers } : state.complete ? { ...state.answers } : {};
+
+  if (state.complete && mensagemEhSaudacaoSimples(params.mensagem)) {
+    flowStep = null;
+    flowAnswers = {};
+  }
+
+  const persistState = async (patch: {
+    step?: string | null;
+    answers?: Record<string, string>;
+    active?: boolean;
+    complete?: boolean;
+    resetAnswers?: boolean;
+  }) => {
     const persisted = await persistirEstado(params.supabase, params.leadId, meta, {
       step: patch.step ? (patch.step as PlaybookStep) : patch.step === null ? null : undefined,
       answers: patch.answers,
       active: patch.active,
       complete: patch.complete,
+      resetAnswers: patch.resetAnswers,
     });
     meta = persisted;
   };
 
+  if (state.complete && mensagemEhSaudacaoSimples(params.mensagem)) {
+    await persistState({
+      step: null,
+      answers: {},
+      active: true,
+      complete: false,
+      resetAnswers: true,
+    });
+  }
+
   const result = await executeFlowEngine(
     runtime.definition,
     {
-      step: state.step && !isHardcodedStep(state.step) ? state.step : null,
-      answers: state.answers,
+      step: flowStep,
+      answers: flowAnswers,
       mensagem: params.mensagem,
       menuChoiceId: params.menuChoiceId,
       tipoMidia: params.tipoMidia,
@@ -1410,6 +1492,7 @@ async function processarPlaybookMariaInboundDynamic(params: {
     handled: true,
     skipIa: result.skipIa,
     step: mapDynamicStepToContract(result.step),
+    motivo: "dynamic_flow",
   };
 }
 
@@ -1427,10 +1510,26 @@ export async function processarPlaybookMariaInbound(params: {
   metadata: unknown;
 }): Promise<PlaybookProcessResult> {
   if (!params.instanceToken.trim()) {
-    return { handled: false };
+    return { handled: false, motivo: "sem_instance_token" };
   }
 
+  const ident =
+    (await carregarIdentidadeAgentePlaybook(params.supabase, params.agenteSlug)) ?? {
+      cargo: null,
+      area: null,
+      instrucao_modo: null,
+      playbook_object_path: null,
+      playbook_public_url: null,
+    };
+  const state = lerEstadoPlaybook(params.metadata);
+  const routing = resolverRoteamentoPlaybookAgente({
+    ident,
+    playbookActive: state.active,
+    playbookComplete: state.complete,
+  });
   const agenteLegadoMari = agenteUsaPlaybookMaria(params.agenteSlug);
+  const temPlaybookPublicado =
+    routing.temPlaybookPublicado || temReferenciaPlaybookPublicado(ident);
 
   if (dynamicFlowEnabled()) {
     try {
@@ -1445,19 +1544,24 @@ export async function processarPlaybookMariaInbound(params: {
         instanceToken: params.instanceToken,
         leadNome: params.leadNome,
         metadata: params.metadata,
+        bloquearIaPosConclusao: routing.bloquearIa,
       });
       if (dynamicOut.handled) {
         console.info("[playbook-flow] dynamic flow handled", {
           agente: params.agenteSlug,
           lead_id: params.leadId,
           step: dynamicOut.step ?? null,
+          motivo: dynamicOut.motivo ?? null,
         });
-        return dynamicOut;
+        return {
+          ...dynamicOut,
+          bloquearIa: routing.bloquearIa || dynamicOut.bloquearIa,
+        };
       }
       console.info("[playbook-flow] dynamic flow unavailable, fallback evaluation", {
         agente: params.agenteSlug,
         lead_id: params.leadId,
-        motivo: "definicao_ausente_ou_invalida",
+        motivo: dynamicOut.motivo ?? "definicao_ausente_ou_invalida",
       });
     } catch (err) {
       console.warn("[playbook-flow] dynamic flow failed, fallback evaluation", {
@@ -1474,13 +1578,26 @@ export async function processarPlaybookMariaInbound(params: {
     });
   }
 
+  if (temPlaybookPublicado) {
+    console.warn("[playbook-flow] published playbook without executable flow", {
+      agente: params.agenteSlug,
+      lead_id: params.leadId,
+      motivo: "fluxo_json_ausente_ou_invalido",
+    });
+    return responderFluxoPlaybookIndisponivel({
+      telefone: params.telefone,
+      instanceToken: params.instanceToken,
+      bloquearIa: routing.bloquearIa,
+    });
+  }
+
   if (!agenteLegadoMari) {
     console.info("[playbook-flow] no legacy fallback for agent", {
       agente: params.agenteSlug,
       lead_id: params.leadId,
       motivo: "fallback_hardcoded_somente_mari",
     });
-    return { handled: false };
+    return { handled: false, motivo: "sem_playbook_sem_legado" };
   }
 
   console.info("[playbook-flow] using legacy Mari hardcoded fallback", {

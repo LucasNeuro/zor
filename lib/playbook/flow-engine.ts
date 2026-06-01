@@ -1,3 +1,5 @@
+import { mensagemEhSaudacaoSimples } from "@/lib/whatsapp/menu-triagem-uazapi";
+
 export type FlowEngineResult =
   | { handled: false }
   | { handled: true; skipIa: boolean; step?: string };
@@ -118,8 +120,19 @@ export type FlowEngineAdapter = {
 function mensagemPareceNome(mensagem: string): boolean {
   const t = mensagem.trim();
   if (t.length < 2 || t.length > 60) return false;
+  if (mensagemEhSaudacaoSimples(t)) return false;
   if (/^\d+$/.test(t)) return false;
   if (t.includes("@")) return false;
+  return true;
+}
+
+function askTextAceitaResposta(step: FlowAskTextStep, texto: string, tipoMidia: string): boolean {
+  const minLength = Number.isFinite(step.min_length) ? Math.max(1, Number(step.min_length)) : 1;
+  const mediaOk = step.allow_media === true && tipoMidia !== "texto";
+  const textOk = texto.length >= minLength;
+  const validEmail = step.validator === "email" ? mensagemPareceEmail(texto) : true;
+  if (!((mediaOk || textOk) && validEmail)) return false;
+  if (step.answer_key === "nome" && !mediaOk && !mensagemPareceNome(texto)) return false;
   return true;
 }
 
@@ -144,6 +157,7 @@ export async function executeFlowEngine(
   for (let transitions = 0; transitions < MAX_AUTO_TRANSITIONS; transitions += 1) {
     const step = definition.steps[currentStepId];
     if (!step) return { handled: false };
+    const waitingAtCurrentStep = input.step === currentStepId;
 
     switch (step.type) {
       case "send_text": {
@@ -164,7 +178,7 @@ export async function executeFlowEngine(
       }
 
       case "await_name": {
-        if (mensagemPareceNome(texto) && !choiceId) {
+        if (waitingAtCurrentStep && mensagemPareceNome(texto) && !choiceId) {
           const key = step.answer_key || "nome";
           answers[key] = texto;
           if (adapter.onNameCaptured) {
@@ -190,7 +204,8 @@ export async function executeFlowEngine(
       }
 
       case "menu": {
-        const selected = choiceId ? step.choices.find((c) => c.id === choiceId) : null;
+        const selected =
+          waitingAtCurrentStep && choiceId ? step.choices.find((c) => c.id === choiceId) : null;
         if (selected) {
           const key = step.answer_key;
           if (key) answers[key] = selected.id;
@@ -237,11 +252,12 @@ export async function executeFlowEngine(
       }
 
       case "ask_text": {
-        const minLength = Number.isFinite(step.min_length) ? Math.max(1, Number(step.min_length)) : 1;
-        const mediaOk = step.allow_media === true && input.tipoMidia !== "texto";
-        const textOk = texto.length >= minLength;
-        const validEmail = step.validator === "email" ? mensagemPareceEmail(texto) : true;
-        if ((mediaOk || textOk) && validEmail && !choiceId) {
+        if (
+          waitingAtCurrentStep &&
+          askTextAceitaResposta(step, texto, input.tipoMidia) &&
+          !choiceId
+        ) {
+          const mediaOk = step.allow_media === true && input.tipoMidia !== "texto";
           answers[step.answer_key] = mediaOk ? input.tipoMidia : texto;
           await adapter.persistState({
             step: step.next_step,

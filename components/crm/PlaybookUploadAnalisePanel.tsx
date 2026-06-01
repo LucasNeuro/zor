@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import { Loader2, Download } from "lucide-react";
 import {
   PLAYBOOK_EXEMPLO_ARQUIVO,
+  PLAYBOOK_EXEMPLO_LEGADO_MARI_MD_URL,
   PLAYBOOK_EXEMPLO_MD_URL,
 } from "@/lib/playbook/playbook-exemplo";
 
@@ -74,15 +75,15 @@ export function PlaybookUploadAnalisePanel({
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {modoPreCriacao ? (
         <p style={{ color: "#8b949e", fontSize: 12, margin: 0, lineHeight: 1.55 }}>
-          Carregue o playbook aqui, peça à IA Mistral uma <strong style={{ color: "#e6edf3" }}>nota de qualidade</strong>{" "}
-          e só então avance. O arquivo será publicado automaticamente após criar o agente.
+          Carregue o playbook aqui, solicite uma <strong style={{ color: "#e6edf3" }}>nota de qualidade</strong> e so
+          entao avance. O arquivo sera publicado automaticamente apos criar o agente.
         </p>
       ) : null}
 
       <div
         role="button"
         tabIndex={0}
-        aria-label="Área de upload do playbook. Arraste e solte arquivo .md ou .txt."
+        aria-label="Ãrea de upload do playbook. Arraste e solte arquivo .md ou .txt."
         onDragEnter={(e) => {
           e.preventDefault();
           if (!enviando) onHoverChange(true);
@@ -144,7 +145,7 @@ export function PlaybookUploadAnalisePanel({
           </span>
         </div>
         <p style={{ color: "#8b949e", fontSize: 12, margin: "8px 0 0", lineHeight: 1.55 }}>
-          Arraste e solte o arquivo nesta área ou use o botão para selecionar. Tamanho máximo: 2 MB.
+          Arraste e solte o arquivo nesta Ã¡rea ou use o botÃ£o para selecionar. Tamanho mÃ¡ximo: 2 MB.
         </p>
         <p style={{ color: "#8b949e", fontSize: 12, margin: "10px 0 0", lineHeight: 1.55 }}>
           Sem modelo?{" "}
@@ -162,7 +163,16 @@ export function PlaybookUploadAnalisePanel({
             }}
           >
             <Download size={14} aria-hidden />
-            Baixar exemplo de playbook (.md)
+            Baixar template padrao v1 (.md)
+          </a>
+          {" Â· "}
+          <a
+            href={PLAYBOOK_EXEMPLO_LEGADO_MARI_MD_URL}
+            download="exemplo-playbook-mari-obra10-plus.md"
+            onClick={(e) => e.stopPropagation()}
+            style={{ color: "#8b949e", textDecoration: "none" }}
+          >
+            Exemplo Mari (legado)
           </a>
         </p>
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
@@ -252,7 +262,7 @@ export function PlaybookUploadAnalisePanel({
             padding: 12,
           }}
         >
-          <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>PRÉ-VISUALIZAÇÃO</p>
+          <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>PRÃ‰-VISUALIZAÃ‡ÃƒO</p>
           <pre
             style={{
               margin: 0,
@@ -289,11 +299,11 @@ export function PlaybookUploadAnalisePanel({
             opacity: analiseLoading || enviando || !conteudoCarregado ? 0.55 : 1,
           }}
         >
-          {analiseLoading ? "A analisar com IA Mistral..." : "Analisar playbook com IA Mistral"}
+          {analiseLoading ? "A analisar playbook..." : "Analisar playbook"}
         </button>
         <p style={{ color: "#8b949e", fontSize: 11, margin: "8px 0 0", lineHeight: 1.5 }}>
-          A IA lê o conteúdo, atribui uma nota de 0 a 10 e aponta pontos fortes, lacunas, riscos e sugestões.
-          {modoPreCriacao ? " É necessário analisar antes de avançar." : ""}
+          A IA lÃª o conteÃºdo, atribui uma nota de 0 a 10 e aponta pontos fortes, lacunas, riscos e sugestÃµes.
+          {modoPreCriacao ? " Ã‰ necessÃ¡rio analisar antes de avanÃ§ar." : ""}
         </p>
         {analiseLoading ? (
           <div
@@ -325,7 +335,7 @@ export function PlaybookUploadAnalisePanel({
                 }}
               >
                 <Loader2 size={14} className="animate-spin" aria-hidden />
-                A analisar playbook com IA Mistral…
+                A analisar playbook...
               </span>
               <span
                 style={{
@@ -429,7 +439,7 @@ export function PlaybookUploadAnalisePanel({
             </p>
             {analiseResultado.origem === "fallback" ? (
               <p style={{ margin: "8px 0 0", color: "#d29922", fontSize: 11 }}>
-                Análise local — configure MISTRAL_API_KEY para nota automática completa.
+                AnÃ¡lise local â€” configure MISTRAL_API_KEY para nota automÃ¡tica completa.
               </p>
             ) : null}
           </div>
@@ -470,7 +480,7 @@ export function PlaybookUploadAnalisePanel({
               ) : null}
               {analiseResultado.recomendacoes.length > 0 ? (
                 <div>
-                  <p style={{ margin: 0, color: "#58a6ff", fontSize: 11, fontWeight: 700 }}>SUGESTÕES</p>
+                  <p style={{ margin: 0, color: "#58a6ff", fontSize: 11, fontWeight: 700 }}>SUGESTÃ•ES</p>
                   <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#aebccf", fontSize: 12, lineHeight: 1.5 }}>
                     {analiseResultado.recomendacoes.map((item, idx) => (
                       <li key={idx}>{item}</li>
@@ -485,3 +495,4 @@ export function PlaybookUploadAnalisePanel({
     </div>
   );
 }
+

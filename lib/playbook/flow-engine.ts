@@ -1,0 +1,315 @@
+export type FlowEngineResult =
+  | { handled: false }
+  | { handled: true; skipIa: boolean; step?: string };
+
+export type FlowEngineStepType =
+  | "await_name"
+  | "send_text"
+  | "menu"
+  | "ask_text"
+  | "branch_imob_sub"
+  | "complete";
+
+type BaseStep = {
+  id: string;
+  type: FlowEngineStepType;
+};
+
+export type FlowAwaitNameStep = BaseStep & {
+  type: "await_name";
+  prompt: string;
+  invalid_prompt?: string;
+  answer_key?: string;
+  next_step: string;
+};
+
+export type FlowSendTextStep = BaseStep & {
+  type: "send_text";
+  text: string;
+  next_step?: string;
+};
+
+export type FlowMenuChoice = {
+  id: string;
+  label: string;
+  next_step?: string;
+};
+
+export type FlowMenuStep = BaseStep & {
+  type: "menu";
+  text: string;
+  menu_type?: "list" | "button";
+  list_button?: string;
+  choices: FlowMenuChoice[];
+  answer_key?: string;
+  invalid_prompt?: string;
+  next_step?: string;
+};
+
+export type FlowAskTextValidator = "text" | "email";
+
+export type FlowAskTextStep = BaseStep & {
+  type: "ask_text";
+  prompt: string;
+  answer_key: string;
+  next_step: string;
+  min_length?: number;
+  allow_media?: boolean;
+  validator?: FlowAskTextValidator;
+  invalid_prompt?: string;
+};
+
+export type FlowBranchImobSubStep = BaseStep & {
+  type: "branch_imob_sub";
+  source_key?: string;
+  answer_key?: string;
+  routes: Record<string, string>;
+  default_step?: string;
+  invalid_prompt?: string;
+};
+
+export type FlowCompleteStep = BaseStep & {
+  type: "complete";
+  text?: string;
+};
+
+export type FlowEngineStep =
+  | FlowAwaitNameStep
+  | FlowSendTextStep
+  | FlowMenuStep
+  | FlowAskTextStep
+  | FlowBranchImobSubStep
+  | FlowCompleteStep;
+
+export type FlowEngineDefinition = {
+  start_step: string;
+  steps: Record<string, FlowEngineStep>;
+};
+
+export type FlowEngineInput = {
+  step: string | null;
+  answers: Record<string, string>;
+  mensagem: string;
+  menuChoiceId?: string | null;
+  tipoMidia: string;
+};
+
+export type FlowEnginePersistPatch = {
+  step?: string | null;
+  answers?: Record<string, string>;
+  active?: boolean;
+  complete?: boolean;
+};
+
+export type FlowEngineAdapter = {
+  sendText: (text: string) => Promise<void>;
+  sendMenu: (args: {
+    text: string;
+    menuType: "list" | "button";
+    listButton?: string;
+    choices: string[];
+  }) => Promise<{ ok: boolean; erro?: string }>;
+  resolveChoiceId: (mensagem: string, menuChoiceId?: string | null) => string | null;
+  persistState: (patch: FlowEnginePersistPatch) => Promise<void>;
+  onNameCaptured?: (name: string) => Promise<void>;
+  onStepComplete?: (stepId: string, answers: Record<string, string>) => Promise<void>;
+};
+
+function mensagemPareceNome(mensagem: string): boolean {
+  const t = mensagem.trim();
+  if (t.length < 2 || t.length > 60) return false;
+  if (/^\d+$/.test(t)) return false;
+  if (t.includes("@")) return false;
+  return true;
+}
+
+function mensagemPareceEmail(mensagem: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mensagem.trim());
+}
+
+const MAX_AUTO_TRANSITIONS = 12;
+
+export async function executeFlowEngine(
+  definition: FlowEngineDefinition,
+  input: FlowEngineInput,
+  adapter: FlowEngineAdapter
+): Promise<FlowEngineResult> {
+  let currentStepId = input.step || definition.start_step;
+  if (!currentStepId) return { handled: false };
+
+  const answers = { ...input.answers };
+  const texto = input.mensagem.trim();
+  const choiceId = adapter.resolveChoiceId(input.mensagem, input.menuChoiceId);
+
+  for (let transitions = 0; transitions < MAX_AUTO_TRANSITIONS; transitions += 1) {
+    const step = definition.steps[currentStepId];
+    if (!step) return { handled: false };
+
+    switch (step.type) {
+      case "send_text": {
+        if (step.text.trim()) {
+          await adapter.sendText(step.text.trim());
+        }
+        if (!step.next_step) {
+          await adapter.persistState({
+            step: currentStepId,
+            answers,
+            active: true,
+            complete: false,
+          });
+          return { handled: true, skipIa: true, step: currentStepId };
+        }
+        currentStepId = step.next_step;
+        continue;
+      }
+
+      case "await_name": {
+        if (mensagemPareceNome(texto) && !choiceId) {
+          const key = step.answer_key || "nome";
+          answers[key] = texto;
+          if (adapter.onNameCaptured) {
+            await adapter.onNameCaptured(texto);
+          }
+          await adapter.persistState({
+            step: step.next_step,
+            answers,
+            active: true,
+            complete: false,
+          });
+          currentStepId = step.next_step;
+          continue;
+        }
+        await adapter.sendText(step.invalid_prompt || step.prompt);
+        await adapter.persistState({
+          step: currentStepId,
+          answers,
+          active: true,
+          complete: false,
+        });
+        return { handled: true, skipIa: true, step: currentStepId };
+      }
+
+      case "menu": {
+        const selected = choiceId ? step.choices.find((c) => c.id === choiceId) : null;
+        if (selected) {
+          const key = step.answer_key;
+          if (key) answers[key] = selected.id;
+          const nextStep = selected.next_step || step.next_step;
+          if (!nextStep) {
+            await adapter.persistState({
+              step: currentStepId,
+              answers,
+              active: true,
+              complete: false,
+            });
+            return { handled: true, skipIa: true, step: currentStepId };
+          }
+          await adapter.persistState({
+            step: nextStep,
+            answers,
+            active: true,
+            complete: false,
+          });
+          currentStepId = nextStep;
+          continue;
+        }
+
+        if (choiceId && step.invalid_prompt) {
+          await adapter.sendText(step.invalid_prompt);
+        }
+        const menuChoices = step.choices.map((c) => `${c.label}|${c.id}`);
+        const menu = await adapter.sendMenu({
+          text: step.text,
+          menuType: step.menu_type || "list",
+          listButton: step.list_button,
+          choices: menuChoices,
+        });
+        if (!menu.ok && menu.erro) {
+          await adapter.sendText(step.invalid_prompt || "Não consegui abrir o menu agora. Tente novamente em instantes.");
+        }
+        await adapter.persistState({
+          step: currentStepId,
+          answers,
+          active: true,
+          complete: false,
+        });
+        return { handled: true, skipIa: true, step: currentStepId };
+      }
+
+      case "ask_text": {
+        const minLength = Number.isFinite(step.min_length) ? Math.max(1, Number(step.min_length)) : 1;
+        const mediaOk = step.allow_media === true && input.tipoMidia !== "texto";
+        const textOk = texto.length >= minLength;
+        const validEmail = step.validator === "email" ? mensagemPareceEmail(texto) : true;
+        if ((mediaOk || textOk) && validEmail && !choiceId) {
+          answers[step.answer_key] = mediaOk ? input.tipoMidia : texto;
+          await adapter.persistState({
+            step: step.next_step,
+            answers,
+            active: true,
+            complete: false,
+          });
+          currentStepId = step.next_step;
+          continue;
+        }
+        await adapter.sendText(step.invalid_prompt || step.prompt);
+        await adapter.persistState({
+          step: currentStepId,
+          answers,
+          active: true,
+          complete: false,
+        });
+        return { handled: true, skipIa: true, step: currentStepId };
+      }
+
+      case "branch_imob_sub": {
+        const key = step.source_key || step.answer_key || "imob_sub";
+        const incoming = choiceId || answers[key] || "";
+        if (incoming) answers[key] = incoming;
+        const nextStep = step.routes[incoming] || step.default_step;
+        if (!nextStep) {
+          await adapter.sendText(step.invalid_prompt || "Escolha uma opção do menu para continuarmos.");
+          await adapter.persistState({
+            step: currentStepId,
+            answers,
+            active: true,
+            complete: false,
+          });
+          return { handled: true, skipIa: true, step: currentStepId };
+        }
+        await adapter.persistState({
+          step: nextStep,
+          answers,
+          active: true,
+          complete: false,
+        });
+        currentStepId = nextStep;
+        continue;
+      }
+
+      case "complete": {
+        if (step.text?.trim()) {
+          await adapter.sendText(step.text.trim());
+        }
+        if (adapter.onStepComplete) {
+          await adapter.onStepComplete(currentStepId, answers);
+        }
+        await adapter.persistState({
+          step: "concluido",
+          answers,
+          active: false,
+          complete: true,
+        });
+        return { handled: true, skipIa: true, step: "concluido" };
+      }
+    }
+  }
+
+  await adapter.persistState({
+    step: currentStepId,
+    answers,
+    active: true,
+    complete: false,
+  });
+  return { handled: true, skipIa: true, step: currentStepId };
+}

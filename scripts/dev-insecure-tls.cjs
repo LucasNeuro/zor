@@ -12,7 +12,8 @@ console.warn(
 );
 console.warn(
   `[dev] URL deste projeto (porta ${port}, não 3000): http://localhost:${port}\n` +
-    `     Com servidor a correr: npm run open:dev\n`
+    `     Com servidor a correr: npm run open:dev\n` +
+    `     Cache dev: .next-dev/ (exclua esta pasta do OneDrive se houver erros de chunk)\n`
 );
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 const { spawn } = require("child_process");

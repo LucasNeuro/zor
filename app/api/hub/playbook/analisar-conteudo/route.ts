@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { analyzePlaybookWithMistral } from "@/lib/playbook/mistral-analysis";
+import { analyzePlaybookWithMistral, buildLocalPlaybookAnalysisFallback } from "@/lib/playbook/mistral-analysis";
 import { normalizePlaybookText } from "@/lib/playbook/custom-playbook";
 
 const MAX_CHARS = 40_000;
@@ -30,7 +30,15 @@ export async function POST(request: NextRequest) {
 
   const analysis = await analyzePlaybookWithMistral(markdown);
   if (!analysis.ok) {
-    return NextResponse.json({ error: analysis.error }, { status: analysis.status });
+    return NextResponse.json({
+      sucesso: true,
+      origem: "conteudo_local",
+      filename: typeof body.filename === "string" ? body.filename : null,
+      model: "local-fallback",
+      analise: buildLocalPlaybookAnalysisFallback(markdown),
+      analise_origem: "fallback",
+      aviso: analysis.error,
+    });
   }
 
   return NextResponse.json({
@@ -39,5 +47,6 @@ export async function POST(request: NextRequest) {
     filename: typeof body.filename === "string" ? body.filename : null,
     model: analysis.model,
     analise: analysis.analise,
+    analise_origem: "mistral",
   });
 }

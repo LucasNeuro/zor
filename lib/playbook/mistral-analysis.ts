@@ -142,3 +142,72 @@ export async function analyzePlaybookWithMistral(markdown: string): Promise<Play
 export function _parsePlaybookAnalysisForTests(raw: string): PlaybookAnalysis | null {
   return parsePlaybookAnalysis(raw);
 }
+
+export function buildLocalPlaybookAnalysisFallback(markdown: string): PlaybookAnalysis {
+  const normalized = String(markdown || "").replace(/\r\n/g, "\n").trim();
+  const lines = normalized
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const headings = lines.filter((l) => /^#{1,6}\s+/.test(l)).slice(0, 10);
+  const hasFlowFence = /```(?:json\s+)?obra10_playbook_flow\b/i.test(normalized);
+  const hasSchema = /"obra10_playbook_flow_schema"\s*:\s*1\b/.test(normalized);
+  const hasEntry = /"entry_step_id"\s*:\s*"[a-z0-9_-]+"/i.test(normalized);
+
+  const riscos: string[] = [];
+  const sugestoes: string[] = [];
+  const gaps: string[] = [];
+
+  if (!hasFlowFence) {
+    gaps.push("Bloco `obra10_playbook_flow` não encontrado no markdown.");
+    riscos.push("Sem bloco de fluxo, o WhatsApp pode operar fora do motor dinâmico.");
+    sugestoes.push("Adicionar bloco fenced `json obra10_playbook_flow` no final do playbook.");
+  }
+  if (hasFlowFence && !hasSchema) {
+    gaps.push("Schema v1 ausente (`obra10_playbook_flow_schema: 1`).");
+    riscos.push("Publicação pode ser recusada na validação de fluxo.");
+    sugestoes.push("Incluir `obra10_playbook_flow_schema: 1` no objeto de fluxo.");
+  }
+  if (hasFlowFence && !hasEntry) {
+    gaps.push("Campo `entry_step_id` não identificado.");
+    riscos.push("Motor dinâmico pode não conseguir iniciar o fluxo corretamente.");
+    sugestoes.push("Definir `entry_step_id` com step inicial válido.");
+  }
+
+  if (!sugestoes.length) {
+    sugestoes.push("Revisar consistência de `next`/`on_select` para todos os passos antes de publicar.");
+  }
+  if (!riscos.length) {
+    riscos.push("Análise local sem LLM: validar semanticamente menus e mensagens no teste WhatsApp.");
+  }
+  if (!gaps.length) {
+    gaps.push("Nenhuma lacuna estrutural óbvia identificada no parser local.");
+  }
+
+  const pontosFortes = [
+    headings.length > 0
+      ? `Documento com secções estruturadas (${Math.min(headings.length, 10)} headings detectados).`
+      : "Documento textual presente e legível para revisão.",
+    hasFlowFence
+      ? "Bloco de fluxo dinâmico identificado no conteúdo."
+      : "Conteúdo narrativo disponível para calibragem operacional.",
+    "Template compatível com análise e publicação na interface de playbook.",
+  ];
+
+  const structuralScore =
+    (hasFlowFence ? 4 : 0) + (hasSchema ? 3 : 0) + (hasEntry ? 2 : 0) + (headings.length > 3 ? 1 : 0);
+  const nota = Math.max(4, Math.min(9.5, structuralScore));
+
+  return {
+    resumo_executivo:
+      "Análise local concluída (fallback sem Mistral). Estrutura geral avaliada com foco em compatibilidade do fluxo dinâmico.",
+    nota: Math.round(nota * 10) / 10,
+    nota_comentario:
+      "Pontuação baseada em sinais estruturais (bloco de fluxo, schema, entrypoint e organização textual).",
+    pontos_fortes: pontosFortes,
+    gaps,
+    riscos,
+    sugestoes,
+  };
+}

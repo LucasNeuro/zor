@@ -4,6 +4,8 @@ import {
   loadCurrentPlaybookMarkdown,
   savePlaybookMarkdownForAgent,
 } from "@/lib/playbook/custom-playbook";
+import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
+import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 
 function db() {
   return createClient(
@@ -101,6 +103,26 @@ export async function PUT(
       : typeof body.content === "string"
         ? body.content
         : "";
+
+  const parsed = parsePlaybookFlowFromMarkdown(markdown);
+  const noFlowBlock = !parsed.ok && parsed.reason === "not_found";
+
+  if (!noFlowBlock) {
+    if (!parsed.ok) {
+      return NextResponse.json(
+        { error: "Fluxo playbook inválido.", errors: parsed.errors },
+        { status: 400 }
+      );
+    }
+
+    const validated = validatePlaybookFlowDefinition(parsed.definition);
+    if (!validated.ok) {
+      return NextResponse.json(
+        { error: "Fluxo playbook inválido.", errors: validated.errors },
+        { status: 400 }
+      );
+    }
+  }
 
   const result = await savePlaybookMarkdownForAgent(supabase, slug, markdown);
   if (!result.ok) {

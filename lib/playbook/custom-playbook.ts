@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PLAYBOOK_BUCKET } from "./persist";
+import { cleanupPlaybookFolderForAgent, PLAYBOOK_BUCKET, playbookObjectPath } from "./persist";
 
 export const MAX_PLAYBOOK_UPLOAD_BYTES = 1024 * 1024; // 1 MB
 
@@ -83,17 +83,13 @@ export function normalizePlaybookText(input: string): string {
   return input.replace(/\r\n/g, "\n").trim();
 }
 
-function safeSlug(raw: string): string {
-  return raw.replace(/[^a-z0-9_-]/gi, "_").slice(0, 80);
-}
-
 export function customPlaybookObjectPath(
   tenantId: string | null | undefined,
   agenteSlug: string,
   ext: ".md" | ".txt"
 ): string {
-  const t = (tenantId && String(tenantId).trim()) || "default";
-  return `${t}/${safeSlug(agenteSlug)}-custom${ext}`;
+  const base = playbookObjectPath(tenantId, agenteSlug).replace(/\.md$/i, "");
+  return `${base}${ext}`;
 }
 
 async function uploadTextObject(
@@ -167,6 +163,15 @@ export async function uploadCustomPlaybookForAgent(
   const sourceHash = createHash("sha256").update(markdown, "utf8").digest("hex");
   const path = customPlaybookObjectPath(agent.tenant_id as string | null | undefined, agenteSlug, validation.extension);
   const bytes = Buffer.from(markdown, "utf8");
+
+  const cleanup = await cleanupPlaybookFolderForAgent(
+    supabase,
+    agent.tenant_id as string | null | undefined,
+    agenteSlug
+  );
+  if (!cleanup.ok) {
+    return { ok: false, status: 500, error: `Falha ao limpar pasta de playbooks do agente: ${cleanup.error}` };
+  }
 
   const upload = await uploadTextObject(supabase, path, bytes, validation.mimeType);
   if (!upload.ok) return { ok: false, status: 500, error: upload.error };
@@ -242,9 +247,17 @@ export async function savePlaybookMarkdownForAgent(
   const ext: ".md" | ".txt" = existingPath.toLowerCase().endsWith(".txt") ? ".txt" : ".md";
   const mimeType: "text/markdown" | "text/plain" = ext === ".txt" ? "text/plain" : "text/markdown";
   const path =
-    existingPath ||
     customPlaybookObjectPath(agent.tenant_id as string | null | undefined, agenteSlug, ext);
   const sourceHash = createHash("sha256").update(markdown, "utf8").digest("hex");
+
+  const cleanup = await cleanupPlaybookFolderForAgent(
+    supabase,
+    agent.tenant_id as string | null | undefined,
+    agenteSlug
+  );
+  if (!cleanup.ok) {
+    return { ok: false, status: 500, error: `Falha ao limpar pasta de playbooks do agente: ${cleanup.error}` };
+  }
 
   const upload = await uploadTextObject(supabase, path, bytes, mimeType);
   if (!upload.ok) return { ok: false, status: 500, error: upload.error };

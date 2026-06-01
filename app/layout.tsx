@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from "next";
+import dynamic from "next/dynamic";
 import { Poppins, Playfair_Display, Space_Mono } from "next/font/google";
 import "./globals.css";
-import MobileDetector from "@/components/mobile/MobileDetector";
-import IOSInstallBanner from "@/components/IOSInstallBanner";
+
+/** Fora do chunk crítico app/layout.js — evita ChunkLoadError por bundle pesado (MobileShell/Supabase). */
+const MobileDetector = dynamic(() => import("@/components/mobile/MobileDetector"));
+
+const IOSInstallBanner = dynamic(() => import("@/components/IOSInstallBanner"));
 
 const poppins = Poppins({
   subsets: ["latin"],

@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { uploadCustomPlaybookForAgent } from "@/lib/playbook/custom-playbook";
+import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
+import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 
 function db() {
   return createClient(
@@ -38,6 +40,27 @@ export async function POST(
   const file = form.get("file");
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Envie um arquivo no campo file." }, { status: 400 });
+  }
+
+  const markdown = await file.text();
+  const parsed = parsePlaybookFlowFromMarkdown(markdown);
+  const noFlowBlock = !parsed.ok && parsed.reason === "not_found";
+
+  if (!noFlowBlock) {
+    if (!parsed.ok) {
+      return NextResponse.json(
+        { error: "Fluxo playbook inválido.", errors: parsed.errors },
+        { status: 400 }
+      );
+    }
+
+    const validated = validatePlaybookFlowDefinition(parsed.definition);
+    if (!validated.ok) {
+      return NextResponse.json(
+        { error: "Fluxo playbook inválido.", errors: validated.errors },
+        { status: 400 }
+      );
+    }
   }
 
   const supabase = db();

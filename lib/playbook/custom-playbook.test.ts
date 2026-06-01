@@ -35,7 +35,7 @@ describe("custom-playbook validation", () => {
 
   it("normaliza path com tenant e slug", () => {
     const path = customPlaybookObjectPath("tenant-1", "agente legal", ".txt");
-    expect(path).toBe("tenant-1/agente_legal-custom.txt");
+    expect(path).toBe("tenant-1/agente_legal/playbook.txt");
   });
 
   it("normaliza quebra de linha e trim", () => {

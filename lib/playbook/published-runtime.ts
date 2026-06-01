@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PLAYBOOK_BUCKET } from "./persist";
+import { loadCurrentPlaybookMarkdown } from "./custom-playbook";
 
 type PlaybookMeta = {
   playbook_generated_at?: string | null;
@@ -190,28 +190,17 @@ function selectPromptFromMarkdown(md: string): {
 
 async function downloadMarkdownFromStorage(
   supabase: SupabaseClient,
-  meta: PlaybookMeta
+  agenteSlug: string,
+  _meta: PlaybookMeta
 ): Promise<{ ok: true; markdown: string; path: string } | { ok: false; detail: string }> {
-  const path = String(meta.playbook_object_path || "").trim();
-  if (path) {
-    const { data, error } = await supabase.storage.from(PLAYBOOK_BUCKET).download(path);
-    if (error || !data) {
-      return { ok: false, detail: error?.message || "Falha ao descarregar playbook do bucket." };
-    }
-    const markdown = await data.text();
-    return { ok: true, markdown, path };
+  const loaded = await loadCurrentPlaybookMarkdown(supabase, agenteSlug);
+  if (!loaded.ok) {
+    return { ok: false, detail: loaded.error };
   }
-
-  const publicUrl = String(meta.playbook_public_url || "").trim();
-  if (!publicUrl) {
-    return { ok: false, detail: "Agente sem playbook_object_path nem playbook_public_url." };
-  }
-  const res = await fetch(publicUrl, { method: "GET" });
-  if (!res.ok) {
-    return { ok: false, detail: `HTTP ${res.status} ao ler playbook_public_url.` };
-  }
-  const markdown = await res.text();
-  return { ok: true, markdown, path: publicUrl };
+  const path =
+    String(loaded.playbook_object_path || "").trim() ||
+    String(loaded.playbook_public_url || "").trim();
+  return { ok: true, markdown: loaded.markdown, path };
 }
 
 export async function loadPublishedPlaybookRuntimeSource(
@@ -232,7 +221,7 @@ export async function loadPublishedPlaybookRuntimeSource(
     return hit.result;
   }
 
-  const downloaded = await downloadMarkdownFromStorage(supabase, meta);
+  const downloaded = await downloadMarkdownFromStorage(supabase, agenteSlug, meta);
   if (!downloaded.ok) {
     return { ok: false, reason: "download_error", detail: downloaded.detail };
   }

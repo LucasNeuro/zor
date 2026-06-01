@@ -5,10 +5,53 @@ import { mistralGenerateAgnoAppendix } from "./mistral-appendix";
 
 export const PLAYBOOK_BUCKET = "hub-agent-playbooks";
 
-export function playbookObjectPath(tenantId: string | null | undefined, agenteSlug: string): string {
+export function safePlaybookSlug(agenteSlug: string): string {
+  return agenteSlug.replace(/[^a-z0-9_-]/gi, "_").slice(0, 80);
+}
+
+export function playbookAgentFolderPath(
+  tenantId: string | null | undefined,
+  agenteSlug: string
+): string {
   const t = (tenantId && String(tenantId).trim()) || "default";
-  const safeSlug = agenteSlug.replace(/[^a-z0-9_-]/gi, "_").slice(0, 80);
-  return `${t}/${safeSlug}.md`;
+  return `${t}/${safePlaybookSlug(agenteSlug)}`;
+}
+
+export function playbookObjectPath(tenantId: string | null | undefined, agenteSlug: string): string {
+  return `${playbookAgentFolderPath(tenantId, agenteSlug)}/playbook.md`;
+}
+
+function isIgnorableStorageError(message: string): boolean {
+  return /not found|does not exist|no such object|schema cache/i.test(message);
+}
+
+async function removeStoragePaths(
+  supabase: SupabaseClient,
+  paths: string[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const uniq = Array.from(new Set(paths.map((p) => String(p || "").trim()).filter(Boolean)));
+  if (!uniq.length) return { ok: true };
+  const { error } = await supabase.storage.from(PLAYBOOK_BUCKET).remove(uniq);
+  if (!error || isIgnorableStorageError(error.message)) return { ok: true };
+  return { ok: false, error: error.message };
+}
+
+export async function cleanupPlaybookFolderForAgent(
+  supabase: SupabaseClient,
+  tenantId: string | null | undefined,
+  agenteSlug: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const folder = playbookAgentFolderPath(tenantId, agenteSlug);
+  const list = await supabase.storage.from(PLAYBOOK_BUCKET).list(folder, { limit: 100 });
+  if (list.error) {
+    if (isIgnorableStorageError(list.error.message)) return { ok: true };
+    return { ok: false, error: list.error.message };
+  }
+  const names = (list.data || [])
+    .map((f) => String((f as { name?: string }).name || "").trim())
+    .filter(Boolean);
+  const fullPaths = names.map((n) => `${folder}/${n}`);
+  return removeStoragePaths(supabase, fullPaths);
 }
 
 export async function generateUploadAndLinkPlaybook(
@@ -41,6 +84,11 @@ export async function generateUploadAndLinkPlaybook(
 
   const path = playbookObjectPath(tenantId, agenteSlug);
   const buf = Buffer.from(bodyMd, "utf8");
+
+  const cleanup = await cleanupPlaybookFolderForAgent(supabase, tenantId, agenteSlug);
+  if (!cleanup.ok) {
+    console.warn("[playbook] cleanup folder falhou", { bucket: PLAYBOOK_BUCKET, path, error: cleanup.error });
+  }
 
   // Tem de coincidir com `allowed_mime_types` do bucket (ver migração); variantes com charset falhavam o upload.
   const { error: upErr } = await supabase.storage.from(PLAYBOOK_BUCKET).upload(path, buf, {

@@ -12,6 +12,15 @@ import {
   mensagemPedeMenuOuOpcoes,
 } from "@/lib/whatsapp/menu-triagem-uazapi";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
+import {
+  executeFlowEngine,
+  type FlowEngineDefinition,
+  type FlowEngineStep,
+} from "@/lib/playbook/flow-engine";
+import type { PlaybookFlowDefinition, PlaybookFlowStep } from "@/lib/playbook/flow-definition-types";
+import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
+import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
+import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
 
 export type PlaybookStep =
   | "aguardar_nome"
@@ -35,6 +44,33 @@ export type PlaybookStep =
   | "outro_descricao"
   | "concluido";
 
+const HARDCODED_STEPS = new Set<PlaybookStep>([
+  "aguardar_nome",
+  "triagem_inicial",
+  "arq_tipo_imovel",
+  "arq_tamanho",
+  "arq_localizacao",
+  "arq_prazo",
+  "imob_sub",
+  "prop_intencao",
+  "prop_localizacao",
+  "prop_tamanho",
+  "prop_valor",
+  "prop_midias",
+  "parc_email",
+  "parc_tipo",
+  "parc_imovel_localizacao",
+  "parc_imovel_tamanho",
+  "parc_imovel_valor",
+  "parc_imovel_midias",
+  "outro_descricao",
+  "concluido",
+]);
+
+function isHardcodedStep(step: string): step is PlaybookStep {
+  return HARDCODED_STEPS.has(step as PlaybookStep);
+}
+
 export type PlaybookProcessResult =
   | { handled: false }
   | { handled: true; skipIa: boolean; step?: PlaybookStep };
@@ -42,6 +78,7 @@ export type PlaybookProcessResult =
 type PlaybookAnswers = Record<string, string>;
 
 const FOOTER = "HUB Obra 10+";
+const DEFAULT_DYNAMIC_STEP = "mari_dynamic";
 
 const KNOWN_CHOICE_IDS = new Set([
   "triagem_arq",
@@ -98,6 +135,143 @@ const CHOICE_ALIASES = new Map<string, string>();
 function regAlias(label: string, id: string) {
   CHOICE_ALIASES.set(normAlias(label), id);
   CHOICE_ALIASES.set(normAlias(id), id);
+}
+
+function parseBoolEnvOnByDefault(value: string | undefined): boolean {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return true;
+  return !(raw === "0" || raw === "false" || raw === "off");
+}
+
+function dynamicFlowEnabled(): boolean {
+  return parseBoolEnvOnByDefault(process.env.PLAYBOOK_DYNAMIC_FLOW);
+}
+
+function normalizeDynamicId(raw: string, fallback: string): string {
+  const cleaned = raw.trim();
+  if (!cleaned) return fallback;
+  return cleaned
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function makeSyntheticCompleteStepId(stepId: string, suffix: string): string {
+  return `${normalizeDynamicId(stepId, "step")}__complete__${normalizeDynamicId(suffix, "done")}`;
+}
+
+function textFromCompleteAction(
+  step: PlaybookFlowStep & { complete?: { summary?: string } },
+  fallback: string
+): string {
+  const summary =
+    step.complete && typeof step.complete.summary === "string"
+      ? step.complete.summary.trim()
+      : "";
+  if (summary) return summary;
+  if (typeof step.title === "string" && step.title.trim()) return step.title.trim();
+  return fallback;
+}
+
+function convertStructuredFlowToEngine(definition: PlaybookFlowDefinition): FlowEngineDefinition {
+  const steps: Record<string, FlowEngineStep> = {};
+  const syntheticCompleteSteps: Record<string, FlowEngineStep> = {};
+
+  for (const step of definition.steps) {
+    const stepId = step.id.trim();
+
+    if (step.kind === "message") {
+      let nextStep = typeof step.next === "string" && step.next.trim() ? step.next.trim() : undefined;
+      if (!nextStep && step.complete) {
+        nextStep = makeSyntheticCompleteStepId(stepId, "message");
+        syntheticCompleteSteps[nextStep] = {
+          id: nextStep,
+          type: "complete",
+          text: textFromCompleteAction(step, "Concluí essa etapa. Nosso time seguirá por aqui."),
+        };
+      }
+      steps[stepId] = {
+        id: stepId,
+        type: "send_text",
+        text: step.message.trim(),
+        next_step: nextStep,
+      };
+      continue;
+    }
+
+    if (step.kind === "input") {
+      let nextStep = typeof step.next === "string" && step.next.trim() ? step.next.trim() : undefined;
+      if (!nextStep && step.complete) {
+        nextStep = makeSyntheticCompleteStepId(stepId, "input");
+        syntheticCompleteSteps[nextStep] = {
+          id: nextStep,
+          type: "complete",
+          text: textFromCompleteAction(step, "Perfeito, concluí essa etapa."),
+        };
+      }
+      steps[stepId] = {
+        id: stepId,
+        type: "ask_text",
+        prompt: step.prompt.trim(),
+        invalid_prompt: step.prompt.trim(),
+        answer_key: step.field.trim(),
+        next_step: nextStep || "concluido",
+        min_length: step.input_type === "email" ? 5 : 2,
+        validator: step.input_type === "email" ? "email" : "text",
+      };
+      continue;
+    }
+
+    if (step.kind === "menu") {
+      const choices = step.options.map((option) => {
+        let nextStep = typeof option.next === "string" && option.next.trim() ? option.next.trim() : undefined;
+        if (!nextStep && option.complete) {
+          nextStep = makeSyntheticCompleteStepId(stepId, option.id);
+          syntheticCompleteSteps[nextStep] = {
+            id: nextStep,
+            type: "complete",
+            text: option.complete.summary?.trim() || "Perfeito, vou encaminhar internamente e seguimos por aqui.",
+          };
+        }
+        if (!nextStep && step.on_select?.[option.id]) {
+          nextStep = String(step.on_select[option.id]).trim() || undefined;
+        }
+        return {
+          id: option.id.trim(),
+          label: option.label.trim(),
+          next_step: nextStep,
+        };
+      });
+
+      steps[stepId] = {
+        id: stepId,
+        type: "menu",
+        text: step.prompt.trim(),
+        menu_type: "list",
+        list_button: "Ver opções",
+        answer_key: stepId,
+        invalid_prompt: "Escolha uma opção válida no menu para continuarmos.",
+        choices,
+      };
+      continue;
+    }
+
+    if (step.kind === "complete") {
+      steps[stepId] = {
+        id: stepId,
+        type: "complete",
+        text: textFromCompleteAction(step, "Concluído. Nosso time seguirá com você por aqui."),
+      };
+    }
+  }
+
+  return {
+    start_step: definition.entry_step_id.trim(),
+    steps: {
+      ...steps,
+      ...syntheticCompleteSteps,
+    },
+  };
 }
 
 regAlias("Projeto arquitetura / design", "triagem_arq");
@@ -983,7 +1157,7 @@ async function processarPasso(
   }
 }
 
-export async function processarPlaybookMariaInbound(params: {
+async function processarPlaybookMariaInboundHardcoded(params: {
   supabase: SupabaseClient;
   leadId: string;
   telefone: string;
@@ -996,13 +1170,6 @@ export async function processarPlaybookMariaInbound(params: {
   leadNome?: string | null;
   metadata: unknown;
 }): Promise<PlaybookProcessResult> {
-  if (!agenteUsaPlaybookMaria(params.agenteSlug)) {
-    return { handled: false };
-  }
-  if (!params.instanceToken.trim()) {
-    return { handled: false };
-  }
-
   const { step, answers, active, complete } = lerEstadoPlaybook(params.metadata);
   const pedeMenu = mensagemPedeMenuOuOpcoes(params.mensagem);
 
@@ -1022,7 +1189,7 @@ export async function processarPlaybookMariaInbound(params: {
     leadNome: params.leadNome,
   };
 
-  if (step && step !== "concluido") {
+  if (step && step !== "concluido" && isHardcodedStep(step)) {
     return processarPasso(step, ctx);
   }
 
@@ -1052,4 +1219,273 @@ export async function processarPlaybookMariaInbound(params: {
   }
 
   return { handled: false };
+}
+
+type DynamicPlaybookRuntime = {
+  definition: FlowEngineDefinition;
+  source: "published_dynamic_flow";
+};
+
+async function carregarDynamicPlaybookRuntime(
+  supabase: SupabaseClient,
+  agenteSlug: string
+): Promise<DynamicPlaybookRuntime | null> {
+  const { data: agenteMeta, error: agenteMetaErr } = await supabase
+    .from("hub_agente_identidade")
+    .select("playbook_generated_at, playbook_object_path, playbook_public_url, playbook_source_hash")
+    .eq("agente_slug", agenteSlug)
+    .maybeSingle();
+
+  if (agenteMetaErr || !agenteMeta) return null;
+
+  const loaded = await loadPublishedPlaybookRuntimeSource(supabase, agenteSlug, {
+    playbook_generated_at:
+      typeof agenteMeta.playbook_generated_at === "string" ? agenteMeta.playbook_generated_at : null,
+    playbook_object_path:
+      typeof agenteMeta.playbook_object_path === "string" ? agenteMeta.playbook_object_path : null,
+    playbook_public_url:
+      typeof agenteMeta.playbook_public_url === "string" ? agenteMeta.playbook_public_url : null,
+    playbook_source_hash:
+      typeof agenteMeta.playbook_source_hash === "string" ? agenteMeta.playbook_source_hash : null,
+  });
+  if (!loaded.ok) return null;
+
+  const parsed = parsePlaybookFlowFromMarkdown(loaded.rawMarkdown);
+  if (!parsed.ok) return null;
+
+  const validated = validatePlaybookFlowDefinition(parsed.definition);
+  if (!validated.ok) return null;
+
+  return {
+    definition: convertStructuredFlowToEngine(validated.definition),
+    source: "published_dynamic_flow",
+  };
+}
+
+function mapDynamicStepToContract(step: string | undefined): PlaybookStep | undefined {
+  if (!step) return undefined;
+  if (step === "concluido") return "concluido";
+  if (isHardcodedStep(step)) return step;
+  return DEFAULT_DYNAMIC_STEP as PlaybookStep;
+}
+
+async function processarPlaybookMariaInboundDynamic(params: {
+  supabase: SupabaseClient;
+  leadId: string;
+  telefone: string;
+  mensagem: string;
+  menuChoiceId?: string | null;
+  tipoMidia: string;
+  agenteSlug: string;
+  instanceToken: string;
+  leadNome?: string | null;
+  metadata: unknown;
+}): Promise<PlaybookProcessResult> {
+  const state = lerEstadoPlaybook(params.metadata);
+  let meta = lerMetadata(params.metadata);
+  const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
+  if (!runtime) return { handled: false };
+
+  const persistState = async (patch: { step?: string | null; answers?: Record<string, string>; active?: boolean; complete?: boolean }) => {
+    const persisted = await persistirEstado(params.supabase, params.leadId, meta, {
+      step: patch.step ? (patch.step as PlaybookStep) : patch.step === null ? null : undefined,
+      answers: patch.answers,
+      active: patch.active,
+      complete: patch.complete,
+    });
+    meta = persisted;
+  };
+
+  const result = await executeFlowEngine(
+    runtime.definition,
+    {
+      step: state.step && !isHardcodedStep(state.step) ? state.step : null,
+      answers: state.answers,
+      mensagem: params.mensagem,
+      menuChoiceId: params.menuChoiceId,
+      tipoMidia: params.tipoMidia,
+    },
+    {
+      sendText: async (text) => {
+        await enviarTexto(params.telefone, text, params.instanceToken);
+      },
+      sendMenu: async ({ text, menuType, choices, listButton }) => {
+        const out = await enviarMenuUazapi({
+          telefone: params.telefone,
+          instanceToken: params.instanceToken,
+          texto: text,
+          tipo: menuType,
+          choices,
+          listButton,
+          footerText: FOOTER,
+        });
+        if (out.ok) {
+          await marcarMenuTriagemEnviado(params.supabase, params.leadId);
+        }
+        const erro = out.ok ? undefined : "erro" in out ? out.erro : "falha_menu_uazapi";
+        return { ok: out.ok, erro };
+      },
+      resolveChoiceId: resolverChoiceId,
+      persistState,
+      onNameCaptured: async (name) => {
+        await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, { nome: name });
+      },
+      onStepComplete: async (stepId, answers) => {
+        switch (stepId) {
+          case "complete_arquitetura":
+            await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+              estagio: "qualificado",
+              metadata: {
+                fluxo_ativo: "fluxo_arquitetura",
+                lead_kind: "cliente_projetos",
+                potencial: "MEDIO",
+                cidade_bairro_projeto: answers.arq_localizacao || null,
+                wa_playbook_complete: true,
+              },
+            });
+            break;
+          case "complete_corretor_cliente":
+            await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+              estagio: "qualificado",
+              metadata: {
+                fluxo_ativo: "fluxo1",
+                lead_kind: "cliente_imobiliario",
+                potencial: "ALTO",
+                wa_playbook_complete: true,
+              },
+            });
+            break;
+          case "complete_proprietario":
+            await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+              estagio: "qualificado",
+              metadata: {
+                fluxo_ativo: "fluxo2",
+                lead_kind: "cliente_imobiliario",
+                potencial: "MEDIO",
+                cidade_bairro_imovel: answers.prop_localizacao || null,
+                valor_imovel: answers.prop_valor || null,
+                wa_playbook_complete: true,
+              },
+            });
+            break;
+          case "complete_parceria":
+            if (answers.parc_email) {
+              await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+                email: answers.parc_email,
+              });
+            }
+            await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+              estagio: "qualificado",
+              metadata: {
+                fluxo_ativo: "fluxo3",
+                lead_kind: "imobiliaria_corretor",
+                potencial: "MEDIO",
+                wa_playbook_complete: true,
+              },
+            });
+            break;
+          case "complete_outro":
+            await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+              metadata: {
+                fluxo_ativo: "outro",
+                caracteristicas_adicionais: answers.outro_descricao || null,
+                wa_playbook_complete: true,
+              },
+            });
+            break;
+          default:
+            if (runtime.source === "published_dynamic_flow") {
+              await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+                metadata: { wa_playbook_complete: true },
+              });
+            }
+            break;
+        }
+      },
+    }
+  );
+
+  if (!result.handled) return result;
+  return {
+    handled: true,
+    skipIa: result.skipIa,
+    step: mapDynamicStepToContract(result.step),
+  };
+}
+
+export async function processarPlaybookMariaInbound(params: {
+  supabase: SupabaseClient;
+  leadId: string;
+  telefone: string;
+  mensagem: string;
+  menuChoiceId?: string | null;
+  tipoMidia: string;
+  agenteSlug: string;
+  instanceToken: string;
+  isNovo: boolean;
+  leadNome?: string | null;
+  metadata: unknown;
+}): Promise<PlaybookProcessResult> {
+  if (!params.instanceToken.trim()) {
+    return { handled: false };
+  }
+
+  const agenteLegadoMari = agenteUsaPlaybookMaria(params.agenteSlug);
+
+  if (dynamicFlowEnabled()) {
+    try {
+      const dynamicOut = await processarPlaybookMariaInboundDynamic({
+        supabase: params.supabase,
+        leadId: params.leadId,
+        telefone: params.telefone,
+        mensagem: params.mensagem,
+        menuChoiceId: params.menuChoiceId,
+        tipoMidia: params.tipoMidia,
+        agenteSlug: params.agenteSlug,
+        instanceToken: params.instanceToken,
+        leadNome: params.leadNome,
+        metadata: params.metadata,
+      });
+      if (dynamicOut.handled) {
+        console.info("[playbook-flow] dynamic flow handled", {
+          agente: params.agenteSlug,
+          lead_id: params.leadId,
+          step: dynamicOut.step ?? null,
+        });
+        return dynamicOut;
+      }
+      console.info("[playbook-flow] dynamic flow unavailable, fallback evaluation", {
+        agente: params.agenteSlug,
+        lead_id: params.leadId,
+        motivo: "definicao_ausente_ou_invalida",
+      });
+    } catch (err) {
+      console.warn("[playbook-flow] dynamic flow failed, fallback evaluation", {
+        erro: err instanceof Error ? err.message : String(err),
+        agente: params.agenteSlug,
+        lead_id: params.leadId,
+      });
+    }
+  } else {
+    console.info("[playbook-flow] dynamic flow disabled via env flag", {
+      agente: params.agenteSlug,
+      lead_id: params.leadId,
+      flag: "PLAYBOOK_DYNAMIC_FLOW",
+    });
+  }
+
+  if (!agenteLegadoMari) {
+    console.info("[playbook-flow] no legacy fallback for agent", {
+      agente: params.agenteSlug,
+      lead_id: params.leadId,
+      motivo: "fallback_hardcoded_somente_mari",
+    });
+    return { handled: false };
+  }
+
+  console.info("[playbook-flow] using legacy Mari hardcoded fallback", {
+    agente: params.agenteSlug,
+    lead_id: params.leadId,
+  });
+  return processarPlaybookMariaInboundHardcoded(params);
 }

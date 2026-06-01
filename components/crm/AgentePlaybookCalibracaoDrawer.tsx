@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, FileText, RefreshCw, Save, Send, User, X } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
@@ -10,8 +10,11 @@ import {
   type PlaybookUploadStatus,
   PLAYBOOK_ACCEPT_ATTR,
 } from "@/components/crm/PlaybookUploadAnalisePanel";
+import { PlaybookFlowStatusBanner } from "@/components/crm/PlaybookFlowStatusBanner";
 import { normalizarAnalisePlaybook } from "@/lib/playbook/playbook-analise-ui";
 import { MAX_PLAYBOOK_UPLOAD_BYTES } from "@/lib/playbook/custom-playbook";
+import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
+import { PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
 
 const PLAYBOOK_INPUT_CALIB = "playbook-calibracao-upload";
 
@@ -23,17 +26,21 @@ type ChatMsg = {
   modelo?: string;
 };
 
+function extractApiError(payload: Record<string, unknown>, fallback: string): string {
+  const base = typeof payload.error === "string" && payload.error.trim() ? payload.error.trim() : fallback;
+  const errs = Array.isArray(payload.errors)
+    ? payload.errors.map((x) => String(x).trim()).filter(Boolean)
+    : [];
+  if (!errs.length) return base;
+  return `${base}\n- ${errs.join("\n- ")}`;
+}
+
 export type AgentePlaybookCalibracaoDrawerProps = {
   open: boolean;
   onClose: () => void;
   agenteSlug: string;
   agenteNome: string;
 };
-
-function slugTemFluxoWaDeterministico(slug: string): boolean {
-  const s = slug.trim().toLowerCase();
-  return /^mari/.test(s) || s === "maria";
-}
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -83,6 +90,11 @@ export function AgentePlaybookCalibracaoDrawer({
 
   const dirty = markdown.trim() !== markdownPublicado.trim();
   const temConteudo = markdown.trim().length > 0;
+  const flowStatus = useMemo(() => assessPlaybookFlowInMarkdown(markdown), [markdown]);
+  const flowStatusPublicado = useMemo(
+    () => assessPlaybookFlowInMarkdown(markdownPublicado),
+    [markdownPublicado]
+  );
 
   const dropzoneBorder =
     uploadHover || uploadStatus === "hover"
@@ -113,7 +125,7 @@ export function AgentePlaybookCalibracaoDrawer({
       );
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
-        setErro(typeof data.error === "string" ? data.error : `Erro HTTP ${res.status}`);
+        setErro(extractApiError(data, `Erro HTTP ${res.status}`));
         return;
       }
 
@@ -186,7 +198,7 @@ export function AgentePlaybookCalibracaoDrawer({
       );
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
-        setErro(typeof data.error === "string" ? data.error : `Erro HTTP ${res.status}`);
+        setErro(extractApiError(data, `Erro HTTP ${res.status}`));
         return;
       }
       setMarkdownPublicado(markdown);
@@ -271,9 +283,7 @@ export function AgentePlaybookCalibracaoDrawer({
       const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
         setUploadStatus("erro");
-        setUploadMensagem(
-          typeof payload.error === "string" ? payload.error : `Falha HTTP ${res.status}`
-        );
+        setUploadMensagem(extractApiError(payload, `Falha HTTP ${res.status}`));
         setUploadPct(0);
         return;
       }
@@ -323,6 +333,33 @@ export function AgentePlaybookCalibracaoDrawer({
       window.clearInterval(tick);
       setAnalisePct(100);
       setAnaliseLoading(false);
+    }
+  }
+
+  async function aplicarTemplatePadraoV1() {
+    if (carregando || publicando || uploadStatus === "enviando") return;
+    setErro("");
+    try {
+      const res = await fetch(PLAYBOOK_EXEMPLO_MD_URL, { headers: internalApiHeaders() });
+      if (!res.ok) {
+        setErro(`Falha ao carregar template padrão (HTTP ${res.status}).`);
+        return;
+      }
+      const texto = (await res.text()).trim();
+      if (!texto) {
+        setErro("Template padrão vazio.");
+        return;
+      }
+      setMarkdown(texto);
+      setArquivoNome("playbook-template-v1.md");
+      setUploadStatus("sucesso");
+      setUploadPct(100);
+      setUploadMensagem("Template padrão v1 aplicado no editor.");
+      setAnaliseResultado(null);
+      setAnaliseErro("");
+      setToast("Template padrão aplicado. Revise, ajuste e publique.");
+    } catch {
+      setErro("Falha de rede ao carregar template padrão.");
     }
   }
 
@@ -476,25 +513,15 @@ export function AgentePlaybookCalibracaoDrawer({
           </button>
         </div>
 
-        {slugTemFluxoWaDeterministico(agenteSlug) ? (
-          <div
-            style={{
-              flexShrink: 0,
-              margin: "0 16px",
-              marginTop: 10,
-              padding: "10px 12px",
-              borderRadius: 8,
-              background: "#c9a24a14",
-              border: "1px solid #c9a24a44",
-              color: "#d6b976",
-              fontSize: 11,
-              lineHeight: 1.45,
-            }}
-          >
-            Este agente pode ter fluxo WhatsApp determinístico em código. Alterar o playbook no bucket melhora o
-            prompt estático, mas nem sempre substitui menus/fluxos hardcoded no runtime WA.
-          </div>
-        ) : null}
+        <div style={{ flexShrink: 0, margin: "10px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+          <PlaybookFlowStatusBanner status={flowStatus} published={!dirty && flowStatusPublicado.kind === "ready"} />
+          {dirty && flowStatusPublicado.kind === "ready" ? (
+            <p style={{ margin: 0, color: "#8b949e", fontSize: 10, lineHeight: 1.45 }}>
+              Versão publicada ainda válida para motor dinâmico. Publique o rascunho para substituir no bucket (
+              <code style={{ fontSize: 10 }}>tenant/slug/playbook.md</code>, arquivo único).
+            </p>
+          ) : null}
+        </div>
 
         <div
           style={{
@@ -535,6 +562,15 @@ export function AgentePlaybookCalibracaoDrawer({
                 style={btnSecundario}
               >
                 <RefreshCw size={14} /> Recarregar
+              </button>
+              <button
+                type="button"
+                onClick={() => void aplicarTemplatePadraoV1()}
+                disabled={carregando || publicando || uploadStatus === "enviando"}
+                style={btnSecundario}
+                title="Substitui o rascunho pelo template padrão v1 (motor dinâmico)"
+              >
+                <FileText size={14} /> Aplicar template v1
               </button>
               <button
                 type="button"

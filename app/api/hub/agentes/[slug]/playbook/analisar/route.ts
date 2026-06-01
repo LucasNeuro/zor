@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { loadCurrentPlaybookMarkdown } from "@/lib/playbook/custom-playbook";
-import { analyzePlaybookWithMistral } from "@/lib/playbook/mistral-analysis";
+import { analyzePlaybookWithMistral, buildLocalPlaybookAnalysisFallback } from "@/lib/playbook/mistral-analysis";
 
 function db() {
   return createClient(
@@ -50,7 +50,17 @@ export async function POST(
 
   const analysis = await analyzePlaybookWithMistral(markdown);
   if (!analysis.ok) {
-    return NextResponse.json({ error: analysis.error }, { status: analysis.status });
+    const fallback = buildLocalPlaybookAnalysisFallback(markdown);
+    return NextResponse.json({
+      sucesso: true,
+      origem_playbook: origemPlaybook,
+      playbook_object_path: metaPath,
+      playbook_public_url: metaUrl,
+      model: "local-fallback",
+      analise: fallback,
+      analise_origem: "fallback",
+      aviso: analysis.error,
+    });
   }
 
   return NextResponse.json({
@@ -60,5 +70,6 @@ export async function POST(
     playbook_public_url: metaUrl,
     model: analysis.model,
     analise: analysis.analise,
+    analise_origem: "mistral",
   });
 }

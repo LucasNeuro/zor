@@ -50,6 +50,10 @@ export function normalizarAnalisePlaybook(raw: Record<string, unknown>): Playboo
     pickTexto(raw, ["texto", "raw_text", "resultado", "output", "content"]) ||
     JSON.stringify(raw, null, 2);
   const modelo = pickTexto(raw, ["model", "modelo"]) || null;
+  const analiseOrigem =
+    pickTexto(raw, ["analise_origem", "origem_analise"]).toLowerCase() || "";
+  const origem: PlaybookAnaliseResultado["origem"] =
+    analiseOrigem === "fallback" || modelo === "local-fallback" ? "fallback" : "mistral";
 
   return {
     resumo,
@@ -61,6 +65,6 @@ export function normalizarAnalisePlaybook(raw: Record<string, unknown>): Playboo
     recomendacoes,
     textoBruto,
     modelo,
-    origem: "mistral",
+    origem,
   };
 }

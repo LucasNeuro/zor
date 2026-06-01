@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type CSSProperties, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Archive, ArrowLeft, BookOpen, Sparkles, Trash2 } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { AgenteBriefingDrawer } from "@/components/crm/AgenteBriefingChatPanel";
 import { AgentePlaybookCalibracaoDrawer } from "@/components/crm/AgentePlaybookCalibracaoDrawer";
@@ -739,134 +740,133 @@ export default function AgentePage() {
       {/* HEADER */}
       <div style={{
         position: "sticky", top: 0, zIndex: 50,
-        background: "#161b22",
+        background: "linear-gradient(180deg, #161b22 0%, #0d1117 100%)",
         borderBottom: "1px solid #30363d",
-        boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
-        padding: "16px 24px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+        padding: "18px 24px 14px",
       }}>
-        {/* TOPO ESQUERDA: avatar + info */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <button
-            onClick={() => router.back()}
-            style={{ background: "none", border: "none", color: "#8b949e", fontSize: 18, cursor: "pointer", lineHeight: 1, marginRight: 4 }}
-          >
-            ←
-          </button>
-          <div
-            style={{
-              width: 56, height: 56, borderRadius: "50%",
-              background: segCor,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 18, fontWeight: 700, color: "white", flexShrink: 0,
-            }}
-          >
-            {iniciais(agente.nome)}
-          </div>
-          <div>
-            <h1 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
-              {agente.nome}
-            </h1>
-            <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 6px" }}>
-              {agente.cargo}
-              <span style={{ color: "#444c56", marginLeft: 6 }}>@{agente.agente_slug}</span>
-            </p>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: "2px 8px",
-                  borderRadius: 20,
-                  background: statusBadge.bg,
-                  color: statusBadge.fg,
-                  border: `1px solid ${statusBadge.border}`,
-                }}
-              >
-                {statusBadge.label}
-              </span>
-              {agente.area && (
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                  background: segCor + "22", color: segCor, border: `1px solid ${segCor}44`,
-                }}>
-                  {agente.area}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              aria-label="Voltar"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                border: "1px solid #30363d",
+                background: "#21262d",
+                color: "#c9d1d9",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 16,
+                background: `linear-gradient(135deg, ${segCor} 0%, #0d1117 140%)`,
+                border: `1px solid ${segCor}55`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 18,
+                fontWeight: 800,
+                color: "white",
+                flexShrink: 0,
+                boxShadow: `0 8px 24px ${segCor}33`,
+              }}
+            >
+              {iniciais(agente.nome)}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ color: "#e6edf3", fontSize: 20, fontWeight: 800, margin: "0 0 4px", letterSpacing: -0.2 }}>
+                {agente.nome}
+              </h1>
+              <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 8px", lineHeight: 1.45 }}>
+                {agente.cargo}
+                <span style={{ color: "#484f58", marginLeft: 8 }}>@{agente.agente_slug}</span>
+              </p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "3px 9px",
+                    borderRadius: 999,
+                    background: statusBadge.bg,
+                    color: statusBadge.fg,
+                    border: `1px solid ${statusBadge.border}`,
+                  }}
+                >
+                  {statusBadge.label}
                 </span>
-              )}
-              {agente.nivel && (
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                  background: nivelCor + "22", color: nivelCor, border: `1px solid ${nivelCor}44`,
-                }}>
-                  {nivelTag(agente.nivel)}
-                </span>
-              )}
+                {agente.area ? (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
+                    background: segCor + "22", color: segCor, border: `1px solid ${segCor}44`,
+                  }}>
+                    {agente.area}
+                  </span>
+                ) : null}
+                {agente.nivel ? (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
+                    background: nivelCor + "22", color: nivelCor, border: `1px solid ${nivelCor}44`,
+                  }}>
+                    {nivelTag(agente.nivel)}
+                  </span>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* TOPO DIREITA */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {toast && (
-            <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 700 }}>{toast}</span>
-          )}
-          {erro && (
-            <span style={{ fontSize: 11, color: "#ef4444", maxWidth: 220 }}>{erro}</span>
-          )}
-          <button
-            type="button"
-            onClick={() => setBriefingOpen(true)}
-            style={{
-              padding: "8px 16px", borderRadius: 8,
-              background: "#c9a24a18", border: "1px solid #c9a24a66",
-              color: "#d6b976", fontSize: 12, fontWeight: 700, cursor: "pointer",
-            }}
-          >
-            AI — Funcionários
-          </button>
-          <button
-            type="button"
-            onClick={() => setCalibracaoOpen(true)}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 8,
-              background: "#1e3a5f18",
-              border: "1px solid #388bfd66",
-              color: "#79c0ff",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Playbook — Calibração
-          </button>
-          <button
-            type="button"
-            onClick={() => void abrirModalLimparMemorias()}
-            title="Apaga memórias operacionais do agente (testes)"
-            style={{
-              padding: "8px 16px",
-              borderRadius: 8,
-              background: "#1c1917",
-              border: "1px solid #ea580c55",
-              color: "#fdba74",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Limpar memórias
-          </button>
-          <button
-            onClick={() => { setShowArquivar(true); setMotivoArquivamento(""); }}
-            style={{
-              padding: "8px 16px", borderRadius: 8,
-              background: "transparent", border: "1px solid #ef4444",
-              color: "#ef4444", fontSize: 12, fontWeight: 700, cursor: "pointer",
-            }}
-          >
-            Arquivar agente
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+            {toast ? (
+              <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 700 }}>{toast}</span>
+            ) : null}
+            {erro ? (
+              <span style={{ fontSize: 11, color: "#ef4444", maxWidth: 320, textAlign: "right" }}>{erro}</span>
+            ) : null}
+            <HeaderActionGroup>
+              <HeaderActionButton
+                icon={<Sparkles size={15} />}
+                label="AI — Funcionários"
+                onClick={() => setBriefingOpen(true)}
+                variant="ai"
+                position="first"
+              />
+              <HeaderActionButton
+                icon={<BookOpen size={15} />}
+                label="Playbook — Calibração"
+                onClick={() => setCalibracaoOpen(true)}
+                variant="ai"
+                position="middle"
+              />
+              <HeaderActionButton
+                icon={<Trash2 size={15} />}
+                label="Limpar memórias"
+                onClick={() => void abrirModalLimparMemorias()}
+                variant="default"
+                position="middle"
+                title="Apaga memórias operacionais do agente (testes)"
+              />
+              <HeaderActionButton
+                icon={<Archive size={15} />}
+                label="Arquivar"
+                onClick={() => { setShowArquivar(true); setMotivoArquivamento(""); }}
+                variant="default"
+                position="last"
+              />
+            </HeaderActionGroup>
+          </div>
         </div>
       </div>
 
@@ -1231,10 +1231,85 @@ export default function AgentePage() {
       />
       <AgentePlaybookCalibracaoDrawer
         open={calibracaoOpen}
-        onClose={() => setCalibracaoOpen(false)}
+        onClose={() => {
+          setCalibracaoOpen(false);
+        }}
         agenteSlug={slug}
         agenteNome={agente.nome}
       />
     </div>
   );
 }
+
+function HeaderActionGroup({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "stretch",
+        borderRadius: 12,
+        border: "1px solid #30363d",
+        overflow: "hidden",
+        background: "#0d1117",
+        boxShadow: "0 4px 18px rgba(0,0,0,0.28)",
+        flexShrink: 0,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function HeaderActionButton({
+  icon,
+  label,
+  onClick,
+  variant,
+  position,
+  title,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  variant: "default" | "ai";
+  position: "first" | "middle" | "last";
+  title?: string;
+}) {
+  const palette =
+    variant === "ai"
+      ? { bg: "#2e106418", hoverBg: "#2e106428", color: "#c4b5fd", divider: "#6d28d944" }
+      : { bg: "#21262d", hoverBg: "#30363d", color: "#c9d1d9", divider: "#30363d" };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 7,
+        padding: "9px 14px",
+        background: palette.bg,
+        border: "none",
+        borderLeft: position === "first" ? "none" : `1px solid ${palette.divider}`,
+        color: palette.color,
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        transition: "background 140ms ease",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = palette.hoverBg;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = palette.bg;
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+

@@ -191,7 +191,7 @@ export async function processarMensagemInboundWhatsapp(params: {
       instanceToken = tokenDb;
     }
 
-    if (instanceToken && agenteUsaPlaybookMaria(agenteSlug)) {
+    if (instanceToken) {
       const playbookOut = await processarPlaybookMariaInbound({
         supabase,
         leadId: lead.id,
@@ -206,8 +206,9 @@ export async function processarMensagemInboundWhatsapp(params: {
         metadata: leadMetaRow?.metadata,
       });
       if (playbookOut.handled) {
-        log.info("wa.processor.playbook_maria", {
+        log.info("wa.processor.playbook_dynamic_or_fallback", {
           telefone: trace.maskTelefone(params.telefone),
+          agente_slug: agenteSlug,
           step: playbookOut.step ?? null,
           skip_ia: playbookOut.skipIa,
         });

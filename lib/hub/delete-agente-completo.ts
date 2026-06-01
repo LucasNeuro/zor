@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { apagarStorageRagAgente } from "@/lib/hub/delete-agente-rag-storage";
-import { PLAYBOOK_BUCKET, playbookObjectPath } from "@/lib/playbook/persist";
+import { PLAYBOOK_BUCKET, playbookAgentFolderPath, playbookObjectPath } from "@/lib/playbook/persist";
 
 function ignorable(msg: string): boolean {
   return /does not exist|schema cache/i.test(msg);
@@ -45,6 +45,22 @@ export async function deleteAgenteHubCompleto(
   if (ident.playbook_object_path) paths.add(String(ident.playbook_object_path).trim());
   paths.add(playbookObjectPath(tenantId, slug));
   paths.add(playbookObjectPath(null, slug));
+  const folderCandidates = [
+    playbookAgentFolderPath(tenantId, slug),
+    playbookAgentFolderPath(null, slug),
+  ];
+  for (const folder of folderCandidates) {
+    const listed = await supabase.storage.from(PLAYBOOK_BUCKET).list(folder, { limit: 100 });
+    if (listed.error && !ignorable(listed.error.message)) {
+      console.warn("[agente-delete] list pasta playbook", folder, listed.error.message);
+      continue;
+    }
+    for (const item of listed.data || []) {
+      const name = String(item.name || "").trim();
+      if (!name) continue;
+      paths.add(`${folder}/${name}`);
+    }
+  }
 
   const { data: rpcRaw, error: rpcErr } = await supabase.rpc("hub_delete_agente_cascade", {
     p_agente_slug: slug,

@@ -13,7 +13,8 @@ export type ParsePlaybookFlowResult =
     }
   | { ok: false; reason: "not_found" | "invalid_json" | "missing_schema"; errors: string[] };
 
-const FENCED_CODE_BLOCK_RE = /```([a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/g;
+/** Captura a linha de abertura inteira (ex.: `json obra10_playbook_flow`). */
+const FENCED_CODE_BLOCK_RE = /```([^\n]*)\n([\s\S]*?)```/g;
 
 function parseJsonSafe(raw: string): unknown | null {
   try {
@@ -28,13 +29,25 @@ function hasSchemaMarker(value: unknown): boolean {
   return Object.prototype.hasOwnProperty.call(value, "obra10_playbook_flow_schema");
 }
 
-function extractFencedJsonBlocks(markdown: string): Array<{ lang: string; code: string }> {
-  const blocks: Array<{ lang: string; code: string }> = [];
+function normalizeFenceInfo(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function isObra10PlaybookFlowFence(info: string): boolean {
+  const normalized = normalizeFenceInfo(info);
+  if (!normalized) return false;
+  if (normalized === "obra10_playbook_flow") return true;
+  if (normalized.includes("obra10_playbook_flow")) return true;
+  return false;
+}
+
+function extractFencedJsonBlocks(markdown: string): Array<{ info: string; code: string }> {
+  const blocks: Array<{ info: string; code: string }> = [];
   for (const match of markdown.matchAll(FENCED_CODE_BLOCK_RE)) {
-    const lang = (match[1] || "").trim().toLowerCase();
+    const info = (match[1] || "").trim();
     const code = (match[2] || "").trim();
     if (!code) continue;
-    blocks.push({ lang, code });
+    blocks.push({ info, code });
   }
   return blocks;
 }
@@ -42,7 +55,7 @@ function extractFencedJsonBlocks(markdown: string): Array<{ lang: string; code: 
 function findTaggedFence(markdown: string): ParsedWithSource | null {
   const blocks = extractFencedJsonBlocks(markdown);
   for (const block of blocks) {
-    if (block.lang !== "obra10_playbook_flow") continue;
+    if (!isObra10PlaybookFlowFence(block.info)) continue;
     const parsed = parseJsonSafe(block.code);
     if (!parsed) {
       return {

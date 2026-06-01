@@ -174,8 +174,11 @@ export async function processarMensagemInboundWhatsapp(params: {
   try {
     const { mensagemEhSaudacaoSimples, mensagemPedeMenuOuOpcoes, leadJaRecebeuMenuTriagem } =
       await import("@/lib/whatsapp/menu-triagem-uazapi");
-    const { agenteUsaPlaybookMaria, processarPlaybookMariaInbound } = await import(
+    const { agenteUsaPlaybookMaria, lerEstadoPlaybook, processarPlaybookMariaInbound } = await import(
       "@/lib/whatsapp/playbook-flow-maria"
+    );
+    const { AGENTE_IDENTIDADE_PLAYBOOK_SELECT, resolverRoteamentoPlaybookAgente } = await import(
+      "@/lib/hub/agente-playbook-routing"
     );
 
     const { data: leadMetaRow } = await supabase
@@ -183,6 +186,19 @@ export async function processarMensagemInboundWhatsapp(params: {
       .select("metadata, nome")
       .eq("id", lead.id)
       .maybeSingle();
+
+    const { data: agenteIdentRow } = await supabase
+      .from("hub_agente_identidade")
+      .select(AGENTE_IDENTIDADE_PLAYBOOK_SELECT)
+      .eq("agente_slug", agenteSlug)
+      .maybeSingle();
+
+    const playbookState = lerEstadoPlaybook(leadMetaRow?.metadata);
+    const playbookRouting = resolverRoteamentoPlaybookAgente({
+      ident: agenteIdentRow ?? {},
+      playbookActive: playbookState.active,
+      playbookComplete: playbookState.complete,
+    });
 
     let instanceToken = String(params.waSendOpts?.instanceToken || "").trim();
     if (!instanceToken) {
@@ -211,15 +227,33 @@ export async function processarMensagemInboundWhatsapp(params: {
           agente_slug: agenteSlug,
           step: playbookOut.step ?? null,
           skip_ia: playbookOut.skipIa,
+          bloquear_ia: playbookOut.bloquearIa ?? playbookRouting.bloquearIa,
+          motivo: playbookOut.motivo ?? playbookRouting.motivo ?? null,
         });
-        if (playbookOut.skipIa) {
+        if (playbookOut.skipIa || playbookOut.bloquearIa || playbookRouting.bloquearIa) {
           return;
         }
+      } else if (playbookRouting.bloquearIa) {
+        log.warn("wa.processor.playbook_unhandled_blocked_ia", {
+          telefone: trace.maskTelefone(params.telefone),
+          agente_slug: agenteSlug,
+          motivo: playbookOut.motivo ?? playbookRouting.motivo ?? "playbook_obrigatorio",
+        });
+        await enviarFallbackIA({
+          supabase,
+          leadId: lead.id,
+          telefone: params.telefone,
+          agenteSlug,
+          motivo: playbookOut.motivo ?? "playbook_obrigatorio_sem_resposta",
+          mensagemOriginal: params.mensagemFinal,
+          waSendOpts: params.waSendOpts,
+        });
+        return;
       }
     }
 
     const pedeMenuAntesIa = mensagemPedeMenuOuOpcoes(params.mensagemFinal);
-    if (pedeMenuAntesIa && !menuEnviadoDeterministico) {
+    if (pedeMenuAntesIa && !menuEnviadoDeterministico && !playbookRouting.temPlaybookPublicado) {
       let tokenMenu = String(params.waSendOpts?.instanceToken || "").trim();
       if (!tokenMenu) {
         tokenMenu =
@@ -327,12 +361,13 @@ export async function processarMensagemInboundWhatsapp(params: {
     const usaPlaybookMaria = agenteUsaPlaybookMaria(agenteSlug);
     const menuTriagemNuncaEnviado = !leadJaRecebeuMenuTriagem(leadMetaRow?.metadata);
     const deveFallbackMenu =
-      pedeMenuOpcoes ||
-      (!usaPlaybookMaria &&
-        (params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal))) ||
-      (usaPlaybookMaria &&
-        menuTriagemNuncaEnviado &&
-        (params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal)));
+      !playbookRouting.temPlaybookPublicado &&
+      (pedeMenuOpcoes ||
+        (!usaPlaybookMaria &&
+          (params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal))) ||
+        (usaPlaybookMaria &&
+          menuTriagemNuncaEnviado &&
+          (params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal))));
 
     if (!menuJaEnviado && deveFallbackMenu) {
       const { enviarMenuTriagemInicialUazapi, marcarMenuTriagemEnviado } = await import(

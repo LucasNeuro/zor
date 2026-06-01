@@ -227,20 +227,20 @@ async function recuperarJobsProcessingExpirados(
 async function tokenInstanciaPorAgente(
   supabase: SupabaseClient,
   agenteSlug: string
-): Promise<string | null> {
+): Promise<{ token: string | null; ident: Record<string, unknown> | null }> {
   const slug = agenteSlug.trim();
-  if (!slug) return null;
+  if (!slug) return { token: null, ident: null };
   const { data, error } = await supabase
     .from("hub_agente_identidade")
-    .select("uazapi_instance_token")
+    .select("uazapi_instance_token, cargo, area, instrucao_modo, playbook_object_path, playbook_public_url")
     .eq("agente_slug", slug)
     .maybeSingle();
   if (error) {
     console.warn("[WORKER] token por agente:", error.message);
-    return null;
+    return { token: null, ident: null };
   }
   const token = typeof data?.uazapi_instance_token === "string" ? data.uazapi_instance_token.trim() : "";
-  return token || null;
+  return { token: token || null, ident: (data as Record<string, unknown> | null) ?? null };
 }
 
 async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogger): Promise<void> {
@@ -248,9 +248,14 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
 
   if (!contexto.waSendOpts?.instanceToken) {
     const slug = contexto.agente?.agente_slug || job.agente_slug || "";
-    const token = await tokenInstanciaPorAgente(supabase, slug);
+    const { token, ident } = await tokenInstanciaPorAgente(supabase, slug);
     if (token) {
       contexto.waSendOpts = { instanceToken: token };
+    }
+    if (ident && contexto.agente) {
+      contexto.agente = { ...contexto.agente, ...ident };
+    } else if (ident && slug) {
+      contexto.agente = { agente_slug: slug, ...ident };
     }
   }
 

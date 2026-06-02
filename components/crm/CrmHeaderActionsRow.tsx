@@ -37,7 +37,14 @@ function cloneButtonForGroup(
  * Área de ações do header CRM: filhos são dispostos com `gap-2`;
  * **duas ou mais tags `<button>` seguidas** viram um único button group (borda única, sem espaço entre elas).
  */
-export function CrmHeaderActionsRow({ children }: { children: ReactNode }) {
+export function CrmHeaderActionsRow({
+  children,
+  align = "end",
+}: {
+  children: ReactNode;
+  /** Alinhamento horizontal dos grupos na linha. */
+  align?: "start" | "end" | "center";
+}) {
   const items = Children.toArray(children);
   if (items.length === 0) return null;
 
@@ -79,5 +86,10 @@ export function CrmHeaderActionsRow({ children }: { children: ReactNode }) {
     }
   }
 
-  return <div className="flex min-w-0 flex-shrink-0 flex-wrap items-center justify-end gap-2">{out}</div>;
+  const justify =
+    align === "start" ? "justify-start" : align === "center" ? "justify-center" : "justify-end";
+
+  return (
+    <div className={`flex min-w-0 flex-shrink-0 flex-wrap items-center gap-2 ${justify}`}>{out}</div>
+  );
 }

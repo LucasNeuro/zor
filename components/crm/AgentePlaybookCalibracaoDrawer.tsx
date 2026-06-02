@@ -11,6 +11,7 @@ import {
   PLAYBOOK_ACCEPT_ATTR,
 } from "@/components/crm/PlaybookUploadAnalisePanel";
 import { PlaybookFlowStatusBanner } from "@/components/crm/PlaybookFlowStatusBanner";
+import { CrmHeaderActionsRow } from "@/components/crm/CrmHeaderActionsRow";
 import { normalizarAnalisePlaybook } from "@/lib/playbook/playbook-analise-ui";
 import { MAX_PLAYBOOK_UPLOAD_BYTES } from "@/lib/playbook/custom-playbook";
 import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
@@ -591,70 +592,96 @@ export function AgentePlaybookCalibracaoDrawer({
                 borderBottom: "1px solid #30363d",
                 display: "flex",
                 flexWrap: "wrap",
-                gap: 8,
+                gap: 10,
                 alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              <button
-                type="button"
-                onClick={() => void carregarConteudo()}
-                disabled={carregando}
-                style={btnSecundario}
-              >
-                <RefreshCw size={14} /> Recarregar
-              </button>
-              <button
-                type="button"
-                onClick={() => void adaptarTextoAoMotorWhatsapp()}
-                disabled={
-                  carregando ||
-                  publicando ||
-                  uploadStatus === "enviando" ||
-                  adaptandoMotor ||
-                  !temConteudo
-                }
-                style={{
-                  ...btnSecundario,
-                  borderColor: flowStatus.kind === "ready" ? "#30363d" : "#3fb95055",
-                  color: flowStatus.kind === "ready" ? "#8b949e" : "#3fb950",
-                }}
-                title="Mantém o texto actual e acrescenta o bloco json obra10_playbook_flow (template v1) para o WhatsApp"
-              >
-                <GitBranch size={14} />{" "}
-                {adaptandoMotor ? "A adaptar…" : "Adaptar ao motor WhatsApp"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void aplicarTemplatePadraoV1()}
-                disabled={carregando || publicando || uploadStatus === "enviando"}
-                style={btnSecundario}
-                title="Substitui o rascunho pelo template padrão v1 (motor dinâmico)"
-              >
-                <FileText size={14} /> Aplicar template v1
-              </button>
-              <button
-                type="button"
-                onClick={() => void regenerarDoAgente()}
-                disabled={regenerando || carregando}
-                style={btnSecundario}
-                title="Gera playbook a partir do cargo/conhecimento do agente"
-              >
-                <FileText size={14} /> Regenerar do agente
-              </button>
-              <button
-                type="button"
-                onClick={() => void publicarMarkdown()}
-                disabled={!dirty || !temConteudo || publicando}
-                style={{
-                  ...btnPrimario,
-                  opacity: !dirty || !temConteudo || publicando ? 0.5 : 1,
-                }}
-              >
-                <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
-              </button>
-              {dirty ? (
-                <span style={{ fontSize: 10, color: "#d29922", fontWeight: 700 }}>Rascunho não publicado</span>
-              ) : null}
+              <CrmHeaderActionsRow align="start">
+                <button
+                  type="button"
+                  onClick={() => void carregarConteudo()}
+                  disabled={carregando}
+                  style={btnToolbar}
+                  title="Recarrega o playbook publicado do bucket"
+                >
+                  <RefreshCw size={14} /> Recarregar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void adaptarTextoAoMotorWhatsapp()}
+                  disabled={
+                    carregando ||
+                    publicando ||
+                    uploadStatus === "enviando" ||
+                    adaptandoMotor ||
+                    !temConteudo
+                  }
+                  style={{
+                    ...btnToolbar,
+                    background:
+                      flowStatus.kind === "ready" ? "#21262d" : "rgba(35, 134, 54, 0.18)",
+                    color: flowStatus.kind === "ready" ? "#8b949e" : "#3fb950",
+                  }}
+                  title="Mantém o texto actual e acrescenta o bloco json obra10_playbook_flow (template v1) para o WhatsApp"
+                >
+                  <GitBranch size={14} />{" "}
+                  {adaptandoMotor ? "A adaptar…" : "Adaptar motor WA"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void aplicarTemplatePadraoV1()}
+                  disabled={carregando || publicando || uploadStatus === "enviando"}
+                  style={btnToolbar}
+                  title="Substitui o rascunho pelo template padrão v1 (motor dinâmico)"
+                >
+                  <FileText size={14} /> Template v1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void regenerarDoAgente()}
+                  disabled={regenerando || carregando}
+                  style={btnToolbar}
+                  title="Gera playbook a partir do cargo/conhecimento do agente (pode remover o fluxo WA)"
+                >
+                  <RefreshCw size={14} className={regenerando ? "animate-spin" : undefined} />
+                  {regenerando ? "A gerar…" : "Regenerar"}
+                </button>
+              </CrmHeaderActionsRow>
+
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                <CrmHeaderActionsRow align="start">
+                  <button
+                    type="button"
+                    onClick={() => void publicarMarkdown()}
+                    disabled={!dirty || !temConteudo || publicando}
+                    style={{
+                      ...btnToolbarPublish,
+                      opacity: !dirty || !temConteudo || publicando ? 0.5 : 1,
+                    }}
+                    title="Grava o rascunho no bucket e substitui playbook.md"
+                  >
+                    <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
+                  </button>
+                </CrmHeaderActionsRow>
+                {dirty ? (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: "#d29922",
+                      fontWeight: 700,
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #d2992244",
+                      background: "#d2992211",
+                    }}
+                  >
+                    Rascunho não publicado
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 10, color: "#3fb950", fontWeight: 600 }}>Publicado</span>
+                )}
+              </div>
             </div>
 
             <div
@@ -869,18 +896,26 @@ export function AgentePlaybookCalibracaoDrawer({
   );
 }
 
-const btnSecundario: CSSProperties = {
+/** Base para botões dentro de `CrmHeaderActionsRow` (borda/radius vêm do grupo). */
+const btnToolbar: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
-  padding: "7px 11px",
-  borderRadius: 8,
-  border: "1px solid #30363d",
+  padding: "8px 12px",
+  borderRadius: 0,
+  border: "none",
   background: "#21262d",
   color: "#c9d1d9",
   fontSize: 11,
   fontWeight: 700,
   cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const btnToolbarPublish: CSSProperties = {
+  ...btnToolbar,
+  background: "#c9a24a28",
+  color: "#e8c97a",
 };
 
 const btnPrimario: CSSProperties = {

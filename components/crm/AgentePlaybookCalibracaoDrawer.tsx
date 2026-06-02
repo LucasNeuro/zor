@@ -186,9 +186,12 @@ export function AgentePlaybookCalibracaoDrawer({
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  async function publicarMarkdown() {
-    if (!temConteudo || publicando) return;
-    if (flowStatus.kind !== "ready") {
+  async function publicarMarkdown(markdownOverride?: string) {
+    const markdownToPublish =
+      typeof markdownOverride === "string" ? markdownOverride : markdown;
+    if (!markdownToPublish.trim() || publicando) return;
+    const statusToPublish = assessPlaybookFlowInMarkdown(markdownToPublish);
+    if (statusToPublish.kind !== "ready") {
       setErro(
         "Antes de publicar, use «Adaptar motor WA» até o banner verde confirmar o fluxo WhatsApp (obra10_playbook_flow)."
       );
@@ -202,7 +205,7 @@ export function AgentePlaybookCalibracaoDrawer({
         {
           method: "PUT",
           headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({ markdown }),
+          body: JSON.stringify({ markdown: markdownToPublish }),
         }
       );
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -210,7 +213,8 @@ export function AgentePlaybookCalibracaoDrawer({
         setErro(extractApiError(data, `Erro HTTP ${res.status}`));
         return;
       }
-      setMarkdownPublicado(markdown);
+      setMarkdown(markdownToPublish);
+      setMarkdownPublicado(markdownToPublish);
       setMeta((m) => ({
         ...m,
         hash: typeof data.playbook_source_hash === "string" ? data.playbook_source_hash : m.hash,
@@ -358,6 +362,14 @@ export function AgentePlaybookCalibracaoDrawer({
     }
     if (flowStatus.kind === "ready") {
       setToast("O rascunho já tem fluxo WhatsApp válido. Pode publicar.");
+      if (dirty) {
+        const confirmarPublicacao = window.confirm(
+          "Fluxo WA já está válido. Deseja publicar este rascunho agora?"
+        );
+        if (confirmarPublicacao) {
+          await publicarMarkdown(markdown);
+        }
+      }
       return;
     }
 
@@ -387,6 +399,13 @@ export function AgentePlaybookCalibracaoDrawer({
         setToast("Fluxo substituído com template WA atual. Rascunho pronto para publicar.");
       } else {
         setToast(out.message);
+      }
+
+      const confirmarPublicacao = window.confirm(
+        "Playbook adaptado para o motor WA. Deseja publicar agora (modo 1-clique)?"
+      );
+      if (confirmarPublicacao) {
+        await publicarMarkdown(out.markdown);
       }
     } catch {
       setErro("Falha de rede ao adaptar ao motor WhatsApp.");

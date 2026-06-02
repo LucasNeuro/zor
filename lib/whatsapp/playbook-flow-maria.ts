@@ -1280,7 +1280,14 @@ async function carregarDynamicPlaybookRuntime(
     .eq("agente_slug", agenteSlug)
     .maybeSingle();
 
-  if (agenteMetaErr || !agenteMeta) return null;
+  if (agenteMetaErr || !agenteMeta) {
+    console.warn("[playbook-flow] runtime load failed: agent meta", {
+      agente: agenteSlug,
+      motivo: agenteMetaErr ? "meta_query_error" : "meta_not_found",
+      erro: agenteMetaErr?.message ?? null,
+    });
+    return null;
+  }
 
   const loaded = await loadPublishedPlaybookRuntimeSource(supabase, agenteSlug, {
     playbook_generated_at:
@@ -1292,13 +1299,36 @@ async function carregarDynamicPlaybookRuntime(
     playbook_source_hash:
       typeof agenteMeta.playbook_source_hash === "string" ? agenteMeta.playbook_source_hash : null,
   });
-  if (!loaded.ok) return null;
+  if (!loaded.ok) {
+    console.warn("[playbook-flow] runtime load failed: bucket download", {
+      agente: agenteSlug,
+      motivo: loaded.reason,
+      detalhe: loaded.detail ?? null,
+      path: agenteMeta.playbook_object_path ?? null,
+    });
+    return null;
+  }
 
   const parsed = parsePlaybookFlowFromMarkdown(loaded.rawMarkdown);
-  if (!parsed.ok) return null;
+  if (!parsed.ok) {
+    console.warn("[playbook-flow] runtime load failed: flow parse", {
+      agente: agenteSlug,
+      motivo: parsed.reason,
+      errors: parsed.errors,
+      markdown_bytes: loaded.rawMarkdown.length,
+    });
+    return null;
+  }
 
   const validated = validatePlaybookFlowDefinition(parsed.definition);
-  if (!validated.ok) return null;
+  if (!validated.ok) {
+    console.warn("[playbook-flow] runtime load failed: flow validate", {
+      agente: agenteSlug,
+      motivo: "validation_errors",
+      errors: validated.errors,
+    });
+    return null;
+  }
 
   return {
     definition: convertStructuredFlowToEngine(validated.definition),

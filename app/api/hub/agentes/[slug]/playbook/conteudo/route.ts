@@ -6,6 +6,7 @@ import {
 } from "@/lib/playbook/custom-playbook";
 import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
+import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
 
 function db() {
   return createClient(
@@ -75,6 +76,7 @@ export async function GET(
     tem_playbook: true,
     markdown: loaded.markdown,
     bytes: Buffer.byteLength(loaded.markdown, "utf8"),
+    fluxo_whatsapp: assessPlaybookFlowInMarkdown(loaded.markdown),
   });
 }
 

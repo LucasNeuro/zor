@@ -186,8 +186,17 @@ export function AgentePlaybookCalibracaoDrawer({
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  async function publicarMarkdown() {
-    if (!temConteudo || publicando) return;
+  async function publicarMarkdown(markdownOverride?: string) {
+    const markdownToPublish =
+      typeof markdownOverride === "string" ? markdownOverride : markdown;
+    if (!markdownToPublish.trim() || publicando) return;
+    const statusToPublish = assessPlaybookFlowInMarkdown(markdownToPublish);
+    if (statusToPublish.kind !== "ready") {
+      setErro(
+        "Antes de publicar, use «Adaptar motor WA» até o banner verde confirmar o fluxo WhatsApp (obra10_playbook_flow)."
+      );
+      return;
+    }
     setPublicando(true);
     setErro("");
     try {
@@ -196,7 +205,7 @@ export function AgentePlaybookCalibracaoDrawer({
         {
           method: "PUT",
           headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({ markdown }),
+          body: JSON.stringify({ markdown: markdownToPublish }),
         }
       );
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -204,7 +213,8 @@ export function AgentePlaybookCalibracaoDrawer({
         setErro(extractApiError(data, `Erro HTTP ${res.status}`));
         return;
       }
-      setMarkdownPublicado(markdown);
+      setMarkdown(markdownToPublish);
+      setMarkdownPublicado(markdownToPublish);
       setMeta((m) => ({
         ...m,
         hash: typeof data.playbook_source_hash === "string" ? data.playbook_source_hash : m.hash,
@@ -213,7 +223,12 @@ export function AgentePlaybookCalibracaoDrawer({
         generatedAt:
           typeof data.playbook_generated_at === "string" ? data.playbook_generated_at : m.generatedAt,
       }));
-      setToast("Playbook publicado no bucket.");
+      const autoFlow = data.auto_appended_flow === true;
+      setToast(
+        autoFlow
+          ? "Publicado com bloco de fluxo WA acrescentado automaticamente."
+          : "Playbook publicado no bucket (com fluxo WhatsApp)."
+      );
     } catch {
       setErro("Falha de rede ao publicar.");
     } finally {
@@ -347,6 +362,14 @@ export function AgentePlaybookCalibracaoDrawer({
     }
     if (flowStatus.kind === "ready") {
       setToast("O rascunho já tem fluxo WhatsApp válido. Pode publicar.");
+      if (dirty) {
+        const confirmarPublicacao = window.confirm(
+          "Fluxo WA já está válido. Deseja publicar este rascunho agora?"
+        );
+        if (confirmarPublicacao) {
+          await publicarMarkdown(markdown);
+        }
+      }
       return;
     }
 
@@ -369,7 +392,21 @@ export function AgentePlaybookCalibracaoDrawer({
         setAnaliseResultado(null);
         setAnaliseErro("");
       }
-      setToast(out.message);
+      if (out.action === "replaced_flow") {
+        setMarkdown(out.markdown);
+        setAnaliseResultado(null);
+        setAnaliseErro("");
+        setToast("Fluxo substituído com template WA atual. Rascunho pronto para publicar.");
+      } else {
+        setToast(out.message);
+      }
+
+      const confirmarPublicacao = window.confirm(
+        "Playbook adaptado para o motor WA. Deseja publicar agora (modo 1-clique)?"
+      );
+      if (confirmarPublicacao) {
+        await publicarMarkdown(out.markdown);
+      }
     } catch {
       setErro("Falha de rede ao adaptar ao motor WhatsApp.");
     } finally {
@@ -613,13 +650,18 @@ export function AgentePlaybookCalibracaoDrawer({
                 <button
                   type="button"
                   onClick={() => void publicarMarkdown()}
-                  disabled={!dirty || !temConteudo || publicando}
+                  disabled={!dirty || !temConteudo || publicando || flowStatus.kind !== "ready"}
                   style={{
                     ...btnToolbarPublish,
                     boxShadow: "inset 1px 0 0 rgba(201, 162, 74, 0.45)",
-                    opacity: !dirty || !temConteudo || publicando ? 0.5 : 1,
+                    opacity:
+                      !dirty || !temConteudo || publicando || flowStatus.kind !== "ready" ? 0.5 : 1,
                   }}
-                  title="Grava o rascunho no bucket e substitui playbook.md"
+                  title={
+                    flowStatus.kind !== "ready"
+                      ? "Use «Adaptar motor WA» até o banner verde antes de publicar"
+                      : "Grava o rascunho no bucket e substitui playbook.md"
+                  }
                 >
                   <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
                 </button>

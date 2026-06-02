@@ -4,9 +4,8 @@ import {
   loadCurrentPlaybookMarkdown,
   savePlaybookMarkdownForAgent,
 } from "@/lib/playbook/custom-playbook";
-import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
-import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
+import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
 
 function db() {
   return createClient(
@@ -106,27 +105,19 @@ export async function PUT(
         ? body.content
         : "";
 
-  const parsed = parsePlaybookFlowFromMarkdown(markdown);
-  const noFlowBlock = !parsed.ok && parsed.reason === "not_found";
-
-  if (!noFlowBlock) {
-    if (!parsed.ok) {
-      return NextResponse.json(
-        { error: "Fluxo playbook inválido.", errors: parsed.errors },
-        { status: 400 }
-      );
-    }
-
-    const validated = validatePlaybookFlowDefinition(parsed.definition);
-    if (!validated.ok) {
-      return NextResponse.json(
-        { error: "Fluxo playbook inválido.", errors: validated.errors },
-        { status: 400 }
-      );
-    }
+  const ensured = await ensureMarkdownWithWhatsappFlow(markdown);
+  if (!ensured.ok) {
+    return NextResponse.json(
+      {
+        error:
+          "Publicação exige bloco de fluxo WhatsApp válido (`obra10_playbook_flow`). Use «Adaptar motor WA» na calibração.",
+        errors: ensured.errors,
+      },
+      { status: 400 }
+    );
   }
 
-  const result = await savePlaybookMarkdownForAgent(supabase, slug, markdown);
+  const result = await savePlaybookMarkdownForAgent(supabase, slug, ensured.markdown);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
@@ -134,5 +125,7 @@ export async function PUT(
   return NextResponse.json({
     sucesso: true,
     ...result,
+    auto_appended_flow: ensured.auto_appended_flow,
+    fluxo_whatsapp: assessPlaybookFlowInMarkdown(ensured.markdown),
   });
 }

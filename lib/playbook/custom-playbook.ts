@@ -277,6 +277,9 @@ export async function savePlaybookMarkdownForAgent(
 
   if (dbErr) return { ok: false, status: 500, error: dbErr.message };
 
+  const { invalidatePublishedPlaybookCache } = await import("@/lib/playbook/published-runtime");
+  invalidatePublishedPlaybookCache(agenteSlug);
+
   return {
     ok: true,
     playbook_object_path: path,

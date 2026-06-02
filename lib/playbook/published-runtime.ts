@@ -43,6 +43,14 @@ function cacheKey(meta: PlaybookMeta, agenteSlug: string): string {
   return `${agenteSlug}::${path}::${hash}`;
 }
 
+/** Limpa cache em memória após publicar playbook (worker lê ficheiro novo de imediato). */
+export function invalidatePublishedPlaybookCache(agenteSlug: string): void {
+  const prefix = `${agenteSlug.trim()}::`;
+  for (const key of publishedPlaybookCache.keys()) {
+    if (key.startsWith(prefix)) publishedPlaybookCache.delete(key);
+  }
+}
+
 function stripFrontmatter(md: string): string {
   const normalized = md.replace(/\r\n/g, "\n");
   if (!normalized.startsWith("---\n")) return normalized;

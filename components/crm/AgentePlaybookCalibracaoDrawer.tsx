@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, FileText, GitBranch, RefreshCw, Save, Send, User, X } from "lucide-react";
+import { Bot, GitBranch, RefreshCw, Save, Send, User, X } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
   PlaybookUploadAnalisePanel,
@@ -377,33 +377,6 @@ export function AgentePlaybookCalibracaoDrawer({
     }
   }
 
-  async function aplicarTemplatePadraoV1() {
-    if (carregando || publicando || uploadStatus === "enviando") return;
-    setErro("");
-    try {
-      const res = await fetch(PLAYBOOK_EXEMPLO_MD_URL, { headers: internalApiHeaders() });
-      if (!res.ok) {
-        setErro(`Falha ao carregar template padrão (HTTP ${res.status}).`);
-        return;
-      }
-      const texto = (await res.text()).trim();
-      if (!texto) {
-        setErro("Template padrão vazio.");
-        return;
-      }
-      setMarkdown(texto);
-      setArquivoNome("playbook-template-v1.md");
-      setUploadStatus("sucesso");
-      setUploadPct(100);
-      setUploadMensagem("Template padrão v1 aplicado no editor.");
-      setAnaliseResultado(null);
-      setAnaliseErro("");
-      setToast("Template padrão aplicado. Revise, ajuste e publique.");
-    } catch {
-      setErro("Falha de rede ao carregar template padrão.");
-    }
-  }
-
   async function enviarChat() {
     const t = chatInput.trim();
     if (!t || chatEnviando || !temConteudo) return;
@@ -594,7 +567,6 @@ export function AgentePlaybookCalibracaoDrawer({
                 flexWrap: "wrap",
                 gap: 10,
                 alignItems: "center",
-                justifyContent: "space-between",
               }}
             >
               <CrmHeaderActionsRow align="start">
@@ -630,15 +602,6 @@ export function AgentePlaybookCalibracaoDrawer({
                 </button>
                 <button
                   type="button"
-                  onClick={() => void aplicarTemplatePadraoV1()}
-                  disabled={carregando || publicando || uploadStatus === "enviando"}
-                  style={btnToolbar}
-                  title="Substitui o rascunho pelo template padrão v1 (motor dinâmico)"
-                >
-                  <FileText size={14} /> Template v1
-                </button>
-                <button
-                  type="button"
                   onClick={() => void regenerarDoAgente()}
                   disabled={regenerando || carregando}
                   style={btnToolbar}
@@ -647,41 +610,37 @@ export function AgentePlaybookCalibracaoDrawer({
                   <RefreshCw size={14} className={regenerando ? "animate-spin" : undefined} />
                   {regenerando ? "A gerar…" : "Regenerar"}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void publicarMarkdown()}
+                  disabled={!dirty || !temConteudo || publicando}
+                  style={{
+                    ...btnToolbarPublish,
+                    boxShadow: "inset 1px 0 0 rgba(201, 162, 74, 0.45)",
+                    opacity: !dirty || !temConteudo || publicando ? 0.5 : 1,
+                  }}
+                  title="Grava o rascunho no bucket e substitui playbook.md"
+                >
+                  <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
+                </button>
               </CrmHeaderActionsRow>
-
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                <CrmHeaderActionsRow align="start">
-                  <button
-                    type="button"
-                    onClick={() => void publicarMarkdown()}
-                    disabled={!dirty || !temConteudo || publicando}
-                    style={{
-                      ...btnToolbarPublish,
-                      opacity: !dirty || !temConteudo || publicando ? 0.5 : 1,
-                    }}
-                    title="Grava o rascunho no bucket e substitui playbook.md"
-                  >
-                    <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
-                  </button>
-                </CrmHeaderActionsRow>
-                {dirty ? (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: "#d29922",
-                      fontWeight: 700,
-                      padding: "4px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #d2992244",
-                      background: "#d2992211",
-                    }}
-                  >
-                    Rascunho não publicado
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 10, color: "#3fb950", fontWeight: 600 }}>Publicado</span>
-                )}
-              </div>
+              {dirty ? (
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: "#d29922",
+                    fontWeight: 700,
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    border: "1px solid #d2992244",
+                    background: "#d2992211",
+                  }}
+                >
+                  Rascunho não publicado
+                </span>
+              ) : (
+                <span style={{ fontSize: 10, color: "#3fb950", fontWeight: 600 }}>Publicado</span>
+              )}
             </div>
 
             <div

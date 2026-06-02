@@ -380,7 +380,14 @@ export function AgentePlaybookCalibracaoDrawer({
         setAnaliseResultado(null);
         setAnaliseErro("");
       }
-      setToast(out.message);
+      if (out.action === "replaced_flow") {
+        setMarkdown(out.markdown);
+        setAnaliseResultado(null);
+        setAnaliseErro("");
+        setToast("Fluxo substituído com template WA atual. Rascunho pronto para publicar.");
+      } else {
+        setToast(out.message);
+      }
     } catch {
       setErro("Falha de rede ao adaptar ao motor WhatsApp.");
     } finally {

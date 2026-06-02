@@ -3,11 +3,36 @@ import { parsePlaybookFlowFromMarkdown } from "./flow-parse";
 import { validatePlaybookFlowDefinition } from "./flow-validate";
 
 const FLOW_SECTION_RE = /\n---\n\n## Bloco de fluxo din[aá]mico[\s\S]*$/i;
+const FRONTMATTER_RE = /^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/;
+const MARKDOWN_HEADING_RE = /(^|\n)#{1,6}\s+\S/;
 
 export type AdaptarMarkdownMotorWhatsappResult =
   | { ok: true; markdown: string; action: "appended_flow"; message: string }
   | { ok: true; markdown: string; action: "replaced_flow"; message: string }
   | { ok: false; error: string };
+
+function looksLikeStructuredMarkdown(text: string): boolean {
+  return FRONTMATTER_RE.test(text) || MARKDOWN_HEADING_RE.test(text);
+}
+
+function buildMarkdownFromPlainText(raw: string): string {
+  const body = raw
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
+  return `---
+obra10_playbook_schema: 1
+---
+
+# Playbook — Rascunho calibracao
+
+## Prompt unificado
+
+${body}
+`;
+}
 
 /**
  * Mantém o corpo narrativo (prompt/cargo) e acrescenta ou preserva o bloco
@@ -45,12 +70,16 @@ export function adaptarMarkdownParaMotorWhatsapp(
     };
   }
 
+  const narrativeBase = looksLikeStructuredMarkdown(current)
+    ? current
+    : buildMarkdownFromPlainText(current);
+
   const hadValidFlow = (() => {
-    const parsed = parsePlaybookFlowFromMarkdown(current);
+    const parsed = parsePlaybookFlowFromMarkdown(narrativeBase);
     if (!parsed.ok) return false;
     return validatePlaybookFlowDefinition(parsed.definition).ok;
   })();
-  const base = current.replace(FLOW_SECTION_RE, "").trimEnd();
+  const base = narrativeBase.replace(FLOW_SECTION_RE, "").trimEnd();
   const markdown = base + renderPlaybookFlowBlockToMarkdown(validatedTemplate.definition);
 
   return {

@@ -13,6 +13,9 @@ obra10_playbook_schema: 1
 ## Prompt unificado
 Texto de exemplo.
 `;
+const TEXTO_CRU = `Atenda com objetividade e empatia.
+Peça nome antes de qualquer classificação.
+No final, encaminhe para humano com resumo.`;
 
 describe("adaptarMarkdownParaMotorWhatsapp", () => {
   const template = readFileSync(
@@ -41,5 +44,17 @@ describe("adaptarMarkdownParaMotorWhatsapp", () => {
     expect(again.action).toBe("replaced_flow");
     expect(again.markdown).toContain("```json obra10_playbook_flow");
     expect(again.markdown).toContain("obra10_playbook_flow_schema");
+  });
+
+  it("estrutura texto cru em markdown e acrescenta fluxo", () => {
+    const out = adaptarMarkdownParaMotorWhatsapp(TEXTO_CRU, template);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.action).toBe("appended_flow");
+    expect(out.markdown).toContain("obra10_playbook_schema: 1");
+    expect(out.markdown).toContain("# Playbook — Rascunho calibracao");
+    expect(out.markdown).toContain("## Prompt unificado");
+    expect(out.markdown).toContain("```json obra10_playbook_flow");
+    expect(assessPlaybookFlowInMarkdown(out.markdown).kind).toBe("ready");
   });
 });

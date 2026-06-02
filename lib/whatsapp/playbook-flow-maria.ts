@@ -19,6 +19,7 @@ import {
 } from "@/lib/playbook/flow-engine";
 import type { PlaybookFlowDefinition, PlaybookFlowStep } from "@/lib/playbook/flow-definition-types";
 import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
+import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
 import {
@@ -1309,13 +1310,26 @@ async function carregarDynamicPlaybookRuntime(
     return null;
   }
 
-  const parsed = parsePlaybookFlowFromMarkdown(loaded.rawMarkdown);
+  let markdownForFlow = loaded.rawMarkdown;
+  let parsed = parsePlaybookFlowFromMarkdown(markdownForFlow);
+  if (!parsed.ok && parsed.reason === "not_found") {
+    const ensured = await ensureMarkdownWithWhatsappFlow(markdownForFlow);
+    if (ensured.ok) {
+      console.info("[playbook-flow] runtime auto-adapted missing whatsapp flow block", {
+        agente: agenteSlug,
+        auto_appended_flow: ensured.auto_appended_flow,
+        markdown_bytes: ensured.markdown.length,
+      });
+      markdownForFlow = ensured.markdown;
+      parsed = parsePlaybookFlowFromMarkdown(markdownForFlow);
+    }
+  }
   if (!parsed.ok) {
     console.warn("[playbook-flow] runtime load failed: flow parse", {
       agente: agenteSlug,
       motivo: parsed.reason,
       errors: parsed.errors,
-      markdown_bytes: loaded.rawMarkdown.length,
+      markdown_bytes: markdownForFlow.length,
     });
     return null;
   }

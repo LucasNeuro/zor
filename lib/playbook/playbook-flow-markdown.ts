@@ -5,8 +5,8 @@ import { validatePlaybookFlowDefinition } from "./flow-validate";
 const FLOW_SECTION_RE = /\n---\n\n## Bloco de fluxo din[aá]mico[\s\S]*$/i;
 
 export type AdaptarMarkdownMotorWhatsappResult =
-  | { ok: true; markdown: string; action: "already_ready"; message: string }
   | { ok: true; markdown: string; action: "appended_flow"; message: string }
+  | { ok: true; markdown: string; action: "replaced_flow"; message: string }
   | { ok: false; error: string };
 
 /**
@@ -20,19 +20,6 @@ export function adaptarMarkdownParaMotorWhatsapp(
   const current = String(narrativeMarkdown ?? "").trim();
   if (!current) {
     return { ok: false, error: "O editor está vazio. Cole ou carregue o playbook antes de adaptar." };
-  }
-
-  const flowAtual = parsePlaybookFlowFromMarkdown(current);
-  if (flowAtual.ok) {
-    const validated = validatePlaybookFlowDefinition(flowAtual.definition);
-    if (validated.ok) {
-      return {
-        ok: true,
-        markdown: current,
-        action: "already_ready",
-        message: "O rascunho já contém um bloco de fluxo WhatsApp válido (schema v1).",
-      };
-    }
   }
 
   const template = String(templateMarkdownComFluxo ?? "").trim();
@@ -58,15 +45,21 @@ export function adaptarMarkdownParaMotorWhatsapp(
     };
   }
 
+  const hadValidFlow = (() => {
+    const parsed = parsePlaybookFlowFromMarkdown(current);
+    if (!parsed.ok) return false;
+    return validatePlaybookFlowDefinition(parsed.definition).ok;
+  })();
   const base = current.replace(FLOW_SECTION_RE, "").trimEnd();
   const markdown = base + renderPlaybookFlowBlockToMarkdown(validatedTemplate.definition);
 
   return {
     ok: true,
     markdown,
-    action: "appended_flow",
-    message:
-      "Bloco de fluxo WhatsApp (obra10_playbook_flow) adicionado ao final. Revise, analise e publique.",
+    action: hadValidFlow ? "replaced_flow" : "appended_flow",
+    message: hadValidFlow
+      ? "Bloco de fluxo WhatsApp substituído pelo template atual. Revise, analise e publique."
+      : "Bloco de fluxo WhatsApp (obra10_playbook_flow) adicionado ao final. Revise, analise e publique.",
   };
 }
 

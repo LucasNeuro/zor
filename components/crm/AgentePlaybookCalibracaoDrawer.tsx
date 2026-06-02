@@ -188,6 +188,12 @@ export function AgentePlaybookCalibracaoDrawer({
 
   async function publicarMarkdown() {
     if (!temConteudo || publicando) return;
+    if (flowStatus.kind !== "ready") {
+      setErro(
+        "Antes de publicar, use «Adaptar motor WA» até o banner verde confirmar o fluxo WhatsApp (obra10_playbook_flow)."
+      );
+      return;
+    }
     setPublicando(true);
     setErro("");
     try {
@@ -213,7 +219,12 @@ export function AgentePlaybookCalibracaoDrawer({
         generatedAt:
           typeof data.playbook_generated_at === "string" ? data.playbook_generated_at : m.generatedAt,
       }));
-      setToast("Playbook publicado no bucket.");
+      const autoFlow = data.auto_appended_flow === true;
+      setToast(
+        autoFlow
+          ? "Publicado com bloco de fluxo WA acrescentado automaticamente."
+          : "Playbook publicado no bucket (com fluxo WhatsApp)."
+      );
     } catch {
       setErro("Falha de rede ao publicar.");
     } finally {
@@ -613,13 +624,18 @@ export function AgentePlaybookCalibracaoDrawer({
                 <button
                   type="button"
                   onClick={() => void publicarMarkdown()}
-                  disabled={!dirty || !temConteudo || publicando}
+                  disabled={!dirty || !temConteudo || publicando || flowStatus.kind !== "ready"}
                   style={{
                     ...btnToolbarPublish,
                     boxShadow: "inset 1px 0 0 rgba(201, 162, 74, 0.45)",
-                    opacity: !dirty || !temConteudo || publicando ? 0.5 : 1,
+                    opacity:
+                      !dirty || !temConteudo || publicando || flowStatus.kind !== "ready" ? 0.5 : 1,
                   }}
-                  title="Grava o rascunho no bucket e substitui playbook.md"
+                  title={
+                    flowStatus.kind !== "ready"
+                      ? "Use «Adaptar motor WA» até o banner verde antes de publicar"
+                      : "Grava o rascunho no bucket e substitui playbook.md"
+                  }
                 >
                   <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
                 </button>

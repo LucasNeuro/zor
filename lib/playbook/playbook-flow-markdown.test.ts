@@ -30,7 +30,7 @@ describe("adaptarMarkdownParaMotorWhatsapp", () => {
     expect(assessPlaybookFlowInMarkdown(out.markdown).kind).toBe("ready");
   });
 
-  it("não duplica quando fluxo já é válido", () => {
+  it("substitui o fluxo quando já existe um válido", () => {
     const ready = adaptarMarkdownParaMotorWhatsapp(NARRATIVO_SO_SCHEMA, template);
     if (!ready.ok || ready.action !== "appended_flow") {
       throw new Error("setup failed");
@@ -38,6 +38,8 @@ describe("adaptarMarkdownParaMotorWhatsapp", () => {
     const again = adaptarMarkdownParaMotorWhatsapp(ready.markdown, template);
     expect(again.ok).toBe(true);
     if (!again.ok) return;
-    expect(again.action).toBe("already_ready");
+    expect(again.action).toBe("replaced_flow");
+    expect(again.markdown).toContain("```json obra10_playbook_flow");
+    expect(again.markdown).toContain("obra10_playbook_flow_schema");
   });
 });

@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, FileText, RefreshCw, Save, Send, User, X } from "lucide-react";
+import { Bot, FileText, GitBranch, RefreshCw, Save, Send, User, X } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
   PlaybookUploadAnalisePanel,
@@ -14,6 +14,7 @@ import { PlaybookFlowStatusBanner } from "@/components/crm/PlaybookFlowStatusBan
 import { normalizarAnalisePlaybook } from "@/lib/playbook/playbook-analise-ui";
 import { MAX_PLAYBOOK_UPLOAD_BYTES } from "@/lib/playbook/custom-playbook";
 import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
+import { adaptarMarkdownParaMotorWhatsapp } from "@/lib/playbook/playbook-flow-markdown";
 import { PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
 
 const PLAYBOOK_INPUT_CALIB = "playbook-calibracao-upload";
@@ -71,6 +72,7 @@ export function AgentePlaybookCalibracaoDrawer({
 
   const [publicando, setPublicando] = useState(false);
   const [regenerando, setRegenerando] = useState(false);
+  const [adaptandoMotor, setAdaptandoMotor] = useState(false);
 
   const [uploadStatus, setUploadStatus] = useState<PlaybookUploadStatus>("idle");
   const [uploadHover, setUploadHover] = useState(false);
@@ -336,6 +338,44 @@ export function AgentePlaybookCalibracaoDrawer({
     }
   }
 
+  async function adaptarTextoAoMotorWhatsapp() {
+    if (carregando || publicando || uploadStatus === "enviando" || adaptandoMotor) return;
+    if (!temConteudo) {
+      setErro("Cole ou carregue o playbook no editor antes de adaptar ao motor.");
+      return;
+    }
+    if (flowStatus.kind === "ready") {
+      setToast("O rascunho já tem fluxo WhatsApp válido. Pode publicar.");
+      return;
+    }
+
+    setAdaptandoMotor(true);
+    setErro("");
+    try {
+      const res = await fetch(PLAYBOOK_EXEMPLO_MD_URL, { headers: internalApiHeaders() });
+      if (!res.ok) {
+        setErro(`Falha ao carregar template de fluxo (HTTP ${res.status}).`);
+        return;
+      }
+      const template = (await res.text()).trim();
+      const out = adaptarMarkdownParaMotorWhatsapp(markdown, template);
+      if (!out.ok) {
+        setErro(out.error);
+        return;
+      }
+      if (out.action === "appended_flow") {
+        setMarkdown(out.markdown);
+        setAnaliseResultado(null);
+        setAnaliseErro("");
+      }
+      setToast(out.message);
+    } catch {
+      setErro("Falha de rede ao adaptar ao motor WhatsApp.");
+    } finally {
+      setAdaptandoMotor(false);
+    }
+  }
+
   async function aplicarTemplatePadraoV1() {
     if (carregando || publicando || uploadStatus === "enviando") return;
     setErro("");
@@ -562,6 +602,26 @@ export function AgentePlaybookCalibracaoDrawer({
                 style={btnSecundario}
               >
                 <RefreshCw size={14} /> Recarregar
+              </button>
+              <button
+                type="button"
+                onClick={() => void adaptarTextoAoMotorWhatsapp()}
+                disabled={
+                  carregando ||
+                  publicando ||
+                  uploadStatus === "enviando" ||
+                  adaptandoMotor ||
+                  !temConteudo
+                }
+                style={{
+                  ...btnSecundario,
+                  borderColor: flowStatus.kind === "ready" ? "#30363d" : "#3fb95055",
+                  color: flowStatus.kind === "ready" ? "#8b949e" : "#3fb950",
+                }}
+                title="Mantém o texto actual e acrescenta o bloco json obra10_playbook_flow (template v1) para o WhatsApp"
+              >
+                <GitBranch size={14} />{" "}
+                {adaptandoMotor ? "A adaptar…" : "Adaptar ao motor WhatsApp"}
               </button>
               <button
                 type="button"

@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgentPlaybookSnapshotV1 } from "./agent-snapshot";
 import { renderDeterministicPlaybookMd } from "./render-deterministic";
 import { mistralGenerateAgnoAppendix } from "./mistral-appendix";
+import { loadCurrentPlaybookMarkdown } from "./custom-playbook";
+import { mergePlaybookMarkdownPreservingFlow } from "./playbook-flow-markdown";
 
 export const PLAYBOOK_BUCKET = "hub-agent-playbooks";
 
@@ -69,6 +71,16 @@ export async function generateUploadAndLinkPlaybook(
 
   let bodyMd = renderDeterministicPlaybookMd(snapshot, sourceHash);
   let mistralUsed = false;
+
+  const existingPlaybook = await loadCurrentPlaybookMarkdown(supabase, agenteSlug);
+  const merged = mergePlaybookMarkdownPreservingFlow(
+    bodyMd,
+    existingPlaybook.ok ? existingPlaybook.markdown : null
+  );
+  bodyMd = merged.markdown;
+  if (merged.preservedFlow) {
+    console.info("[playbook] fluxo WA preservado na regeneracao", { agente: agenteSlug });
+  }
 
   const appendix = await mistralGenerateAgnoAppendix(bodyMd, nome, agenteSlug);
   if (appendix) {

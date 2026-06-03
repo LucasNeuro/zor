@@ -66,6 +66,8 @@ export type PlaybookFlowMessageStep = PlaybookFlowBaseStep & {
 export type PlaybookFlowMenuStep = PlaybookFlowBaseStep & {
   kind: "menu";
   prompt: string;
+  /** Chave em wa_playbook_answers; padrão: id do step. */
+  field?: string;
   options: PlaybookFlowMenuOption[];
   on_select?: Record<string, string>;
 };

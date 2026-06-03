@@ -67,15 +67,16 @@ Se o sistema permitir personalização: «[Nome], obrigado pela informação. É
 
 ## §3 — Triagem inicial (uma vez por conversa)
 
-Após nome (ou se o nome já estiver no CRM), identificar intenção e enviar menu com **5 opções** (preferir menu tipo **list**):
+Após nome (ou se o nome já estiver no CRM), identificar intenção e enviar menu com **6 opções** (preferir menu tipo **list**):
 
 | Opção para o cliente | ID interno sugerido |
 |----------------------|---------------------|
-| Arquitetura e projetos | `fluxo_arquitetura` / `triagem_arq` |
-| Imobiliário (comprar, vender ou alugar) | `fluxo1` / `triagem_imob` |
-| Homologação de parceiro (arquiteto/corretor) | `fluxo_homologacao` |
-| Proprietário — anunciar imóvel | `fluxo2` |
-| Outro assunto | `fluxo_outro` |
+| Arquitetura e projetos | `triagem_arq` |
+| Obra / reforma | `triagem_obra` |
+| Marcenaria | `triagem_marcenaria` |
+| Imobiliário (comprar, vender ou alugar) | `triagem_imob` |
+| Homologação de parceiro (arquiteto/corretor) | `triagem_homolog` |
+| Outro assunto | `triagem_outro` |
 
 **Não repetir** o menu depois que o cliente escolher um ramo.
 
@@ -496,7 +497,7 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
 ```json obra10_playbook_flow
 {
   "obra10_playbook_flow_schema": 1,
-  "id": "obra10_playbook_flow",
+  "id": "hub_mari_unificado_v1",
   "version": "1.0.0",
   "entry_step_id": "inicio_saudacao",
   "journeys": ["triagem", "arquitetura", "imobiliario"],
@@ -504,19 +505,22 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
     {
       "id": "inicio_saudacao",
       "kind": "message",
+      "journey": "triagem",
       "message": "Seja muito bem-vindo ao Obra 10+.",
       "next": "inicio_apresentacao"
     },
     {
       "id": "inicio_apresentacao",
       "kind": "message",
-      "message": "Meu nome é Mari e vou te acompanhar para garantir que seu atendimento saia exatamente como você deseja.",
+      "journey": "triagem",
+      "message": "Meu nome e Mari e vou te acompanhar para garantir que seu atendimento saia exatamente como voce deseja.",
       "next": "inicio_nome"
     },
     {
       "id": "inicio_nome",
       "kind": "input",
-      "prompt": "Me fale qual é o seu nome, por gentileza?",
+      "journey": "triagem",
+      "prompt": "Me fale qual e o seu nome, por gentileza?",
       "field": "nome",
       "input_type": "text",
       "next": "agradecer_nome"
@@ -524,7 +528,8 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
     {
       "id": "agradecer_nome",
       "kind": "message",
-      "message": "Obrigado pela informação. É um prazer te atender.",
+      "journey": "triagem",
+      "message": "Obrigado pela informacao. E um prazer te atender.",
       "next": "triagem_inicial_menu"
     },
     {
@@ -536,150 +541,182 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
         {
           "id": "triagem_arq",
           "label": "Arquitetura e projetos",
-          "next": "arquitetura_tamanho",
+          "next": "arq_tipo_imovel",
           "crm_patch": {
             "interesse_principal": "arquitetura",
-            "fluxo_ativo": "arquitetura"
+            "fluxo_ativo": "fluxo_arquitetura",
+            "lead_kind": "cliente_projetos"
+          }
+        },
+        {
+          "id": "triagem_obra",
+          "label": "Obra / reforma",
+          "next": "arq_tipo_imovel",
+          "crm_patch": {
+            "interesse_principal": "obra_reforma",
+            "fluxo_ativo": "fluxo_arquitetura",
+            "lead_kind": "cliente_projetos"
+          }
+        },
+        {
+          "id": "triagem_marcenaria",
+          "label": "Marcenaria",
+          "next": "marcenaria_descricao",
+          "crm_patch": {
+            "interesse_principal": "marcenaria",
+            "fluxo_ativo": "marcenaria",
+            "lead_kind": "cliente_projetos"
           }
         },
         {
           "id": "triagem_imob",
-          "label": "Imobiliário (comprar, vender ou alugar)",
+          "label": "Imobiliario (comprar, vender ou alugar)",
           "next": "imobiliario_router",
           "crm_patch": {
             "interesse_principal": "imobiliario",
-            "fluxo_ativo": "imobiliario"
+            "fluxo_ativo": "fluxo_imobiliario",
+            "lead_kind": "cliente_imobiliario"
           }
         },
         {
-          "id": "triagem_homologacao",
-          "label": "Homologação de parceiro (arquiteto/corretor)",
+          "id": "triagem_homolog",
+          "label": "Homologacao de parceiro (arquiteto/corretor)",
           "next": "imobiliario_parceiro_email",
           "crm_patch": {
             "interesse_principal": "parceiro",
-            "fluxo_ativo": "imobiliario",
+            "fluxo_ativo": "fluxo3",
             "lead_kind": "imobiliaria_corretor"
-          }
-        },
-        {
-          "id": "triagem_proprietario",
-          "label": "Proprietário — anunciar imóvel",
-          "next": "imobiliario_proprietario_operacao",
-          "crm_patch": {
-            "interesse_principal": "proprietario",
-            "fluxo_ativo": "imobiliario",
-            "intencao_imobiliario": "anunciar"
           }
         },
         {
           "id": "triagem_outro",
           "label": "Outro assunto",
-          "next": "atendimento_outro_assunto"
+          "next": "atendimento_outro_descricao"
         }
       ]
     },
     {
-      "id": "arquitetura_tamanho",
+      "id": "arq_tipo_imovel",
       "kind": "menu",
       "journey": "arquitetura",
-      "prompt": "Qual o tamanho aproximado do imóvel?",
+      "prompt": "Qual o tipo de imovel do seu projeto?",
       "options": [
-        {
-          "id": "arq_tamanho_50_100",
-          "label": "De 50 a 100 m²",
-          "next": "arquitetura_prazo"
-        },
-        {
-          "id": "arq_tamanho_100_200",
-          "label": "De 100 a 200 m²",
-          "next": "arquitetura_prazo"
-        },
-        {
-          "id": "arq_tamanho_200_plus",
-          "label": "Acima de 200 m²",
-          "next": "arquitetura_prazo"
-        }
+        { "id": "arq_tipo_ap", "label": "Apartamento", "next": "arq_tamanho" },
+        { "id": "arq_tipo_casa", "label": "Casa", "next": "arq_tamanho" },
+        { "id": "arq_tipo_com", "label": "Comercial", "next": "arq_tamanho" },
+        { "id": "arq_tipo_ind", "label": "Industrial", "next": "arq_tamanho" },
+        { "id": "arq_tipo_outro", "label": "Outro", "next": "arq_tamanho" }
       ]
     },
     {
-      "id": "arquitetura_prazo",
+      "id": "arq_tamanho",
       "kind": "menu",
       "journey": "arquitetura",
-      "prompt": "Para quando você pretende iniciar o projeto?",
+      "prompt": "Qual o tamanho aproximado do projeto?",
       "options": [
-        {
-          "id": "arq_prazo_imediato",
-          "label": "Imediatamente",
-          "next": "arquitetura_localizacao"
-        },
-        {
-          "id": "arq_prazo_ate_90",
-          "label": "Dentro dos próximos 90 dias",
-          "next": "arquitetura_localizacao"
-        },
-        {
-          "id": "arq_prazo_90_plus",
-          "label": "Mais para frente, acima de 90 dias",
-          "next": "arquitetura_localizacao"
-        }
+        { "id": "arq_m2_ate50", "label": "Ate 50 m2", "next": "arq_localizacao" },
+        { "id": "arq_m2_51_250", "label": "51 a 250 m2", "next": "arq_localizacao" },
+        { "id": "arq_m2_251_500", "label": "251 a 500 m2", "next": "arq_localizacao" },
+        { "id": "arq_m2_mais500", "label": "Mais de 500 m2", "next": "arq_localizacao" },
+        { "id": "arq_m2_ns", "label": "Nao sei", "next": "arq_localizacao" }
       ]
     },
     {
-      "id": "arquitetura_localizacao",
+      "id": "arq_localizacao",
       "kind": "input",
       "journey": "arquitetura",
-      "prompt": "Qual a cidade e o bairro onde fica esse projeto?",
-      "field": "arquitetura_localizacao",
+      "prompt": "Em qual cidade e bairro fica o projeto?",
+      "field": "arq_localizacao",
       "input_type": "text",
-      "next": "arquitetura_agradecimento"
+      "next": "arq_prazo"
     },
     {
-      "id": "arquitetura_agradecimento",
+      "id": "arq_prazo",
+      "kind": "menu",
+      "journey": "arquitetura",
+      "prompt": "Para quando voce pretende iniciar o projeto?",
+      "options": [
+        { "id": "arq_prazo_imediato", "label": "Imediato", "next": "arq_agradecimento_final" },
+        { "id": "arq_prazo_30", "label": "Ate 30 dias", "next": "arq_agradecimento_final" },
+        { "id": "arq_prazo_60", "label": "Ate 60 dias", "next": "arq_agradecimento_final" },
+        { "id": "arq_prazo_90", "label": "Ate 90 dias", "next": "arq_agradecimento_final" },
+        { "id": "arq_prazo_mais", "label": "Mais pra frente", "next": "arq_agradecimento_final" }
+      ]
+    },
+    {
+      "id": "arq_agradecimento_final",
       "kind": "message",
       "journey": "arquitetura",
-      "message": "Perfeito, obrigado pelas informações.",
-      "next": "arquitetura_encaminhamento_1"
+      "message": "Perfeito, obrigado pelas informacoes.",
+      "next": "arq_handoff_explicacao_1"
     },
     {
-      "id": "arquitetura_encaminhamento_1",
+      "id": "arq_handoff_explicacao_1",
       "kind": "message",
       "journey": "arquitetura",
-      "message": "Eu cuido dessa fase inicial para entender melhor o que você precisa.",
-      "next": "arquitetura_encaminhamento_2"
+      "message": "Eu cuido dessa fase inicial para entender melhor o que voce precisa.",
+      "next": "arq_handoff_explicacao_2"
     },
     {
-      "id": "arquitetura_encaminhamento_2",
+      "id": "arq_handoff_explicacao_2",
       "kind": "message",
       "journey": "arquitetura",
-      "message": "Agora vou solicitar que os arquitetos responsáveis entrem em contato para dar continuidade.",
-      "next": "arquitetura_encaminhamento_3"
+      "message": "Agora vou solicitar que os arquitetos responsaveis entrem em contato para dar continuidade.",
+      "next": "arq_handoff_explicacao_3"
     },
     {
-      "id": "arquitetura_encaminhamento_3",
+      "id": "arq_handoff_explicacao_3",
       "kind": "message",
       "journey": "arquitetura",
-      "message": "Eles vão te orientar com mais detalhes e apresentar as melhores opções para o seu projeto.",
-      "next": "arquitetura_encaminhamento_4"
+      "message": "Eles vao te orientar com mais detalhes e apresentar as melhores opcoes para o seu projeto.",
+      "next": "arq_encerrar"
     },
     {
-      "id": "arquitetura_encaminhamento_4",
-      "kind": "message",
-      "journey": "arquitetura",
-      "message": "Eu continuo acompanhando seu atendimento e fico à disposição para o que precisar.",
-      "next": "arquitetura_complete"
-    },
-    {
-      "id": "arquitetura_complete",
+      "id": "arq_encerrar",
       "kind": "complete",
       "journey": "arquitetura",
       "complete": {
         "type": "complete",
         "handoff_to": "arquitetura",
-        "summary": "Lead de arquitetura qualificado: tamanho, prazo e localização registrados.",
+        "summary": "Eu continuo acompanhando seu atendimento e fico a disposicao para o que precisar.",
+        "crm_patch": {
+          "estagio": "qualificacao_inicial_concluida",
+          "potencial": "MEDIO",
+          "lead_kind": "cliente_projetos",
+          "fluxo_ativo": "fluxo_arquitetura",
+          "interesse_principal": "arquitetura"
+        }
+      }
+    },
+    {
+      "id": "marcenaria_descricao",
+      "kind": "input",
+      "journey": "arquitetura",
+      "prompt": "Conte em poucas palavras o que voce precisa em marcenaria que eu encaminho para o time certo.",
+      "field": "marcenaria_descricao",
+      "input_type": "text",
+      "next": "marcenaria_encerramento"
+    },
+    {
+      "id": "marcenaria_encerramento",
+      "kind": "message",
+      "journey": "arquitetura",
+      "message": "Obrigado! Ja encaminhei para o time de marcenaria. Em breve alguem fala com voce por aqui.",
+      "next": "marcenaria_complete"
+    },
+    {
+      "id": "marcenaria_complete",
+      "kind": "complete",
+      "journey": "arquitetura",
+      "complete": {
+        "type": "complete",
+        "handoff_to": "time_humano",
+        "summary": "Lead de marcenaria registrado e encaminhado ao time responsavel.",
         "crm_patch": {
           "estagio": "Lead recebido",
           "lead_kind": "cliente_projetos",
-          "fluxo_ativo": "arquitetura"
+          "fluxo_ativo": "marcenaria",
+          "potencial": "MEDIO"
         }
       }
     },
@@ -687,46 +724,36 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "imobiliario_router",
       "kind": "menu",
       "journey": "imobiliario",
-      "prompt": "Você quer comprar, vender, alugar, anunciar um imóvel ou outro assunto?",
+      "prompt": "O que voce busca no mercado imobiliario?",
       "options": [
         {
           "id": "imob_comprar",
           "label": "Comprar",
           "next": "imobiliario_cliente_final_1",
-          "crm_patch": {
-            "intencao_imobiliario": "comprar",
-            "lead_kind": "cliente_imobiliario"
-          }
+          "crm_patch": { "intencao_imobiliario": "comprar", "lead_kind": "cliente_imobiliario" }
         },
         {
           "id": "imob_vender",
           "label": "Vender",
           "next": "imobiliario_proprietario_operacao",
-          "crm_patch": {
-            "intencao_imobiliario": "vender"
-          }
+          "crm_patch": { "intencao_imobiliario": "vender" }
         },
         {
           "id": "imob_alugar",
           "label": "Alugar",
           "next": "imobiliario_cliente_final_1",
-          "crm_patch": {
-            "intencao_imobiliario": "alugar",
-            "lead_kind": "cliente_imobiliario"
-          }
+          "crm_patch": { "intencao_imobiliario": "alugar", "lead_kind": "cliente_imobiliario" }
         },
         {
           "id": "imob_anunciar",
-          "label": "Anunciar imóvel",
+          "label": "Anunciar imovel",
           "next": "imobiliario_proprietario_operacao",
-          "crm_patch": {
-            "intencao_imobiliario": "anunciar"
-          }
+          "crm_patch": { "intencao_imobiliario": "anunciar" }
         },
         {
           "id": "imob_outro",
           "label": "Outro",
-          "next": "atendimento_outro_assunto"
+          "next": "atendimento_outro_descricao"
         }
       ]
     },
@@ -734,21 +761,21 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "imobiliario_cliente_final_1",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Eu cuido desse primeiro contato e já vou te direcionar para o corretor responsável pelo imóvel.",
+      "message": "Eu cuido desse primeiro contato e ja vou te direcionar para o corretor responsavel pelo imovel.",
       "next": "imobiliario_cliente_final_2"
     },
     {
       "id": "imobiliario_cliente_final_2",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Ele vai te chamar por aqui com todas as informações do imóvel.",
+      "message": "Ele vai te chamar por aqui com todas as informacoes do imovel.",
       "next": "imobiliario_cliente_final_3"
     },
     {
       "id": "imobiliario_cliente_final_3",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Eu continuo acompanhando seu atendimento e fico à disposição para o que precisar.",
+      "message": "Eu continuo acompanhando seu atendimento e fico a disposicao para o que precisar.",
       "next": "imobiliario_cliente_final_complete"
     },
     {
@@ -758,11 +785,12 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "complete": {
         "type": "complete",
         "handoff_to": "imobiliario",
-        "summary": "Cliente final interessado em compra ou locação; encaminhado ao corretor responsável.",
+        "summary": "Cliente final interessado em compra ou locacao; encaminhado ao corretor responsavel.",
         "crm_patch": {
-          "estagio": "Lead recebido — compra/locação",
+          "estagio": "Lead recebido — compra/locacao",
           "lead_kind": "cliente_imobiliario",
-          "fluxo_ativo": "imobiliario"
+          "fluxo_ativo": "fluxo1",
+          "potencial": "ALTO"
         }
       }
     },
@@ -770,23 +798,19 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "imobiliario_proprietario_operacao",
       "kind": "menu",
       "journey": "imobiliario",
-      "prompt": "Você quer vender ou alugar esse imóvel?",
+      "prompt": "Voce quer vender ou alugar esse imovel?",
       "options": [
         {
-          "id": "proprietario_vender",
+          "id": "prop_vender",
           "label": "Vender",
           "next": "imobiliario_proprietario_cidade",
-          "crm_patch": {
-            "intencao_imobiliario": "vender"
-          }
+          "crm_patch": { "intencao_imobiliario": "vender" }
         },
         {
-          "id": "proprietario_alugar",
+          "id": "prop_alugar",
           "label": "Alugar",
           "next": "imobiliario_proprietario_cidade",
-          "crm_patch": {
-            "intencao_imobiliario": "alugar"
-          }
+          "crm_patch": { "intencao_imobiliario": "alugar" }
         }
       ]
     },
@@ -794,26 +818,30 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "imobiliario_proprietario_cidade",
       "kind": "input",
       "journey": "imobiliario",
-      "prompt": "Qual a cidade e o bairro onde está o imóvel?",
-      "field": "cidade_bairro",
+      "prompt": "Qual a cidade e o bairro onde esta o imovel?",
+      "field": "prop_localizacao",
       "input_type": "text",
       "next": "imobiliario_proprietario_tamanho"
     },
     {
       "id": "imobiliario_proprietario_tamanho",
-      "kind": "input",
+      "kind": "menu",
       "journey": "imobiliario",
-      "prompt": "Qual o tamanho aproximado do imóvel?",
-      "field": "tamanho_imovel",
-      "input_type": "text",
-      "next": "imobiliario_proprietario_valor"
+      "prompt": "Qual o tamanho aproximado do imovel?",
+      "options": [
+        { "id": "arq_m2_ate50", "label": "Ate 50 m2", "next": "imobiliario_proprietario_valor" },
+        { "id": "arq_m2_51_250", "label": "51 a 250 m2", "next": "imobiliario_proprietario_valor" },
+        { "id": "arq_m2_251_500", "label": "251 a 500 m2", "next": "imobiliario_proprietario_valor" },
+        { "id": "arq_m2_mais500", "label": "Mais de 500 m2", "next": "imobiliario_proprietario_valor" },
+        { "id": "arq_m2_ns", "label": "Nao sei", "next": "imobiliario_proprietario_valor" }
+      ]
     },
     {
       "id": "imobiliario_proprietario_valor",
       "kind": "input",
       "journey": "imobiliario",
-      "prompt": "Qual o valor que você está pedindo?",
-      "field": "valor_pedido",
+      "prompt": "Qual o valor que voce esta pedindo?",
+      "field": "prop_valor",
       "input_type": "text",
       "next": "imobiliario_proprietario_fotos"
     },
@@ -821,14 +849,7 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "imobiliario_proprietario_fotos",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Se tiver fotos ou vídeos, pode me enviar por aqui também. Isso ajuda bastante na análise do imóvel.",
-      "next": "imobiliario_proprietario_anunciado"
-    },
-    {
-      "id": "imobiliario_proprietario_anunciado",
-      "kind": "message",
-      "journey": "imobiliario",
-      "message": "O imóvel já está anunciado ou ainda não?",
+      "message": "Se tiver fotos ou videos, pode me enviar por aqui tambem. Isso ajuda bastante na analise do imovel.",
       "next": "imobiliario_proprietario_encerramento_1"
     },
     {
@@ -842,14 +863,14 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "imobiliario_proprietario_encerramento_2",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Ele vai entrar em contato para alinhar os próximos passos com você.",
+      "message": "Ele vai entrar em contato para alinhar os proximos passos com voce.",
       "next": "imobiliario_proprietario_encerramento_3"
     },
     {
       "id": "imobiliario_proprietario_encerramento_3",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Fico à disposição caso precise de algo.",
+      "message": "Fico a disposicao caso precise de algo.",
       "next": "imobiliario_proprietario_complete"
     },
     {
@@ -859,11 +880,12 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "complete": {
         "type": "complete",
         "handoff_to": "imobiliario",
-        "summary": "Proprietário qualificado: operação, localização, tamanho e valor registrados.",
+        "summary": "Proprietario qualificado: operacao, localizacao, tamanho e valor registrados.",
         "crm_patch": {
-          "estagio": "Captação de imóvel",
+          "estagio": "Captacao de imovel",
           "lead_kind": "cliente_imobiliario",
-          "fluxo_ativo": "imobiliario"
+          "fluxo_ativo": "fluxo2",
+          "potencial": "MEDIO"
         }
       }
     },
@@ -871,8 +893,8 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "imobiliario_parceiro_email",
       "kind": "input",
       "journey": "imobiliario",
-      "prompt": "Agora me informe seu e-mail para darmos continuidade.",
-      "field": "email",
+      "prompt": "Para seguir com homologacao ou parceria, qual e o seu e-mail de contato?",
+      "field": "parc_email",
       "input_type": "email",
       "next": "imobiliario_parceiro_intencao"
     },
@@ -880,44 +902,40 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "imobiliario_parceiro_intencao",
       "kind": "menu",
       "journey": "imobiliario",
-      "prompt": "Você quer cadastrar um imóvel ou falar sobre parceria?",
+      "prompt": "Voce quer cadastrar um imovel ou falar sobre parceria?",
       "options": [
-        {
-          "id": "parceiro_cadastrar_imovel",
-          "label": "Cadastrar imóvel",
-          "next": "parceiro_cidade"
-        },
-        {
-          "id": "parceiro_parceria",
-          "label": "Falar sobre parceria",
-          "next": "parceiro_parceria_1"
-        }
+        { "id": "parc_cadastro", "label": "Cadastrar imovel", "next": "parceiro_cidade" },
+        { "id": "parc_parceria", "label": "Parceria", "next": "parceiro_parceria_1" }
       ]
     },
     {
       "id": "parceiro_cidade",
       "kind": "input",
       "journey": "imobiliario",
-      "prompt": "Perfeito. Me informe a cidade e o bairro do imóvel.",
-      "field": "cidade_bairro",
+      "prompt": "Qual a cidade e o bairro do imovel?",
+      "field": "parc_imovel_localizacao",
       "input_type": "text",
       "next": "parceiro_tamanho"
     },
     {
       "id": "parceiro_tamanho",
-      "kind": "input",
+      "kind": "menu",
       "journey": "imobiliario",
       "prompt": "Qual o tamanho aproximado?",
-      "field": "tamanho_imovel",
-      "input_type": "text",
-      "next": "parceiro_valor"
+      "options": [
+        { "id": "arq_m2_ate50", "label": "Ate 50 m2", "next": "parceiro_valor" },
+        { "id": "arq_m2_51_250", "label": "51 a 250 m2", "next": "parceiro_valor" },
+        { "id": "arq_m2_251_500", "label": "251 a 500 m2", "next": "parceiro_valor" },
+        { "id": "arq_m2_mais500", "label": "Mais de 500 m2", "next": "parceiro_valor" },
+        { "id": "arq_m2_ns", "label": "Nao sei", "next": "parceiro_valor" }
+      ]
     },
     {
       "id": "parceiro_valor",
       "kind": "input",
       "journey": "imobiliario",
       "prompt": "Qual o valor?",
-      "field": "valor_imovel",
+      "field": "parc_imovel_valor",
       "input_type": "text",
       "next": "parceiro_fotos"
     },
@@ -925,14 +943,14 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "parceiro_fotos",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Se tiver fotos ou vídeos, pode enviar por aqui também.",
+      "message": "Se tiver fotos ou videos, pode enviar por aqui tambem.",
       "next": "parceiro_cadastro_encerramento"
     },
     {
       "id": "parceiro_cadastro_encerramento",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Vou direcionar para o time responsável dar andamento.",
+      "message": "Vou direcionar para o time responsavel dar andamento.",
       "next": "parceiro_cadastro_complete"
     },
     {
@@ -942,11 +960,12 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "complete": {
         "type": "complete",
         "handoff_to": "parcerias",
-        "summary": "Parceiro cadastrando imóvel: dados básicos registrados para o time responsável.",
+        "summary": "Parceiro cadastrando imovel: dados basicos registrados para o time responsavel.",
         "crm_patch": {
-          "estagio": "Parceiros ou Imóvel indicado",
+          "estagio": "Parceiros ou Imovel indicado",
           "lead_kind": "imobiliaria_corretor",
-          "fluxo_ativo": "imobiliario"
+          "fluxo_ativo": "fluxo3",
+          "potencial": "MEDIO"
         }
       }
     },
@@ -954,14 +973,14 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "id": "parceiro_parceria_1",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Perfeito. Vou direcionar seu contato para o time responsável.",
+      "message": "Perfeito. Vou direcionar seu contato para o time responsavel.",
       "next": "parceiro_parceria_2"
     },
     {
       "id": "parceiro_parceria_2",
       "kind": "message",
       "journey": "imobiliario",
-      "message": "Em breve alguém do nosso time vai falar com você.",
+      "message": "Em breve alguem do nosso time vai falar com voce.",
       "next": "parceiro_parceria_complete"
     },
     {
@@ -971,18 +990,27 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "complete": {
         "type": "complete",
         "handoff_to": "parcerias",
-        "summary": "Parceiro interessado em parceria; encaminhado ao time responsável.",
+        "summary": "Parceiro interessado em parceria; encaminhado ao time responsavel.",
         "crm_patch": {
-          "estagio": "Parceiros ou Imóvel indicado",
+          "estagio": "Parceiros ou Imovel indicado",
           "lead_kind": "imobiliaria_corretor",
-          "fluxo_ativo": "imobiliario"
+          "fluxo_ativo": "fluxo3",
+          "potencial": "MEDIO"
         }
       }
     },
     {
-      "id": "atendimento_outro_assunto",
+      "id": "atendimento_outro_descricao",
+      "kind": "input",
+      "prompt": "Sem problema! Conte em poucas palavras o que voce precisa que eu encaminho para o time certo.",
+      "field": "outro_descricao",
+      "input_type": "text",
+      "next": "atendimento_outro_encerramento"
+    },
+    {
+      "id": "atendimento_outro_encerramento",
       "kind": "message",
-      "message": "Perfeito. Vou registrar seu assunto e direcionar para o time responsável, que segue com você por aqui.",
+      "message": "Obrigado! Ja encaminhei para o time responsavel. Em breve alguem fala com voce por aqui.",
       "next": "atendimento_outro_complete"
     },
     {
@@ -991,9 +1019,10 @@ Nota de compatibilidade para runtime: no bloco JSON abaixo, `triagem_homologacao
       "complete": {
         "type": "complete",
         "handoff_to": "time_humano",
-        "summary": "Lead com outro assunto registrado e encaminhado ao time responsável.",
+        "summary": "Lead com outro assunto registrado e encaminhado ao time responsavel.",
         "crm_patch": {
-          "lead_kind": "outro"
+          "lead_kind": "outro",
+          "fluxo_ativo": "outro"
         }
       }
     }

@@ -40,10 +40,13 @@ function cloneButtonForGroup(
 export function CrmHeaderActionsRow({
   children,
   align = "end",
+  overflowBehavior = "wrap",
 }: {
   children: ReactNode;
   /** Alinhamento horizontal dos grupos na linha. */
   align?: "start" | "end" | "center";
+  /** Comportamento quando os grupos excedem a largura disponível. */
+  overflowBehavior?: "wrap" | "scroll";
 }) {
   const items = Children.toArray(children);
   if (items.length === 0) return null;
@@ -88,8 +91,18 @@ export function CrmHeaderActionsRow({
 
   const justify =
     align === "start" ? "justify-start" : align === "center" ? "justify-center" : "justify-end";
+  const allowHorizontalScroll = overflowBehavior === "scroll";
+  const rowClass = allowHorizontalScroll
+    ? `flex min-w-0 max-w-full w-full flex-nowrap items-center gap-2 ${justify}`
+    : `flex min-w-0 flex-shrink-0 flex-wrap items-center gap-2 ${justify}`;
+  const rowStyle = allowHorizontalScroll
+    ? ({
+        overflowX: "auto",
+        overflowY: "hidden",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "thin",
+      } as CSSProperties)
+    : undefined;
 
-  return (
-    <div className={`flex min-w-0 flex-shrink-0 flex-wrap items-center gap-2 ${justify}`}>{out}</div>
-  );
+  return <div className={rowClass} style={rowStyle}>{out}</div>;
 }

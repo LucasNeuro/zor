@@ -11,12 +11,15 @@ import {
   PLAYBOOK_ACCEPT_ATTR,
 } from "@/components/crm/PlaybookUploadAnalisePanel";
 import { PlaybookFlowStatusBanner } from "@/components/crm/PlaybookFlowStatusBanner";
+import { PlaybookFlowVisualSideover } from "@/components/crm/PlaybookFlowVisualSideover";
 import { CrmHeaderActionsRow } from "@/components/crm/CrmHeaderActionsRow";
+import { crmFeatureFlags } from "@/lib/crm/feature-flags";
 import { normalizarAnalisePlaybook } from "@/lib/playbook/playbook-analise-ui";
 import { MAX_PLAYBOOK_UPLOAD_BYTES } from "@/lib/playbook/custom-playbook";
 import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
 import { adaptarMarkdownParaMotorWhatsapp } from "@/lib/playbook/playbook-flow-markdown";
 import { PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
+import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
 
 const PLAYBOOK_INPUT_CALIB = "playbook-calibracao-upload";
 
@@ -74,6 +77,8 @@ export function AgentePlaybookCalibracaoDrawer({
   const [publicando, setPublicando] = useState(false);
   const [regenerando, setRegenerando] = useState(false);
   const [adaptandoMotor, setAdaptandoMotor] = useState(false);
+  const [visualSideoverOpen, setVisualSideoverOpen] = useState(false);
+  const [markdownOrigem, setMarkdownOrigem] = useState<"visual" | "texto" | null>(null);
 
   const [uploadStatus, setUploadStatus] = useState<PlaybookUploadStatus>("idle");
   const [uploadHover, setUploadHover] = useState(false);
@@ -98,6 +103,7 @@ export function AgentePlaybookCalibracaoDrawer({
     () => assessPlaybookFlowInMarkdown(markdownPublicado),
     [markdownPublicado]
   );
+  const visualBuilderEnabled = crmFeatureFlags.playbookFlowVisualSideover();
 
   const dropzoneBorder =
     uploadHover || uploadStatus === "hover"
@@ -173,6 +179,8 @@ export function AgentePlaybookCalibracaoDrawer({
     setAnaliseErro("");
     setUploadStatus("idle");
     setUploadMensagem("");
+    setVisualSideoverOpen(false);
+    setMarkdownOrigem(null);
     void carregarConteudo();
   }, [open, agenteSlug, carregarConteudo]);
 
@@ -192,9 +200,30 @@ export function AgentePlaybookCalibracaoDrawer({
     if (!markdownToPublish.trim() || publicando) return;
     const statusToPublish = assessPlaybookFlowInMarkdown(markdownToPublish);
     if (statusToPublish.kind !== "ready") {
-      setErro(
-        "Antes de publicar, use «Adaptar motor WA» até o banner verde confirmar o fluxo WhatsApp (obra10_playbook_flow)."
-      );
+      if (statusToPublish.kind === "invalid") {
+        if (markdownOrigem === "visual") {
+          void emitFlowVisualTelemetry({
+            event: "playbook.flow_visual.publish_validation_invalid",
+            agente_slug: agenteSlug,
+            metadata: {
+              source: "visual",
+              errors_count: statusToPublish.errors.length,
+            },
+          });
+        }
+        const detalhes = statusToPublish.errors.slice(0, 3);
+        setErro(
+          `Fluxo com pendências antes da publicação:\n- ${detalhes.join("\n- ")}${
+            statusToPublish.errors.length > 3 ? `\n- ...e mais ${statusToPublish.errors.length - 3} erro(s).` : ""
+          }`
+        );
+      } else if (statusToPublish.kind === "no_flow_block") {
+        setErro("Antes de publicar, gere/edite o bloco `obra10_playbook_flow` no modo visual ou textual.");
+      } else {
+        setErro(
+          "Antes de publicar, use «Adaptar motor WA» até o banner verde confirmar o fluxo WhatsApp (obra10_playbook_flow)."
+        );
+      }
       return;
     }
     setPublicando(true);
@@ -215,6 +244,7 @@ export function AgentePlaybookCalibracaoDrawer({
       }
       setMarkdown(markdownToPublish);
       setMarkdownPublicado(markdownToPublish);
+      setMarkdownOrigem(null);
       setMeta((m) => ({
         ...m,
         hash: typeof data.playbook_source_hash === "string" ? data.playbook_source_hash : m.hash,
@@ -290,6 +320,7 @@ export function AgentePlaybookCalibracaoDrawer({
         return;
       }
       setMarkdown(texto);
+      setMarkdownOrigem("texto");
       setUploadPct(55);
 
       const form = new FormData();
@@ -515,53 +546,157 @@ export function AgentePlaybookCalibracaoDrawer({
             padding: "14px 16px",
             borderBottom: "1px solid #30363d",
             display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
+            flexDirection: "column",
+            gap: 10,
             background: "linear-gradient(180deg, #161b22 0%, #0d1117 100%)",
           }}
         >
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <h2 style={{ color: "#e6edf3", fontSize: 15, fontWeight: 700, margin: 0 }}>
-              Playbook — Calibração
-            </h2>
-            <p style={{ color: "#8b949e", fontSize: 12, fontWeight: 600, margin: "4px 0 0" }}>
-              {agenteNome}
-            </p>
-            {meta.generatedAt ? (
-              <p style={{ color: "#6e7681", fontSize: 10, margin: "6px 0 0" }}>
-                Publicado: {new Date(meta.generatedAt).toLocaleString("pt-BR")}
-                {meta.hash ? ` · hash ${meta.hash.slice(0, 10)}…` : ""}
-                {temConteudo ? ` · ${formatBytes(new TextEncoder().encode(markdown).length)}` : ""}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <h2 style={{ color: "#e6edf3", fontSize: 15, fontWeight: 700, margin: 0 }}>
+                Playbook — Calibração
+              </h2>
+              <p style={{ color: "#8b949e", fontSize: 12, fontWeight: 600, margin: "4px 0 0" }}>
+                {agenteNome}
               </p>
-            ) : null}
-            {toast ? (
-              <p style={{ color: "#3fb950", fontSize: 11, fontWeight: 700, margin: "6px 0 0" }}>{toast}</p>
-            ) : null}
-            {erro ? (
-              <p style={{ color: "#f85149", fontSize: 11, margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{erro}</p>
-            ) : null}
+              {meta.generatedAt ? (
+                <p style={{ color: "#6e7681", fontSize: 10, margin: "6px 0 0" }}>
+                  Publicado: {new Date(meta.generatedAt).toLocaleString("pt-BR")}
+                  {meta.hash ? ` · hash ${meta.hash.slice(0, 10)}…` : ""}
+                  {temConteudo ? ` · ${formatBytes(new TextEncoder().encode(markdown).length)}` : ""}
+                </p>
+              ) : null}
+              {toast ? (
+                <p style={{ color: "#3fb950", fontSize: 11, fontWeight: 700, margin: "6px 0 0" }}>{toast}</p>
+              ) : null}
+              {erro ? (
+                <p style={{ color: "#f85149", fontSize: 11, margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{erro}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar"
+              style={{
+                flexShrink: 0,
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                border: "1px solid #30363d",
+                background: "#21262d",
+                color: "#c9d1d9",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <X size={20} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            style={{
-              flexShrink: 0,
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              border: "1px solid #30363d",
-              background: "#21262d",
-              color: "#c9d1d9",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <X size={20} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
+            <CrmHeaderActionsRow align="start" overflowBehavior="scroll">
+              {visualBuilderEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void emitFlowVisualTelemetry({
+                      event: "playbook.flow_visual.sideover_opened",
+                      agente_slug: agenteSlug,
+                      metadata: {
+                        source: "visual_button",
+                      },
+                    });
+                    setVisualSideoverOpen(true);
+                  }}
+                  style={{
+                    ...btnToolbar,
+                    background: "#1f6feb26",
+                    color: "#9ecbff",
+                  }}
+                  title="Abrir editor visual React Flow em sideover dedicado"
+                >
+                  Editar fluxo visual
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void carregarConteudo()}
+                disabled={carregando}
+                style={btnToolbar}
+                title="Recarrega o playbook publicado do bucket"
+              >
+                <RefreshCw size={14} /> Recarregar
+              </button>
+              <button
+                type="button"
+                onClick={() => void adaptarTextoAoMotorWhatsapp()}
+                disabled={
+                  carregando ||
+                  publicando ||
+                  uploadStatus === "enviando" ||
+                  adaptandoMotor ||
+                  !temConteudo
+                }
+                style={{
+                  ...btnToolbar,
+                  background:
+                    flowStatus.kind === "ready" ? "#21262d" : "rgba(35, 134, 54, 0.18)",
+                  color: flowStatus.kind === "ready" ? "#8b949e" : "#3fb950",
+                }}
+                title="Mantém o texto actual e acrescenta o bloco json obra10_playbook_flow (template v1) para o WhatsApp"
+              >
+                <GitBranch size={14} />{" "}
+                {adaptandoMotor ? "A adaptar…" : "Adaptar motor WA"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void regenerarDoAgente()}
+                disabled={regenerando || carregando}
+                style={btnToolbar}
+                title="Gera playbook a partir do cargo/conhecimento do agente (pode remover o fluxo WA)"
+              >
+                <RefreshCw size={14} className={regenerando ? "animate-spin" : undefined} />
+                {regenerando ? "A gerar…" : "Regenerar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void publicarMarkdown()}
+                disabled={!dirty || !temConteudo || publicando || flowStatus.kind !== "ready"}
+                style={{
+                  ...btnToolbarPublish,
+                  boxShadow: "inset 1px 0 0 rgba(201, 162, 74, 0.45)",
+                  opacity:
+                    !dirty || !temConteudo || publicando || flowStatus.kind !== "ready" ? 0.5 : 1,
+                }}
+                title={
+                  flowStatus.kind !== "ready"
+                    ? "Use «Adaptar motor WA» até o banner verde antes de publicar"
+                    : "Grava o rascunho no bucket e substitui playbook.md"
+                }
+              >
+                <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
+              </button>
+            </CrmHeaderActionsRow>
+            {dirty ? (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: "#d29922",
+                  fontWeight: 700,
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #d2992244",
+                  background: "#d2992211",
+                  flexShrink: 0,
+                }}
+              >
+                Rascunho não publicado
+              </span>
+            ) : (
+              <span style={{ fontSize: 10, color: "#3fb950", fontWeight: 600, flexShrink: 0 }}>Publicado</span>
+            )}
+          </div>
         </div>
 
         <div style={{ flexShrink: 0, margin: "10px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -597,96 +732,6 @@ export function AgentePlaybookCalibracaoDrawer({
           >
             <div
               style={{
-                flexShrink: 0,
-                padding: "10px 14px",
-                borderBottom: "1px solid #30363d",
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
-                alignItems: "center",
-              }}
-            >
-              <CrmHeaderActionsRow align="start">
-                <button
-                  type="button"
-                  onClick={() => void carregarConteudo()}
-                  disabled={carregando}
-                  style={btnToolbar}
-                  title="Recarrega o playbook publicado do bucket"
-                >
-                  <RefreshCw size={14} /> Recarregar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void adaptarTextoAoMotorWhatsapp()}
-                  disabled={
-                    carregando ||
-                    publicando ||
-                    uploadStatus === "enviando" ||
-                    adaptandoMotor ||
-                    !temConteudo
-                  }
-                  style={{
-                    ...btnToolbar,
-                    background:
-                      flowStatus.kind === "ready" ? "#21262d" : "rgba(35, 134, 54, 0.18)",
-                    color: flowStatus.kind === "ready" ? "#8b949e" : "#3fb950",
-                  }}
-                  title="Mantém o texto actual e acrescenta o bloco json obra10_playbook_flow (template v1) para o WhatsApp"
-                >
-                  <GitBranch size={14} />{" "}
-                  {adaptandoMotor ? "A adaptar…" : "Adaptar motor WA"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void regenerarDoAgente()}
-                  disabled={regenerando || carregando}
-                  style={btnToolbar}
-                  title="Gera playbook a partir do cargo/conhecimento do agente (pode remover o fluxo WA)"
-                >
-                  <RefreshCw size={14} className={regenerando ? "animate-spin" : undefined} />
-                  {regenerando ? "A gerar…" : "Regenerar"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void publicarMarkdown()}
-                  disabled={!dirty || !temConteudo || publicando || flowStatus.kind !== "ready"}
-                  style={{
-                    ...btnToolbarPublish,
-                    boxShadow: "inset 1px 0 0 rgba(201, 162, 74, 0.45)",
-                    opacity:
-                      !dirty || !temConteudo || publicando || flowStatus.kind !== "ready" ? 0.5 : 1,
-                  }}
-                  title={
-                    flowStatus.kind !== "ready"
-                      ? "Use «Adaptar motor WA» até o banner verde antes de publicar"
-                      : "Grava o rascunho no bucket e substitui playbook.md"
-                  }
-                >
-                  <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
-                </button>
-              </CrmHeaderActionsRow>
-              {dirty ? (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: "#d29922",
-                    fontWeight: 700,
-                    padding: "4px 8px",
-                    borderRadius: 6,
-                    border: "1px solid #d2992244",
-                    background: "#d2992211",
-                  }}
-                >
-                  Rascunho não publicado
-                </span>
-              ) : (
-                <span style={{ fontSize: 10, color: "#3fb950", fontWeight: 600 }}>Publicado</span>
-              )}
-            </div>
-
-            <div
-              style={{
                 flex: 1,
                 minHeight: 0,
                 padding: 12,
@@ -698,11 +743,33 @@ export function AgentePlaybookCalibracaoDrawer({
               }}
             >
               {carregando ? (
-                <p style={{ color: "#8b949e", fontSize: 12 }}>A carregar playbook…</p>
+                <div
+                  style={{
+                    flex: "0 0 auto",
+                    height: "34vh",
+                    minHeight: 220,
+                    maxHeight: 420,
+                    borderRadius: 10,
+                    border: "1px solid #30363d",
+                    background: "#0d1117",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    color: "#8b949e",
+                  }}
+                >
+                  <RefreshCw size={18} className="animate-spin" />
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>A carregar playbook...</p>
+                </div>
               ) : (
                 <textarea
                   value={markdown}
-                  onChange={(e) => setMarkdown(e.target.value)}
+                  onChange={(e) => {
+                    setMarkdownOrigem("texto");
+                    setMarkdown(e.target.value);
+                  }}
                   placeholder="Sem playbook publicado. Carregue um .md, regenere do agente ou escreva aqui."
                   spellCheck={false}
                   style={{
@@ -892,6 +959,35 @@ export function AgentePlaybookCalibracaoDrawer({
             </div>
           </div>
         </div>
+        {visualBuilderEnabled ? (
+          <PlaybookFlowVisualSideover
+            open={visualSideoverOpen}
+            onClose={() => setVisualSideoverOpen(false)}
+            markdown={markdown}
+            onMarkdownChange={(next) => {
+              setMarkdownOrigem("visual");
+              setMarkdown(next);
+            }}
+            agenteSlug={agenteSlug}
+            agenteNome={agenteNome}
+            disabled={carregando || publicando || uploadStatus === "enviando"}
+            onBuilderError={(message) => {
+              void emitFlowVisualTelemetry({
+                event: "playbook.flow_visual.builder_fallback",
+                agente_slug: agenteSlug,
+                metadata: {
+                  source: "builder_error_boundary",
+                  message_size: message.length,
+                },
+              });
+              setVisualSideoverOpen(false);
+              setToast("");
+              setErro(
+                `Editor visual indisponivel no momento. Continue pelo modo texto sem impacto na publicacao.\nDetalhe: ${message}`
+              );
+            }}
+          />
+        ) : null}
       </aside>
     </>
   );

@@ -1386,7 +1386,10 @@ async function processarPlaybookMariaInboundDynamic(params: {
   const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
   if (!runtime) return { handled: false, motivo: "runtime_indisponivel" };
 
-  let flowStep = state.step && !isHardcodedStep(state.step) ? state.step : null;
+  // No modo dinâmico, o passo persistido deve ser retomado literalmente.
+  // Alguns IDs do fluxo dinâmico podem coincidir com nomes legados (ex.: "arq_tamanho"),
+  // então não podemos descartá-los com isHardcodedStep aqui.
+  let flowStep = state.step && state.step !== "concluido" ? state.step : null;
   let flowAnswers =
     flowStep || state.active ? { ...state.answers } : state.complete ? { ...state.answers } : {};
 

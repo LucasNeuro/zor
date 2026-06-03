@@ -4,6 +4,7 @@ export type FlowVisualTelemetryEvent =
   | "playbook.flow_visual.sideover_opened"
   | "playbook.flow_visual.markdown_applied"
   | "playbook.flow_visual.builder_fallback"
+  | "playbook.flow_visual.draft_saved"
   | "playbook.flow_visual.publish_validation_invalid";
 
 type FlowVisualTelemetryPayload = {

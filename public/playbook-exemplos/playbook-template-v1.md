@@ -157,10 +157,10 @@ A IA deve atuar como pre-atendimento qualificado: reduzir atrito, organizar nece
 ```json obra10_playbook_flow
 {
   "obra10_playbook_flow_schema": 1,
-  "id": "hub_arquitetura_cliente_final_v1",
+  "id": "hub_mari_unificado_v1",
   "version": "1.0.0",
   "entry_step_id": "inicio_saudacao",
-  "journeys": ["triagem", "arquitetura"],
+  "journeys": ["triagem", "arquitetura", "imobiliario"],
   "steps": [
     {
       "id": "inicio_saudacao",
@@ -173,7 +173,7 @@ A IA deve atuar como pre-atendimento qualificado: reduzir atrito, organizar nece
       "id": "inicio_apresentacao",
       "kind": "message",
       "journey": "triagem",
-      "message": "Meu nome e Mari e vou te acompanhar para garantir que seu projeto saia exatamente como voce deseja.",
+      "message": "Meu nome e Mari e vou te acompanhar para garantir que seu atendimento saia exatamente como voce deseja.",
       "next": "inicio_nome"
     },
     {
@@ -190,18 +190,105 @@ A IA deve atuar como pre-atendimento qualificado: reduzir atrito, organizar nece
       "kind": "message",
       "journey": "triagem",
       "message": "Obrigado pela informacao. E um prazer te atender.",
-      "next": "arq_tamanho"
+      "next": "triagem_inicial_menu"
+    },
+    {
+      "id": "triagem_inicial_menu",
+      "kind": "menu",
+      "journey": "triagem",
+      "prompt": "Como posso te ajudar hoje?",
+      "options": [
+        {
+          "id": "triagem_arq",
+          "label": "Arquitetura e projetos",
+          "next": "arq_tipo_imovel",
+          "crm_patch": {
+            "interesse_principal": "arquitetura",
+            "fluxo_ativo": "fluxo_arquitetura",
+            "lead_kind": "cliente_projetos"
+          }
+        },
+        {
+          "id": "triagem_obra",
+          "label": "Obra / reforma",
+          "next": "arq_tipo_imovel",
+          "crm_patch": {
+            "interesse_principal": "obra_reforma",
+            "fluxo_ativo": "fluxo_arquitetura",
+            "lead_kind": "cliente_projetos"
+          }
+        },
+        {
+          "id": "triagem_marcenaria",
+          "label": "Marcenaria",
+          "next": "marcenaria_descricao",
+          "crm_patch": {
+            "interesse_principal": "marcenaria",
+            "fluxo_ativo": "marcenaria",
+            "lead_kind": "cliente_projetos"
+          }
+        },
+        {
+          "id": "triagem_imob",
+          "label": "Imobiliario (comprar, vender ou alugar)",
+          "next": "imobiliario_router",
+          "crm_patch": {
+            "interesse_principal": "imobiliario",
+            "fluxo_ativo": "fluxo_imobiliario",
+            "lead_kind": "cliente_imobiliario"
+          }
+        },
+        {
+          "id": "triagem_homolog",
+          "label": "Homologacao de parceiro (arquiteto/corretor)",
+          "next": "imobiliario_parceiro_email",
+          "crm_patch": {
+            "interesse_principal": "parceiro",
+            "fluxo_ativo": "fluxo3",
+            "lead_kind": "imobiliaria_corretor"
+          }
+        },
+        {
+          "id": "triagem_outro",
+          "label": "Outro assunto",
+          "next": "atendimento_outro_descricao"
+        }
+      ]
+    },
+    {
+      "id": "arq_tipo_imovel",
+      "kind": "menu",
+      "journey": "arquitetura",
+      "prompt": "Qual o tipo de imovel do seu projeto?",
+      "options": [
+        { "id": "arq_tipo_ap", "label": "Apartamento", "next": "arq_tamanho" },
+        { "id": "arq_tipo_casa", "label": "Casa", "next": "arq_tamanho" },
+        { "id": "arq_tipo_com", "label": "Comercial", "next": "arq_tamanho" },
+        { "id": "arq_tipo_ind", "label": "Industrial", "next": "arq_tamanho" },
+        { "id": "arq_tipo_outro", "label": "Outro", "next": "arq_tamanho" }
+      ]
     },
     {
       "id": "arq_tamanho",
       "kind": "menu",
       "journey": "arquitetura",
-      "prompt": "Qual o tamanho aproximado do imovel?",
+      "prompt": "Qual o tamanho aproximado do projeto?",
       "options": [
-        { "id": "m2_50_100", "label": "De 50 a 100 m2", "next": "arq_prazo" },
-        { "id": "m2_100_200", "label": "De 100 a 200 m2", "next": "arq_prazo" },
-        { "id": "m2_acima_200", "label": "Acima de 200 m2", "next": "arq_prazo" }
+        { "id": "arq_m2_ate50", "label": "Ate 50 m2", "next": "arq_localizacao" },
+        { "id": "arq_m2_51_250", "label": "51 a 250 m2", "next": "arq_localizacao" },
+        { "id": "arq_m2_251_500", "label": "251 a 500 m2", "next": "arq_localizacao" },
+        { "id": "arq_m2_mais500", "label": "Mais de 500 m2", "next": "arq_localizacao" },
+        { "id": "arq_m2_ns", "label": "Nao sei", "next": "arq_localizacao" }
       ]
+    },
+    {
+      "id": "arq_localizacao",
+      "kind": "input",
+      "journey": "arquitetura",
+      "prompt": "Em qual cidade e bairro fica o projeto?",
+      "field": "arq_localizacao",
+      "input_type": "text",
+      "next": "arq_prazo"
     },
     {
       "id": "arq_prazo",
@@ -209,19 +296,12 @@ A IA deve atuar como pre-atendimento qualificado: reduzir atrito, organizar nece
       "journey": "arquitetura",
       "prompt": "Para quando voce pretende iniciar o projeto?",
       "options": [
-        { "id": "prazo_imediato", "label": "Imediatamente", "next": "arq_localizacao" },
-        { "id": "prazo_ate_90", "label": "Dentro dos proximos 90 dias", "next": "arq_localizacao" },
-        { "id": "prazo_mais_90", "label": "Mais para frente, acima de 90 dias", "next": "arq_localizacao" }
+        { "id": "arq_prazo_imediato", "label": "Imediato", "next": "arq_agradecimento_final" },
+        { "id": "arq_prazo_30", "label": "Ate 30 dias", "next": "arq_agradecimento_final" },
+        { "id": "arq_prazo_60", "label": "Ate 60 dias", "next": "arq_agradecimento_final" },
+        { "id": "arq_prazo_90", "label": "Ate 90 dias", "next": "arq_agradecimento_final" },
+        { "id": "arq_prazo_mais", "label": "Mais pra frente", "next": "arq_agradecimento_final" }
       ]
-    },
-    {
-      "id": "arq_localizacao",
-      "kind": "input",
-      "journey": "arquitetura",
-      "prompt": "Qual a cidade e o bairro onde fica esse projeto?",
-      "field": "cidade_bairro",
-      "input_type": "text",
-      "next": "arq_agradecimento_final"
     },
     {
       "id": "arq_agradecimento_final",
@@ -263,7 +343,346 @@ A IA deve atuar como pre-atendimento qualificado: reduzir atrito, organizar nece
           "estagio": "qualificacao_inicial_concluida",
           "potencial": "MEDIO",
           "lead_kind": "cliente_projetos",
-          "interesse_principal": "projeto_arquitetura"
+          "fluxo_ativo": "fluxo_arquitetura",
+          "interesse_principal": "arquitetura"
+        }
+      }
+    },
+    {
+      "id": "marcenaria_descricao",
+      "kind": "input",
+      "journey": "arquitetura",
+      "prompt": "Conte em poucas palavras o que voce precisa em marcenaria que eu encaminho para o time certo.",
+      "field": "marcenaria_descricao",
+      "input_type": "text",
+      "next": "marcenaria_encerramento"
+    },
+    {
+      "id": "marcenaria_encerramento",
+      "kind": "message",
+      "journey": "arquitetura",
+      "message": "Obrigado! Ja encaminhei para o time de marcenaria. Em breve alguem fala com voce por aqui.",
+      "next": "marcenaria_complete"
+    },
+    {
+      "id": "marcenaria_complete",
+      "kind": "complete",
+      "journey": "arquitetura",
+      "complete": {
+        "type": "complete",
+        "handoff_to": "time_humano",
+        "summary": "Lead de marcenaria registrado e encaminhado ao time responsavel.",
+        "crm_patch": {
+          "estagio": "Lead recebido",
+          "lead_kind": "cliente_projetos",
+          "fluxo_ativo": "marcenaria",
+          "potencial": "MEDIO"
+        }
+      }
+    },
+    {
+      "id": "imobiliario_router",
+      "kind": "menu",
+      "journey": "imobiliario",
+      "prompt": "O que voce busca no mercado imobiliario?",
+      "options": [
+        {
+          "id": "imob_comprar",
+          "label": "Comprar",
+          "next": "imobiliario_cliente_final_1",
+          "crm_patch": { "intencao_imobiliario": "comprar", "lead_kind": "cliente_imobiliario" }
+        },
+        {
+          "id": "imob_vender",
+          "label": "Vender",
+          "next": "imobiliario_proprietario_operacao",
+          "crm_patch": { "intencao_imobiliario": "vender" }
+        },
+        {
+          "id": "imob_alugar",
+          "label": "Alugar",
+          "next": "imobiliario_cliente_final_1",
+          "crm_patch": { "intencao_imobiliario": "alugar", "lead_kind": "cliente_imobiliario" }
+        },
+        {
+          "id": "imob_anunciar",
+          "label": "Anunciar imovel",
+          "next": "imobiliario_proprietario_operacao",
+          "crm_patch": { "intencao_imobiliario": "anunciar" }
+        },
+        {
+          "id": "imob_outro",
+          "label": "Outro",
+          "next": "atendimento_outro_descricao"
+        }
+      ]
+    },
+    {
+      "id": "imobiliario_cliente_final_1",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Eu cuido desse primeiro contato e ja vou te direcionar para o corretor responsavel pelo imovel.",
+      "next": "imobiliario_cliente_final_2"
+    },
+    {
+      "id": "imobiliario_cliente_final_2",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Ele vai te chamar por aqui com todas as informacoes do imovel.",
+      "next": "imobiliario_cliente_final_3"
+    },
+    {
+      "id": "imobiliario_cliente_final_3",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Eu continuo acompanhando seu atendimento e fico a disposicao para o que precisar.",
+      "next": "imobiliario_cliente_final_complete"
+    },
+    {
+      "id": "imobiliario_cliente_final_complete",
+      "kind": "complete",
+      "journey": "imobiliario",
+      "complete": {
+        "type": "complete",
+        "handoff_to": "imobiliario",
+        "summary": "Cliente final interessado em compra ou locacao; encaminhado ao corretor responsavel.",
+        "crm_patch": {
+          "estagio": "Lead recebido — compra/locacao",
+          "lead_kind": "cliente_imobiliario",
+          "fluxo_ativo": "fluxo1",
+          "potencial": "ALTO"
+        }
+      }
+    },
+    {
+      "id": "imobiliario_proprietario_operacao",
+      "kind": "menu",
+      "journey": "imobiliario",
+      "prompt": "Voce quer vender ou alugar esse imovel?",
+      "options": [
+        {
+          "id": "prop_vender",
+          "label": "Vender",
+          "next": "imobiliario_proprietario_cidade",
+          "crm_patch": { "intencao_imobiliario": "vender" }
+        },
+        {
+          "id": "prop_alugar",
+          "label": "Alugar",
+          "next": "imobiliario_proprietario_cidade",
+          "crm_patch": { "intencao_imobiliario": "alugar" }
+        }
+      ]
+    },
+    {
+      "id": "imobiliario_proprietario_cidade",
+      "kind": "input",
+      "journey": "imobiliario",
+      "prompt": "Qual a cidade e o bairro onde esta o imovel?",
+      "field": "prop_localizacao",
+      "input_type": "text",
+      "next": "imobiliario_proprietario_tamanho"
+    },
+    {
+      "id": "imobiliario_proprietario_tamanho",
+      "kind": "menu",
+      "journey": "imobiliario",
+      "prompt": "Qual o tamanho aproximado do imovel?",
+      "options": [
+        { "id": "arq_m2_ate50", "label": "Ate 50 m2", "next": "imobiliario_proprietario_valor" },
+        { "id": "arq_m2_51_250", "label": "51 a 250 m2", "next": "imobiliario_proprietario_valor" },
+        { "id": "arq_m2_251_500", "label": "251 a 500 m2", "next": "imobiliario_proprietario_valor" },
+        { "id": "arq_m2_mais500", "label": "Mais de 500 m2", "next": "imobiliario_proprietario_valor" },
+        { "id": "arq_m2_ns", "label": "Nao sei", "next": "imobiliario_proprietario_valor" }
+      ]
+    },
+    {
+      "id": "imobiliario_proprietario_valor",
+      "kind": "input",
+      "journey": "imobiliario",
+      "prompt": "Qual o valor que voce esta pedindo?",
+      "field": "prop_valor",
+      "input_type": "text",
+      "next": "imobiliario_proprietario_fotos"
+    },
+    {
+      "id": "imobiliario_proprietario_fotos",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Se tiver fotos ou videos, pode me enviar por aqui tambem. Isso ajuda bastante na analise do imovel.",
+      "next": "imobiliario_proprietario_encerramento_1"
+    },
+    {
+      "id": "imobiliario_proprietario_encerramento_1",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Vou encaminhar tudo para um corretor especialista dar andamento.",
+      "next": "imobiliario_proprietario_encerramento_2"
+    },
+    {
+      "id": "imobiliario_proprietario_encerramento_2",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Ele vai entrar em contato para alinhar os proximos passos com voce.",
+      "next": "imobiliario_proprietario_encerramento_3"
+    },
+    {
+      "id": "imobiliario_proprietario_encerramento_3",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Fico a disposicao caso precise de algo.",
+      "next": "imobiliario_proprietario_complete"
+    },
+    {
+      "id": "imobiliario_proprietario_complete",
+      "kind": "complete",
+      "journey": "imobiliario",
+      "complete": {
+        "type": "complete",
+        "handoff_to": "imobiliario",
+        "summary": "Proprietario qualificado: operacao, localizacao, tamanho e valor registrados.",
+        "crm_patch": {
+          "estagio": "Captacao de imovel",
+          "lead_kind": "cliente_imobiliario",
+          "fluxo_ativo": "fluxo2",
+          "potencial": "MEDIO"
+        }
+      }
+    },
+    {
+      "id": "imobiliario_parceiro_email",
+      "kind": "input",
+      "journey": "imobiliario",
+      "prompt": "Para seguir com homologacao ou parceria, qual e o seu e-mail de contato?",
+      "field": "parc_email",
+      "input_type": "email",
+      "next": "imobiliario_parceiro_intencao"
+    },
+    {
+      "id": "imobiliario_parceiro_intencao",
+      "kind": "menu",
+      "journey": "imobiliario",
+      "prompt": "Voce quer cadastrar um imovel ou falar sobre parceria?",
+      "options": [
+        { "id": "parc_cadastro", "label": "Cadastrar imovel", "next": "parceiro_cidade" },
+        { "id": "parc_parceria", "label": "Parceria", "next": "parceiro_parceria_1" }
+      ]
+    },
+    {
+      "id": "parceiro_cidade",
+      "kind": "input",
+      "journey": "imobiliario",
+      "prompt": "Qual a cidade e o bairro do imovel?",
+      "field": "parc_imovel_localizacao",
+      "input_type": "text",
+      "next": "parceiro_tamanho"
+    },
+    {
+      "id": "parceiro_tamanho",
+      "kind": "menu",
+      "journey": "imobiliario",
+      "prompt": "Qual o tamanho aproximado?",
+      "options": [
+        { "id": "arq_m2_ate50", "label": "Ate 50 m2", "next": "parceiro_valor" },
+        { "id": "arq_m2_51_250", "label": "51 a 250 m2", "next": "parceiro_valor" },
+        { "id": "arq_m2_251_500", "label": "251 a 500 m2", "next": "parceiro_valor" },
+        { "id": "arq_m2_mais500", "label": "Mais de 500 m2", "next": "parceiro_valor" },
+        { "id": "arq_m2_ns", "label": "Nao sei", "next": "parceiro_valor" }
+      ]
+    },
+    {
+      "id": "parceiro_valor",
+      "kind": "input",
+      "journey": "imobiliario",
+      "prompt": "Qual o valor?",
+      "field": "parc_imovel_valor",
+      "input_type": "text",
+      "next": "parceiro_fotos"
+    },
+    {
+      "id": "parceiro_fotos",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Se tiver fotos ou videos, pode enviar por aqui tambem.",
+      "next": "parceiro_cadastro_encerramento"
+    },
+    {
+      "id": "parceiro_cadastro_encerramento",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Vou direcionar para o time responsavel dar andamento.",
+      "next": "parceiro_cadastro_complete"
+    },
+    {
+      "id": "parceiro_cadastro_complete",
+      "kind": "complete",
+      "journey": "imobiliario",
+      "complete": {
+        "type": "complete",
+        "handoff_to": "parcerias",
+        "summary": "Parceiro cadastrando imovel: dados basicos registrados para o time responsavel.",
+        "crm_patch": {
+          "estagio": "Parceiros ou Imovel indicado",
+          "lead_kind": "imobiliaria_corretor",
+          "fluxo_ativo": "fluxo3",
+          "potencial": "MEDIO"
+        }
+      }
+    },
+    {
+      "id": "parceiro_parceria_1",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Perfeito. Vou direcionar seu contato para o time responsavel.",
+      "next": "parceiro_parceria_2"
+    },
+    {
+      "id": "parceiro_parceria_2",
+      "kind": "message",
+      "journey": "imobiliario",
+      "message": "Em breve alguem do nosso time vai falar com voce.",
+      "next": "parceiro_parceria_complete"
+    },
+    {
+      "id": "parceiro_parceria_complete",
+      "kind": "complete",
+      "journey": "imobiliario",
+      "complete": {
+        "type": "complete",
+        "handoff_to": "parcerias",
+        "summary": "Parceiro interessado em parceria; encaminhado ao time responsavel.",
+        "crm_patch": {
+          "estagio": "Parceiros ou Imovel indicado",
+          "lead_kind": "imobiliaria_corretor",
+          "fluxo_ativo": "fluxo3",
+          "potencial": "MEDIO"
+        }
+      }
+    },
+    {
+      "id": "atendimento_outro_descricao",
+      "kind": "input",
+      "prompt": "Sem problema! Conte em poucas palavras o que voce precisa que eu encaminho para o time certo.",
+      "field": "outro_descricao",
+      "input_type": "text",
+      "next": "atendimento_outro_encerramento"
+    },
+    {
+      "id": "atendimento_outro_encerramento",
+      "kind": "message",
+      "message": "Obrigado! Ja encaminhei para o time responsavel. Em breve alguem fala com voce por aqui.",
+      "next": "atendimento_outro_complete"
+    },
+    {
+      "id": "atendimento_outro_complete",
+      "kind": "complete",
+      "complete": {
+        "type": "complete",
+        "handoff_to": "time_humano",
+        "summary": "Lead com outro assunto registrado e encaminhado ao time responsavel.",
+        "crm_patch": {
+          "lead_kind": "outro",
+          "fluxo_ativo": "outro"
         }
       }
     }

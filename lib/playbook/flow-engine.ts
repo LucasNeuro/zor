@@ -140,6 +140,83 @@ function mensagemPareceEmail(mensagem: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mensagem.trim());
 }
 
+/** Normaliza texto de menu para comparação (rótulos, respostas livres, m²/m2). */
+export function normMenuChoiceText(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/m²/g, "m2")
+    .replace(/[²º°]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function choiceIdFromCandidates(
+  candidates: string[],
+  choices: FlowMenuChoice[],
+  globalResolve?: (mensagem: string, menuChoiceId?: string | null) => string | null
+): string | null {
+  const choiceIds = new Set(choices.map((c) => c.id));
+
+  for (const raw of candidates) {
+    const t = raw.trim();
+    if (!t) continue;
+
+    const globalId = globalResolve?.(t, null);
+    if (globalId && choiceIds.has(globalId)) return globalId;
+
+    if (choiceIds.has(t)) return t;
+    const lower = t.toLowerCase();
+    const byId = choices.find((c) => c.id === t || c.id.toLowerCase() === lower);
+    if (byId) return byId.id;
+
+    const pipeId = t.includes("|") ? t.split("|").pop()?.trim() : "";
+    if (pipeId && choiceIds.has(pipeId)) return pipeId;
+
+    if (/^\d+$/.test(t)) {
+      const idx = Number.parseInt(t, 10);
+      if (idx >= 1 && idx <= choices.length) return choices[idx - 1].id;
+    }
+
+    const normMsg = normMenuChoiceText(t);
+    if (!normMsg) continue;
+
+    const exactLabel = choices.find((c) => normMenuChoiceText(c.label) === normMsg);
+    if (exactLabel) return exactLabel.id;
+
+    const partialLabel = choices.find((c) => {
+      const normLabel = normMenuChoiceText(c.label);
+      if (!normLabel || normLabel.length < 4) return false;
+      return normMsg.includes(normLabel) || normLabel.includes(normMsg);
+    });
+    if (partialLabel) return partialLabel.id;
+  }
+
+  return null;
+}
+
+/**
+ * Resolve opção de menu: ID do WhatsApp, aliases globais, índice numérico (1..n) ou rótulo.
+ */
+export function resolveMenuChoiceId(
+  mensagem: string,
+  menuChoiceId: string | null | undefined,
+  choices: FlowMenuChoice[],
+  globalResolve?: (mensagem: string, menuChoiceId?: string | null) => string | null
+): string | null {
+  if (!choices.length) return null;
+
+  const fromGlobal = globalResolve?.(mensagem, menuChoiceId);
+  if (fromGlobal && choices.some((c) => c.id === fromGlobal)) return fromGlobal;
+
+  const candidates = [menuChoiceId, mensagem].filter(
+    (x): x is string => typeof x === "string" && Boolean(x.trim())
+  );
+  return choiceIdFromCandidates(candidates, choices, globalResolve);
+}
+
 const MAX_AUTO_TRANSITIONS = 12;
 
 export async function executeFlowEngine(
@@ -152,12 +229,20 @@ export async function executeFlowEngine(
 
   const answers = { ...input.answers };
   const texto = input.mensagem.trim();
-  const choiceId = adapter.resolveChoiceId(input.mensagem, input.menuChoiceId);
 
   for (let transitions = 0; transitions < MAX_AUTO_TRANSITIONS; transitions += 1) {
     const step = definition.steps[currentStepId];
     if (!step) return { handled: false };
     const waitingAtCurrentStep = input.step === currentStepId;
+    const choiceId =
+      step.type === "menu" && waitingAtCurrentStep
+        ? resolveMenuChoiceId(
+            input.mensagem,
+            input.menuChoiceId,
+            step.choices,
+            adapter.resolveChoiceId
+          )
+        : adapter.resolveChoiceId(input.mensagem, input.menuChoiceId);
 
     switch (step.type) {
       case "send_text": {

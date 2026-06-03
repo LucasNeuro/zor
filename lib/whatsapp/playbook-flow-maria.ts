@@ -87,7 +87,6 @@ export type PlaybookProcessResult =
 type PlaybookAnswers = Record<string, string>;
 
 const FOOTER = "HUB Obra 10+";
-const DEFAULT_DYNAMIC_STEP = "mari_dynamic";
 
 const KNOWN_CHOICE_IDS = new Set([
   "triagem_arq",
@@ -252,13 +251,18 @@ function convertStructuredFlowToEngine(definition: PlaybookFlowDefinition): Flow
         };
       });
 
+      const menuField =
+        "field" in step && typeof step.field === "string" && step.field.trim()
+          ? step.field.trim()
+          : stepId;
+
       steps[stepId] = {
         id: stepId,
         type: "menu",
         text: step.prompt.trim(),
         menu_type: "list",
         list_button: "Ver opções",
-        answer_key: stepId,
+        answer_key: menuField,
         invalid_prompt: "Escolha uma opção válida no menu para continuarmos.",
         choices,
       };
@@ -338,7 +342,7 @@ export function resolverChoiceId(mensagem: string, menuChoiceId?: string | null)
     if (KNOWN_CHOICE_IDS.has(lower)) return lower;
     const alias = CHOICE_ALIASES.get(normAlias(t));
     if (alias) return alias;
-    const pipeId = t.includes("|") ? t.split("|")[1]?.trim() : "";
+    const pipeId = t.includes("|") ? t.split("|").pop()?.trim() : "";
     if (pipeId && KNOWN_CHOICE_IDS.has(pipeId)) return pipeId;
   }
   return null;
@@ -1352,9 +1356,7 @@ async function carregarDynamicPlaybookRuntime(
 
 function mapDynamicStepToContract(step: string | undefined): PlaybookStep | undefined {
   if (!step) return undefined;
-  if (step === "concluido") return "concluido";
-  if (isHardcodedStep(step)) return step;
-  return DEFAULT_DYNAMIC_STEP as PlaybookStep;
+  return step as PlaybookStep;
 }
 
 async function processarPlaybookMariaInboundDynamic(params: {

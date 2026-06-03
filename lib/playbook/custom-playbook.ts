@@ -293,7 +293,8 @@ export async function savePlaybookMarkdownForAgent(
 
 export async function loadCurrentPlaybookMarkdown(
   supabase: SupabaseClient,
-  agenteSlug: string
+  agenteSlug: string,
+  prefetched?: { objectPath: string | null; publicUrl: string | null }
 ): Promise<
   | {
       ok: true;
@@ -304,22 +305,60 @@ export async function loadCurrentPlaybookMarkdown(
     }
   | { ok: false; status: number; error: string }
 > {
-  const { data, error } = await supabase
-    .from("hub_agente_identidade")
-    .select("playbook_object_path, playbook_public_url")
-    .eq("agente_slug", agenteSlug)
-    .maybeSingle();
+  let objectPath: string;
+  let publicUrl: string;
 
-  if (error) return { ok: false, status: 500, error: error.message };
-  if (!data) return { ok: false, status: 404, error: "Agente não encontrado." };
+  if (prefetched !== undefined) {
+    objectPath = String(prefetched.objectPath || "").trim();
+    publicUrl = String(prefetched.publicUrl || "").trim();
+  } else {
+    const { data, error } = await supabase
+      .from("hub_agente_identidade")
+      .select("playbook_object_path, playbook_public_url")
+      .eq("agente_slug", agenteSlug)
+      .maybeSingle();
 
-  const objectPath = String(data.playbook_object_path || "").trim();
-  const publicUrl = String(data.playbook_public_url || "").trim();
+    if (error) return { ok: false, status: 500, error: error.message };
+    if (!data) return { ok: false, status: 404, error: "Agente não encontrado." };
+
+    objectPath = String(data.playbook_object_path || "").trim();
+    publicUrl = String(data.playbook_public_url || "").trim();
+  }
+
   if (!objectPath && !publicUrl) {
     return {
       ok: false,
       status: 409,
       error: "Agente sem playbook publicado. Gere ou envie um playbook antes de analisar.",
+    };
+  }
+
+  // Prefer CDN fetch (cached, no auth overhead) when publicUrl is available.
+  // Fall back to storage.download() only when publicUrl is absent.
+  if (objectPath && publicUrl) {
+    const res = await fetch(publicUrl, { method: "GET" });
+    if (!res.ok) {
+      // CDN miss — fall back to authenticated storage download
+      const { data: blob, error: dlErr } = await supabase.storage.from(PLAYBOOK_BUCKET).download(objectPath);
+      if (dlErr || !blob) return { ok: false, status: 502, error: dlErr?.message || "Falha ao baixar playbook." };
+      const markdown = normalizePlaybookText(await blob.text());
+      if (!markdown) return { ok: false, status: 422, error: "Playbook publicado está vazio." };
+      return {
+        ok: true,
+        markdown,
+        origem: "object_path",
+        playbook_object_path: objectPath,
+        playbook_public_url: publicUrl,
+      };
+    }
+    const markdown = normalizePlaybookText(await res.text());
+    if (!markdown) return { ok: false, status: 422, error: "Playbook publicado está vazio." };
+    return {
+      ok: true,
+      markdown,
+      origem: "public_url",
+      playbook_object_path: objectPath,
+      playbook_public_url: publicUrl,
     };
   }
 

@@ -41,7 +41,13 @@ export async function GET(
   if (metaErr) return NextResponse.json({ error: metaErr.message }, { status: 500 });
   if (!meta) return NextResponse.json({ error: "Agente não encontrado." }, { status: 404 });
 
-  const loaded = await loadCurrentPlaybookMarkdown(supabase, slug);
+  const loaded = await loadCurrentPlaybookMarkdown(supabase, slug, {
+    objectPath: meta.playbook_object_path as string | null,
+    publicUrl: meta.playbook_public_url as string | null,
+  });
+
+  const cacheHeaders = { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" };
+
   if (!loaded.ok) {
     return NextResponse.json(
       {
@@ -57,26 +63,29 @@ export async function GET(
         tem_playbook: false,
         error: loaded.error,
       },
-      { status: loaded.status === 409 ? 200 : loaded.status }
+      { status: loaded.status === 409 ? 200 : loaded.status, headers: cacheHeaders }
     );
   }
 
-  return NextResponse.json({
-    agente_slug: meta.agente_slug,
-    nome: meta.nome,
-    cargo: meta.cargo,
-    area: meta.area,
-    instrucao_modo: meta.instrucao_modo,
-    playbook_object_path: loaded.playbook_object_path ?? meta.playbook_object_path,
-    playbook_public_url: loaded.playbook_public_url ?? meta.playbook_public_url,
-    playbook_generated_at: meta.playbook_generated_at,
-    playbook_source_hash: meta.playbook_source_hash,
-    origem: loaded.origem,
-    tem_playbook: true,
-    markdown: loaded.markdown,
-    bytes: Buffer.byteLength(loaded.markdown, "utf8"),
-    fluxo_whatsapp: assessPlaybookFlowInMarkdown(loaded.markdown),
-  });
+  return NextResponse.json(
+    {
+      agente_slug: meta.agente_slug,
+      nome: meta.nome,
+      cargo: meta.cargo,
+      area: meta.area,
+      instrucao_modo: meta.instrucao_modo,
+      playbook_object_path: loaded.playbook_object_path ?? meta.playbook_object_path,
+      playbook_public_url: loaded.playbook_public_url ?? meta.playbook_public_url,
+      playbook_generated_at: meta.playbook_generated_at,
+      playbook_source_hash: meta.playbook_source_hash,
+      origem: loaded.origem,
+      tem_playbook: true,
+      markdown: loaded.markdown,
+      bytes: Buffer.byteLength(loaded.markdown, "utf8"),
+      fluxo_whatsapp: assessPlaybookFlowInMarkdown(loaded.markdown),
+    },
+    { headers: cacheHeaders }
+  );
 }
 
 export async function PUT(

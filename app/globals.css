@@ -70,9 +70,95 @@ html, body {
 }
 
 body {
-  background-color: #0a0a0a;
+  background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-poppins, system-ui, sans-serif);
+}
+
+/* Landing TIVIA */
+.tivia-landing-bg {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(146, 255, 0, 0.18), transparent 26%),
+    radial-gradient(circle at 100% 100%, rgba(0, 128, 90, 0.10), transparent 24%),
+    linear-gradient(180deg, #f4faf1 0%, #eef7eb 46%, #f8fcf6 100%);
+}
+
+/* ── Scroll reveal ───────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Hero entrance ───────────────────────────────── */
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-badge { animation: hero-in 0.60s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both; }
+.hero-title { animation: hero-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.32s both; }
+.hero-desc  { animation: hero-in 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.52s both; }
+.hero-ctas  { animation: hero-in 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.68s both; }
+
+.tivia-grid-bg {
+  background-image:
+    linear-gradient(rgba(20, 65, 32, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 65, 32, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.tivia-card {
+  transition:
+    transform 260ms ease,
+    box-shadow 260ms ease,
+    border-color 220ms ease;
+}
+
+.tivia-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(20, 48, 28, 0.10);
+}
+
+@keyframes tivia-float-kf {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes tivia-pulse-kf {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.95; transform: scale(1.08); }
+}
+
+@keyframes tivia-shimmer-kf {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(160%); }
+}
+
+.tivia-float {
+  animation: tivia-float-kf 4.6s ease-in-out infinite;
+}
+
+.tivia-pulse {
+  animation: tivia-pulse-kf 3.4s ease-in-out infinite;
+}
+
+.tivia-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: -20% -40%;
+  background: linear-gradient(
+    110deg,
+    transparent 32%,
+    rgba(170, 255, 100, 0.22) 50%,
+    transparent 68%
+  );
+  animation: tivia-shimmer-kf 3.4s linear infinite;
 }
 
 .office-desktop-bg {

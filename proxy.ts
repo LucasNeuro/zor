@@ -8,6 +8,7 @@ import { getSafeReturnPath } from "@/lib/auth/safe-return-path";
  * Escritório virtual (/office) e CRM (/crm): mesma sessão (cookie após login).
  */
 function isPublicApiPath(pathname: string): boolean {
+  if (pathname.startsWith("/api/public/")) return true;
   if (pathname.startsWith("/api/whatsapp")) return true;
   if (pathname.startsWith("/api/health")) return true;
   if (pathname === "/api/parceiros/portal/verify") return true;

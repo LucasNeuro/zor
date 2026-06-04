@@ -113,6 +113,15 @@ CREATE INDEX IF NOT EXISTS idx_hub_propostas_lead ON hub_propostas(lead_id);
 CREATE INDEX IF NOT EXISTS idx_hub_conhecimento_agente ON hub_agente_conhecimento(agente_slug, secao);
 CREATE INDEX IF NOT EXISTS idx_hub_memorias_lead ON hub_memorias_lead(lead_id);
 
+-- Função usada pelos triggers abaixo (idempotente)
+CREATE OR REPLACE FUNCTION public.hub_atualizar_timestamp()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.atualizado_em = NOW();
+  RETURN NEW;
+END;
+$$;
+
 -- TRIGGERS (idempotent)
 DROP TRIGGER IF EXISTS hub_leads_crm_ts ON hub_leads_crm;
 DROP TRIGGER IF EXISTS hub_notas_ts ON hub_notas;

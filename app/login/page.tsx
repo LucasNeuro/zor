@@ -1,11 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Zap } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
-import { Obra10BrandHeader } from "@/components/brand/Obra10Brand";
-import { LoginHeroPanel } from "@/components/login/LoginHeroPanel";
+import { TiviaBrand } from "@/components/brand/TiviaBrand";
 import { getSafeReturnPath } from "@/lib/auth/safe-return-path";
 
 function messageForAuthRequestFailure(err: unknown): string {
@@ -114,7 +114,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-[var(--obra-dark,#0d1117)] md:flex-row">
+    <div className="tivia-landing-bg min-h-[100dvh] overflow-hidden">
       <style jsx global>{`
         #login-email:-webkit-autofill,
         #login-email:-webkit-autofill:hover,
@@ -124,103 +124,135 @@ function LoginForm() {
         #login-password:-webkit-autofill:hover,
         #login-password:-webkit-autofill:focus,
         #login-password:-webkit-autofill:active {
-          -webkit-text-fill-color: var(--obra-texto, #e6edf3);
-          caret-color: var(--obra-texto, #e6edf3);
-          box-shadow: 0 0 0 1000px var(--obra-dark-2, #161b22) inset;
-          -webkit-box-shadow: 0 0 0 1000px var(--obra-dark-2, #161b22) inset;
+          -webkit-text-fill-color: #1e3a23;
+          caret-color: #1e3a23;
+          box-shadow: 0 0 0 1000px #ffffff inset;
+          -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
           transition: background-color 9999s ease-out 0s;
         }
       `}</style>
-      {/* Painel do formulário — esquerda no desktop, abaixo do hero no mobile */}
-      <div className="order-2 flex flex-1 flex-col justify-center px-6 py-10 sm:px-10 md:order-1 md:w-[46%] md:max-w-xl md:flex-none md:px-12 lg:px-14 xl:px-16">
-        <div className="mx-auto w-full max-w-[400px]">
-          <div className="mb-10">
-            <Obra10BrandHeader
-              size="lg"
-              subtitle="Plataforma"
-              subtitleClassName="!text-[var(--obra-dourado,#c9a24a)] !tracking-[0.12em]"
-            />
-          
-          </div>
-
-          <form onSubmit={onSubmit} className="flex flex-col gap-5">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="login-email"
-                className="text-xs font-medium uppercase tracking-wide text-[var(--obra-texto-2,#8b949e)]"
-              >
-                E-mail
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nome@empresa.com"
-                className="w-full rounded-xl border border-[var(--obra-borda,#30363d)] bg-[var(--obra-dark-2,#161b22)] px-4 py-3 text-[15px] text-[var(--obra-texto,#e6edf3)] transition-[border-color,box-shadow] placeholder:text-[var(--obra-texto-3,#484f58)] focus:border-[var(--obra-dourado,#c9a24a)] focus:outline-none focus:ring-1 focus:ring-[var(--obra-dourado,#c9a24a)]/35"
-              />
+      <div className="flex min-h-[100dvh]">
+        <aside className="h-[100dvh] w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[460px] md:min-w-[420px]">
+          <div className="mx-auto w-full max-w-[430px] p-6 text-[#1c2a1c] md:p-8">
+            <div className="mb-8 flex items-center justify-between">
+              <TiviaBrand layout="horizontal" />
+              <Link href="/" className="text-xs font-medium text-[#3f5b44] hover:text-[#1f3a24]">
+                Voltar
+              </Link>
             </div>
-            <div className="space-y-1.5">
-              <label
-                htmlFor="login-password"
-                className="text-xs font-medium uppercase tracking-wide text-[var(--obra-texto-2,#8b949e)]"
-              >
-                Senha
-              </label>
-              <div className="relative">
-                <input
-                  id="login-password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-xl border border-[var(--obra-borda,#30363d)] bg-[var(--obra-dark-2,#161b22)] py-3 pl-4 pr-12 text-[15px] text-[var(--obra-texto,#e6edf3)] transition-[border-color,box-shadow] placeholder:text-[var(--obra-texto-3,#484f58)] focus:border-[var(--obra-dourado,#c9a24a)] focus:outline-none focus:ring-1 focus:ring-[var(--obra-dourado,#c9a24a)]/35"
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                  className="absolute right-0 top-0 flex h-full w-11 items-center justify-center rounded-r-xl text-[var(--obra-texto-2,#8b949e)] transition-colors hover:text-[var(--obra-dourado,#c9a24a)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--obra-dourado,#c9a24a)]/50"
-                  onClick={() => setShowPassword((v: boolean) => !v)}
+
+            <h1 className="mb-2 text-3xl font-bold text-[#132a17]">Entrar</h1>
+            <p className="mb-8 text-sm text-[#58745d]">
+              Faça login com e-mail e senha para abrir seu CRM.
+            </p>
+
+            <form onSubmit={onSubmit} className="flex flex-col gap-5">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="login-email"
+                  className="text-xs font-medium uppercase tracking-wide text-[#5a745d]"
                 >
-                  {showPassword ? <EyeOff className="h-[18px] w-[18px]" aria-hidden /> : <Eye className="h-[18px] w-[18px]" aria-hidden />}
-                </button>
+                  E-mail de acesso
+                </label>
+                <input
+                  id="login-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="operador@empresa.com"
+                  className="w-full rounded-xl border border-[#d5e2d2] bg-white px-4 py-3 text-[15px] text-[#1e3a23] transition-[border-color,box-shadow] placeholder:text-[#7f9481] focus:border-[#92ff00]/55 focus:outline-none focus:ring-2 focus:ring-[#92ff00]/20"
+                />
               </div>
-            </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="login-password"
+                  className="text-xs font-medium uppercase tracking-wide text-[#5a745d]"
+                >
+                  Senha
+                </label>
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-xl border border-[#d5e2d2] bg-white py-3 pl-4 pr-12 text-[15px] text-[#1e3a23] transition-[border-color,box-shadow] placeholder:text-[#7f9481] focus:border-[#92ff00]/55 focus:outline-none focus:ring-2 focus:ring-[#92ff00]/20"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    className="absolute right-0 top-0 flex h-full w-11 items-center justify-center rounded-r-xl text-[#6d846f] transition-colors hover:text-[#3f9848] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#92ff00]/50"
+                    onClick={() => setShowPassword((v: boolean) => !v)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-[18px] w-[18px]" aria-hidden />
+                    ) : (
+                      <Eye className="h-[18px] w-[18px]" aria-hidden />
+                    )}
+                  </button>
+                </div>
+              </div>
 
-            {msg && (
-              <div
-                role="alert"
-                className="rounded-xl border border-[rgba(248,81,73,0.35)] bg-[rgba(179,38,30,0.08)] px-4 py-3 text-sm leading-snug text-[#f0aba8]"
+              {msg && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-[#f4b4b1] bg-[#fff5f5] px-4 py-3 text-sm leading-snug text-[#9d2f2f]"
+                >
+                  {msg}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#92ff00]/35 bg-[#92ff00] py-3.5 text-[15px] font-semibold tracking-wide text-[#091107] transition-[transform,opacity,box-shadow] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-55"
+                style={{
+                  boxShadow: "0 12px 28px rgba(140, 255, 0, 0.18)",
+                  cursor: loading ? "wait" : "pointer",
+                }}
               >
-                {msg}
-              </div>
-            )}
+                <span>{loading ? "Autorizando..." : "Entrar"}</span>
+                <Zap className="h-4 w-4" />
+              </button>
+            </form>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-1 w-full rounded-xl border border-[rgba(201,162,74,0.22)] py-3.5 text-[15px] font-semibold tracking-wide text-[var(--obra-dourado-light,#e0b86a)] transition-[transform,opacity,box-shadow] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-55"
-              style={{
-                background: "linear-gradient(180deg, var(--obra-verde-light,#005c3d) 0%, var(--obra-verde,#003b26) 100%)",
-                boxShadow: "0 8px 24px rgba(0, 40, 26, 0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
-                cursor: loading ? "wait" : "pointer",
-              }}
-            >
-              {loading ? "Entrando…" : "Entrar"}
-            </button>
-          </form>
+            <p className="mt-10 text-center text-[11px] leading-relaxed text-[#5f745f]">
+              Atendimento com IA e supervisão humana.
+            </p>
+          </div>
+        </aside>
 
-          <p className="mt-10 text-center text-[11px] leading-relaxed text-[var(--obra-texto-3,#484f58)]">
-            Problemas para entrar? Contate o administrador da sua organização.
-          </p>
-        </div>
+        <section className="relative hidden h-[100dvh] flex-1 overflow-hidden md:block bg-[radial-gradient(ellipse_at_25%_18%,rgba(146,255,0,0.16),transparent_52%),radial-gradient(ellipse_at_78%_82%,rgba(63,152,72,0.13),transparent_50%),linear-gradient(145deg,#f6fdf4,#ecf8e8_45%,#f2faf0)]">
+          {/* decorative floating orbs */}
+          <div className="tivia-float pointer-events-none absolute left-[10%] top-[15%] h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.18),transparent_65%)]" />
+          <div className="tivia-float pointer-events-none absolute bottom-[18%] right-[12%] h-28 w-28 rounded-full bg-[radial-gradient(circle,rgba(63,152,72,0.15),transparent_68%)] [animation-delay:1.5s]" />
+          <div className="tivia-float pointer-events-none absolute right-[30%] top-[40%] h-20 w-20 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.12),transparent_70%)] [animation-delay:0.8s]" />
+          {/* tagline */}
+          <div className="absolute right-10 top-10 max-w-sm text-right">
+            <p className="text-2xl font-extrabold leading-snug text-[#0b1f10]">
+              Operações, leads e atendimento em uma plataforma só.
+            </p>
+            <p className="mt-2 text-sm text-[#4f6853]">Entre com sua conta e continue de onde parou.</p>
+          </div>
+          {/* bottom illustration hint */}
+          <div className="absolute bottom-10 left-10 flex items-center gap-3 rounded-2xl border border-[#c8e6c0] bg-white/80 px-4 py-3 shadow-sm backdrop-blur-sm">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#92ff00]">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 2 L10 6 L14 7 L11 10 L11.5 14 L8 12 L4.5 14 L5 10 L2 7 L6 6 Z" fill="#0b1f10"/>
+              </svg>
+            </span>
+            <div>
+              <p className="text-xs font-bold text-[#0b1f10]">TIVIA</p>
+              <p className="text-[11px] text-[#527055]">Atendimento com IA</p>
+            </div>
+          </div>
+        </section>
       </div>
-
-      <LoginHeroPanel />
     </div>
   );
 }
@@ -228,7 +260,7 @@ function LoginForm() {
 function LoginFallback() {
   return (
     <div
-      className="flex min-h-[100dvh] items-center justify-center bg-[var(--obra-dark,#0d1117)] text-sm text-[var(--obra-texto-2,#8b949e)]"
+      className="tivia-landing-bg flex min-h-[100dvh] items-center justify-center text-sm text-[#527055]"
     >
       Carregando…
     </div>

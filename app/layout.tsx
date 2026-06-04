@@ -30,13 +30,38 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Obra10+",
-  description: "Central de operações da Obra10+ — leads, agentes e campanhas em tempo real",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"),
+  title: {
+    default: "TIVIA | IA para atendimento e CRM",
+    template: "%s | TIVIA",
+  },
+  description:
+    "Plataforma TIVIA: atendimento WhatsApp, CRM e agentes de IA com operação human-in-the-loop para PMEs.",
   manifest: "/manifest.json",
+  keywords: [
+    "tivia",
+    "crm com ia",
+    "atendimento whatsapp",
+    "agente de ia",
+    "human in the loop",
+    "multitenant saas",
+  ],
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  category: "business",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Obra10+",
+    title: "TIVIA",
   },
   icons: {
     icon: [
@@ -49,7 +74,7 @@ export const metadata: Metadata = {
     "mobile-web-app-capable": "yes",
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
-    "apple-mobile-web-app-title": "Obra10+",
+    "apple-mobile-web-app-title": "TIVIA",
     "msapplication-TileColor": "#003b26",
   },
 };

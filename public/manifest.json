@@ -1,8 +1,8 @@
 {
-  "name": "Obra10+ CRM",
-  "short_name": "Obra10+",
-  "description": "Central comercial Obra10+ — leads, funil, agentes e campanhas",
-  "start_url": "/crm",
+  "name": "TIVIA",
+  "short_name": "TIVIA",
+  "description": "Plataforma de atendimento com IA, WhatsApp e CRM para PMEs",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
@@ -19,24 +19,17 @@
   ],
   "shortcuts": [
     {
-      "name": "Leads",
-      "short_name": "Leads",
-      "description": "Ver pipeline de leads",
-      "url": "/crm/leads",
+      "name": "Cadastro",
+      "short_name": "Cadastro",
+      "description": "Criar conta e iniciar onboarding",
+      "url": "/cadastro",
       "icons": [{ "src": "/icon", "sizes": "192x192" }]
     },
     {
-      "name": "Atendimento",
-      "short_name": "Chat",
-      "description": "Atender leads",
-      "url": "/crm/atendimento",
-      "icons": [{ "src": "/icon", "sizes": "192x192" }]
-    },
-    {
-      "name": "Aprovações",
-      "short_name": "Aprovar",
-      "description": "Decisões pendentes",
-      "url": "/crm/aprovacoes",
+      "name": "Login",
+      "short_name": "Login",
+      "description": "Entrar na plataforma",
+      "url": "/login",
       "icons": [{ "src": "/icon", "sizes": "192x192" }]
     }
   ]

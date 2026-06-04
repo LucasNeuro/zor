@@ -109,7 +109,7 @@ function LoginForm() {
     }
     setLoading(false);
     const next = searchParams.get("next");
-    router.push(getSafeReturnPath(next, "/office"));
+    router.push(getSafeReturnPath(next, "/crm"));
     router.refresh();
   }
 

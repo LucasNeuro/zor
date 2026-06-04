@@ -1,7 +1,7 @@
 /**
  * Evita open redirect: só caminhos relativos internos (sem protocolo, sem "..").
  */
-export function getSafeReturnPath(raw: string | null | undefined, fallback = "/office"): string {
+export function getSafeReturnPath(raw: string | null | undefined, fallback = "/crm"): string {
   if (raw == null || typeof raw !== "string") return fallback;
   let t: string;
   try {

@@ -21,6 +21,7 @@ type FlowNodeEditorSideoverProps = {
   onSetEntryStepId: (stepId: string) => void;
   onRenameNodeId: (oldId: string, nextId: string) => void;
   onUpdateNode: (nodeId: string, updates: Partial<FlowVisualNodeData>) => void;
+  onRemoveMenuOption: (nodeId: string, optionId: string) => void;
   onDeleteNode: (nodeId: string) => void;
   onClose: () => void;
 };
@@ -53,6 +54,7 @@ export function FlowNodeEditorSideover({
   onSetEntryStepId,
   onRenameNodeId,
   onUpdateNode,
+  onRemoveMenuOption,
   onDeleteNode,
   onClose,
 }: FlowNodeEditorSideoverProps) {
@@ -80,7 +82,8 @@ export function FlowNodeEditorSideover({
 
   function removeOption(optionId: string) {
     const current = data.menuOptions ?? [];
-    update({ menuOptions: current.filter((opt) => opt.id !== optionId) });
+    if (current.length <= 1) return;
+    onRemoveMenuOption(id, optionId);
   }
 
   function addOption() {

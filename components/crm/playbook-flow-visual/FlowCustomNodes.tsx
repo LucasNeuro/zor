@@ -26,11 +26,14 @@ import type { FlowMenuOption, FlowNodeKind, FlowVisualNodeData } from "./types";
 export type NodeCallbacks = {
   onUpdate: (nodeId: string, updates: Partial<FlowVisualNodeData>) => void;
   onDelete: (nodeId: string) => void;
+  /** Remove opção do menu e a aresta associada (evita ressuscitar opção no JSON). */
+  onRemoveMenuOption: (nodeId: string, optionId: string) => void;
 };
 
 export const FlowNodeCallbacksContext = createContext<NodeCallbacks>({
   onUpdate: () => undefined,
   onDelete: () => undefined,
+  onRemoveMenuOption: () => undefined,
 });
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
@@ -273,7 +276,7 @@ export function InputNode({ id, data, selected, isConnectable }: NodeProps<Node<
 }
 
 export function MenuNode({ id, data, selected, isConnectable }: NodeProps<Node<FlowVisualNodeData>>) {
-  const { onUpdate } = useContext(FlowNodeCallbacksContext);
+  const { onUpdate, onRemoveMenuOption } = useContext(FlowNodeCallbacksContext);
   const [addingOption, setAddingOption] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const options: FlowMenuOption[] = (data.menuOptions as FlowMenuOption[] | undefined) ?? [];
@@ -283,7 +286,8 @@ export function MenuNode({ id, data, selected, isConnectable }: NodeProps<Node<F
   }
 
   function removeOption(optId: string) {
-    onUpdate(id, { menuOptions: options.filter((o) => o.id !== optId) });
+    if (options.length <= 1) return;
+    onRemoveMenuOption(id, optId);
   }
 
   function addOption() {

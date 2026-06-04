@@ -122,74 +122,87 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className={`bg-[#0d1117] ${isMobile ? "min-h-0 p-3 pb-6" : "min-h-screen p-4 sm:p-6"}`}>
-      {isMobile && (
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <div>
-            <h1 className="text-lg font-bold text-[#e6edf3]">Pulso</h1>
-            <p className="text-xs capitalize text-[#8b949e]">{dataHoje}</p>
+    <div
+      className={`bg-[#0d1117] ${isMobile ? "min-h-0 px-3 pb-6 pt-1" : "min-h-screen px-4 py-5 sm:px-6 sm:py-6"}`}
+    >
+      <div className="mx-auto w-full max-w-[1400px] space-y-6">
+        {isMobile && (
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-[#2b3544] bg-[#121926] px-3.5 py-3">
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-[#e6edf3]">Dashboard</h1>
+              <p className="text-xs capitalize text-[#8b949e]">{dataHoje}</p>
+            </div>
+            <Link
+              href="/crm/analytics"
+              className="flex min-h-10 items-center gap-1.5 rounded-xl border border-[#30363d] bg-[#21262d] px-3 text-xs font-bold text-[#c9a24a]"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Tendências
+            </Link>
           </div>
-          <Link
-            href="/crm/analytics"
-            className="flex min-h-11 items-center gap-1 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-xs font-bold text-[#c9a24a]"
+        )}
+
+        {dash.erro && (
+          <div
+            className="rounded-2xl border border-[#f8514966] bg-[#1a0a0a] px-4 py-3 text-sm text-[#ff7b72]"
+            role="alert"
           >
-            <BarChart3 className="h-3.5 w-3.5" />
-            Tendências
-          </Link>
+            {dash.erro}
+            <button
+              type="button"
+              onClick={() => dash.recarregar()}
+              className="ml-2 text-xs font-bold underline"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
+        <CrmAcaoAgora m={m} loading={m.loading} indisponivel={!!dash.erro && !dash.carregado} />
+        <CrmPipelineResumo />
+        <CrmAlertasStrip alertas={dash.alertas} loading={dash.loading} />
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <CrmUltimosLeads leads={dash.leadsRecentes} loading={dash.loading} />
+          <CrmOperacaoResumo operacao={dash.operacao} loading={dash.loading} />
         </div>
-      )}
-      {dash.erro && (
-        <div
-          className="mb-4 rounded-xl border border-[#f8514966] bg-[#1a0a0a] px-4 py-3 text-sm text-[#ff7b72]"
-          role="alert"
-        >
-          {dash.erro}
-          <button
-            type="button"
-            onClick={() => dash.recarregar()}
-            className="ml-2 text-xs font-bold underline"
-          >
-            Tentar novamente
-          </button>
+
+        <div>
+          <CrmSectionTitle>Hoje</CrmSectionTitle>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+            {hoje.map((c) => (
+              <CrmMetricCard
+                key={c.label}
+                label={c.label}
+                valor={c.valor}
+                sub={c.sub}
+                cor={c.cor}
+                loading={m.loading}
+                onClick={() => router.push(c.rota)}
+              />
+            ))}
+          </div>
         </div>
-      )}
-      <CrmAcaoAgora m={m} loading={m.loading} indisponivel={!!dash.erro && !dash.carregado} />
-      <CrmPipelineResumo />
-      <CrmAlertasStrip alertas={dash.alertas} loading={dash.loading} />
-      <CrmUltimosLeads leads={dash.leadsRecentes} loading={dash.loading} />
-      <CrmOperacaoResumo operacao={dash.operacao} loading={dash.loading} />
 
-      <CrmSectionTitle>Hoje</CrmSectionTitle>
-      <div className="mb-6 grid grid-cols-2 gap-2">
-        {hoje.map((c) => (
-          <CrmMetricCard
-            key={c.label}
-            label={c.label}
-            valor={c.valor}
-            sub={c.sub}
-            cor={c.cor}
-            loading={m.loading}
-            onClick={() => router.push(c.rota)}
-          />
-        ))}
+        <div>
+          <CrmSectionTitle>Saúde comercial</CrmSectionTitle>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {saude.map((c) => (
+              <CrmMetricCard
+                key={c.label}
+                label={c.label}
+                valor={c.valor}
+                sub={c.sub}
+                cor={c.cor}
+                loading={m.loading}
+                onClick={() => router.push(c.rota)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <CrmEquipeResumo agentes={agentes} ciclos={dash.ciclos} loading={loadingAgentes || dash.loading} />
       </div>
-
-      <CrmSectionTitle>Saúde comercial</CrmSectionTitle>
-      <div className="mb-6 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {saude.map((c) => (
-          <CrmMetricCard
-            key={c.label}
-            label={c.label}
-            valor={c.valor}
-            sub={c.sub}
-            cor={c.cor}
-            loading={m.loading}
-            onClick={() => router.push(c.rota)}
-          />
-        ))}
-      </div>
-
-      <CrmEquipeResumo agentes={agentes} ciclos={dash.ciclos} loading={loadingAgentes || dash.loading} />
     </div>
   );
 }

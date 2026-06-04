@@ -40,7 +40,7 @@ export async function proxy(request: NextRequest) {
     if (sessionUser) {
       const url = request.nextUrl.clone();
       const next = url.searchParams.get("next");
-      url.pathname = getSafeReturnPath(next, "/office");
+      url.pathname = getSafeReturnPath(next, "/crm");
       url.search = "";
       return NextResponse.redirect(url);
     }

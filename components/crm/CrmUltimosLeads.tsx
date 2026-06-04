@@ -29,20 +29,23 @@ export function CrmUltimosLeads({
 }) {
   if (loading) {
     return (
-      <div className="mb-6 animate-pulse rounded-xl border border-[#30363d] bg-[#161b22] p-4">
+      <div className="h-full animate-pulse rounded-2xl border border-[#2b3544] bg-[#121926] p-4">
         <div className="mb-3 h-4 w-40 rounded bg-[#21262d]" />
         {[1, 2, 3].map((i) => (
-          <div key={i} className="mb-2 h-10 rounded bg-[#21262d]" />
+          <div key={i} className="mb-2 h-10 rounded-xl bg-[#21262d]" />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="mb-6 rounded-xl border border-[#30363d] bg-[#161b22] p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="m-0 text-sm font-bold text-[#e6edf3]">Últimos movimentos</h2>
-        <Link href="/crm/leads" className="text-xs font-bold text-[#c9a24a] hover:underline">
+    <section className="h-full rounded-2xl border border-[#2b3544] bg-[#121926] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="m-0 text-sm font-bold tracking-tight text-[#e6edf3]">Últimos movimentos</h2>
+        <Link
+          href="/crm/leads"
+          className="rounded-lg border border-[#30363d] px-2 py-1 text-xs font-bold text-[#c9a24a] transition-colors hover:border-[#c9a24a55]"
+        >
           Ver todos
         </Link>
       </div>
@@ -54,7 +57,7 @@ export function CrmUltimosLeads({
             <li key={l.id}>
               <Link
                 href={`/crm/leads/${l.id}`}
-                className="flex items-center justify-between gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-[#0d1117]"
+                className="flex items-center justify-between gap-2 rounded-xl border border-transparent px-2.5 py-2 transition-colors hover:border-[#2b3544] hover:bg-[#0f1520]"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-[#e6edf3]">
@@ -70,6 +73,6 @@ export function CrmUltimosLeads({
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

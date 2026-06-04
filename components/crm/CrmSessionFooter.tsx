@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, LogOut, type LucideIcon } from "lucide-react";
+import { LogOut, Shield, type LucideIcon } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { getInitials } from "@/lib/data/office-map";
@@ -48,7 +48,6 @@ function displayNameFromUser(user: Pick<User, "email" | "user_metadata">): strin
   return "Utilizador";
 }
 
-/** Rótulo curto para o badge (papéis em `public.app_role`). */
 function formatRolePill(role: string): string {
   const r = role.trim().toLowerCase();
   if (r === "owner") return "Owner";
@@ -57,13 +56,50 @@ function formatRolePill(role: string): string {
   return role;
 }
 
-async function signOutAndRedirect(router: ReturnType<typeof useRouter>, onNavigate?: () => void) {
+async function signOutAndRedirect(
+  router: ReturnType<typeof useRouter>,
+  onNavigate?: () => void,
+) {
   onNavigate?.();
   await fetch("/api/auth/crm-session", { method: "DELETE", credentials: "include" });
   await supabase.auth.signOut();
   router.push("/login");
   router.refresh();
 }
+
+/* ─── Avatar ─────────────────────────────────────────────────────────────── */
+
+const AVATAR_RING =
+  "linear-gradient(135deg, #c9a24a 0%, #e0c068 40%, #5a9e7a 70%, #003b26 100%)";
+const AVATAR_INNER = "linear-gradient(145deg, #1c2a1e 0%, #0d1117 100%)";
+const AVATAR_SHADOW = "0 0 0 1px rgba(201,162,74,0.30), 0 4px 12px rgba(0,0,0,0.55)";
+
+function Avatar({ initials, email, size }: { initials: string; email: string; size: number }) {
+  return (
+    <div
+      className="relative flex-shrink-0 rounded-full"
+      style={{ width: size, height: size, boxShadow: AVATAR_SHADOW }}
+      title={email || undefined}
+    >
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{ background: AVATAR_RING, padding: 2 }}
+      >
+        <div
+          className="flex h-full w-full items-center justify-center rounded-full font-bold tracking-wide text-white"
+          style={{
+            background: AVATAR_INNER,
+            fontSize: size >= 44 ? 14 : 11,
+          }}
+        >
+          {initials}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function CrmSessionFooter({
   expanded = false,
@@ -75,7 +111,7 @@ export function CrmSessionFooter({
   variant?: "sidebar" | "drawer";
   /** Chamado antes do redirect (ex.: fechar menu mobile). */
   onNavigate?: () => void;
-  /** Por defeito: Escritório → `/office`. Na página do escritório use p.ex. CRM → `/crm`. */
+  /** Ação opcional (ex. link secundário). No CRM omitir — não promover escritório virtual. */
   primaryAction?: { href: string; label: string; title?: string; icon?: LucideIcon };
 }) {
   const router = useRouter();
@@ -83,13 +119,8 @@ export function CrmSessionFooter({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
 
-  const primary = primaryAction ?? {
-    href: "/office",
-    label: "Escritório",
-    title: "Escritório virtual",
-    icon: Building2,
-  };
-  const PrimaryIcon = primary.icon ?? Building2;
+  const primary = primaryAction;
+  const PrimaryIcon = primary?.icon;
 
   useEffect(() => {
     let cancelled = false;
@@ -97,7 +128,11 @@ export function CrmSessionFooter({
     async function loadProfile(u: User) {
       setEmail(u.email ?? "");
       setName(displayNameFromUser(u));
-      const row = await supabase.from("users").select("name, role").eq("auth_id", u.id).maybeSingle();
+      const row = await supabase
+        .from("users")
+        .select("name, role")
+        .eq("auth_id", u.id)
+        .maybeSingle();
       if (cancelled) return;
       if (row.data?.name) setName(String(row.data.name).trim());
       setRole(row.data?.role != null ? String(row.data.role) : "");
@@ -114,7 +149,6 @@ export function CrmSessionFooter({
     }
 
     const unsubscribe = subscribeSharedAuthProfile(onAuthUser);
-
     return () => {
       cancelled = true;
       unsubscribe();
@@ -125,136 +159,112 @@ export function CrmSessionFooter({
   const rolePill = formatRolePill(role);
   const isDrawer = variant === "drawer";
   const showExpandedBlock = expanded || isDrawer;
+  const isPrivileged = ["owner", "admin"].includes(role.trim().toLowerCase());
 
-  const avatar = (
-    <div
-      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums"
+  /* ── Role badge ─────────────────────────────────────────────────── */
+  const roleBadge = rolePill ? (
+    <span
+      className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
       style={{
-        background: "linear-gradient(145deg, #21262d 0%, #161b22 100%)",
-        color: "var(--obra-dourado, #c9a24a)",
-        border: "1px solid rgba(201, 162, 74, 0.35)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+        background: "#c9a24a14",
+        color: "#c9a24a",
+        border: "1px solid #c9a24a44",
       }}
-      title={email || undefined}
     >
-      {initials}
-    </div>
-  );
+      {isPrivileged && <Shield size={9} strokeWidth={2.5} aria-hidden />}
+      {rolePill}
+    </span>
+  ) : null;
 
-  const btnGroupBase =
-    "inline-flex min-h-10 w-full max-w-full overflow-hidden rounded-xl border transition-opacity hover:opacity-95";
-  const btnGroupBorder = "1px solid var(--obra-borda, #30363d)";
-
-  const signOutBtnClassIconOnly =
-    "flex flex-none items-center justify-center px-2.5 py-2.5 text-sm font-semibold sm:px-3";
-
-  const officeLinkClass =
-    "flex flex-1 items-center justify-center gap-2 px-3 py-2.5 text-sm font-bold transition-colors no-underline";
-  const officeLinkStyle: CSSProperties = {
-    background: "var(--obra-verde, #003b26)",
-    color: "var(--obra-dourado, #c9a24a)",
-  };
-
-  const signOutExpandedStyle: CSSProperties = {
-    background: "rgba(248, 81, 73, 0.12)",
-    color: "#f85149",
-    borderLeft: "1px solid var(--obra-borda, #30363d)",
-    cursor: "pointer",
-    boxShadow: "inset 0 1px 0 0 #f85149, inset 0 -1px 0 0 #f85149, inset -1px 0 0 0 #f85149",
-  };
-
-  const signOutCollapsedStyle: CSSProperties = {
-    background: "rgba(248, 81, 73, 0.12)",
-    color: "#f85149",
-    cursor: "pointer",
-    boxShadow: "inset 1px 0 0 0 #f85149, inset -1px 0 0 0 #f85149, inset 0 -1px 0 0 #f85149",
-  };
-
+  /* ── Collapsed (sidebar minimizada) ─────────────────────────────── */
   if (!showExpandedBlock) {
     return (
-      <div
-        className="mt-auto flex w-full flex-shrink-0 flex-col items-center gap-2 border-t px-1 pt-2 pb-1"
-        style={{ borderColor: "rgba(48,54,61,0.65)" }}
-      >
-        {avatar}
-        <div
-          className={`${btnGroupBase} w-[2.75rem] flex-col`}
-          style={{ border: btnGroupBorder }}
-        >
+      <div className="mt-auto flex w-full flex-shrink-0 flex-col items-center gap-2.5 px-1 pt-3 pb-2">
+        <Avatar initials={initials} email={email} size={40} />
+
+        {primary && PrimaryIcon && (
           <Link
             href={primary.href}
-            className="flex h-10 w-10 flex-none items-center justify-center border-b"
-            style={{ ...officeLinkStyle, borderColor: "rgba(48,54,61,0.65)" }}
             title={primary.title ?? primary.label}
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors hover:opacity-80"
+            style={{
+              background: "var(--obra-verde, #003b26)",
+              color: "var(--obra-dourado, #c9a24a)",
+              border: "1px solid rgba(201,162,74,0.2)",
+            }}
           >
-            <PrimaryIcon size={18} strokeWidth={2} aria-hidden />
+            <PrimaryIcon size={16} strokeWidth={2} aria-hidden />
           </Link>
-          <button
-            type="button"
-            className="flex h-10 w-10 flex-none items-center justify-center"
-            style={signOutCollapsedStyle}
-            title="Sair da conta"
-            onClick={() => void signOutAndRedirect(router, onNavigate)}
-          >
-            <LogOut size={18} strokeWidth={2} aria-hidden />
-          </button>
-        </div>
+        )}
+
+        <button
+          type="button"
+          title="Sair da conta"
+          aria-label="Sair da conta"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[#f8514944] bg-[#f8514914] text-[#f85149] transition-colors hover:border-[#f85149] hover:bg-[#f8514930]"
+          onClick={() => void signOutAndRedirect(router, onNavigate)}
+        >
+          <LogOut size={15} strokeWidth={2} aria-hidden />
+        </button>
       </div>
     );
   }
 
+  const signOutIconBtn = (
+    <button
+      type="button"
+      title="Sair da conta"
+      aria-label="Sair da conta"
+      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[#f8514944] bg-[#f8514914] text-[#f85149] transition-colors hover:border-[#f85149] hover:bg-[#f8514930]"
+      onClick={() => void signOutAndRedirect(router, onNavigate)}
+    >
+      <LogOut size={16} strokeWidth={2} aria-hidden />
+    </button>
+  );
+
+  /* ── Expanded (sidebar aberta ou drawer) ─────────────────────────── */
   return (
     <div
-      className={`mt-auto flex flex-shrink-0 flex-col gap-2 border-t pt-2 pb-1 ${isDrawer ? "px-2" : "w-full px-1"}`}
-      style={{ borderColor: "rgba(48,54,61,0.65)" }}
+      className={`mt-auto flex flex-shrink-0 ${isDrawer ? "px-2 pb-2" : "w-full px-2 pb-2"}`}
     >
-      <div className={`flex items-center gap-3 ${isDrawer ? "px-1" : "px-2"} py-1`}>
-        {avatar}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold" style={{ color: "var(--obra-texto, #e6edf3)" }}>
-            {name || "…"}
-          </p>
-          {email ? (
-            <p className="truncate text-[11px]" style={{ color: "var(--obra-texto-3, #484f58)" }}>
-              {email}
-            </p>
-          ) : null}
-          {rolePill ? (
-            <span
-              className="mt-1 inline-block rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-              style={{
-                background: "rgba(0, 59, 38, 0.55)",
-                color: "var(--obra-dourado-light, #e0b86a)",
-                border: "1px solid rgba(201, 162, 74, 0.25)",
-              }}
-            >
-              {rolePill}
-            </span>
-          ) : null}
-        </div>
-      </div>
+      <div className="w-full rounded-2xl border border-[#2b3544] bg-[#121926] p-2.5">
+        <div className="flex items-center gap-2.5">
+          <Avatar initials={initials} email={email} size={40} />
 
-      <div className={btnGroupBase} style={{ border: btnGroupBorder }}>
-        <Link
-          href={primary.href}
-          className={officeLinkClass}
-          style={officeLinkStyle}
-          title={primary.title ?? primary.label}
-          onClick={onNavigate}
-        >
-          <PrimaryIcon size={18} strokeWidth={2} className="flex-shrink-0" aria-hidden />
-          <span className="truncate">{primary.label}</span>
-        </Link>
-        <button
-          type="button"
-          className={signOutBtnClassIconOnly}
-          style={signOutExpandedStyle}
-          title="Sair da conta"
-          aria-label="Sair da conta"
-          onClick={() => void signOutAndRedirect(router, onNavigate)}
-        >
-          <LogOut size={18} strokeWidth={2} className="flex-shrink-0" aria-hidden />
-        </button>
+          <div className="min-w-0 flex-1">
+            <p
+              className="truncate text-sm font-bold leading-tight tracking-tight"
+              style={{ color: "var(--obra-texto, #e6edf3)" }}
+            >
+              {name || "…"}
+            </p>
+            {email ? (
+              <p className="mt-0.5 truncate text-[11px] leading-tight" style={{ color: "#6e7681" }}>
+                {email}
+              </p>
+            ) : null}
+            {roleBadge}
+          </div>
+
+          <div className="flex shrink-0 flex-col items-center gap-1.5 self-center">
+            {primary && PrimaryIcon ? (
+              <Link
+                href={primary.href}
+                title={primary.title ?? primary.label}
+                className="flex h-9 w-9 items-center justify-center rounded-xl no-underline transition-opacity hover:opacity-90"
+                style={{
+                  background: "var(--obra-verde, #003b26)",
+                  color: "var(--obra-dourado, #c9a24a)",
+                  border: "1px solid rgba(201,162,74,0.2)",
+                }}
+                onClick={onNavigate}
+              >
+                <PrimaryIcon size={16} strokeWidth={2} aria-hidden />
+              </Link>
+            ) : null}
+            {signOutIconBtn}
+          </div>
+        </div>
       </div>
     </div>
   );

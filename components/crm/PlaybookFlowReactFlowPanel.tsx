@@ -29,6 +29,7 @@ type Props = {
   agenteSlug: string;
   disabled?: boolean;
   hasUnsavedChanges?: boolean;
+  onCanvasDirty?: () => void;
   onSaveDraft?: () => void;
   onSaveDraftAndClose?: () => void;
 };
@@ -39,9 +40,11 @@ export function PlaybookFlowReactFlowPanel({
   agenteSlug,
   disabled,
   hasUnsavedChanges = false,
+  onCanvasDirty,
   onSaveDraft,
   onSaveDraftAndClose,
 }: Props) {
+  const canSave = hasUnsavedChanges;
   const parsed = useMemo(() => parsePlaybookFlowFromMarkdown(markdown), [markdown]);
 
   const validation = useMemo(
@@ -132,10 +135,10 @@ export function PlaybookFlowReactFlowPanel({
               <button
                 type="button"
                 onClick={onSaveDraft}
-                disabled={disabled || !hasUnsavedChanges}
+                disabled={disabled || !canSave}
                 style={{
                   ...saveButtonStyle,
-                  opacity: disabled || !hasUnsavedChanges ? 0.55 : 1,
+                  opacity: disabled || !canSave ? 0.55 : 1,
                 }}
                 title="Salva o JSON atual no rascunho do drawer"
               >
@@ -147,10 +150,10 @@ export function PlaybookFlowReactFlowPanel({
               <button
                 type="button"
                 onClick={onSaveDraftAndClose}
-                disabled={disabled || !hasUnsavedChanges}
+                disabled={disabled || !canSave}
                 style={{
                   ...saveAndCloseButtonStyle,
-                  opacity: disabled || !hasUnsavedChanges ? 0.55 : 1,
+                  opacity: disabled || !canSave ? 0.55 : 1,
                 }}
                 title="Salva no rascunho e volta para o drawer"
               >
@@ -178,6 +181,7 @@ export function PlaybookFlowReactFlowPanel({
           key={mountKey}
           initialDefinition={definition}
           onChange={handleChange}
+          onDirty={onCanvasDirty}
         />
       </div>
     </div>

@@ -233,4 +233,26 @@ describe("parseWhatsappWebhookBody UAZAPI", () => {
       expect(r.value.mensagemFinal).toBe("Projeto arquitetura / design");
     }
   });
+
+  it("fromMe dispara human takeover (mensagem enviada pelo celular da linha)", () => {
+    const r = parseWhatsappWebhookBody({
+      event: "messages",
+      data: {
+        fromMe: true,
+        isGroup: false,
+        chatid: `${PNG}@s.whatsapp.net`,
+        sender: `${PNG}@s.whatsapp.net`,
+        messageid: "out-1",
+        messageTimestamp: 1_700_000_000,
+        messageType: "conversation",
+        text: "Oi, sou da equipe, vou assumir seu atendimento",
+      },
+    });
+    expect(r.kind).toBe("outgoing_human");
+    if (r.kind === "outgoing_human") {
+      expect(r.value.telefone).toBe(PNG);
+      expect(r.value.fromMe).toBe(true);
+      expect(r.value.mensagemFinal).toContain("assumir");
+    }
+  });
 });

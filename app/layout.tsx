@@ -30,7 +30,7 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Obra10+ Escritório Virtual",
+  title: "Obra10+",
   description: "Central de operações da Obra10+ — leads, agentes e campanhas em tempo real",
   manifest: "/manifest.json",
   appleWebApp: {

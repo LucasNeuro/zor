@@ -1,8 +1,8 @@
 {
-  "name": "Obra10+ Escritório Virtual",
+  "name": "Obra10+ CRM",
   "short_name": "Obra10+",
-  "description": "Central de operações da Obra10+ — leads, agentes e campanhas em tempo real",
-  "start_url": "/office",
+  "description": "Central comercial Obra10+ — leads, funil, agentes e campanhas",
+  "start_url": "/crm",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],

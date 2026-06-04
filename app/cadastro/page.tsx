@@ -224,20 +224,26 @@ export default function CadastroPage() {
 
     setSubmitting(true);
     try {
-      const auth = await supabase.auth.signUp({
-        email: form.contactEmail.trim().toLowerCase(),
-        password: form.password,
-        options: {
-          data: {
-            full_name: form.contactName.trim(),
-          },
-        },
+      const authRes = await fetch("/api/public/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.contactEmail.trim().toLowerCase(),
+          password: form.password,
+          fullName: form.contactName.trim(),
+        }),
       });
-      if (auth.error) {
-        setError(auth.error.message);
+      const authData = (await authRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        user?: { id: string };
+        session?: { access_token: string; expires_in: number } | null;
+      };
+      if (!authRes.ok || !authData.ok) {
+        setError(authData.error || "Não foi possível criar a conta no Supabase.");
         return;
       }
-      const authUserId = auth.data.user?.id;
+      const authUserId = authData.user?.id;
       if (!authUserId) {
         setError("Não foi possível obter o ID do usuário no Supabase Auth.");
         return;
@@ -261,7 +267,7 @@ export default function CadastroPage() {
         return;
       }
 
-      const session = auth.data.session;
+      const session = authData.session;
       if (session?.access_token) {
         const sync = await fetch("/api/auth/crm-session", {
           method: "POST",
@@ -283,8 +289,13 @@ export default function CadastroPage() {
         `${data.tenant?.nome_exibicao ?? "Tenant"} criado com sucesso (${data.tenant?.slug ?? "-"}). Verifique seu e-mail para confirmar o acesso e depois entre no login.`,
       );
       setForm(INITIAL_FORM);
-    } catch {
-      setError("Falha de rede ao criar tenant.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setError(
+        msg && /failed to fetch/i.test(msg)
+          ? "Falha de rede ao contactar o servidor. Verifique se o dev server está a correr e recarregue a página."
+          : "Falha de rede ao criar conta.",
+      );
     } finally {
       setSubmitting(false);
     }

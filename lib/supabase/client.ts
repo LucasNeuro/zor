@@ -18,20 +18,32 @@ function resolveSupabaseBrowserEnv(): { url: string; anonKey: string } {
   return { url: SUPABASE_ENV_PLACEHOLDER_URL, anonKey: SUPABASE_ENV_PLACEHOLDER_ANON_KEY };
 }
 
-const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseBrowserEnv();
-
 /** Uma instância por contexto browser; reutiliza em HMR para evitar avisos GoTrueClient duplicados. */
-const globalForSupabase = globalThis as unknown as { __supabaseBrowser?: SupabaseClient };
+const globalForSupabase = globalThis as unknown as {
+  __supabaseBrowser?: SupabaseClient;
+  __supabaseBrowserUrl?: string;
+};
 
-export const supabase =
-  globalForSupabase.__supabaseBrowser ??
-  createClient(supabaseUrl, supabaseAnonKey, {
+function createBrowserClient(): SupabaseClient {
+  const { url, anonKey } = resolveSupabaseBrowserEnv();
+  return createClient(url, anonKey, {
     realtime: { params: { eventsPerSecond: 10 } },
   });
-
-if (typeof globalThis !== "undefined") {
-  globalForSupabase.__supabaseBrowser = supabase;
 }
+
+function getBrowserClient(): SupabaseClient {
+  const { url } = resolveSupabaseBrowserEnv();
+  const cached = globalForSupabase.__supabaseBrowser;
+  if (cached && globalForSupabase.__supabaseBrowserUrl === url) {
+    return cached;
+  }
+  const client = createBrowserClient();
+  globalForSupabase.__supabaseBrowser = client;
+  globalForSupabase.__supabaseBrowserUrl = url;
+  return client;
+}
+
+export const supabase = getBrowserClient();
 
 if (typeof window !== "undefined") {
   installCrmAuthBridge(supabase);

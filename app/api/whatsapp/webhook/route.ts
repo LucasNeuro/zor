@@ -23,6 +23,7 @@ import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook
 import { dispararProcessamentoJobsWhatsapp } from "@/lib/whatsapp/trigger-job-processor";
 import { runWhatsappWorkerTick } from "@/lib/workers/whatsapp-job-worker";
 import { supersedeJobsAntigosMesmoTelefone } from "@/lib/whatsapp/supersede-jobs-antigos";
+import { ativarAtendimentoHumanoPorMensagemDoCelular } from "@/lib/whatsapp/human-handoff-from-device";
 
 let warnedMissingWebhookSecret = false;
 const WEBHOOK_DEDUPE_TTL_MS = 2 * 60 * 1000;
@@ -411,6 +412,42 @@ export async function POST(request: NextRequest) {
     const supabase = db();
 
     const inbound = parseWhatsappWebhookBody(body);
+    if (inbound.kind === "outgoing_human") {
+      const outbound = inbound.value;
+      const telefoneLead = telefoneConversaId(outbound.telefone);
+      if (telefoneLead.length < 10) {
+        return trace.json({ status: "ignored", reason: "invalid_phone" }, 200, "invalid_phone");
+      }
+
+      const handoff = await ativarAtendimentoHumanoPorMensagemDoCelular(supabase, {
+        telefone: telefoneLead,
+        mensagem: outbound.mensagemFinal,
+        messageId: outbound.messageId || null,
+        timestamp: outbound.timestamp,
+      });
+
+      log.info("wa.webhook.human_takeover_from_device", {
+        telefone: trace.maskTelefone(telefoneLead),
+        ok: handoff.ok,
+        lead_id: handoff.leadId ?? null,
+        humano_slug: handoff.humanoSlug,
+        jobs_cancelados: handoff.jobsCancelados,
+        motivo: handoff.motivo ?? null,
+        message_id: outbound.messageId || null,
+      });
+
+      return trace.json(
+        {
+          status: handoff.ok ? "human_takeover" : "human_takeover_skipped",
+          lead_id: handoff.leadId ?? null,
+          humano_slug: handoff.humanoSlug,
+          jobs_cancelados: handoff.jobsCancelados,
+          motivo: handoff.motivo ?? null,
+        },
+        200,
+        handoff.ok ? "human_takeover_ok" : "human_takeover_skipped"
+      );
+    }
     if (inbound.kind === "ignored") {
       log.info("wa.webhook.parse_ignored", {
         reason: inbound.status,

@@ -14,7 +14,7 @@ type Props = {
 export function CrmMetricCardSkeleton({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-xl border border-[#30363d] bg-[#161b22] p-4 ${className}`}
+      className={`animate-pulse rounded-2xl border border-[#2b3544] bg-[#121926] p-4 ${className}`}
       aria-hidden
     >
       <div className="mb-2 h-3 w-24 rounded bg-[#21262d]" />
@@ -54,7 +54,7 @@ export function CrmMetricCard({
   );
 
   const baseClass =
-    `w-full rounded-xl border border-[#30363d] bg-[#161b22] p-4 text-left transition-transform hover:scale-[1.02] ${className}`;
+    `group w-full rounded-2xl border border-[#2b3544] bg-gradient-to-b from-[#161b22] to-[#0f1520] p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.22)] transition-[border-color,box-shadow] hover:border-[#c9a24a44] hover:shadow-[0_12px_32px_rgba(0,0,0,0.32)] ${className}`;
 
   const style = { borderLeft: `3px solid ${cor}` };
 
@@ -75,6 +75,11 @@ export function CrmMetricCard({
 
 export function CrmSectionTitle({ children }: { children: string }) {
   return (
-    <p className="mb-2 text-xs font-bold uppercase tracking-widest text-[#6e7681]">{children}</p>
+    <div className="mb-3 flex items-center gap-3">
+      <p className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-[#8b949e]">
+        {children}
+      </p>
+      <span className="h-px flex-1 bg-gradient-to-r from-[#30363d] to-transparent" aria-hidden />
+    </div>
   );
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Plus, X, ChevronDown } from "lucide-react";
+import { Plus, X, ChevronDown, Menu } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -49,6 +49,33 @@ function CrmNavItemLabel({ item, expanded }: { item: CrmNavItem; expanded: boole
   );
 }
 
+const NESTED_GROUP_EXCLUDE_IDS = new Set(["vendas", "ia", "cadastros"]);
+
+function splitSistemaItems(items: CrmNavItem[]) {
+  const root = items.find(item => item.href === "/crm/configuracoes");
+  if (!root) return null;
+  const children = items.filter(item => item.href !== "/crm/configuracoes");
+  return { root, children };
+}
+
+function getNestedGroupMenu(groupId: string, groupLabel: string, items: CrmNavItem[]) {
+  if (groupId === "sistema") {
+    const sistema = splitSistemaItems(items);
+    if (!sistema) return null;
+    return {
+      parentLabel: "Configurações",
+      parentIcon: sistema.root.icon,
+      children: [{ ...sistema.root, label: "Geral" }, ...sistema.children],
+    };
+  }
+  if (NESTED_GROUP_EXCLUDE_IDS.has(groupId) || items.length < 2) return null;
+  return {
+    parentLabel: groupLabel,
+    parentIcon: items[0].icon,
+    children: items,
+  };
+}
+
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -58,6 +85,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userRole, setUserRole] = useState("");
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(CRM_NAV_GROUPS[0].id);
+  const [openNestedGroups, setOpenNestedGroups] = useState<Record<string, boolean>>({ sistema: true });
   const [collapsedFlyoutId, setCollapsedFlyoutId] = useState<string | null>(null);
   const miniSidebarShellRef = useRef<HTMLDivElement>(null);
   const miniFlyoutRef = useRef<HTMLDivElement>(null);
@@ -190,32 +218,29 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
             className="relative z-20 hidden md:flex md:h-[calc(100dvh-1rem)] md:max-h-[calc(100dvh-1rem)] flex-shrink-0 self-stretch"
           >
         <aside
-          className={`flex h-full flex-col gap-1 overflow-hidden pb-2 pt-3.5 transition-[width] duration-200 ease-out md:rounded-l-xl md:rounded-r-none md:border-0 md:pb-2 md:pt-4 md:shadow-none ${
-            sidebarExpanded ? "w-72 items-stretch px-2" : "w-[4.25rem] items-center px-0"
+          className={`flex h-full flex-col overflow-hidden border-r border-[#2b3544] pt-4 pb-3 transition-[width] duration-200 ease-out md:rounded-l-xl ${
+            sidebarExpanded ? "w-[260px] items-stretch px-2" : "w-14 items-center px-0"
           }`}
-          style={{
-            background: CRM_CHROME_SOLID,
-            borderColor: "transparent",
-            boxShadow: "none",
-          }}
+          style={{ background: "#0f1520" }}
         >
+          {/* Brand header */}
           <div
-            className={`mb-1 flex min-h-0 w-full flex-shrink-0 px-0.5 ${
-              sidebarExpanded ? "flex-row items-center" : "flex-col items-center"
+            className={`mb-2 flex min-h-0 w-full flex-shrink-0 ${
+              sidebarExpanded
+                ? "border-b border-[#2b3544] px-2 pb-3 pt-0.5"
+                : "flex-col items-center justify-center py-1"
             }`}
           >
             {sidebarExpanded ? (
-              <div className="min-w-0 flex-1 px-1 py-0.5">
-                <Obra10BrandHeader size="sm" />
-              </div>
+              <Obra10BrandHeader size="sm" subtitle="CRM" />
             ) : (
-              <div className="flex justify-center rounded-xl p-0.5" title="Obra10+">
+              <div className="flex justify-center rounded-xl p-0.5" title="Obra10 CRM">
                 <Obra10LogoBadge size="md" />
               </div>
             )}
           </div>
 
-          <nav className="flex min-h-0 w-full flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-0.5">
+          <nav className="flex min-h-0 w-full flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-1">
             {sidebarExpanded ? (
               <>
                 {navGroups.map(group => {
@@ -226,22 +251,19 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                       <button
                         type="button"
                         onClick={() => toggleDrawer(group.id)}
-                        className="flex w-full items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left transition-colors"
-                        style={{
-                          background: open || groupHasActive ? "rgba(0,0,0,0.22)" : "transparent",
-                          color: "var(--obra-texto-2, #8b949e)",
-                          border: "none",
-                          cursor: "pointer",
-                        }}
+                        className={`flex w-full items-center justify-between gap-1 rounded-xl px-2.5 py-1.5 text-left transition-colors ${
+                          open || groupHasActive ? "bg-[#1a2332]" : "hover:bg-[#1a2332]"
+                        }`}
+                        style={{ border: "none", cursor: "pointer" }}
                         aria-expanded={open}
                       >
-                        <span className="min-w-0 truncate text-[11px] font-bold uppercase tracking-wide">
+                        <span className="min-w-0 truncate text-[11px] font-bold uppercase tracking-[0.12em] text-[#6e7681]">
                           {group.label}
                         </span>
                         <ChevronDown
-                          size={14}
-                          strokeWidth={2}
-                          className={`flex-shrink-0 transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+                          size={12}
+                          strokeWidth={2.5}
+                          className={`flex-shrink-0 text-[#6e7681] transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
                           aria-hidden
                         />
                       </button>
@@ -249,56 +271,104 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                         className={`grid transition-[grid-template-rows] duration-200 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
                       >
                         <div className="overflow-hidden">
-                          <div
-                            className="space-y-0.5 rounded-lg py-1 pl-1 pr-0"
-                            style={{
-                              background: "rgba(0,0,0,0.18)",
-                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
-                            }}
-                          >
-                            {group.items.map(item => {
-                              const active = isCrmNavPathActive(pathname, item.href);
-                              return (
-                                <div key={item.href} className={`relative group ${sidebarExpanded ? "w-full" : ""}`}>
-                                  <Link
-                                    href={item.href}
-                                    title={sidebarExpanded ? undefined : item.label}
-                                    className={`relative flex min-h-10 items-center rounded-xl transition-colors ${
-                                      sidebarExpanded
-                                        ? `w-full gap-2 px-2 py-1.5 text-left text-sm${item.extra ? " pr-9" : ""}`
-                                        : "mx-auto h-10 w-10 justify-center"
-                                    }`}
-                                    style={{
-                                      background: active ? "rgba(33,38,45,0.95)" : "transparent",
-                                      color: active ? "var(--obra-dourado, #c9a24a)" : "var(--obra-texto-2, #8b949e)",
-                                    }}
-                                  >
-                                    {active && !sidebarExpanded && (
-                                      <span
-                                        className="pointer-events-none absolute right-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full"
-                                        style={{ background: "#3fb950" }}
+                          <div className="space-y-0.5 rounded-xl border border-[#2b3544]/50 bg-[#0d1117]/60 px-1 py-1">
+                            {getNestedGroupMenu(group.id, group.label, group.items) ? (
+                              (() => {
+                                const nestedMenu = getNestedGroupMenu(group.id, group.label, group.items)!;
+                                const nestedItems = nestedMenu.children;
+                                const nestedActive = nestedItems.some(item =>
+                                  isCrmNavPathActive(pathname, item.href),
+                                );
+                                const nestedOpen = openNestedGroups[group.id] ?? true;
+                                return (
+                                  <div className="space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setOpenNestedGroups(prev => ({
+                                          ...prev,
+                                          [group.id]: !(prev[group.id] ?? true),
+                                        }))
+                                      }
+                                      className={`flex min-h-[38px] w-full items-center justify-between rounded-lg border-l-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                                        nestedActive
+                                          ? "border-[#c9a24a] bg-[#1a2332] text-[#c9a24a]"
+                                          : "border-transparent text-[#8b949e] hover:bg-[#1a2332]/80 hover:text-[#e6edf3]"
+                                      }`}
+                                    >
+                                      <span className="flex items-center gap-2.5">
+                                        <NavIcon Icon={nestedMenu.parentIcon} expanded />
+                                        <span>{nestedMenu.parentLabel}</span>
+                                      </span>
+                                      <ChevronDown
+                                        size={14}
+                                        strokeWidth={2.25}
+                                        className={`transition-transform ${nestedOpen ? "rotate-0" : "-rotate-90"}`}
                                         aria-hidden
                                       />
-                                    )}
-                                    <NavIcon Icon={item.icon} expanded={sidebarExpanded} />
-                                    {sidebarExpanded && <CrmNavItemLabel item={item} expanded />}
-                                  </Link>
-                                  {item.extra && (
-                                    <Link
-                                      href={item.extra.href}
-                                      title={item.extra.label}
-                                      className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-xs font-black"
-                                      style={{
-                                        background: "var(--obra-dourado, #c9a24a)",
-                                        color: "var(--obra-verde, #003b26)",
-                                      }}
+                                    </button>
+                                    <div
+                                      className={`grid overflow-hidden pl-2 transition-[grid-template-rows] duration-200 ease-out ${
+                                        nestedOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                                      }`}
                                     >
-                                      <Plus size={16} strokeWidth={2.5} aria-hidden />
+                                      <div className="space-y-0.5 overflow-hidden">
+                                        {nestedItems.map(item => {
+                                          const active = isCrmNavPathActive(pathname, item.href);
+                                          return (
+                                            <div key={item.href} className="relative w-full">
+                                              <Link
+                                                href={item.href}
+                                                className={`relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+                                                  active
+                                                    ? "border-[#c9a24a] bg-[#1a2332] text-[#c9a24a]"
+                                                    : "border-transparent text-[#8b949e] hover:bg-[#1a2332]/80 hover:text-[#e6edf3]"
+                                                }`}
+                                              >
+                                                <NavIcon Icon={item.icon} expanded />
+                                                <CrmNavItemLabel item={item} expanded />
+                                              </Link>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()
+                            ) : (
+                              group.items.map(item => {
+                                const active = isCrmNavPathActive(pathname, item.href);
+                                return (
+                                  <div key={item.href} className="relative w-full">
+                                    <Link
+                                      href={item.href}
+                                      className={`relative flex min-h-[38px] w-full items-center gap-2.5 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+                                        active
+                                          ? "border-[#c9a24a] bg-[#1a2332] text-[#c9a24a]"
+                                          : `border-transparent text-[#8b949e] hover:bg-[#1a2332]/80 hover:text-[#e6edf3]${item.extra ? " pr-10" : ""}`
+                                      }`}
+                                    >
+                                      <NavIcon Icon={item.icon} expanded />
+                                      <CrmNavItemLabel item={item} expanded />
                                     </Link>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                    {item.extra && (
+                                      <Link
+                                        href={item.extra.href}
+                                        title={item.extra.label}
+                                        className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-xs font-black"
+                                        style={{
+                                          background: "var(--obra-dourado, #c9a24a)",
+                                          color: "var(--obra-verde, #003b26)",
+                                        }}
+                                      >
+                                        <Plus size={14} strokeWidth={2.5} aria-hidden />
+                                      </Link>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
                         </div>
                       </div>
@@ -317,24 +387,20 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                       key={group.id}
                       type="button"
                       onClick={() => setCollapsedFlyoutId(prev => (prev === group.id ? null : group.id))}
-                      className="relative mx-auto flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors"
-                      style={{
-                        background: flyoutOpen || groupHasActive ? "rgba(33,38,45,0.95)" : "transparent",
-                        color:
-                          flyoutOpen || groupHasActive
-                            ? "var(--obra-dourado, #c9a24a)"
-                            : "var(--obra-texto-2, #8b949e)",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
+                      className={`relative mx-auto flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+                        flyoutOpen || groupHasActive
+                          ? "bg-[#1a2332] text-[#c9a24a]"
+                          : "text-[#484f58] hover:bg-[#1a2332]/60 hover:text-[#8b949e]"
+                      }`}
+                      style={{ border: "none", cursor: "pointer" }}
                       title={group.label}
                       aria-expanded={flyoutOpen}
                       aria-haspopup="dialog"
                     >
                       {groupHasActive && (
                         <span
-                          className="pointer-events-none absolute right-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full"
-                          style={{ background: "#3fb950" }}
+                          className="pointer-events-none absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full"
+                          style={{ background: "#c9a24a" }}
                           aria-hidden
                         />
                       )}
@@ -348,7 +414,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 
           <div
             className={`relative z-30 mt-auto flex flex-shrink-0 border-t pt-2 pb-1 ${sidebarExpanded ? "w-full px-1" : "flex-col items-center"}`}
-            style={{ borderColor: "rgba(48,54,61,0.65)" }}
+            style={{ borderColor: "#2b3544" }}
           >
             <CrmSessionFooter expanded={sidebarExpanded} />
           </div>
@@ -363,73 +429,132 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   ref={miniFlyoutRef}
                   role="dialog"
                   aria-label={group.label}
-                  className="pointer-events-auto absolute z-[60] flex max-h-[min(72vh,calc(100%-4.75rem))] w-72 flex-col overflow-hidden rounded-xl border shadow-2xl"
+                  className="pointer-events-auto absolute z-[60] flex max-h-[min(72vh,calc(100%-4.75rem))] w-60 flex-col overflow-hidden rounded-2xl border border-[#2b3544] shadow-2xl"
                   style={{
                     left: "100%",
                     top: "3.75rem",
                     marginLeft: "0.35rem",
-                    background: CRM_CHROME_SOLID,
-                    borderColor: "var(--obra-borda, #30363d)",
-                    boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
+                    background: "#0f1520",
+                    boxShadow: "0 16px 48px rgba(0,0,0,0.55)",
                   }}
                 >
                   <div
-                    className="flex flex-shrink-0 items-center justify-between gap-2 border-b px-3 py-2"
-                    style={{ borderColor: "var(--obra-borda, #30363d)" }}
+                    className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[#2b3544] bg-[#121926] px-3 py-2.5"
                   >
-                    <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-wide text-[#8b949e]">
+                    <span className="min-w-0 truncate text-[11px] font-bold uppercase tracking-[0.12em] text-[#8b949e]">
                       {group.label}
                     </span>
                     <button
                       type="button"
-                      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg"
-                      style={{
-                        background: "var(--obra-dark-3, #21262d)",
-                        color: "var(--obra-texto-2, #8b949e)",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
+                      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl border border-[#2b3544] bg-[#1a2332] transition-colors hover:bg-[#1a2332]/80"
+                      style={{ color: "#8b949e", cursor: "pointer" }}
                       aria-label="Fechar"
                       onClick={() => setCollapsedFlyoutId(null)}
                     >
-                      <X size={16} strokeWidth={2} aria-hidden />
+                      <X size={14} strokeWidth={2} aria-hidden />
                     </button>
                   </div>
                   <div className="min-h-0 flex-1 overflow-y-auto py-2" style={{ WebkitOverflowScrolling: "touch" }}>
                     <div className="space-y-0.5 px-2">
-                      {group.items.map(item => {
-                        const active = isCrmNavPathActive(pathname, item.href);
-                        return (
-                          <div key={item.href} className="relative">
-                            <Link
-                              href={item.href}
-                              onClick={() => setCollapsedFlyoutId(null)}
-                              className={`relative flex min-h-10 items-center gap-2 rounded-xl px-2 py-2 text-left text-sm font-medium ${item.extra ? "pr-10" : ""}`}
-                              style={{
-                                background: active ? "rgba(33,38,45,0.95)" : "transparent",
-                                color: active ? "var(--obra-dourado, #c9a24a)" : "var(--obra-texto-2, #8b949e)",
-                              }}
-                            >
-                              <NavIcon Icon={item.icon} expanded />
-                              <CrmNavItemLabel item={item} expanded />
-                            </Link>
-                            {item.extra && (
-                              <Link
-                                href={item.extra.href}
-                                onClick={() => setCollapsedFlyoutId(null)}
-                                className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-xs font-black"
-                                style={{
-                                  background: "var(--obra-dourado, #c9a24a)",
-                                  color: "var(--obra-verde, #003b26)",
-                                }}
-                                title={item.extra.label}
+                      {getNestedGroupMenu(group.id, group.label, group.items) ? (
+                        (() => {
+                          const nestedMenu = getNestedGroupMenu(group.id, group.label, group.items)!;
+                          const nestedItems = nestedMenu.children;
+                          const nestedActive = nestedItems.some(item =>
+                            isCrmNavPathActive(pathname, item.href),
+                          );
+                          const nestedOpen = openNestedGroups[group.id] ?? true;
+                          return (
+                            <div className="space-y-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpenNestedGroups(prev => ({
+                                    ...prev,
+                                    [group.id]: !(prev[group.id] ?? true),
+                                  }))
+                                }
+                                className={`flex min-h-[38px] w-full items-center justify-between rounded-lg border-l-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                                  nestedActive
+                                    ? "border-[#c9a24a] bg-[#1a2332] text-[#c9a24a]"
+                                    : "border-transparent text-[#8b949e] hover:bg-[#1a2332]/80 hover:text-[#e6edf3]"
+                                }`}
                               >
-                                <Plus size={16} strokeWidth={2.5} aria-hidden />
+                                <span className="flex items-center gap-2.5">
+                                  <NavIcon Icon={nestedMenu.parentIcon} expanded />
+                                  <span>{nestedMenu.parentLabel}</span>
+                                </span>
+                                <ChevronDown
+                                  size={14}
+                                  strokeWidth={2.25}
+                                  className={`transition-transform ${nestedOpen ? "rotate-0" : "-rotate-90"}`}
+                                  aria-hidden
+                                />
+                              </button>
+                              <div
+                                className={`grid overflow-hidden pl-2 transition-[grid-template-rows] duration-200 ease-out ${
+                                  nestedOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                                }`}
+                              >
+                                <div className="space-y-0.5 overflow-hidden">
+                                  {nestedItems.map(item => {
+                                    const active = isCrmNavPathActive(pathname, item.href);
+                                    return (
+                                      <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        onClick={() => setCollapsedFlyoutId(null)}
+                                        className={`relative flex min-h-[36px] items-center gap-2.5 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+                                          active
+                                            ? "border-[#c9a24a] bg-[#1a2332] text-[#c9a24a]"
+                                            : "border-transparent text-[#8b949e] hover:bg-[#1a2332]/80 hover:text-[#e6edf3]"
+                                        }`}
+                                      >
+                                        <NavIcon Icon={item.icon} expanded />
+                                        <CrmNavItemLabel item={item} expanded />
+                                      </Link>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        group.items.map(item => {
+                          const active = isCrmNavPathActive(pathname, item.href);
+                          return (
+                            <div key={item.href} className="relative">
+                              <Link
+                                href={item.href}
+                                onClick={() => setCollapsedFlyoutId(null)}
+                                className={`relative flex min-h-[38px] items-center gap-2.5 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+                                  active
+                                    ? "border-[#c9a24a] bg-[#1a2332] text-[#c9a24a]"
+                                    : `border-transparent text-[#8b949e] hover:bg-[#1a2332]/80 hover:text-[#e6edf3]${item.extra ? " pr-10" : ""}`
+                                }`}
+                              >
+                                <NavIcon Icon={item.icon} expanded />
+                                <CrmNavItemLabel item={item} expanded />
                               </Link>
-                            )}
-                          </div>
-                        );
-                      })}
+                              {item.extra && (
+                                <Link
+                                  href={item.extra.href}
+                                  onClick={() => setCollapsedFlyoutId(null)}
+                                  className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-xs font-black"
+                                  style={{
+                                    background: "var(--obra-dourado, #c9a24a)",
+                                    color: "var(--obra-verde, #003b26)",
+                                  }}
+                                  title={item.extra.label}
+                                >
+                                  <Plus size={14} strokeWidth={2.5} aria-hidden />
+                                </Link>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
                 </div>
@@ -450,7 +575,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() =>
-              typeof window !== "undefined" && window.history.length > 1 ? router.back() : router.push("/office")
+              typeof window !== "undefined" && window.history.length > 1 ? router.back() : router.push("/crm")
             }
             className="flex min-h-11 min-w-11 flex-shrink-0 items-center justify-center rounded-xl"
             style={{
@@ -471,19 +596,12 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="flex min-h-11 min-w-11 flex-shrink-0 items-center justify-center rounded-xl"
-            style={{
-              background: "var(--obra-dark-3, #21262d)",
-              color: "var(--obra-texto, #e6edf3)",
-              border: "1px solid var(--obra-borda, #30363d)",
-              cursor: "pointer",
-            }}
+            className="flex min-h-11 min-w-11 flex-shrink-0 items-center justify-center rounded-xl border border-[#2b3544] bg-[#121926] text-[#e6edf3] transition-colors hover:border-[#3d4f65] hover:bg-[#1a2332]"
+            style={{ cursor: "pointer" }}
             aria-expanded={mobileMenuOpen}
             aria-label="Abrir menu do CRM"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
-            </svg>
+            <Menu size={20} strokeWidth={1.75} aria-hidden />
           </button>
         </div>
 
@@ -506,88 +624,149 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
         </div>
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-[100] flex md:hidden" role="dialog" aria-modal="true" aria-label="Menu do CRM">
-          <button
-            type="button"
-            className="absolute inset-0 m-0 cursor-default border-0 bg-black/55 p-0"
-            style={{ WebkitTapHighlightColor: "transparent" }}
-            aria-label="Fechar menu"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div
-            className="relative flex h-full w-[min(100%,20rem)] max-w-[85vw] flex-col border-r shadow-2xl"
-            style={{
-              background: CRM_CHROME_SOLID,
-              borderColor: "var(--obra-borda, #30363d)",
-              paddingTop: "env(safe-area-inset-top, 0px)",
-              paddingBottom: "env(safe-area-inset-bottom, 0px)",
-            }}
-          >
-            <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b px-3 py-3" style={{ borderColor: "var(--obra-borda, #30363d)" }}>
-              <div className="min-w-0 flex-1">
-                <Obra10BrandHeader size="sm" subtitle="CRM" subtitleClassName="!text-[#8b949e]" />
-              </div>
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex min-h-10 min-w-10 items-center justify-center rounded-lg"
-                style={{ background: "var(--obra-dark-3, #21262d)", color: "var(--obra-texto-2, #8b949e)", border: "none", cursor: "pointer" }}
-                aria-label="Fechar"
-              >
-                <X size={20} strokeWidth={2} aria-hidden />
-              </button>
+      <div
+        className={`fixed inset-0 z-[100] flex md:hidden transition-opacity duration-[250ms] ease-out ${mobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu do CRM"
+        aria-hidden={!mobileMenuOpen}
+      >
+        <button
+          type="button"
+          className="absolute inset-0 m-0 cursor-default border-0 bg-[#0d1117]/85 p-0 backdrop-blur-sm"
+          style={{ WebkitTapHighlightColor: "transparent" }}
+          aria-label="Fechar menu"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+        <div
+          className={`relative flex h-full w-[min(100%,20rem)] max-w-[85vw] flex-col border-r border-[#2b3544] transition-transform duration-[250ms] ease-out ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+          style={{
+            background: "#0f1520",
+            boxShadow: "4px 0 40px rgba(0,0,0,0.6), inset -1px 0 0 rgba(255,255,255,0.04)",
+            paddingTop: "env(safe-area-inset-top, 0px)",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
+        >
+          <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[#2b3544] bg-[#121926]/90 px-4 py-3.5">
+            <div className="min-w-0 flex-1">
+              <Obra10BrandHeader size="sm" subtitle="CRM" />
             </div>
-            <div className="flex-shrink-0 space-y-2 border-b px-2 py-2" style={{ borderColor: "var(--obra-borda, #30363d)" }}>
-              <CrmSessionFooter variant="drawer" onNavigate={() => setMobileMenuOpen(false)} />
-            </div>
-            <nav className="min-h-0 flex-1 overflow-y-auto py-2" style={{ WebkitOverflowScrolling: "touch" }}>
-              {navGroups.map(group => {
-                const open = openDrawerId === group.id;
-                const groupHasActive = group.items.some(item => isCrmNavPathActive(pathname, item.href));
-                return (
-                  <div key={group.id} className="px-2 pb-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleDrawer(group.id)}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left"
-                      style={{
-                        background: open || groupHasActive ? "rgba(0,0,0,0.22)" : "transparent",
-                        color: "var(--obra-texto-2, #8b949e)",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                      aria-expanded={open}
-                    >
-                      <span className="text-xs font-bold uppercase tracking-wide">{group.label}</span>
-                      <ChevronDown
-                        size={16}
-                        strokeWidth={2}
-                        className={`flex-shrink-0 transition-transform ${open ? "rotate-0" : "-rotate-90"}`}
-                        aria-hidden
-                      />
-                    </button>
-                    <div className={`grid overflow-hidden transition-[grid-template-rows] duration-200 ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
-                      <div className="min-h-0">
-                        <div
-                          className="mt-1 space-y-0.5 rounded-lg py-3 pl-2 pr-1"
-                          style={{
-                            background: "rgba(0,0,0,0.18)",
-                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
-                          }}
-                        >
-                          {group.items.map(item => {
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-[#2b3544] bg-[#1a2332] text-[#8b949e] transition-colors hover:border-[#3d4f65] hover:text-[#e6edf3]"
+              style={{ cursor: "pointer" }}
+              aria-label="Fechar"
+            >
+              <X size={20} strokeWidth={2} aria-hidden />
+            </button>
+          </div>
+          <div className="flex-shrink-0 border-b border-[#2b3544] px-3 py-3">
+            <CrmSessionFooter variant="drawer" onNavigate={() => setMobileMenuOpen(false)} />
+          </div>
+          <nav className="min-h-0 flex-1 overflow-y-auto py-2" style={{ WebkitOverflowScrolling: "touch" }}>
+            {navGroups.map(group => {
+              const open = openDrawerId === group.id;
+              const groupHasActive = group.items.some(item => isCrmNavPathActive(pathname, item.href));
+              return (
+                <div key={group.id} className="px-2 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleDrawer(group.id)}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
+                      open || groupHasActive ? "bg-[#1a2332]" : "hover:bg-[#1a2332]/40"
+                    }`}
+                    style={{ border: "none", cursor: "pointer" }}
+                    aria-expanded={open}
+                  >
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-[#484f58]">{group.label}</span>
+                    <ChevronDown
+                      size={12}
+                      strokeWidth={2.5}
+                      className={`flex-shrink-0 text-[#484f58] transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+                      aria-hidden
+                    />
+                  </button>
+                  <div className={`grid overflow-hidden transition-[grid-template-rows] duration-200 ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+                    <div className="min-h-0">
+                      <div className="space-y-0.5 py-1">
+                        {getNestedGroupMenu(group.id, group.label, group.items) ? (
+                          (() => {
+                            const nestedMenu = getNestedGroupMenu(group.id, group.label, group.items)!;
+                            const nestedItems = nestedMenu.children;
+                            const nestedActive = nestedItems.some(item =>
+                              isCrmNavPathActive(pathname, item.href),
+                            );
+                            const nestedOpen = openNestedGroups[group.id] ?? true;
+                            return (
+                              <div className="space-y-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setOpenNestedGroups(prev => ({
+                                      ...prev,
+                                      [group.id]: !(prev[group.id] ?? true),
+                                    }))
+                                  }
+                                  className={`flex min-h-[38px] w-full items-center justify-between rounded-lg border-l-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                                    nestedActive
+                                      ? "border-[#c9a24a] bg-[#1a2332] text-[#c9a24a]"
+                                      : "border-transparent text-[#8b949e] hover:bg-[#1a2332]/80 hover:text-[#e6edf3]"
+                                  }`}
+                                >
+                                  <span className="flex items-center gap-2.5">
+                                    <NavIcon Icon={nestedMenu.parentIcon} expanded />
+                                    <span>{nestedMenu.parentLabel}</span>
+                                  </span>
+                                  <ChevronDown
+                                    size={14}
+                                    strokeWidth={2.25}
+                                    className={`transition-transform ${nestedOpen ? "rotate-0" : "-rotate-90"}`}
+                                    aria-hidden
+                                  />
+                                </button>
+                                <div
+                                  className={`grid overflow-hidden pl-2 transition-[grid-template-rows] duration-200 ease-out ${
+                                    nestedOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                                  }`}
+                                >
+                                  <div className="space-y-0.5 overflow-hidden">
+                                    {nestedItems.map(item => {
+                                      const active = isCrmNavPathActive(pathname, item.href);
+                                      return (
+                                        <Link
+                                          key={item.href}
+                                          href={item.href}
+                                          onClick={() => setMobileMenuOpen(false)}
+                                          className={`flex min-h-[36px] items-center gap-2.5 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+                                            active
+                                              ? "border-[#c9a24a] bg-[#003b2620] text-[#c9a24a]"
+                                              : "border-transparent text-[#8b949e] hover:bg-[#1a2332] hover:text-[#c7d5e0]"
+                                          }`}
+                                        >
+                                          <NavIcon Icon={item.icon} expanded />
+                                          <CrmNavItemLabel item={item} expanded />
+                                        </Link>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          group.items.map(item => {
                             const active = isCrmNavPathActive(pathname, item.href);
                             return (
-                              <div key={item.href} className="relative px-1 py-0.5">
+                              <div key={item.href} className="relative">
                                 <Link
                                   href={item.href}
                                   onClick={() => setMobileMenuOpen(false)}
-                                  className={`flex min-h-10 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${item.extra ? "pr-14" : ""}`}
-                                  style={{
-                                    background: active ? "rgba(33,38,45,0.95)" : "transparent",
-                                    color: active ? "var(--obra-dourado, #c9a24a)" : "var(--obra-texto-2, #8b949e)",
-                                  }}
+                                  className={`flex min-h-[38px] items-center gap-2.5 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+                                    active
+                                      ? "border-[#c9a24a] bg-[#003b2620] text-[#c9a24a]"
+                                      : `border-transparent text-[#8b949e] hover:bg-[#1a2332] hover:text-[#c7d5e0]${item.extra ? " pr-12" : ""}`
+                                  }`}
                                 >
                                   <NavIcon Icon={item.icon} expanded />
                                   <CrmNavItemLabel item={item} expanded />
@@ -596,29 +775,29 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                                   <Link
                                     href={item.extra.href}
                                     onClick={() => setMobileMenuOpen(false)}
-                                    className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-sm font-black"
+                                    className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-sm font-black"
                                     style={{
                                       background: "var(--obra-dourado, #c9a24a)",
                                       color: "var(--obra-verde, #003b26)",
                                     }}
                                     title={item.extra.label}
                                   >
-                                    <Plus size={18} strokeWidth={2.5} aria-hidden />
+                                    <Plus size={16} strokeWidth={2.5} aria-hidden />
                                   </Link>
                                 )}
                               </div>
                             );
-                          })}
-                        </div>
+                          })
+                        )}
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </nav>
-          </div>
+                </div>
+              );
+            })}
+          </nav>
         </div>
-      )}
+      </div>
         </div>
       </CrmShellProvider>
     </CrmHeaderProvider>

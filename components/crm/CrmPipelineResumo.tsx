@@ -131,11 +131,11 @@ export function CrmPipelineResumo() {
 
   return (
     <section
-      className="mb-6 rounded-2xl border border-[#30363d] bg-[#161b22] shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
+      className="rounded-2xl border border-[#2b3544] bg-gradient-to-b from-[#161b22] to-[#121926] shadow-[0_12px_36px_rgba(0,0,0,0.28)]"
       aria-label="Funil comercial"
     >
       {/* Cabeçalho */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#30363d] px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2b3544] px-4 py-3 sm:px-5">
         <div>
           <h2 className="m-0 text-sm font-bold text-[#e6edf3]">Funil comercial</h2>
           <p className="mt-0.5 text-xs text-[#8b949e]">
@@ -177,7 +177,7 @@ export function CrmPipelineResumo() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-px border-b border-[#30363d] bg-[#30363d] sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-px border-b border-[#2b3544] bg-[#2b3544] sm:grid-cols-4">
         {tab === "leads" ? (
           <>
             <KpiCell label="Leads no funil" value={String(totalAtivosLeads)} hint="excl. ganho/perdido" />
@@ -431,7 +431,7 @@ function KpiCell({
   cor?: string;
 }) {
   return (
-    <div className="bg-[#161b22] px-3 py-2.5 sm:px-4">
+    <div className="bg-[#121926] px-3 py-2.5 sm:px-4">
       <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">{label}</p>
       <p className="text-base font-black tabular-nums sm:text-lg" style={{ color: cor }}>
         {value}

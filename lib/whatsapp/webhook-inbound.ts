@@ -19,6 +19,7 @@ export type NormalizedWhatsappInbound = {
 
 export type WhatsappWebhookParseResult =
   | { kind: "ok"; value: NormalizedWhatsappInbound }
+  | { kind: "outgoing_human"; value: NormalizedWhatsappInbound }
   | { kind: "ignored"; status: string; body?: Record<string, unknown> }
   | { kind: "unknown_event"; event?: string };
 
@@ -470,7 +471,28 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
   const menuChoiceId = extrairMenuChoiceIdDeData(data);
   const texto = extrairTextoMensagem(data);
 
-  if (fromMe) return { kind: "ignored", status: "outgoing_ignored" };
+  if (fromMe) {
+    if (!telefone || telefone.length < 10 || isGroup) {
+      return { kind: "ignored", status: isGroup ? "group_ignored" : "invalid_phone" };
+    }
+    const mensagemFinalOutgoing = texto || menuChoiceId || `[${tipoMidia} enviado pelo celular]`;
+    return {
+      kind: "outgoing_human",
+      value: {
+        telefone,
+        pushName,
+        messageId,
+        timestamp,
+        fromMe: true,
+        isGroup,
+        tipoMidia,
+        texto,
+        mensagemFinal: mensagemFinalOutgoing,
+        ...(menuChoiceId ? { menuChoiceId } : {}),
+        instance: normalizeWebhookInstanceId(body),
+      },
+    };
+  }
   if (!telefone || telefone.length < 10 || isGroup) {
     return { kind: "ignored", status: isGroup ? "group_ignored" : "invalid_phone" };
   }

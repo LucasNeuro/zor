@@ -57,16 +57,18 @@ export function PlaybookFlowVisualSideover({
   onBuilderError,
 }: Props) {
   const [draftMarkdown, setDraftMarkdown] = useState(markdown);
+  const [canvasDirty, setCanvasDirty] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
   const subtitle = useMemo(
     () => `Ajuste o bloco de fluxo dinamico com React Flow para ${agenteNome}.`,
     [agenteNome]
   );
-  const hasUnsavedChanges = draftMarkdown.trim() !== markdown.trim();
+  const hasUnsavedChanges = canvasDirty || draftMarkdown.trim() !== markdown.trim();
 
   useEffect(() => {
     if (!open) return;
     setDraftMarkdown(markdown);
+    setCanvasDirty(false);
     setSaveNotice("");
   }, [open, markdown]);
 
@@ -102,9 +104,11 @@ export function PlaybookFlowVisualSideover({
             agenteSlug={agenteSlug}
             disabled={disabled}
             hasUnsavedChanges={hasUnsavedChanges}
+            onCanvasDirty={() => setCanvasDirty(true)}
             onSaveDraft={() => {
               if (!hasUnsavedChanges) return;
               onMarkdownChange(draftMarkdown);
+              setCanvasDirty(false);
               void emitFlowVisualTelemetry({
                 event: "playbook.flow_visual.draft_saved",
                 agente_slug: agenteSlug,
@@ -118,6 +122,7 @@ export function PlaybookFlowVisualSideover({
             onSaveDraftAndClose={() => {
               if (hasUnsavedChanges) {
                 onMarkdownChange(draftMarkdown);
+                setCanvasDirty(false);
                 void emitFlowVisualTelemetry({
                   event: "playbook.flow_visual.draft_saved",
                   agente_slug: agenteSlug,

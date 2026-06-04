@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCrmShell } from "@/components/crm/CrmShellContext";
 
 type CrmSidebarToggleButtonProps = {
@@ -9,7 +9,7 @@ type CrmSidebarToggleButtonProps = {
   variant?: "sidebar" | "header";
 };
 
-/** Controlo compacto e discreto (não usa verde nem glow). */
+/** Botão circular de colapsar/expandir sidebar. */
 export function CrmSidebarToggleButton({
   className = "",
   variant = "header",
@@ -25,17 +25,16 @@ export function CrmSidebarToggleButton({
     <button
       type="button"
       onClick={toggleSidebar}
-      className={`${visibility} h-7 w-7 flex-shrink-0 touch-manipulation items-center justify-center rounded-md border border-[#30363d] bg-[#21262d] text-[#8b949e] shadow-none transition-colors hover:bg-[#2d333b] hover:text-[#e6edf3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a24a]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${className}`.trim()}
+      className={`${visibility} h-8 w-8 flex-shrink-0 touch-manipulation items-center justify-center rounded-full border border-[#2b3544] bg-[#1a2332] text-[#8b949e] shadow-none transition-all duration-200 hover:border-[#c9a24a]/60 hover:text-[#e6edf3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a24a]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${className}`.trim()}
       title={sidebarExpanded ? "Recolher menu" : "Expandir menu"}
       aria-expanded={sidebarExpanded}
       aria-label={sidebarExpanded ? "Recolher menu lateral" : "Expandir menu lateral"}
     >
-      <ChevronRight
-        size={12}
-        strokeWidth={2}
-        className={`shrink-0 transition-transform duration-200 ${sidebarExpanded ? "rotate-180" : ""}`}
-        aria-hidden
-      />
+      {sidebarExpanded ? (
+        <ChevronLeft size={14} strokeWidth={2} className="shrink-0" aria-hidden />
+      ) : (
+        <ChevronRight size={14} strokeWidth={2} className="shrink-0" aria-hidden />
+      )}
     </button>
   );
 }

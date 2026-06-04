@@ -13,7 +13,7 @@ export type MobileTabDef = {
 
 export const MOBILE_TABS: MobileTabDef[] = [
   { id: "pulso", label: "Pulso", icon: Activity, rota: "/crm" },
-  { id: "escritorio", label: "Escritório", icon: Building2, rota: "/office" },
+  { id: "escritorio", label: "CRM", icon: Building2, rota: "/crm" },
   { id: "atendimento", label: "Atendimento", icon: MessageSquare, rota: "/crm/atendimento" },
   { id: "marketing", label: "Marketing", icon: Megaphone, rota: "/crm/trafego" },
   { id: "mais", label: "Mais", icon: MoreHorizontal, opensSheet: true },

@@ -476,9 +476,11 @@ type FlowCanvasProps = {
   initialNodes?: Array<Node<FlowVisualNodeData>>;
   initialEdges?: Edge[];
   onChange?: (snapshot: FlowCanvasSnapshot, nodes: Array<Node<FlowVisualNodeData>>, edges: Edge[]) => void;
+  /** Dispara em qualquer alteração semântica aplicada ao markdown do fluxo. */
+  onDirty?: () => void;
 };
 
-function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChange }: FlowCanvasProps) {
+function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChange, onDirty }: FlowCanvasProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rfInstance = useRef<any>(null);
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -627,6 +629,29 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
     []
   );
 
+  const handleRemoveMenuOption = useCallback((nodeId: string, optionId: string) => {
+    hasSemanticChangesRef.current = true;
+    setNodes((cur) =>
+      cur.map((node) => {
+        if (node.id !== nodeId || node.data.kind !== "menu") return node;
+        const current = node.data.menuOptions ?? [];
+        if (current.length <= 1) return node;
+        const menuOptions = current.filter((opt) => opt.id !== optionId);
+        return {
+          ...node,
+          data: { ...node.data, menuOptions },
+        };
+      })
+    );
+    setEdges((cur) =>
+      cur.filter((edge) => {
+        if (edge.source !== nodeId) return true;
+        const edgeOptId = extractOptionIdFromEdge(edge);
+        return edgeOptId !== optionId;
+      })
+    );
+  }, []);
+
   const handleSetEntryStepId = useCallback((stepId: string) => {
     if (!nodes.some((node) => node.id === stepId)) return;
     hasSemanticChangesRef.current = true;
@@ -686,8 +711,12 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
   );
 
   const callbacks = useMemo(
-    () => ({ onUpdate: handleUpdateNode, onDelete: handleDeleteNode }),
-    [handleUpdateNode, handleDeleteNode]
+    () => ({
+      onUpdate: handleUpdateNode,
+      onDelete: handleDeleteNode,
+      onRemoveMenuOption: handleRemoveMenuOption,
+    }),
+    [handleUpdateNode, handleDeleteNode, handleRemoveMenuOption]
   );
 
   const selectedNode = useMemo(
@@ -726,6 +755,7 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
         nodes,
         edges
       );
+      onDirty?.();
     }, 80);
 
     return () => {
@@ -733,7 +763,7 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
         window.clearTimeout(emitTimerRef.current);
       }
     };
-  }, [edges, entryStepId, nodes, onChange]);
+  }, [edges, entryStepId, nodes, onChange, onDirty]);
 
   return (
     <FlowNodeCallbacksContext.Provider value={callbacks}>
@@ -777,9 +807,11 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
               }}
               onInit={(instance) => {
                 rfInstance.current = instance;
+                // Em fluxos grandes, fitView deixa tudo minúsculo; abrimos focando na entrada.
+                requestAnimationFrame(() => {
+                  focusEntryNode(false);
+                });
               }}
-              fitView
-              fitViewOptions={{ padding: 0.22, minZoom: READABLE_MIN_ZOOM, maxZoom: 0.7 }}
               minZoom={READABLE_MIN_ZOOM}
               maxZoom={1.6}
               snapToGrid
@@ -838,6 +870,7 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
                 onSetEntryStepId={handleSetEntryStepId}
                 onRenameNodeId={handleRenameNodeId}
                 onUpdateNode={handleUpdateNode}
+                onRemoveMenuOption={handleRemoveMenuOption}
                 onDeleteNode={handleDeleteNode}
                 onClose={() => setSelectedNodeId(null)}
               />

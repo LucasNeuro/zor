@@ -55,11 +55,12 @@ export function CrmAcaoAgora({
 
   if (loading) {
     return (
-      <div className="mb-4 animate-pulse rounded-xl border border-[#30363d] bg-[#161b22] p-4">
+      <div className="mb-6 animate-pulse rounded-2xl border border-[#2b3544] bg-[#121926] p-5">
         <div className="h-4 w-32 rounded bg-[#21262d]" />
-        <div className="mt-3 flex gap-2">
-          <div className="h-10 flex-1 rounded-lg bg-[#21262d]" />
-          <div className="h-10 flex-1 rounded-lg bg-[#21262d]" />
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="h-16 rounded-xl bg-[#21262d]" />
+          <div className="h-16 rounded-xl bg-[#21262d]" />
+          <div className="h-16 rounded-xl bg-[#21262d]" />
         </div>
       </div>
     );
@@ -67,9 +68,11 @@ export function CrmAcaoAgora({
 
   if (pendentes.length === 0) {
     return (
-      <div className="mb-4 flex items-center gap-3 rounded-xl border border-[#23863644] bg-[#003b2618] px-4 py-3">
-        <CheckCircle2 className="h-5 w-5 shrink-0 text-[#3fb950]" />
-        <p className="text-sm text-[#e6edf3]">
+      <div className="mb-6 flex items-center gap-3 rounded-2xl border border-[#23863655] bg-gradient-to-r from-[#003b2622] to-[#121926] px-4 py-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#23863633]">
+          <CheckCircle2 className="h-5 w-5 text-[#3fb950]" />
+        </span>
+        <p className="text-sm leading-snug text-[#e6edf3]">
           Nada urgente no momento — funil e métricas abaixo estão atualizados.
         </p>
       </div>
@@ -77,26 +80,36 @@ export function CrmAcaoAgora({
   }
 
   return (
-    <div className="mb-4 rounded-xl border border-[#c9a24a44] bg-[#161b22] p-3 sm:p-4">
-      <p className="mb-2 text-xs font-bold uppercase tracking-widest text-[#c9a24a]">Ação agora</p>
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+    <section className="mb-6 rounded-2xl border border-[#c9a24a55] bg-gradient-to-br from-[#1a1508] via-[#161b22] to-[#0f1520] p-4 shadow-[0_12px_36px_rgba(0,0,0,0.28)] sm:p-5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#c9a24a]">Ação agora</p>
+        <span className="rounded-full border border-[#c9a24a44] bg-[#c9a24a14] px-2 py-0.5 text-[10px] font-bold text-[#c9a24a]">
+          {pendentes.length} pendente{pendentes.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {pendentes.map((item) => (
           <Link
             key={item.label}
             href={item.href}
-            className="flex flex-1 min-w-[140px] items-center gap-3 rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2.5 transition-colors hover:border-[#c9a24a55]"
+            className="flex min-w-0 items-center gap-3 rounded-xl border border-[#2b3544] bg-[#0d1117]/80 px-3.5 py-3 transition-[border-color,transform] hover:-translate-y-0.5 hover:border-[#c9a24a66]"
             style={{ borderLeftColor: item.cor, borderLeftWidth: 3 }}
           >
-            <span style={{ color: item.cor }}>{item.icon}</span>
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+              style={{ background: `${item.cor}22`, color: item.cor }}
+            >
+              {item.icon}
+            </span>
             <div className="min-w-0 flex-1">
               <p className="text-xs text-[#8b949e]">{item.label}</p>
-              <p className="text-lg font-black tabular-nums" style={{ color: item.cor }}>
+              <p className="text-xl font-black tabular-nums leading-tight" style={{ color: item.cor }}>
                 {item.valor}
               </p>
             </div>
           </Link>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

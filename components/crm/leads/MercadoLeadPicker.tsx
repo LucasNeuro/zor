@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { mercadoIcon } from "@/lib/crm/mercado-visual";
@@ -14,9 +14,9 @@ type Props = {
 export function MercadoLeadPicker({ mercados, onToggle, disabled }: Props) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs leading-relaxed text-[#8b949e]">
+      <p className="text-xs leading-relaxed text-[#5d7a67]">
         Escolhe um ou mais mercados. Se nenhum estiver activo, o lead entra em{" "}
-        <strong className="text-[#e6edf3]">IMB</strong> (imobiliário).
+        <strong className="text-[#0b2210]">IMB</strong> (imobiliário).
       </p>
       {MERCADOS_PREFIXO_OPTIONS.map((m) => {
         const sigla = m.value;
@@ -28,22 +28,22 @@ export function MercadoLeadPicker({ mercados, onToggle, disabled }: Props) {
             key={sigla}
             className="flex items-start gap-3 rounded-xl border px-3.5 py-3 transition-colors"
             style={{
-              borderColor: ativo ? "rgba(56, 139, 253, 0.35)" : "#30363d",
-              background: ativo ? "rgba(56, 139, 253, 0.06)" : "#161b22",
+              borderColor: ativo ? "rgba(56, 139, 253, 0.35)" : "#dcebd8",
+              background: ativo ? "rgba(56, 139, 253, 0.06)" : "#ffffff",
             }}
           >
             <div
               className="mt-0.5 flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px]"
               style={{
-                background: ativo ? "rgba(56, 139, 253, 0.18)" : "#21262d",
-                color: ativo ? "#79c0ff" : "#8b949e",
+                background: ativo ? "rgba(56, 139, 253, 0.18)" : "#eef7eb",
+                color: ativo ? "#79c0ff" : "#5d7a67",
               }}
             >
               <Icon size={21} strokeWidth={2} aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span id={labelId} className="text-[13px] font-bold text-[#e6edf3]">
+                <span id={labelId} className="text-[13px] font-bold text-[#0b2210]">
                   {m.label}
                 </span>
                 <span
@@ -56,7 +56,7 @@ export function MercadoLeadPicker({ mercados, onToggle, disabled }: Props) {
                   {sigla}
                 </span>
               </div>
-              <span className="mt-1 block text-xs leading-snug text-[#8b949e]">
+              <span className="mt-1 block text-xs leading-snug text-[#5d7a67]">
                 Pipeline {sigla} — visível no funil deste mercado.
               </span>
             </div>

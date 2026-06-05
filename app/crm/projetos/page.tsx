@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -52,11 +52,11 @@ function ProjetosPageInner() {
   }
 
   return (
-    <div className="min-h-full bg-[#0d1117] p-4 sm:p-6">
+    <div className="min-h-full bg-[#f8fcf6] p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-bold text-[#e6edf3]">Projetos</h1>
-          <p className="text-xs text-[#8b949e]">Negócio → projeto → obra → pedidos</p>
+          <h1 className="text-lg font-bold text-[#0b2210]">Projetos</h1>
+          <p className="text-xs text-[#5d7a67]">Negócio → projeto → obra → pedidos</p>
         </div>
         <button
           type="button"
@@ -75,10 +75,10 @@ function ProjetosPageInner() {
           {projetos.map((p) => (
             <li
               key={p.id}
-              className="rounded-xl border border-[#30363d] bg-[#161b22] p-4"
+              className="rounded-xl border border-[#dcebd8] bg-[#ffffff] p-4"
             >
-              <p className="font-bold text-[#e6edf3]">{p.titulo}</p>
-              <p className="text-xs text-[#8b949e]">
+              <p className="font-bold text-[#0b2210]">{p.titulo}</p>
+              <p className="text-xs text-[#5d7a67]">
                 {p.codigo} · {p.status}
               </p>
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -92,7 +92,7 @@ function ProjetosPageInner() {
                     Obra
                   </Link>
                 )}
-                <Link href={`/crm/pedidos?obra_id=${p.obra_id || ""}`} className="text-[#8b949e] hover:text-[#e6edf3]">
+                <Link href={`/crm/pedidos?obra_id=${p.obra_id || ""}`} className="text-[#5d7a67] hover:text-[#0b2210]">
                   Pedidos
                 </Link>
               </div>
@@ -103,22 +103,22 @@ function ProjetosPageInner() {
 
       {modal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-xl border border-[#30363d] bg-[#161b22] p-4">
-            <h2 className="text-sm font-bold text-[#e6edf3]">Novo projeto</h2>
+          <div className="w-full max-w-md rounded-xl border border-[#dcebd8] bg-[#ffffff] p-4">
+            <h2 className="text-sm font-bold text-[#0b2210]">Novo projeto</h2>
             <input
               placeholder="Título *"
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
-              className="mt-3 w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-sm text-[#e6edf3]"
+              className="mt-3 w-full min-h-11 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 text-sm text-[#0b2210]"
             />
             <input
               placeholder="ID do negócio (opcional)"
               value={negocioId}
               onChange={(e) => setNegocioId(e.target.value)}
-              className="mt-2 w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-sm text-[#e6edf3]"
+              className="mt-2 w-full min-h-11 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 text-sm text-[#0b2210]"
             />
             <div className="mt-4 flex gap-2">
-              <button type="button" onClick={() => setModal(false)} className="flex-1 min-h-10 rounded-lg bg-[#21262d] text-xs text-[#8b949e]">
+              <button type="button" onClick={() => setModal(false)} className="flex-1 min-h-10 rounded-lg bg-[#eef7eb] text-xs text-[#5d7a67]">
                 Cancelar
               </button>
               <button
@@ -139,7 +139,7 @@ function ProjetosPageInner() {
 
 export default function ProjetosPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-[#8b949e]">Carregando projetos…</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-[#5d7a67]">Carregando projetos…</div>}>
       <ProjetosPageInner />
     </Suspense>
   );

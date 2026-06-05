@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -115,35 +115,35 @@ export function ImovelFormDrawer({ open, onClose, onSaved, initial }: Props) {
           width: "100%",
           maxWidth: 420,
           height: "100%",
-          background: "#161b22",
-          borderLeft: "1px solid #30363d",
+          background: "#ffffff",
+          borderLeft: "1px solid #dcebd8",
           padding: 24,
-          color: "#e6edf3",
+          color: "#0b2210",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Novo imóvel</h2>
-        <label style={{ display: "block", fontSize: 12, color: "#8b949e", marginBottom: 4 }}>Título *</label>
+        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", marginBottom: 4 }}>Título *</label>
         <input
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
           style={inputStyle}
         />
-        <label style={{ display: "block", fontSize: 12, color: "#8b949e", margin: "12px 0 4px" }}>Cidade / UF</label>
+        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", margin: "12px 0 4px" }}>Cidade / UF</label>
         <div style={{ display: "flex", gap: 8 }}>
           <input value={cidade} onChange={(e) => setCidade(e.target.value)} style={{ ...inputStyle, flex: 2 }} placeholder="Cidade" />
           <input value={estado} onChange={(e) => setEstado(e.target.value)} style={{ ...inputStyle, flex: 1 }} placeholder="UF" maxLength={2} />
         </div>
-        <label style={{ display: "block", fontSize: 12, color: "#8b949e", margin: "12px 0 4px" }}>Valor (R$)</label>
+        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", margin: "12px 0 4px" }}>Valor (R$)</label>
         <input value={valor} onChange={(e) => setValor(e.target.value)} type="number" style={inputStyle} />
-        <label style={{ display: "block", fontSize: 12, color: "#8b949e", margin: "12px 0 4px" }}>Tipo</label>
+        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", margin: "12px 0 4px" }}>Tipo</label>
         <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={inputStyle}>
           <option value="apartamento">Apartamento</option>
           <option value="casa">Casa</option>
           <option value="terreno">Terreno</option>
           <option value="comercial">Comercial</option>
         </select>
-        <label style={{ display: "block", fontSize: 12, color: "#8b949e", margin: "12px 0 4px" }}>Finalidade</label>
+        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", margin: "12px 0 4px" }}>Finalidade</label>
         <select value={finalidade} onChange={(e) => setFinalidade(e.target.value)} style={inputStyle}>
           <option value="venda">Venda</option>
           <option value="locacao">Locação</option>
@@ -166,9 +166,9 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
   borderRadius: 8,
-  border: "1px solid #30363d",
-  background: "#0d1117",
-  color: "#e6edf3",
+  border: "1px solid #dcebd8",
+  background: "#f8fcf6",
+  color: "#0b2210",
   fontSize: 14,
   boxSizing: "border-box",
 };
@@ -186,8 +186,8 @@ const btnPrimary: React.CSSProperties = {
 const btnSecondary: React.CSSProperties = {
   padding: "10px 20px",
   borderRadius: 8,
-  border: "1px solid #30363d",
+  border: "1px solid #dcebd8",
   background: "transparent",
-  color: "#8b949e",
+  color: "#5d7a67",
   cursor: "pointer",
 };

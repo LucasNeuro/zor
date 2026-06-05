@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 
@@ -29,7 +29,7 @@ export function CadastroFichaTabs({ active, onChange, children }: Props) {
           gap: 4,
           flexWrap: "wrap",
           marginBottom: 20,
-          borderBottom: "1px solid #30363d",
+          borderBottom: "1px solid #dcebd8",
           paddingBottom: 0,
         }}
       >
@@ -46,7 +46,7 @@ export function CadastroFichaTabs({ active, onChange, children }: Props) {
                 padding: "10px 14px",
                 fontSize: 13,
                 fontWeight: selected ? 700 : 500,
-                color: selected ? "#e6edf3" : "#8b949e",
+                color: selected ? "#0b2210" : "#5d7a67",
                 background: "transparent",
                 border: "none",
                 borderBottom: selected ? "2px solid #c9a24a" : "2px solid transparent",

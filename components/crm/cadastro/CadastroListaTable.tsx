@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { memo, type ReactNode } from "react";
 import { Eye, Pencil, Trash2 } from "lucide-react";
@@ -59,12 +59,12 @@ function CadastroListaTableRowInner<T extends { id: string }>({
   onDelete,
   onToggleRow,
 }: RowProps<T>) {
-  const rowBg = selected ? "bg-[#1a1608]" : "bg-[#0d1117]";
+  const rowBg = selected ? "bg-[#1a1608]" : "bg-[#f8fcf6]";
 
   return (
     <tr
-      className={`border-b border-[#21262d]/80 transition-colors [content-visibility:auto] [contain-intrinsic-size:0_52px] ${
-        onRowClick ? "cursor-pointer hover:bg-[#161b22]/80" : ""
+      className={`border-b border-[#eef7eb]/80 transition-colors [content-visibility:auto] [contain-intrinsic-size:0_52px] ${
+        onRowClick ? "cursor-pointer hover:bg-[#ffffff]/80" : ""
       } ${selected ? "bg-[#c9a24a]/10" : ""}`}
       onClick={() => onRowClick?.(row)}
     >
@@ -114,7 +114,7 @@ function CadastroListaTableRowInner<T extends { id: string }>({
               <button
                 type="button"
                 onClick={() => onView(row)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#30363d] text-[#8b949e] transition-colors hover:bg-[#21262d] hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#dcebd8] text-[#5d7a67] transition-colors hover:bg-[#eef7eb] hover:text-white"
                 aria-label="Ver detalhes"
                 title="Ver detalhes"
               >
@@ -125,7 +125,7 @@ function CadastroListaTableRowInner<T extends { id: string }>({
               <button
                 type="button"
                 onClick={() => onEdit(row)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#30363d] text-[#8b949e] transition-colors hover:bg-[#21262d] hover:text-[#c9a24a]"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#dcebd8] text-[#5d7a67] transition-colors hover:bg-[#eef7eb] hover:text-[#c9a24a]"
                 aria-label="Editar"
                 title="Editar"
               >
@@ -136,7 +136,7 @@ function CadastroListaTableRowInner<T extends { id: string }>({
               <button
                 type="button"
                 onClick={() => onDelete(row)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#30363d] text-[#8b949e] transition-colors hover:border-[#f8514966] hover:bg-[#21262d] hover:text-[#f85149]"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#dcebd8] text-[#5d7a67] transition-colors hover:border-[#f8514966] hover:bg-[#eef7eb] hover:text-[#f85149]"
                 aria-label="Excluir"
                 title="Excluir"
               >
@@ -174,12 +174,12 @@ function CadastroListaTableInner<T extends { id: string }>({
 
   if (rows.length === 0 && emptyMessage) {
     return (
-      <p className="py-12 text-center text-sm text-[#8b949e]">{emptyMessage}</p>
+      <p className="py-12 text-center text-sm text-[#5d7a67]">{emptyMessage}</p>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#30363d] bg-[#0d1117]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dcebd8] bg-[#f8fcf6]">
       <div className="min-h-0 flex-1 overflow-auto">
         <table
           className="w-full border-separate border-spacing-0 text-sm"
@@ -196,9 +196,9 @@ function CadastroListaTableInner<T extends { id: string }>({
           <thead className="sticky top-0 z-20">
             <tr>
               <th
-                className={`border-b border-[#30363d] px-3 py-3 text-left ${
+                className={`border-b border-[#dcebd8] px-3 py-3 text-left ${
                   stickyPrimary
-                    ? "sticky left-0 z-[30] bg-[#161b22] shadow-[2px_0_6px_rgba(0,0,0,0.25)]"
+                    ? "sticky left-0 z-[30] bg-[#ffffff] shadow-[2px_0_6px_rgba(0,0,0,0.25)]"
                     : ""
                 }`}
                 style={{ width: CHECK_COL_PX, minWidth: CHECK_COL_PX, maxWidth: CHECK_COL_PX }}
@@ -211,9 +211,9 @@ function CadastroListaTableInner<T extends { id: string }>({
                 />
               </th>
               <th
-                className={`border-b border-[#30363d] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#8b949e] ${
+                className={`border-b border-[#dcebd8] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#5d7a67] ${
                   stickyPrimary
-                    ? "sticky z-[30] bg-[#161b22] shadow-[4px_0_10px_rgba(0,0,0,0.3)]"
+                    ? "sticky z-[30] bg-[#ffffff] shadow-[4px_0_10px_rgba(0,0,0,0.3)]"
                     : ""
                 }`}
                 style={{
@@ -228,7 +228,7 @@ function CadastroListaTableInner<T extends { id: string }>({
               {columns.map((c) => (
                 <th
                   key={c.id}
-                  className="whitespace-nowrap border-b border-[#30363d] bg-[#161b22] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#8b949e]"
+                  className="whitespace-nowrap border-b border-[#dcebd8] bg-[#ffffff] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#5d7a67]"
                   style={{ minWidth: c.minWidth ?? 100 }}
                 >
                   {c.label}
@@ -236,10 +236,10 @@ function CadastroListaTableInner<T extends { id: string }>({
               ))}
               {hasActions && (
                 <th
-                  className={`whitespace-nowrap border-b border-[#30363d] px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-[#8b949e] ${
+                  className={`whitespace-nowrap border-b border-[#dcebd8] px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-[#5d7a67] ${
                     stickyPrimary
-                      ? "sticky right-0 z-[30] bg-[#161b22] shadow-[-4px_0_10px_rgba(0,0,0,0.3)]"
-                      : "bg-[#161b22]"
+                      ? "sticky right-0 z-[30] bg-[#ffffff] shadow-[-4px_0_10px_rgba(0,0,0,0.3)]"
+                      : "bg-[#ffffff]"
                   }`}
                   style={{ width: ACTIONS_COL_PX, minWidth: ACTIONS_COL_PX }}
                 >

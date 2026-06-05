@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 export type FunilChartItem = {
   label: string;
@@ -21,12 +21,12 @@ export function FunilOperacionalChart({ items }: Props) {
         return (
           <div key={item.label} className="flex items-center gap-2">
             <span
-              className="min-w-[7rem] shrink-0 truncate text-right text-[10px] font-bold text-[#8b949e] sm:max-w-[9rem]"
+              className="min-w-[7rem] shrink-0 truncate text-right text-[10px] font-bold text-[#5d7a67] sm:max-w-[9rem]"
               title={item.label}
             >
               {item.label}
             </span>
-            <div className="relative h-6 min-w-0 flex-1 overflow-hidden rounded-md bg-[#21262d]">
+            <div className="relative h-6 min-w-0 flex-1 overflow-hidden rounded-md bg-[#eef7eb]">
               {item.count > 0 && (
                 <div
                   className="h-full rounded-md transition-all duration-700"
@@ -37,7 +37,7 @@ export function FunilOperacionalChart({ items }: Props) {
                 />
               )}
             </div>
-            <span className="w-8 shrink-0 text-right text-[10px] font-bold tabular-nums text-[#e6edf3]">
+            <span className="w-8 shrink-0 text-right text-[10px] font-bold tabular-nums text-[#0b2210]">
               {item.count}
             </span>
           </div>

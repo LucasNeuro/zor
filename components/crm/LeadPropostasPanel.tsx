@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -50,13 +50,13 @@ export function LeadPropostasPanel({ leadId }: { leadId: string }) {
         Propostas
       </p>
       {lista.length === 0 ? (
-        <p className="text-xs" style={{ color: "#8b949e" }}>Nenhuma proposta ainda.</p>
+        <p className="text-xs" style={{ color: "#5d7a67" }}>Nenhuma proposta ainda.</p>
       ) : (
         <ul style={{ listStyle: "none", padding: 0, margin: "0 0 10px" }}>
           {lista.map((p) => (
-            <li key={p.id} style={{ fontSize: 12, marginBottom: 6, color: "#e6edf3" }}>
+            <li key={p.id} style={{ fontSize: 12, marginBottom: 6, color: "#0b2210" }}>
               {p.titulo} — R$ {Number(p.valor).toLocaleString("pt-BR")}{" "}
-              <span style={{ color: "#8b949e" }}>({p.status})</span>
+              <span style={{ color: "#5d7a67" }}>({p.status})</span>
             </li>
           ))}
         </ul>
@@ -67,7 +67,7 @@ export function LeadPropostasPanel({ leadId }: { leadId: string }) {
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
           className="rounded border px-2 py-1.5 text-xs"
-          style={{ borderColor: "#30363d", background: "#0d1117", color: "#e6edf3" }}
+          style={{ borderColor: "#dcebd8", background: "#f8fcf6", color: "#0b2210" }}
         />
         <input
           placeholder="Valor R$"
@@ -75,7 +75,7 @@ export function LeadPropostasPanel({ leadId }: { leadId: string }) {
           onChange={(e) => setValor(e.target.value)}
           type="number"
           className="rounded border px-2 py-1.5 text-xs"
-          style={{ borderColor: "#30363d", background: "#0d1117", color: "#e6edf3" }}
+          style={{ borderColor: "#dcebd8", background: "#f8fcf6", color: "#0b2210" }}
         />
         <button
           type="button"

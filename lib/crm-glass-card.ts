@@ -9,18 +9,18 @@ export const CRM_ENTITY_GRID: CSSProperties = {
 
 export function crmGlassCardSurface(selecionado: boolean): CSSProperties {
   return {
-    background: "rgba(17, 24, 39, 0.82)",
+    background: "rgba(255, 255, 255, 0.94)",
     backdropFilter: "blur(14px)",
     WebkitBackdropFilter: "blur(14px)",
     borderRadius: 16,
     borderStyle: "solid",
     borderWidth: 1,
     borderColor: selecionado
-      ? "rgba(147, 197, 253, 0.5)"
-      : "rgba(96, 165, 250, 0.22)",
+      ? "rgba(201, 162, 74, 0.58)"
+      : "rgba(18, 56, 43, 0.16)",
     boxShadow: selecionado
-      ? "0 0 28px rgba(59, 130, 246, 0.2), 0 12px 40px rgba(0, 0, 0, 0.4)"
-      : "0 0 20px rgba(59, 130, 246, 0.1), 0 8px 28px rgba(0, 0, 0, 0.3)",
+      ? "0 0 26px rgba(201, 162, 74, 0.16), 0 12px 32px rgba(15, 56, 39, 0.12)"
+      : "0 0 18px rgba(18, 56, 43, 0.06), 0 8px 22px rgba(15, 56, 39, 0.10)",
     padding: 16,
     display: "flex",
     flexDirection: "column",
@@ -40,12 +40,12 @@ export function crmAvatarGlow(accent: string): CSSProperties {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#fff",
+    color: "#12382b",
     fontSize: 13,
     fontWeight: 700,
     flexShrink: 0,
-    border: "1px solid rgba(186, 230, 253, 0.4)",
-    boxShadow: `0 0 14px ${accent}99, 0 0 26px rgba(59, 130, 246, 0.22)`,
+    border: "1px solid rgba(18, 56, 43, 0.2)",
+    boxShadow: `0 0 10px ${accent}66, 0 0 18px rgba(18, 56, 43, 0.14)`,
     overflow: "hidden",
   };
 }
@@ -69,10 +69,10 @@ export function crmBtnExecutar(disabled: boolean): CSSProperties {
     fontWeight: 700,
     padding: "8px 14px",
     borderRadius: 10,
-    border: "1px solid rgba(147, 197, 253, 0.45)",
-    background: "rgba(30, 41, 59, 0.65)",
-    color: "#e2e8f0",
-    boxShadow: "0 0 12px rgba(59, 130, 246, 0.15)",
+    border: "1px solid rgba(18, 56, 43, 0.2)",
+    background: "#f6faf4",
+    color: "#12382b",
+    boxShadow: "0 0 10px rgba(18, 56, 43, 0.08)",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.45 : 1,
     whiteSpace: "nowrap",
@@ -85,9 +85,9 @@ export function crmBtnDesativar(disabled: boolean): CSSProperties {
     fontWeight: 700,
     padding: "8px 14px",
     borderRadius: 10,
-    border: "1px solid rgba(148, 163, 184, 0.35)",
-    background: "rgba(30, 41, 59, 0.5)",
-    color: "#cbd5e1",
+    border: "1px solid rgba(95, 116, 105, 0.35)",
+    background: "#f2f7f0",
+    color: "#4f665b",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,
     flexShrink: 0,

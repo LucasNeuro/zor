@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -55,38 +55,38 @@ export function LeadEncaminharModal({ open, leadId, leadNome, onClose, onSuccess
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-xl border border-[#30363d] bg-[#161b22] p-5 shadow-xl">
-        <h3 className="text-base font-bold text-[#e6edf3]">Encaminhar lead</h3>
-        <p className="mt-1 text-sm text-[#8b949e]">{leadNome}</p>
+      <div className="w-full max-w-md rounded-xl border border-[#dcebd8] bg-[#ffffff] p-5 shadow-xl">
+        <h3 className="text-base font-bold text-[#0b2210]">Encaminhar lead</h3>
+        <p className="mt-1 text-sm text-[#5d7a67]">{leadNome}</p>
 
         <div className="mt-4 space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-[#8b949e]">Para quem *</label>
+            <label className="mb-1 block text-xs font-semibold text-[#5d7a67]">Para quem *</label>
             <input
-              className="w-full rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3]"
+              className="w-full rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210]"
               value={destinatario}
               onChange={(e) => setDestinatario(e.target.value)}
               placeholder="Corretor, arquiteto, fornecedor…"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-[#8b949e]">Segmento</label>
+            <label className="mb-1 block text-xs font-semibold text-[#5d7a67]">Segmento</label>
             <input
-              className="w-full rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3]"
+              className="w-full rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210]"
               value={segmento}
               onChange={(e) => setSegmento(e.target.value)}
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-[#8b949e]">Autorizado por</label>
+            <label className="mb-1 block text-xs font-semibold text-[#5d7a67]">Autorizado por</label>
             <input
-              className="w-full rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3]"
+              className="w-full rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210]"
               value={responsavel}
               onChange={(e) => setResponsavel(e.target.value)}
               placeholder="Seu nome ou e-mail"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-[#8b949e]">
+          <label className="flex items-center gap-2 text-sm text-[#5d7a67]">
             <input type="checkbox" checked={sugeridoIa} onChange={(e) => setSugeridoIa(e.target.checked)} />
             Sugestão da IA (exige validação humana)
           </label>
@@ -98,7 +98,7 @@ export function LeadEncaminharModal({ open, leadId, leadNome, onClose, onSuccess
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg border border-[#30363d] py-2 text-sm text-[#8b949e]"
+            className="flex-1 rounded-lg border border-[#dcebd8] py-2 text-sm text-[#5d7a67]"
           >
             Cancelar
           </button>

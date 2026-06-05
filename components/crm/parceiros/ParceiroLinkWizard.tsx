@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Copy, Link2, X } from "lucide-react";
@@ -8,9 +8,9 @@ import {
 } from "@/lib/crm/parceiro-link-publico";
 
 const OB = {
-  borda: "var(--obra-borda, #30363d)",
-  texto: "var(--obra-texto, #e6edf3)",
-  texto2: "var(--obra-texto-2, #8b949e)",
+  borda: "var(--obra-borda, #dcebd8)",
+  texto: "var(--obra-texto, #0b2210)",
+  texto2: "var(--obra-texto-2, #5d7a67)",
   dourado: "var(--obra-dourado, #c9a24a)",
   panel: "#0f1620",
 };
@@ -144,7 +144,7 @@ export function ParceiroLinkWizard({ open, onClose }: Props) {
 
           <div
             style={{
-              background: "#161b22",
+              background: "#ffffff",
               border: `1px solid ${OB.borda}`,
               borderRadius: 12,
               padding: 14,
@@ -198,7 +198,7 @@ export function ParceiroLinkWizard({ open, onClose }: Props) {
             padding: "14px 20px",
             borderTop: `1px solid ${OB.borda}`,
             flexShrink: 0,
-            background: "#0d1117",
+            background: "#f8fcf6",
           }}
         >
           <button

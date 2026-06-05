@@ -99,7 +99,7 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
       subtitle: "Gestão de equipe e papéis — em construção",
     },
     configuracoes: {
-      title: "Configurações",
+      title: "Conta",
       subtitle: "Regras operacionais sem precisar de programador",
     },
     "onboarding-tenant": {

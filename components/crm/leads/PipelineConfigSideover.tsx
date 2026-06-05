@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { Settings2 } from "lucide-react";
@@ -182,8 +182,8 @@ export function PipelineConfigSideover({
             <CadastroSideoverPanel>
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-bold text-[#e6edf3]">Pipelines</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-[#8b949e]">
+                  <p className="text-xs font-bold text-[#0b2210]">Pipelines</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#5d7a67]">
                     Selecciona um pipeline para gerir os estágios. Novos pipelines criados aqui
                     nascem livres, sem vínculo de mercado, e herdam os estágios padrão.
                   </p>
@@ -204,9 +204,9 @@ export function PipelineConfigSideover({
                         }}
                         className="rounded-lg border px-3 py-2 text-xs font-bold"
                         style={{
-                          borderColor: ativo ? "#c9a24a" : "#30363d",
-                          background: ativo ? "rgba(201,162,74,0.12)" : "#0d1117",
-                          color: ativo ? "#e6edf3" : "#8b949e",
+                          borderColor: ativo ? "#c9a24a" : "#dcebd8",
+                          background: ativo ? "rgba(201,162,74,0.12)" : "#f8fcf6",
+                          color: ativo ? "#0b2210" : "#5d7a67",
                         }}
                       >
                         {item.nome.replace(/^Leads\s+[—-]\s+/i, "").replace(/^Negócios\s+[—-]\s+/i, "")}
@@ -220,8 +220,8 @@ export function PipelineConfigSideover({
             <CadastroSideoverPanel>
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-bold text-[#e6edf3]">Novo pipeline</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-[#8b949e]">
+                  <p className="text-xs font-bold text-[#0b2210]">Novo pipeline</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#5d7a67]">
                     Cria um pipeline novo do zero. Ele fica global e recebe automaticamente os
                     estágios padrão do CRM.
                   </p>
@@ -231,9 +231,9 @@ export function PipelineConfigSideover({
                     value={novoPipelineNome}
                     onChange={(e) => setNovoPipelineNome(e.target.value)}
                     placeholder="Nome do pipeline"
-                    className="rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#e6edf3]"
+                    className="rounded-lg border border-[#dcebd8] bg-[#f8fcf6] px-3 py-2 text-sm text-[#0b2210]"
                   />
-                  <div className="rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#8b949e]">
+                  <div className="rounded-lg border border-[#dcebd8] bg-[#f8fcf6] px-3 py-2 text-sm text-[#5d7a67]">
                     Sem vínculo de mercado
                   </div>
                   <button
@@ -251,9 +251,9 @@ export function PipelineConfigSideover({
         ) : null}
 
         {loading ? (
-          <p className="text-sm text-[#8b949e]">A carregar…</p>
+          <p className="text-sm text-[#5d7a67]">A carregar…</p>
         ) : !pipeline ? (
-          <p className="text-sm text-[#8b949e]">
+          <p className="text-sm text-[#5d7a67]">
             Execute a migração <code className="text-[#c9a24a]">hub_pipelines</code> no Supabase
             para activar a configuração na base de dados. O kanban usa o template padrão até lá.
           </p>
@@ -261,7 +261,7 @@ export function PipelineConfigSideover({
           <>
             <CadastroSideoverPanel>
               <div className="space-y-3">
-                <p className="text-xs leading-relaxed text-[#8b949e]">
+                <p className="text-xs leading-relaxed text-[#5d7a67]">
                   Desactive estágios para ocultá-los no kanban. Registos já nesse estágio mantêm-se
                   até serem movidos.
                 </p>
@@ -271,8 +271,8 @@ export function PipelineConfigSideover({
                       key={est.slug}
                       className="flex items-center gap-3 rounded-xl border px-3.5 py-3"
                       style={{
-                        borderColor: est.ativo ? `${est.cor}55` : "#30363d",
-                        background: est.ativo ? `${est.cor}0c` : "#161b22",
+                        borderColor: est.ativo ? `${est.cor}55` : "#dcebd8",
+                        background: est.ativo ? `${est.cor}0c` : "#ffffff",
                       }}
                     >
                       <span
@@ -280,8 +280,8 @@ export function PipelineConfigSideover({
                         style={{ backgroundColor: est.cor }}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-[#e6edf3]">{est.label}</p>
-                        <p className="font-mono text-[10px] text-[#8b949e]">{est.slug}</p>
+                        <p className="text-[13px] font-bold text-[#0b2210]">{est.label}</p>
+                        <p className="font-mono text-[10px] text-[#5d7a67]">{est.slug}</p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
                         <span
@@ -300,20 +300,20 @@ export function PipelineConfigSideover({
                   ))}
                 </ul>
 
-                <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-3">
-                  <p className="mb-2 text-xs font-bold text-[#e6edf3]">Novo estágio</p>
+                <div className="rounded-xl border border-[#dcebd8] bg-[#ffffff] p-3">
+                  <p className="mb-2 text-xs font-bold text-[#0b2210]">Novo estágio</p>
                   <div className="flex flex-col gap-2">
                     <input
                       value={novoSlug}
                       onChange={(e) => setNovoSlug(e.target.value)}
                       placeholder="slug (ex: pre_analise)"
-                      className="rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#e6edf3]"
+                      className="rounded-lg border border-[#dcebd8] bg-[#f8fcf6] px-3 py-2 text-sm text-[#0b2210]"
                     />
                     <input
                       value={novoLabel}
                       onChange={(e) => setNovoLabel(e.target.value)}
                       placeholder="Nome exibido"
-                      className="rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#e6edf3]"
+                      className="rounded-lg border border-[#dcebd8] bg-[#f8fcf6] px-3 py-2 text-sm text-[#0b2210]"
                     />
                     <button
                       type="button"

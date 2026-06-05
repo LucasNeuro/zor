@@ -5,7 +5,7 @@ import { getSafeReturnPath } from "@/lib/auth/safe-return-path";
 
 /**
  * Rotas /api públicas ou com auth própria na route handler.
- * Escritório virtual (/office) e CRM (/crm): mesma sessão (cookie após login).
+ * CRM (/crm): sessão via cookie após login.
  */
 function isPublicApiPath(pathname: string): boolean {
   if (pathname.startsWith("/api/public/")) return true;
@@ -43,17 +43,6 @@ export async function proxy(request: NextRequest) {
       const next = url.searchParams.get("next");
       url.pathname = getSafeReturnPath(next, "/crm");
       url.search = "";
-      return NextResponse.redirect(url);
-    }
-    return NextResponse.next();
-  }
-
-  if (pathname === "/office" || pathname.startsWith("/office/")) {
-    if (!sessionUser) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.search = "";
-      url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
     return NextResponse.next();
@@ -105,8 +94,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/office",
-    "/office/:path*",
     "/crm",
     "/crm/:path*",
     "/login",

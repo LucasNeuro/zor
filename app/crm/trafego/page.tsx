@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -68,7 +68,7 @@ export default function TrafegoPage() {
   ];
 
   const periodoControls = (
-    <div className="flex rounded-lg p-0.5" style={{ background: "#21262d" }}>
+    <div className="flex rounded-lg p-0.5" style={{ background: "#eef7eb" }}>
       {PERIODOS.map((p) => (
         <button
           key={p.value}
@@ -76,8 +76,8 @@ export default function TrafegoPage() {
           onClick={() => setPeriodo(p.value)}
           className="min-h-11 flex-1 rounded-md px-3 py-2 text-xs font-bold transition-colors md:min-h-0 md:flex-none md:py-1.5"
           style={{
-            background: periodo === p.value ? "#30363d" : "transparent",
-            color: periodo === p.value ? "#e6edf3" : "#8b949e",
+            background: periodo === p.value ? "#dcebd8" : "transparent",
+            color: periodo === p.value ? "#0b2210" : "#5d7a67",
           }}
         >
           {p.label}
@@ -96,18 +96,18 @@ export default function TrafegoPage() {
   }, [pathname, setSlot, periodo, isMobile]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:h-screen" style={{ background: "#0d1117" }}>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:h-screen" style={{ background: "#f8fcf6" }}>
       {isMobile && (
-        <div className="shrink-0 space-y-2 border-b border-[#30363d] px-3 py-3">
-          <h1 className="text-base font-bold text-[#e6edf3]">Marketing</h1>
+        <div className="shrink-0 space-y-2 border-b border-[#dcebd8] px-3 py-3">
+          <h1 className="text-base font-bold text-[#0b2210]">Marketing</h1>
           {periodoControls}
         </div>
       )}
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-px flex-shrink-0 md:grid-cols-4" style={{ background: "#21262d" }}>
+      <div className="grid grid-cols-2 gap-px flex-shrink-0 md:grid-cols-4" style={{ background: "#eef7eb" }}>
         {kpis.map(k => (
-          <div key={k.label} className="px-5 py-3" style={{ background: "#0d1117" }}>
-            <p className="text-xs mb-0.5" style={{ color: "#8b949e" }}>{k.label}</p>
+          <div key={k.label} className="px-5 py-3" style={{ background: "#f8fcf6" }}>
+            <p className="text-xs mb-0.5" style={{ color: "#5d7a67" }}>{k.label}</p>
             <p className="font-black text-lg" style={{ color: loading ? "#484f58" : k.cor }}>{loading ? "—" : k.value}</p>
           </div>
         ))}
@@ -117,14 +117,14 @@ export default function TrafegoPage() {
       <div className="flex-1 overflow-y-auto p-5">
         {loading && (
           <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "#30363d", borderTopColor: "#c9a24a" }} />
+            <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "#dcebd8", borderTopColor: "#c9a24a" }} />
           </div>
         )}
 
         {!loading && erro && (
           <div className="rounded-xl p-6 text-center" style={{ background: "#1a0a0a", border: "1px solid #4a1a1a" }}>
             <p className="text-sm mb-1" style={{ color: "#EF4444" }}>Campanhas indisponíveis</p>
-            <p className="text-xs" style={{ color: "#8b949e" }}>{erro}</p>
+            <p className="text-xs" style={{ color: "#5d7a67" }}>{erro}</p>
             <Link href="/crm/integracoes" className="mt-4 inline-block min-h-11 rounded-lg bg-[#c9a24a] px-4 py-2.5 text-xs font-bold text-[#003b26]">
               Configurar em Integrações
             </Link>
@@ -132,10 +132,10 @@ export default function TrafegoPage() {
         )}
 
         {!loading && !erro && campanhas.length === 0 && (
-          <div className="rounded-xl p-8 text-center" style={{ background: "#161b22", border: "1px solid #30363d" }}>
+          <div className="rounded-xl p-8 text-center" style={{ background: "#ffffff", border: "1px solid #dcebd8" }}>
             <p className="text-4xl mb-3">📡</p>
-            <p className="font-bold mb-1" style={{ color: "#e6edf3" }}>Nenhuma campanha encontrada</p>
-            <p className="text-xs" style={{ color: "#8b949e" }}>Conecte suas contas de anúncios no Windsor.ai</p>
+            <p className="font-bold mb-1" style={{ color: "#0b2210" }}>Nenhuma campanha encontrada</p>
+            <p className="text-xs" style={{ color: "#5d7a67" }}>Conecte suas contas de anúncios no Windsor.ai</p>
             <Link href="/crm/integracoes" className="mt-4 inline-block text-xs font-bold text-[#c9a24a] underline">
               Configurar integrações
             </Link>
@@ -147,14 +147,14 @@ export default function TrafegoPage() {
             {campanhas.map((c, i) => (
               <li
                 key={i}
-                className="rounded-xl border border-[#30363d] bg-[#161b22] p-4"
+                className="rounded-xl border border-[#dcebd8] bg-[#ffffff] p-4"
               >
-                <p className="mb-2 truncate text-sm font-bold text-[#e6edf3]">{c.campaign_name}</p>
+                <p className="mb-2 truncate text-sm font-bold text-[#0b2210]">{c.campaign_name}</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div><span className="text-[#8b949e]">Gasto</span><p className="font-bold text-[#EF4444]">{moeda(c.spend)}</p></div>
-                  <div><span className="text-[#8b949e]">Cliques</span><p className="font-bold text-[#3B82F6]">{num(c.clicks)}</p></div>
-                  <div><span className="text-[#8b949e]">CTR</span><p className="font-bold text-[#F97316]">{(c.ctr * 100).toFixed(2)}%</p></div>
-                  <div><span className="text-[#8b949e]">Conv.</span><p className="font-bold text-[#22C55E]">{c.conversions || 0}</p></div>
+                  <div><span className="text-[#5d7a67]">Gasto</span><p className="font-bold text-[#EF4444]">{moeda(c.spend)}</p></div>
+                  <div><span className="text-[#5d7a67]">Cliques</span><p className="font-bold text-[#3B82F6]">{num(c.clicks)}</p></div>
+                  <div><span className="text-[#5d7a67]">CTR</span><p className="font-bold text-[#F97316]">{(c.ctr * 100).toFixed(2)}%</p></div>
+                  <div><span className="text-[#5d7a67]">Conv.</span><p className="font-bold text-[#22C55E]">{c.conversions || 0}</p></div>
                 </div>
               </li>
             ))}
@@ -162,24 +162,24 @@ export default function TrafegoPage() {
         )}
 
         {!loading && !erro && campanhas.length > 0 && !isMobile && (
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #30363d" }}>
+          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #dcebd8" }}>
             <table className="w-full text-sm">
-              <thead style={{ background: "#161b22" }}>
+              <thead style={{ background: "#ffffff" }}>
                 <tr>
                   {["Campanha", "Gasto", "Cliques", "Impressões", "CTR", "CPC", "Conversões"].map(h => (
-                    <th key={h} className="text-left text-xs font-bold uppercase tracking-wide px-4 py-3" style={{ color: "#8b949e" }}>{h}</th>
+                    <th key={h} className="text-left text-xs font-bold uppercase tracking-wide px-4 py-3" style={{ color: "#5d7a67" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {campanhas.map((c, i) => (
-                  <tr key={i} style={{ borderTop: "1px solid #21262d" }}>
+                  <tr key={i} style={{ borderTop: "1px solid #eef7eb" }}>
                     <td className="px-4 py-3">
-                      <p className="font-bold text-xs truncate max-w-xs" style={{ color: "#e6edf3" }}>{c.campaign_name}</p>
+                      <p className="font-bold text-xs truncate max-w-xs" style={{ color: "#0b2210" }}>{c.campaign_name}</p>
                     </td>
                     <td className="px-4 py-3 font-bold text-xs" style={{ color: "#EF4444" }}>{moeda(c.spend)}</td>
                     <td className="px-4 py-3 text-xs" style={{ color: "#3B82F6" }}>{num(c.clicks)}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#8b949e" }}>{num(c.impressions)}</td>
+                    <td className="px-4 py-3 text-xs" style={{ color: "#5d7a67" }}>{num(c.impressions)}</td>
                     <td className="px-4 py-3 text-xs" style={{ color: "#F97316" }}>{(c.ctr * 100).toFixed(2)}%</td>
                     <td className="px-4 py-3 text-xs font-bold" style={{ color: "#c9a24a" }}>{moeda(c.cpc)}</td>
                     <td className="px-4 py-3 text-xs font-bold" style={{ color: "#22C55E" }}>{c.conversions || 0}</td>

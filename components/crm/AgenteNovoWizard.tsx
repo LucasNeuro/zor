@@ -247,13 +247,13 @@ function RagErroAjuda({ mensagem }: { mensagem: string }) {
           >
             o ficheiro .md de exemplo
           </a>{" "}
-          ou exporte o mesmo conteÃºdo em <strong style={{ color: "#e6edf3" }}>.docx</strong> /{" "}
-          <strong style={{ color: "#e6edf3" }}>.md</strong>.
+          ou exporte o mesmo conteÃºdo em <strong style={{ color: "#0b2210" }}>.docx</strong> /{" "}
+          <strong style={{ color: "#0b2210" }}>.md</strong>.
         </p>
       ) : null}
       {formato ? (
         <p style={{ margin: pdf ? 0 : "0 0 8px" }}>
-          Formatos aceites: <strong style={{ color: "#e6edf3" }}>{RAG_FORMATOS_RESUMO}</strong>.
+          Formatos aceites: <strong style={{ color: "#0b2210" }}>{RAG_FORMATOS_RESUMO}</strong>.
         </p>
       ) : null}
     </div>
@@ -997,7 +997,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         ? "#f8514912"
         : playbookUploadStatus === "sucesso"
           ? "#23863618"
-          : "#0d1117";
+          : "#f8fcf6";
 
   const passo1AvancarBloqueado = somentePlaybook
     ? !playbookConteudoAnalise.trim() || !playbookAnaliseResultado || !playbookFlowReady(playbookFlowStatus)
@@ -1250,21 +1250,21 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     fontSize: 12,
     fontWeight: 700,
     cursor: "pointer",
-    border: `1px solid ${ativo ? cor || "#c9a24a" : "#30363d"}`,
-    background: ativo ? (cor ? cor + "22" : "#c9a24a22") : "#161b22",
-    color: ativo ? cor || "#c9a24a" : "#8b949e",
+    border: `1px solid ${ativo ? cor || "#c9a24a" : "#dcebd8"}`,
+    background: ativo ? (cor ? cor + "22" : "#c9a24a22") : "#ffffff",
+    color: ativo ? cor || "#c9a24a" : "#5d7a67",
     transition: "all 150ms",
   });
 
   const rootStyle: CSSProperties =
     variant === "page"
-      ? { minHeight: "100vh", background: "#0d1117", display: "flex", flexDirection: "column" }
+      ? { minHeight: "100vh", background: "#f8fcf6", display: "flex", flexDirection: "column" }
       : {
           display: "flex",
           flexDirection: "column",
           height: "100%",
           minHeight: 0,
-          background: "#0d1117",
+          background: "#f8fcf6",
           flex: 1,
         };
 
@@ -1288,19 +1288,19 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         >
           <div
             style={{
-              background: "#161b22",
-              border: "1px solid #30363d",
+              background: "#ffffff",
+              border: "1px solid #dcebd8",
               borderRadius: 16,
               padding: 28,
               width: "100%",
               maxWidth: 440,
             }}
           >
-            <h2 style={{ color: "#e6edf3", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
+            <h2 style={{ color: "#0b2210", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
               Confirmar criaÃ§Ã£o
             </h2>
-            <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 20px", lineHeight: 1.5 }}>
-              Confirmar criaÃ§Ã£o do agente <strong style={{ color: "#e6edf3" }}>{nome}</strong>? Em seguida passarÃ¡ por
+            <p style={{ color: "#5d7a67", fontSize: 13, margin: "0 0 20px", lineHeight: 1.5 }}>
+              Confirmar criaÃ§Ã£o do agente <strong style={{ color: "#0b2210" }}>{nome}</strong>? Em seguida passarÃ¡ por
               Materiais (playbook) e, se aplicÃ¡vel, Canal (WhatsApp UAZAPI).
             </p>
             {erro && <p style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}>{erro}</p>}
@@ -1312,9 +1312,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   flex: 1,
                   padding: "10px 0",
                   borderRadius: 8,
-                  background: "#21262d",
-                  border: "1px solid #30363d",
-                  color: "#8b949e",
+                  background: "#eef7eb",
+                  border: "1px solid #dcebd8",
+                  color: "#5d7a67",
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: "pointer",
@@ -1352,8 +1352,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           position: "sticky",
           top: 0,
           zIndex: 10,
-          background: "#161b22",
-          borderBottom: "1px solid #30363d",
+          background: "#ffffff",
+          borderBottom: "1px solid #dcebd8",
           padding: "12px 24px",
         }}
       >
@@ -1365,7 +1365,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               style={{
                 background: "none",
                 border: "none",
-                color: "#8b949e",
+                color: "#5d7a67",
                 fontSize: 18,
                 cursor: "pointer",
                 lineHeight: 1,
@@ -1375,7 +1375,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             </button>
           </div>
           {cargoSelecionado && nome && (
-            <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
+            <p style={{ color: "#5d7a67", fontSize: 12, margin: 0 }}>
               {nome} Â· {cargoSelecionado.titulo}
             </p>
           )}
@@ -1405,9 +1405,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       width: 28,
                       height: 28,
                       borderRadius: "50%",
-                      background: passado ? "#003b26" : ativo ? "#c9a24a" : "#21262d",
-                      border: `2px solid ${passado ? "#003b26" : ativo ? "#c9a24a" : "#30363d"}`,
-                      color: passado ? "#c9a24a" : ativo ? "#003b26" : "#8b949e",
+                      background: passado ? "#003b26" : ativo ? "#c9a24a" : "#eef7eb",
+                      border: `2px solid ${passado ? "#003b26" : ativo ? "#c9a24a" : "#dcebd8"}`,
+                      color: passado ? "#c9a24a" : ativo ? "#003b26" : "#5d7a67",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1420,7 +1420,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   <span
                     style={{
                       fontSize: 9,
-                      color: ativo ? "#c9a24a" : "#8b949e",
+                      color: ativo ? "#c9a24a" : "#5d7a67",
                       whiteSpace: "nowrap",
                       textAlign: "center",
                       maxWidth: 72,
@@ -1437,7 +1437,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       flex: 0,
                       width: 12,
                       flexShrink: 0,
-                      background: passo > num ? "#c9a24a" : "#30363d",
+                      background: passo > num ? "#c9a24a" : "#dcebd8",
                       marginBottom: 16,
                     }}
                   />
@@ -1467,10 +1467,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         >
           {passo === 1 && (
             <div>
-              <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+              <h2 style={{ color: "#0b2210", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                 Como este agente serÃ¡ instruÃ­do?
               </h2>
-              <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 16px" }}>
+              <p style={{ color: "#5d7a67", fontSize: 13, margin: "0 0 16px" }}>
                 Escolha um cargo do catÃ¡logo ou carregue um playbook personalizado (.md / .txt) para instruir o agente.
               </p>
 
@@ -1506,8 +1506,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       style={{
                         padding: "8px 12px",
                         borderRadius: 8,
-                        border: "1px solid #30363d",
-                        background: "#21262d",
+                        border: "1px solid #dcebd8",
+                        background: "#eef7eb",
                         color: "#c9d1d9",
                         fontSize: 12,
                         fontWeight: 700,
@@ -1551,7 +1551,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               ) : null}
 
               {!somentePlaybook && carregando ? (
-                <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando cargos...</p>
+                <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando cargos...</p>
               ) : !somentePlaybook && erroCargos ? (
                 <div>
                   <p style={{ color: "#ef4444", fontSize: 13, margin: "0 0 10px" }}>Erro ao carregar cargos.</p>
@@ -1563,9 +1563,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       borderRadius: 8,
                       fontSize: 12,
                       fontWeight: 700,
-                      background: "#161b22",
-                      border: "1px solid #30363d",
-                      color: "#8b949e",
+                      background: "#ffffff",
+                      border: "1px solid #dcebd8",
+                      color: "#5d7a67",
                       cursor: "pointer",
                     }}
                   >
@@ -1575,7 +1575,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               ) : !somentePlaybook ? (
                 <>
                   <div style={{ marginBottom: 12 }}>
-                    <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>SEGMENTO</p>
+                    <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>SEGMENTO</p>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                       <button
                         type="button"
@@ -1605,7 +1605,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
                   {especialidades.length > 0 && (
                     <div style={{ marginBottom: 20 }}>
-                      <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
+                      <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
                         ESPECIALIDADE
                       </p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -1631,13 +1631,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   )}
 
                   {cargosFiltrados.length === 0 ? (
-                    <p style={{ color: "#8b949e", fontSize: 13 }}>Nenhum cargo encontrado.</p>
+                    <p style={{ color: "#5d7a67", fontSize: 13 }}>Nenhum cargo encontrado.</p>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {cargosFiltrados.map((c) => {
                         const ativo = cargoSelecionado?.slug === c.slug;
-                        const segCor = SEGMENTO_COR[c.segmento || ""] || "#8b949e";
-                        const nivelCor = NIVEL_COR[c.nivel || ""] || "#8b949e";
+                        const segCor = SEGMENTO_COR[c.segmento || ""] || "#5d7a67";
+                        const nivelCor = NIVEL_COR[c.nivel || ""] || "#5d7a67";
                         return (
                           <button
                             type="button"
@@ -1651,14 +1651,14 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               padding: 16,
                               borderRadius: 12,
                               cursor: "pointer",
-                              background: "#161b22",
-                              border: `2px solid ${ativo ? "#c9a24a" : "#30363d"}`,
+                              background: "#ffffff",
+                              border: `2px solid ${ativo ? "#c9a24a" : "#dcebd8"}`,
                               transition: "border-color 150ms",
                             }}
                           >
                             <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                <span style={{ color: "#e6edf3", fontSize: 14, fontWeight: 700 }}>{c.titulo}</span>
+                                <span style={{ color: "#0b2210", fontSize: 14, fontWeight: 700 }}>{c.titulo}</span>
                                 {c.nivel && (
                                   <span
                                     style={{
@@ -1675,7 +1675,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                                   </span>
                                 )}
                                 {c.especialidade && (
-                                  <span style={{ fontSize: 10, color: "#8b949e" }}>{c.especialidade}</span>
+                                  <span style={{ fontSize: 10, color: "#5d7a67" }}>{c.especialidade}</span>
                                 )}
                                 {c.segmento && (
                                   <span
@@ -1694,7 +1694,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                                 )}
                               </div>
                               {c.descricao_curta && (
-                                <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>{c.descricao_curta}</p>
+                                <p style={{ color: "#5d7a67", fontSize: 12, margin: 0 }}>{c.descricao_curta}</p>
                               )}
                             </div>
                             {ativo && <span style={{ color: "#c9a24a", fontSize: 16, flexShrink: 0 }}>âœ“</span>}
@@ -1711,10 +1711,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           {passo === 2 && (cargoSelecionado || somentePlaybook) && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
-                <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+                <h2 style={{ color: "#0b2210", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                   Identidade do agente
                 </h2>
-                <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
+                <p style={{ color: "#5d7a67", fontSize: 13, margin: 0 }}>
                   {somentePlaybook
                     ? "Nome e mercados â€” comportamento vem do playbook no bucket."
                     : "Campos fixos do cargo, nome e mercados."}
@@ -1722,13 +1722,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               </div>
 
               {!somentePlaybook && cargoSelecionado ? (
-              <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
+              <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 16 }}>
                 <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 12px" }}>
                   Fixo do cargo ðŸ”’
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>
+                    <label style={{ fontSize: 11, color: "#5d7a67", display: "block", marginBottom: 4 }}>
                       NÃ­vel
                     </label>
                     {cargoSelecionado.nivel ? (
@@ -1739,19 +1739,19 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           borderRadius: 20,
                           fontSize: 12,
                           fontWeight: 700,
-                          background: (NIVEL_COR[cargoSelecionado.nivel] || "#8b949e") + "22",
-                          color: NIVEL_COR[cargoSelecionado.nivel] || "#8b949e",
-                          border: `1px solid ${(NIVEL_COR[cargoSelecionado.nivel] || "#8b949e")}44`,
+                          background: (NIVEL_COR[cargoSelecionado.nivel] || "#5d7a67") + "22",
+                          color: NIVEL_COR[cargoSelecionado.nivel] || "#5d7a67",
+                          border: `1px solid ${(NIVEL_COR[cargoSelecionado.nivel] || "#5d7a67")}44`,
                         }}
                       >
                         {cargoSelecionado.nivel}
                       </span>
                     ) : (
-                      <span style={{ color: "#8b949e", fontSize: 13 }}>â€”</span>
+                      <span style={{ color: "#5d7a67", fontSize: 13 }}>â€”</span>
                     )}
                   </div>
                   <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.5 }}>
-                    InferÃªncia: <strong style={{ color: "#8b949e" }}>Mistral</strong> (Agno). Modelo efectivo em{" "}
+                    InferÃªncia: <strong style={{ color: "#5d7a67" }}>Mistral</strong> (Agno). Modelo efectivo em{" "}
                     <code style={{ fontSize: 11 }}>MISTRAL_MODEL</code> no servidor â€” sem escolha por agente.
                   </p>
                 </div>
@@ -1760,7 +1760,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
               <div>
                 <label
-                  style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}
+                  style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 8 }}
                 >
                   Nome do agente <span style={{ color: "#ef4444" }}>*</span>
                 </label>
@@ -1770,9 +1770,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   placeholder={somentePlaybook ? "Ex: Maria, Mari..." : "Ex: Marina, SDR Apex, Analista Comercial..."}
                   style={{
                     width: "100%",
-                    background: "#161b22",
-                    border: "1px solid #30363d",
-                    color: "#e6edf3",
+                    background: "#ffffff",
+                    border: "1px solid #dcebd8",
+                    color: "#0b2210",
                     borderRadius: 8,
                     padding: "10px 14px",
                     fontSize: 14,
@@ -1784,7 +1784,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
               <div>
                 <label
-                  style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 10 }}
+                  style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 10 }}
                 >
                   Mercados
                 </label>
@@ -1805,17 +1805,17 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           {passo === 3 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
-                <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+                <h2 style={{ color: "#0b2210", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                   Personalidade
                 </h2>
-                <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
+                <p style={{ color: "#5d7a67", fontSize: 13, margin: 0 }}>
                   Ajuste os 5 eixos para definir o estilo de comunicaÃ§Ã£o do agente.
                 </p>
               </div>
 
               {EIXOS.map((eixo, i) => (
                 <div key={eixo.nome} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3" }}>{eixo.nome}</label>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210" }}>{eixo.nome}</label>
                   <div style={{ display: "flex", gap: 6 }}>
                     {[1, 2, 3, 4, 5].map((v) => {
                       const ativo = valores[i] === v;
@@ -1831,9 +1831,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                             fontSize: 13,
                             fontWeight: 700,
                             cursor: "pointer",
-                            border: `2px solid ${ativo ? "#c9a24a" : "#30363d"}`,
-                            background: ativo ? "#c9a24a" : "#161b22",
-                            color: ativo ? "#003b26" : "#8b949e",
+                            border: `2px solid ${ativo ? "#c9a24a" : "#dcebd8"}`,
+                            background: ativo ? "#c9a24a" : "#ffffff",
+                            color: ativo ? "#003b26" : "#5d7a67",
                             transition: "all 150ms",
                           }}
                         >
@@ -1846,18 +1846,18 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               ))}
 
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "#8b949e", display: "block", marginBottom: 8 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#5d7a67", display: "block", marginBottom: 8 }}>
                   RESULTADO
                 </label>
                 <pre
                   style={{
-                    background: "#161b22",
-                    border: "1px solid #30363d",
+                    background: "#ffffff",
+                    border: "1px solid #dcebd8",
                     borderRadius: 8,
                     padding: 14,
                     fontFamily: "monospace",
                     fontSize: 12,
-                    color: "#8b949e",
+                    color: "#5d7a67",
                     whiteSpace: "pre-wrap",
                     lineHeight: 1.6,
                     margin: 0,
@@ -1872,10 +1872,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           {passo === 4 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+                <h2 style={{ color: "#0b2210", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                   Documentos (RAG)
                 </h2>
-                <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
+                <p style={{ color: "#5d7a67", fontSize: 13, margin: 0 }}>
                   O comportamento operacional (saudaÃ§Ã£o, perguntas essenciais e comprimento padrÃ£o) vem do{" "}
                   <strong style={{ color: "#adbac7" }}>cargo</strong>. Aqui anexe atÃ©{" "}
                   <strong style={{ color: "#adbac7" }}>{RAG_DOCS_LIMIT} documentos</strong> sobre produto ou
@@ -1886,8 +1886,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               {cargoSelecionado ? (
                 <div
                   style={{
-                    background: "#161b22",
-                    border: "1px solid #30363d",
+                    background: "#ffffff",
+                    border: "1px solid #dcebd8",
                     borderRadius: 12,
                     padding: 14,
                     display: "flex",
@@ -1895,28 +1895,28 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     gap: 8,
                   }}
                 >
-                  <p style={{ margin: 0, color: "#8b949e", fontSize: 11, fontWeight: 700 }}>
+                  <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, fontWeight: 700 }}>
                     PREVIEW DO CARGO (ATENDIMENTO)
                   </p>
                   {typeof cargoSelecionado.saudacao_cliente === "string" && cargoSelecionado.saudacao_cliente.trim() ? (
                     <p style={{ margin: 0, color: "#adbac7", fontSize: 12, lineHeight: 1.5 }}>
-                      <strong style={{ color: "#e6edf3" }}>SaudaÃ§Ã£o:</strong>{" "}
+                      <strong style={{ color: "#0b2210" }}>SaudaÃ§Ã£o:</strong>{" "}
                       {cargoSelecionado.saudacao_cliente.trim()}
                     </p>
                   ) : (
-                    <p style={{ margin: 0, color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                    <p style={{ margin: 0, color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
                       Sem saudaÃ§Ã£o padrÃ£o definida no cargo.
                     </p>
                   )}
                   {typeof cargoSelecionado.comprimento_padrao === "string" && cargoSelecionado.comprimento_padrao.trim() ? (
                     <p style={{ margin: 0, color: "#adbac7", fontSize: 12, lineHeight: 1.5 }}>
-                      <strong style={{ color: "#e6edf3" }}>Comprimento:</strong>{" "}
+                      <strong style={{ color: "#0b2210" }}>Comprimento:</strong>{" "}
                       {cargoSelecionado.comprimento_padrao.trim()}
                     </p>
                   ) : null}
                   {cargoSelecionado.usar_perguntas_essenciais === true ? (
                     <div>
-                      <p style={{ margin: "0 0 4px", color: "#e6edf3", fontSize: 12, fontWeight: 700 }}>
+                      <p style={{ margin: "0 0 4px", color: "#0b2210", fontSize: 12, fontWeight: 700 }}>
                         Perguntas essenciais
                       </p>
                       {splitLinesLite(cargoSelecionado.perguntas_essenciais).length > 0 ? (
@@ -1926,26 +1926,26 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           ))}
                         </ol>
                       ) : (
-                        <p style={{ margin: 0, color: "#8b949e", fontSize: 12 }}>
+                        <p style={{ margin: 0, color: "#5d7a67", fontSize: 12 }}>
                           Ativado no cargo, mas sem perguntas cadastradas.
                         </p>
                       )}
                     </div>
                   ) : (
-                    <p style={{ margin: 0, color: "#8b949e", fontSize: 12 }}>
+                    <p style={{ margin: 0, color: "#5d7a67", fontSize: 12 }}>
                       Este cargo nÃ£o exige sequÃªncia de perguntas essenciais.
                     </p>
                   )}
                 </div>
               ) : null}
 
-              <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
+              <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 16 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div>
-                    <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
+                    <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
                       Documentos para RAG (embeddings)
                     </p>
-                    <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 12px", lineHeight: 1.55 }}>
+                    <p style={{ color: "#5d7a67", fontSize: 12, margin: "0 0 12px", lineHeight: 1.55 }}>
                       Recomendado: subir atÃ© <strong style={{ color: "#adbac7" }}>{RAG_DOCS_LIMIT} ficheiros</strong>{" "}
                       sobre produto, serviÃ§os e empresa. Primeiro ficam sÃ³ no navegador; o envio ao servidor exige um
                       agente criado. Pode indexar jÃ¡ com <strong style={{ color: "#adbac7" }}>Processar embeddings</strong>{" "}
@@ -1956,7 +1956,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   </div>
                   <span
                     style={{
-                      color: ragPendentes.length >= RAG_DOCS_LIMIT ? "#f0b429" : "#8b949e",
+                      color: ragPendentes.length >= RAG_DOCS_LIMIT ? "#f0b429" : "#5d7a67",
                       fontSize: 11,
                       fontWeight: 800,
                       whiteSpace: "nowrap",
@@ -1977,7 +1977,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     fontSize: 13,
                     fontWeight: 700,
                     textAlign: "center",
-                    background: "#0d1117",
+                    background: "#f8fcf6",
                     opacity: ragPendentes.length >= RAG_DOCS_LIMIT ? 0.7 : 1,
                   }}
                 >
@@ -2008,9 +2008,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     borderRadius: 10,
                     fontSize: 12,
                     fontWeight: 800,
-                    border: "1px solid #30363d",
-                    background: ragPreparando ? "#21262d" : "#0b5ed722",
-                    color: ragPreparando ? "#8b949e" : "#58a6ff",
+                    border: "1px solid #dcebd8",
+                    background: ragPreparando ? "#eef7eb" : "#0b5ed722",
+                    color: ragPreparando ? "#5d7a67" : "#58a6ff",
                     cursor: ragPreparando || ragPendentes.length === 0 ? "not-allowed" : "pointer",
                     opacity: ragPreparando || ragPendentes.length === 0 ? 0.7 : 1,
                   }}
@@ -2040,8 +2040,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       padding: "8px 10px",
                     }}
                   >
-                    Agente <strong style={{ color: "#e6edf3" }}>{agenteSlugCriado}</strong> criado. Use{" "}
-                    <strong style={{ color: "#e6edf3" }}>PrÃ³ximo</strong> para RevisÃ£o â†’ Ferramentas â†’ Materiais â†’ Canal.
+                    Agente <strong style={{ color: "#0b2210" }}>{agenteSlugCriado}</strong> criado. Use{" "}
+                    <strong style={{ color: "#0b2210" }}>PrÃ³ximo</strong> para RevisÃ£o â†’ Ferramentas â†’ Materiais â†’ Canal.
                   </p>
                 ) : null}
 
@@ -2052,8 +2052,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         width: "100%",
                         height: 8,
                         borderRadius: 999,
-                        background: "#21262d",
-                        border: "1px solid #30363d",
+                        background: "#eef7eb",
+                        border: "1px solid #dcebd8",
                         overflow: "hidden",
                       }}
                     >
@@ -2074,7 +2074,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         }}
                       />
                     </div>
-                    <p style={{ color: "#8b949e", fontSize: 11, margin: "6px 0 0" }}>
+                    <p style={{ color: "#5d7a67", fontSize: 11, margin: "6px 0 0" }}>
                       {ragUploadTotal > 0
                         ? `Progresso do processamento: ${ragUploadDone}/${ragUploadTotal}`
                         : ragPendentes.some((i) => i.status === "concluido")
@@ -2092,10 +2092,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       <div
                         key={ragFileKey(item.file)}
                         style={{
-                          border: "1px solid #30363d",
+                          border: "1px solid #dcebd8",
                           borderRadius: 12,
                           padding: 12,
-                          background: "#0d1117",
+                          background: "#f8fcf6",
                           display: "grid",
                           gridTemplateColumns: "44px 1fr auto",
                           alignItems: "center",
@@ -2107,12 +2107,12 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                             width: 42,
                             height: 42,
                             borderRadius: 10,
-                            background: "#21262d",
-                            border: "1px solid #30363d",
+                            background: "#eef7eb",
+                            border: "1px solid #dcebd8",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            color: "#8b949e",
+                            color: "#5d7a67",
                             fontSize: 10,
                             fontWeight: 900,
                           }}
@@ -2122,7 +2122,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         <div style={{ minWidth: 0 }}>
                           <p
                             style={{
-                              color: "#e6edf3",
+                              color: "#0b2210",
                               fontSize: 13,
                               fontWeight: 800,
                               margin: "0 0 4px",
@@ -2134,7 +2134,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           >
                             {item.file.name}
                           </p>
-                          <p style={{ color: "#8b949e", fontSize: 11, margin: 0, lineHeight: 1.45 }}>
+                          <p style={{ color: "#5d7a67", fontSize: 11, margin: 0, lineHeight: 1.45 }}>
                             {formatBytes(item.file.size)} Â·{" "}
                             <span
                               style={{
@@ -2147,7 +2147,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                                         ? "#58a6ff"
                                         : item.status === "preparado"
                                           ? "#c9a24a"
-                                          : "#8b949e",
+                                          : "#5d7a67",
                               }}
                             >
                               {item.status === "concluido"
@@ -2167,7 +2167,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                                 : ""}
                           </p>
                           {item.mensagem ? (
-                            <p style={{ color: "#8b949e", fontSize: 11, margin: "4px 0 0", lineHeight: 1.4 }}>
+                            <p style={{ color: "#5d7a67", fontSize: 11, margin: "4px 0 0", lineHeight: 1.4 }}>
                               {item.mensagem}
                             </p>
                           ) : null}
@@ -2179,7 +2179,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           type="button"
                           onClick={() => removerRagPendentePorIndice(idx)}
                           style={{
-                            border: "1px solid #30363d",
+                            border: "1px solid #dcebd8",
                             background: "transparent",
                             color: "#f85149",
                             borderRadius: 8,
@@ -2206,10 +2206,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           {passo === 6 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+                <h2 style={{ color: "#0b2210", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                   Ferramentas Hub
                 </h2>
-                <p style={{ color: "#8b949e", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
+                <p style={{ color: "#5d7a67", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
                   Ligue o motor e active as funÃ§Ãµes que o Mistral pode pedir ao servidor (lead na sessÃ£o). Inclui o catÃ¡logo{" "}
                   <strong style={{ color: "#aebccf" }}>builtin</strong> e as ferramentas{" "}
                   <strong style={{ color: "#c9a24a" }}>custom</strong> activas do tenant. Se escolheu{" "}
@@ -2249,7 +2249,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
               {agenteSlugCriado ? (
                 <p style={{ color: "#3fb950", fontSize: 12, margin: "0 0 10px", lineHeight: 1.5 }}>
-                  Agente <strong style={{ color: "#e6edf3" }}>{agenteSlugCriado}</strong> jÃ¡ foi criado (ex.: ao
+                  Agente <strong style={{ color: "#0b2210" }}>{agenteSlugCriado}</strong> jÃ¡ foi criado (ex.: ao
                   processar documentos RAG). Grave as ferramentas abaixo e continue para Materiais e Canal.
                 </p>
               ) : null}
@@ -2298,17 +2298,17 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           {passo === 5 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+                <h2 style={{ color: "#0b2210", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                   RevisÃ£o
                 </h2>
-                <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>
+                <p style={{ color: "#5d7a67", fontSize: 13, margin: 0 }}>
                   Confira identidade, cargo e como o copiloto opera (canal e ciclos). Depois configure as ferramentas
                   e crie o agente.
                 </p>
                 {ragPendentes.some((i) => i.status === "na_fila" || i.status === "preparado") ? (
                   <p style={{ color: "#c9a24a", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
                     Documentos RAG pendentes:{" "}
-                    <strong style={{ color: "#e6edf3" }}>
+                    <strong style={{ color: "#0b2210" }}>
                       {ragPendentes.filter((i) => i.status !== "concluido").length}
                     </strong>{" "}
                     (serÃ£o indexados ao confirmar a criaÃ§Ã£o do agente, se ainda nÃ£o processou no passo Documentos).
@@ -2321,9 +2321,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               </div>
 
               {cargoSelecionado && (
-                <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
-                  <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>CARGO SELECIONADO</p>
-                  <p style={{ color: "#e6edf3", fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>
+                <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 16 }}>
+                  <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>CARGO SELECIONADO</p>
+                  <p style={{ color: "#0b2210", fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>
                     {cargoSelecionado.titulo}
                   </p>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -2334,9 +2334,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           fontWeight: 700,
                           padding: "2px 8px",
                           borderRadius: 20,
-                          background: (NIVEL_COR[cargoSelecionado.nivel] || "#8b949e") + "22",
-                          color: NIVEL_COR[cargoSelecionado.nivel] || "#8b949e",
-                          border: `1px solid ${(NIVEL_COR[cargoSelecionado.nivel] || "#8b949e")}44`,
+                          background: (NIVEL_COR[cargoSelecionado.nivel] || "#5d7a67") + "22",
+                          color: NIVEL_COR[cargoSelecionado.nivel] || "#5d7a67",
+                          border: `1px solid ${(NIVEL_COR[cargoSelecionado.nivel] || "#5d7a67")}44`,
                         }}
                       >
                         {cargoSelecionado.nivel}
@@ -2349,9 +2349,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           fontWeight: 700,
                           padding: "2px 8px",
                           borderRadius: 20,
-                          background: (SEGMENTO_COR[cargoSelecionado.segmento] || "#8b949e") + "22",
-                          color: SEGMENTO_COR[cargoSelecionado.segmento] || "#8b949e",
-                          border: `1px solid ${(SEGMENTO_COR[cargoSelecionado.segmento] || "#8b949e")}44`,
+                          background: (SEGMENTO_COR[cargoSelecionado.segmento] || "#5d7a67") + "22",
+                          color: SEGMENTO_COR[cargoSelecionado.segmento] || "#5d7a67",
+                          border: `1px solid ${(SEGMENTO_COR[cargoSelecionado.segmento] || "#5d7a67")}44`,
                         }}
                       >
                         {cargoSelecionado.segmento}
@@ -2382,7 +2382,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 </div>
               )}
 
-              <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, overflow: "hidden" }}>
                 {[
                   { label: "Nome", value: nome || "â€”" },
                   { label: "Mercados", value: mercados.join(", ") || "â€”" },
@@ -2394,24 +2394,24 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       justifyContent: "space-between",
                       alignItems: "center",
                       padding: "12px 16px",
-                      borderBottom: "1px solid #30363d",
+                      borderBottom: "1px solid #dcebd8",
                     }}
                   >
-                    <span style={{ color: "#8b949e", fontSize: 12 }}>{row.label}</span>
-                    <span style={{ color: "#e6edf3", fontSize: 12, fontWeight: 700 }}>{row.value}</span>
+                    <span style={{ color: "#5d7a67", fontSize: 12 }}>{row.label}</span>
+                    <span style={{ color: "#0b2210", fontSize: 12, fontWeight: 700 }}>{row.value}</span>
                   </div>
                 ))}
               </div>
 
               <div
                     style={{
-                  background: "#161b22",
-                  border: "1px solid #30363d",
+                  background: "#ffffff",
+                  border: "1px solid #dcebd8",
                   borderRadius: 12,
                   padding: 16,
                 }}
               >
-                <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>
+                <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>
                   COMO O COPILOTO RODA
                 </p>
                 <p style={{ color: "#6e7781", fontSize: 12, margin: "0 0 14px", lineHeight: 1.5 }}>
@@ -2420,7 +2420,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Por padrÃ£o recomendamos o copiloto interno; use o canal quando precisar de fila de atendimento ao vivo.
                 </p>
 
-                <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
+                <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
                   ONDE O AGENTE OPERA
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
@@ -2460,8 +2460,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           textAlign: "left",
                           padding: "12px 14px",
                           borderRadius: 10,
-                          border: `1px solid ${ativo ? "#c9a24a88" : "#30363d"}`,
-                          background: ativo ? "#c9a24a18" : "#0d1117",
+                          border: `1px solid ${ativo ? "#c9a24a88" : "#dcebd8"}`,
+                          background: ativo ? "#c9a24a18" : "#f8fcf6",
                           cursor: "pointer",
                         }}
                       >
@@ -2477,7 +2477,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               display: "flex",
                               alignItems: "center",
                               gap: 8,
-                              color: "#e6edf3",
+                              color: "#0b2210",
                               fontWeight: 700,
                               fontSize: 13,
                               marginBottom: 4,
@@ -2501,7 +2501,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               </span>
                             ) : null}
                           </span>
-                          <span style={{ color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                          <span style={{ color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
                             {opt.texto}
                           </span>
                         </span>
@@ -2529,25 +2529,25 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   </div>
                 ) : null}
 
-                <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
+                <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>
                   TIPO DE EXECUÃ‡ÃƒO DO CICLO PADRÃƒO
                 </p>
                 <p
                   style={{
-                    color: "#8b949e",
+                    color: "#5d7a67",
                     fontSize: 12,
                     margin: "0 0 12px",
                     lineHeight: 1.5,
                     padding: "12px 14px",
                     borderRadius: 10,
-                    border: "1px solid #30363d",
-                    background: "#0d1117",
+                    border: "1px solid #dcebd8",
+                    background: "#f8fcf6",
                   }}
                 >
                   {modoOperacao === "jobs_internos" ? (
                     <>
                       O modelo serÃ¡ salvo como <strong style={{ color: "#c9a24a" }}>jobs_internos</strong> e jÃ¡
-                      provisiona um ciclo padrÃ£o em <code style={{ color: "#8b949e" }}>hub_ciclos_ia</code>.
+                      provisiona um ciclo padrÃ£o em <code style={{ color: "#5d7a67" }}>hub_ciclos_ia</code>.
                     </>
                   ) : (
                     <>
@@ -2578,9 +2578,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           fontSize: 12,
                           fontWeight: 700,
                           cursor: "pointer",
-                          border: `1px solid ${at ? "#c9a24a" : "#30363d"}`,
-                          background: at ? "#c9a24a22" : "#0d1117",
-                          color: at ? "#c9a24a" : "#8b949e",
+                          border: `1px solid ${at ? "#c9a24a" : "#dcebd8"}`,
+                          background: at ? "#c9a24a22" : "#f8fcf6",
+                          color: at ? "#c9a24a" : "#5d7a67",
                         }}
                       >
                         {opt.label}
@@ -2601,14 +2601,14 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     {modoOperacao === "canal_whatsapp" ? (
                       <p
                         style={{
-                          color: "#8b949e",
+                          color: "#5d7a67",
                           fontSize: 12,
                           margin: "0 0 12px",
                           lineHeight: 1.5,
                           padding: "12px 14px",
                           borderRadius: 10,
-                          border: "1px solid #30363d",
-                          background: "#0d1117",
+                          border: "1px solid #dcebd8",
+                          background: "#f8fcf6",
                         }}
                       >
                         Para atendimento no WhatsApp (legado), o ciclo padrÃ£o Ã©{" "}
@@ -2660,8 +2660,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               textAlign: "left",
                               padding: "12px 14px",
                               borderRadius: 10,
-                              border: `1px solid ${ativo ? "#23863688" : "#30363d"}`,
-                              background: ativo ? "#23863622" : "#0d1117",
+                              border: `1px solid ${ativo ? "#23863688" : "#dcebd8"}`,
+                              background: ativo ? "#23863622" : "#f8fcf6",
                               cursor: "pointer",
                             }}
                           >
@@ -2675,7 +2675,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               <span
                                 style={{
                                   display: "block",
-                                  color: "#e6edf3",
+                                  color: "#0b2210",
                                   fontWeight: 700,
                                   fontSize: 13,
                                   marginBottom: 4,
@@ -2683,7 +2683,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               >
                                 {opt.titulo}
                               </span>
-                              <span style={{ color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                              <span style={{ color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
                                 {opt.texto}
                               </span>
                             </span>
@@ -2699,7 +2699,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           style={{
                             fontSize: 11,
                             fontWeight: 700,
-                            color: "#8b949e",
+                            color: "#5d7a67",
                             display: "block",
                             marginBottom: 8,
                           }}
@@ -2716,9 +2716,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                             width: "100%",
                             padding: "10px 12px",
                             borderRadius: 8,
-                            background: "#0d1117",
-                            border: "1px solid #30363d",
-                            color: "#e6edf3",
+                            background: "#f8fcf6",
+                            border: "1px solid #dcebd8",
+                            color: "#0b2210",
                             fontSize: 13,
                           }}
                         >
@@ -2735,7 +2735,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 <div style={{ marginTop: hubCicloEstrategia === "provisionar" ? 16 : 0 }}>
                   <p
                     style={{
-                      color: "#8b949e",
+                      color: "#5d7a67",
                       fontSize: 11,
                       fontWeight: 700,
                       margin: "0 0 8px",
@@ -2757,8 +2757,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         maxHeight: 220,
                         overflowY: "auto",
                         borderRadius: 10,
-                        border: "1px solid #30363d",
-                        background: "#0d1117",
+                        border: "1px solid #dcebd8",
+                        background: "#f8fcf6",
                       }}
                     >
                       {hubCiclosLista.map((c) => {
@@ -2771,7 +2771,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               gap: 10,
                               alignItems: "flex-start",
                               padding: "10px 12px",
-                              borderBottom: "1px solid #21262d",
+                              borderBottom: "1px solid #eef7eb",
                               cursor: "pointer",
                               margin: 0,
                             }}
@@ -2786,14 +2786,14 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               <span
                                 style={{
                                   display: "block",
-                                  color: "#e6edf3",
+                                  color: "#0b2210",
                                   fontSize: 12,
                                   fontWeight: 700,
                                 }}
                               >
                                 {c.nome || "â€”"}
                               </span>
-                              <span style={{ color: "#8b949e", fontSize: 11, lineHeight: 1.45 }}>
+                              <span style={{ color: "#5d7a67", fontSize: 11, lineHeight: 1.45 }}>
                                 {c.agente_slug} Â· {hubCicloTipoLabel(c.tipo)}
                                 {!c.ativo ? " Â· inativo" : ""}
                               </span>
@@ -2806,13 +2806,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 </div>
               </div>
 
-              <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
-                <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>PERSONALIDADE</p>
+              <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 16 }}>
+                <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>PERSONALIDADE</p>
                 <pre
                   style={{
                     fontFamily: "monospace",
                     fontSize: 11,
-                    color: "#8b949e",
+                    color: "#5d7a67",
                     whiteSpace: "pre-wrap",
                     margin: 0,
                     lineHeight: 1.5,
@@ -2824,30 +2824,30 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               </div>
 
               {cargoSelecionado ? (
-                <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, overflow: "hidden" }}>
                   <p
                     style={{
-                      color: "#8b949e",
+                      color: "#5d7a67",
                       fontSize: 11,
                       fontWeight: 700,
                       margin: 0,
                       padding: "12px 16px",
-                      borderBottom: "1px solid #30363d",
+                      borderBottom: "1px solid #dcebd8",
                     }}
                   >
                     RESUMO DO CARGO (ATENDIMENTO)
                   </p>
-                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #30363d" }}>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #dcebd8" }}>
                     <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>SaudaÃ§Ã£o</p>
-                    <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
+                    <p style={{ color: "#5d7a67", fontSize: 12, margin: 0 }}>
                       {typeof cargoSelecionado.saudacao_cliente === "string" && cargoSelecionado.saudacao_cliente.trim()
                         ? cargoSelecionado.saudacao_cliente.trim()
                         : "Sem saudaÃ§Ã£o padrÃ£o no cargo."}
                     </p>
                   </div>
-                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #30363d" }}>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #dcebd8" }}>
                     <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>Comprimento</p>
-                    <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
+                    <p style={{ color: "#5d7a67", fontSize: 12, margin: 0 }}>
                       {typeof cargoSelecionado.comprimento_padrao === "string" && cargoSelecionado.comprimento_padrao.trim()
                         ? cargoSelecionado.comprimento_padrao.trim()
                         : "Sem comprimento padrÃ£o definido no cargo."}
@@ -2857,18 +2857,18 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     <p style={{ color: "#c9a24a", fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>Perguntas essenciais</p>
                     {cargoSelecionado.usar_perguntas_essenciais === true ? (
                       splitLinesLite(cargoSelecionado.perguntas_essenciais).length > 0 ? (
-                        <ol style={{ margin: 0, paddingLeft: 18, color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+                        <ol style={{ margin: 0, paddingLeft: 18, color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
                           {splitLinesLite(cargoSelecionado.perguntas_essenciais).slice(0, 5).map((p, idx) => (
                             <li key={`${p}-${idx}`}>{p}</li>
                           ))}
                         </ol>
                       ) : (
-                        <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
+                        <p style={{ color: "#5d7a67", fontSize: 12, margin: 0 }}>
                           Ativado no cargo, mas sem perguntas preenchidas.
                         </p>
                       )
                     ) : (
-                      <p style={{ color: "#8b949e", fontSize: 12, margin: 0 }}>
+                      <p style={{ color: "#5d7a67", fontSize: 12, margin: 0 }}>
                         Este cargo nÃ£o exige sequÃªncia de perguntas.
                       </p>
                     )}
@@ -2881,20 +2881,20 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           {passo === 7 && agenteSlugCriado && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+                <h2 style={{ color: "#0b2210", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                   Materiais (playbook)
                 </h2>
-                <p style={{ color: "#8b949e", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
+                <p style={{ color: "#5d7a67", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
                   Gera um ficheiro no Storage com a configuraÃ§Ã£o deste agente, para ferramentas ou equipas que precisem
                   do playbook num URL estÃ¡vel. Se jÃ¡ passou pelo passo Canal (WhatsApp), use <strong style={{ color: "#aebccf" }}>â† Anterior</strong> a partir desse ecrÃ£ para voltar aqui antes de concluir.
                 </p>
               </div>
 
-              <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
-                <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 10px" }}>
+              <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 16 }}>
+                <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 10px" }}>
                   AGENTE CRIADO
                 </p>
-                <p style={{ color: "#e6edf3", fontSize: 14, fontWeight: 700, margin: "0 0 8px", wordBreak: "break-all" }}>
+                <p style={{ color: "#0b2210", fontSize: 14, fontWeight: 700, margin: "0 0 8px", wordBreak: "break-all" }}>
                   {nome || agenteSlugCriado}{" "}
                   <span style={{ color: "#6e7781", fontWeight: 600, fontSize: 12 }}>({agenteSlugCriado})</span>
                 </p>
@@ -2912,7 +2912,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               </div>
 
               {playbookMetaLoading && (
-                <p style={{ color: "#8b949e", fontSize: 13, margin: 0 }}>A ler estado do playbookâ€¦</p>
+                <p style={{ color: "#5d7a67", fontSize: 13, margin: 0 }}>A ler estado do playbookâ€¦</p>
               )}
 
               {playbookErro ? (
@@ -2982,8 +2982,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   style={{
                     padding: "8px 12px",
                     borderRadius: 8,
-                    border: "1px solid #30363d",
-                    background: "#21262d",
+                    border: "1px solid #dcebd8",
+                    background: "#eef7eb",
                     color: "#c9d1d9",
                     fontSize: 12,
                     fontWeight: 700,
@@ -3007,7 +3007,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     padding: "12px 14px",
                   }}
                 >
-                  <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>
+                  <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>
                     PLAYBOOK PÃšBLICO
                   </p>
                   <a
@@ -3034,8 +3034,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   borderRadius: 10,
                   fontSize: 14,
                   fontWeight: 700,
-                  background: "#21262d",
-                  border: "1px solid #30363d",
+                  background: "#eef7eb",
+                  border: "1px solid #dcebd8",
                   color: "#c9a24a",
                   cursor: playbookGerando || playbookMetaLoading ? "wait" : "pointer",
                   opacity: playbookGerando || playbookMetaLoading ? 0.65 : 1,
@@ -3069,10 +3069,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           {passo === 8 && agenteSlugCriado && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <h2 style={{ color: "#e6edf3", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+                <h2 style={{ color: "#0b2210", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
                   Canal
                 </h2>
-                <p style={{ color: "#8b949e", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
+                <p style={{ color: "#5d7a67", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
                   {modoOperacao === "canal_whatsapp"
                     ? "Passo 1: regiÃ£o + criar instÃ¢ncia UAZAPI. Passo 2 (opcional agora): QR ou cÃ³digo para ligar o telefone."
                     : "Este agente estÃ¡ em modo copiloto interno (jobs por ciclo). NÃ£o hÃ¡ WhatsApp neste fluxo â€” pode concluir e gerir ciclos na Central ou na ficha do agente."}
@@ -3112,9 +3112,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   }}
                 >
                   <strong style={{ color: "#c9a24a" }}>Ciclos vinculados:</strong> associou ciclos existentes da Central a
-                  este agente. Confirme no painel UAZAPI que o <strong style={{ color: "#e6edf3" }}>webhook</strong> aponta
+                  este agente. Confirme no painel UAZAPI que o <strong style={{ color: "#0b2210" }}>webhook</strong> aponta
                   para <code style={{ fontSize: 11, color: "#93c5fd" }}>/api/whatsapp/webhook</code> e que a instÃ¢ncia
-                  abaixo fica <strong style={{ color: "#e6edf3" }}>connected</strong> â€” sÃ³ assim as mensagens disparam a
+                  abaixo fica <strong style={{ color: "#0b2210" }}>connected</strong> â€” sÃ³ assim as mensagens disparam a
                   IA neste modelo.
                 </div>
               ) : null}
@@ -3122,7 +3122,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               {modoOperacao === "canal_whatsapp" ? (
                 <>
                   {syncCanalLoading ? (
-                    <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 10px", lineHeight: 1.5 }}>
+                    <p style={{ color: "#5d7a67", fontSize: 12, margin: "0 0 10px", lineHeight: 1.5 }}>
                       A gravar modo WhatsApp e configuraÃ§Ã£o no agenteâ€¦
                     </p>
                   ) : null}
@@ -3151,8 +3151,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   />
                 </>
               ) : (
-                <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 16 }}>
-                  <p style={{ color: "#8b949e", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
+                <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 16 }}>
+                  <p style={{ color: "#5d7a67", fontSize: 13, margin: 0, lineHeight: 1.55 }}>
                     Para ativar WhatsApp mais tarde, abra a ficha do agente e altere o modo de operaÃ§Ã£o / ciclo ou use o
                     bloco UAZAPI na Ã¡rea de integraÃ§Ãµes.
                   </p>
@@ -3173,8 +3173,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   fontSize: 13,
                   fontWeight: 700,
                   background: "transparent",
-                  border: "1px solid #30363d",
-                  color: "#8b949e",
+                  border: "1px solid #dcebd8",
+                  color: "#5d7a67",
                   cursor: "pointer",
                 }}
               >

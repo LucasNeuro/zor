@@ -74,8 +74,8 @@ export function PlaybookUploadAnalisePanel({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {modoPreCriacao ? (
-        <p style={{ color: "#8b949e", fontSize: 12, margin: 0, lineHeight: 1.55 }}>
-          Carregue o playbook aqui, solicite uma <strong style={{ color: "#e6edf3" }}>nota de qualidade</strong> e so
+        <p style={{ color: "#5d7a67", fontSize: 12, margin: 0, lineHeight: 1.55 }}>
+          Carregue o playbook aqui, solicite uma <strong style={{ color: "#0b2210" }}>nota de qualidade</strong> e so
           entao avance. O arquivo sera publicado automaticamente apos criar o agente.
         </p>
       ) : null}
@@ -120,7 +120,7 @@ export function PlaybookUploadAnalisePanel({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <p style={{ color: "#e6edf3", fontSize: 13, margin: 0, fontWeight: 700 }}>
+          <p style={{ color: "#0b2210", fontSize: 13, margin: 0, fontWeight: 700 }}>
             {modoPreCriacao ? "Arraste o playbook aqui" : "Upload do playbook (.md ou .txt)"}
           </p>
           <span
@@ -132,7 +132,7 @@ export function PlaybookUploadAnalisePanel({
                   ? "#f85149"
                   : uploadStatus === "sucesso"
                     ? "#3fb950"
-                    : "#8b949e",
+                    : "#5d7a67",
             }}
           >
             {uploadStatus === "enviando"
@@ -144,10 +144,10 @@ export function PlaybookUploadAnalisePanel({
                   : "PRONTO"}
           </span>
         </div>
-        <p style={{ color: "#8b949e", fontSize: 12, margin: "8px 0 0", lineHeight: 1.55 }}>
+        <p style={{ color: "#5d7a67", fontSize: 12, margin: "8px 0 0", lineHeight: 1.55 }}>
           Arraste e solte o arquivo nesta Ã¡rea ou use o botÃ£o para selecionar. Tamanho mÃ¡ximo: 2 MB.
         </p>
-        <p style={{ color: "#8b949e", fontSize: 12, margin: "10px 0 0", lineHeight: 1.55 }}>
+        <p style={{ color: "#5d7a67", fontSize: 12, margin: "10px 0 0", lineHeight: 1.55 }}>
           Sem modelo?{" "}
           <a
             href={PLAYBOOK_EXEMPLO_MD_URL}
@@ -170,7 +170,7 @@ export function PlaybookUploadAnalisePanel({
             href={PLAYBOOK_EXEMPLO_LEGADO_MARI_MD_URL}
             download="exemplo-playbook-mari-obra10-plus.md"
             onClick={(e) => e.stopPropagation()}
-            style={{ color: "#8b949e", textDecoration: "none" }}
+            style={{ color: "#5d7a67", textDecoration: "none" }}
           >
             Exemplo Mari (legado)
           </a>
@@ -186,8 +186,8 @@ export function PlaybookUploadAnalisePanel({
             }}
             style={{
               borderRadius: 8,
-              border: "1px solid #30363d",
-              background: "#21262d",
+              border: "1px solid #dcebd8",
+              background: "#eef7eb",
               color: "#c9a24a",
               fontSize: 12,
               fontWeight: 700,
@@ -198,7 +198,7 @@ export function PlaybookUploadAnalisePanel({
           >
             Selecionar arquivo
           </button>
-          <span style={{ color: "#8b949e", fontSize: 12 }}>
+          <span style={{ color: "#5d7a67", fontSize: 12 }}>
             {arquivoNome ? `Arquivo: ${arquivoNome}` : "Nenhum arquivo selecionado."}
           </span>
         </div>
@@ -220,8 +220,8 @@ export function PlaybookUploadAnalisePanel({
                 width: "100%",
                 height: 8,
                 borderRadius: 999,
-                background: "#21262d",
-                border: "1px solid #30363d",
+                background: "#eef7eb",
+                border: "1px solid #dcebd8",
                 overflow: "hidden",
               }}
             >
@@ -234,7 +234,7 @@ export function PlaybookUploadAnalisePanel({
                 }}
               />
             </div>
-            <p style={{ color: "#8b949e", fontSize: 11, margin: "6px 0 0" }}>
+            <p style={{ color: "#5d7a67", fontSize: 11, margin: "6px 0 0" }}>
               {uploadMensagem || "A processar..."}
             </p>
           </div>
@@ -256,13 +256,13 @@ export function PlaybookUploadAnalisePanel({
       {conteudoPreview ? (
         <div
           style={{
-            background: "#0d1117",
-            border: "1px solid #30363d",
+            background: "#f8fcf6",
+            border: "1px solid #dcebd8",
             borderRadius: 10,
             padding: 12,
           }}
         >
-          <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>PRÃ‰-VISUALIZAÃ‡ÃƒO</p>
+          <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>PRÃ‰-VISUALIZAÃ‡ÃƒO</p>
           <pre
             style={{
               margin: 0,
@@ -301,7 +301,7 @@ export function PlaybookUploadAnalisePanel({
         >
           {analiseLoading ? "A analisar playbook..." : "Analisar playbook"}
         </button>
-        <p style={{ color: "#8b949e", fontSize: 11, margin: "8px 0 0", lineHeight: 1.5 }}>
+        <p style={{ color: "#5d7a67", fontSize: 11, margin: "8px 0 0", lineHeight: 1.5 }}>
           A IA lÃª o conteÃºdo, atribui uma nota de 0 a 10 e aponta pontos fortes, lacunas, riscos e sugestÃµes.
           {modoPreCriacao ? " Ã‰ necessÃ¡rio analisar antes de avanÃ§ar." : ""}
         </p>
@@ -352,8 +352,8 @@ export function PlaybookUploadAnalisePanel({
               style={{
                 height: 8,
                 borderRadius: 999,
-                background: "#21262d",
-                border: "1px solid #30363d",
+                background: "#eef7eb",
+                border: "1px solid #dcebd8",
                 overflow: "hidden",
               }}
             >
@@ -367,7 +367,7 @@ export function PlaybookUploadAnalisePanel({
                 }}
               />
             </div>
-            <p style={{ color: "#8b949e", fontSize: 11, margin: "8px 0 0", lineHeight: 1.45 }}>
+            <p style={{ color: "#5d7a67", fontSize: 11, margin: "8px 0 0", lineHeight: 1.45 }}>
               Lendo estrutura, fluxos e regras do playbook. Isso pode levar alguns segundos.
             </p>
           </div>
@@ -393,8 +393,8 @@ export function PlaybookUploadAnalisePanel({
       {analiseResultado ? (
         <div
           style={{
-            background: "#161b22",
-            border: "1px solid #30363d",
+            background: "#ffffff",
+            border: "1px solid #dcebd8",
             borderRadius: 12,
             padding: 16,
             display: "flex",
@@ -422,8 +422,8 @@ export function PlaybookUploadAnalisePanel({
                 </span>
               </div>
               <div>
-                <p style={{ margin: 0, color: "#8b949e", fontSize: 11, fontWeight: 700 }}>NOTA DO PLAYBOOK</p>
-                <p style={{ margin: "4px 0 0", color: "#e6edf3", fontSize: 13, lineHeight: 1.45 }}>
+                <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, fontWeight: 700 }}>NOTA DO PLAYBOOK</p>
+                <p style={{ margin: "4px 0 0", color: "#0b2210", fontSize: 13, lineHeight: 1.45 }}>
                   {analiseResultado.notaComentario || analiseResultado.resumo}
                 </p>
               </div>
@@ -431,7 +431,7 @@ export function PlaybookUploadAnalisePanel({
           ) : null}
 
           <div>
-            <p style={{ margin: 0, color: "#8b949e", fontSize: 11, fontWeight: 700 }}>
+            <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, fontWeight: 700 }}>
               RESUMO {analiseResultado.modelo ? `(${analiseResultado.modelo})` : ""}
             </p>
             <p style={{ margin: "6px 0 0", color: "#c9d1d9", fontSize: 12, lineHeight: 1.5 }}>

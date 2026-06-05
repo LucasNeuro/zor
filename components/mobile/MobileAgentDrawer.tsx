@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
@@ -78,9 +78,9 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
       }}>
       <div
         style={{
-          background: "#161b22",
+          background: "#ffffff",
           borderRadius: "20px 20px 0 0",
-          border: "1px solid #30363d",
+          border: "1px solid #dcebd8",
           borderBottom: "none",
           maxHeight: "88vh",
           display: "flex", flexDirection: "column",
@@ -89,7 +89,7 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
 
         {/* Drag handle */}
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: "#30363d" }} />
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: "#dcebd8" }} />
         </div>
 
         {/* Header com botão X */}
@@ -100,7 +100,7 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
               width: 72, height: 72, borderRadius: "50%", flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 22, fontWeight: 900, color: "white",
-              background: `radial-gradient(circle at 35% 35%, ${cor}55, #0d1117)`,
+              background: `radial-gradient(circle at 35% 35%, ${cor}55, #f8fcf6)`,
               border: `2.5px solid ${cor}`,
               boxShadow: `0 0 20px ${cor}55`,
             }}>
@@ -108,7 +108,7 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
             </div>
             <div>
               <p style={{ color: "white", fontWeight: 900, fontSize: 17, lineHeight: 1.2 }}>{agente.nome}</p>
-              <p style={{ color: "#8b949e", fontSize: 12, marginTop: 2 }}>{agente.cargo}</p>
+              <p style={{ color: "#5d7a67", fontSize: 12, marginTop: 2 }}>{agente.cargo}</p>
               <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                 <span style={{
                   background: `${cor}22`, border: `1px solid ${cor}55`,
@@ -117,7 +117,7 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
                   {nivelLabel(agente.nivel)}
                 </span>
                 <span style={{
-                  background: agente.ativo ? "#22863a22" : "#30363d",
+                  background: agente.ativo ? "#22863a22" : "#dcebd8",
                   border: `1px solid ${agente.ativo ? "#22863a" : "#484f58"}`,
                   color: agente.ativo ? "#3fb950" : "#484f58",
                   fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4,
@@ -128,8 +128,8 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
             </div>
           </div>
           <button onClick={onClose} style={{
-            background: "#21262d", border: "1px solid #30363d", borderRadius: 8,
-            color: "#8b949e", width: 32, height: 32, cursor: "pointer",
+            background: "#eef7eb", border: "1px solid #dcebd8", borderRadius: 8,
+            color: "#5d7a67", width: 32, height: 32, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 14, flexShrink: 0,
           }}>✕</button>
@@ -138,17 +138,17 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
         {/* Stats 3 colunas */}
         <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-          borderTop: "1px solid #30363d", borderBottom: "1px solid #30363d",
-          background: "#0d1117",
+          borderTop: "1px solid #dcebd8", borderBottom: "1px solid #dcebd8",
+          background: "#f8fcf6",
         }}>
           {[
-            { label: "Atendendo", valor: agente.stats.atendendo, cor: agente.stats.atendendo > 0 ? cor : "#8b949e" },
-            { label: "Hoje", valor: agente.stats.atendidos_hoje, cor: "#8b949e" },
-            { label: "Conversão", valor: `${agente.stats.conversao_pct}%`, cor: agente.stats.conversao_pct > 30 ? "#3fb950" : "#8b949e" },
+            { label: "Atendendo", valor: agente.stats.atendendo, cor: agente.stats.atendendo > 0 ? cor : "#5d7a67" },
+            { label: "Hoje", valor: agente.stats.atendidos_hoje, cor: "#5d7a67" },
+            { label: "Conversão", valor: `${agente.stats.conversao_pct}%`, cor: agente.stats.conversao_pct > 30 ? "#3fb950" : "#5d7a67" },
           ].map((s, i) => (
             <div key={s.label} style={{
               display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 0",
-              borderRight: i < 2 ? "1px solid #30363d" : "none",
+              borderRight: i < 2 ? "1px solid #dcebd8" : "none",
             }}>
               <p style={{ color: s.cor, fontWeight: 900, fontSize: 20, lineHeight: 1 }}>{s.valor}</p>
               <p style={{ color: "#484f58", fontSize: 10, marginTop: 2 }}>{s.label}</p>
@@ -176,13 +176,13 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
                       onClick={() => router.push(`/crm/leads/${c.id}`)}
                       style={{
                         display: "flex", alignItems: "center", gap: 10,
-                        background: "#21262d", border: "1px solid #30363d",
+                        background: "#eef7eb", border: "1px solid #dcebd8",
                         borderRadius: 10, padding: "8px 12px",
                         cursor: "pointer", textAlign: "left", width: "100%",
                       }}>
                       <div style={{
                         width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                        background: "#30363d", display: "flex", alignItems: "center",
+                        background: "#dcebd8", display: "flex", alignItems: "center",
                         justifyContent: "center", color: "white", fontWeight: 900, fontSize: 13,
                       }}>
                         {c.nome.charAt(0)}
@@ -210,8 +210,8 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {agente.conhecimento.slice(0, 12).map((c, i) => (
                   <span key={i} style={{
-                    background: "#21262d", border: "1px solid #30363d",
-                    color: "#8b949e", fontSize: 11, padding: "3px 8px", borderRadius: 6,
+                    background: "#eef7eb", border: "1px solid #dcebd8",
+                    color: "#5d7a67", fontSize: 11, padding: "3px 8px", borderRadius: 6,
                   }}>
                     {c.titulo}
                   </span>
@@ -226,8 +226,8 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
               MODELO IA
             </p>
             <span style={{
-              background: "#21262d", border: "1px solid #30363d",
-              color: "#8b949e", fontSize: 11, padding: "3px 8px", borderRadius: 6,
+              background: "#eef7eb", border: "1px solid #dcebd8",
+              color: "#5d7a67", fontSize: 11, padding: "3px 8px", borderRadius: 6,
             }}>
               {agente.modelo_padrao}
             </span>
@@ -237,7 +237,7 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
         {/* Botões de ação */}
         <div style={{
           display: "flex", gap: 10, padding: "12px 16px",
-          borderTop: "1px solid #30363d",
+          borderTop: "1px solid #dcebd8",
         }}>
           <button
             onClick={() => router.push(`/crm/leads?agente=${agente.agente_slug}`)}
@@ -252,8 +252,8 @@ export default function MobileAgentDrawer({ agente, onClose }: Props) {
             onClick={() => router.push(`/crm/agentes/${agente.agente_slug}`)}
             style={{
               flex: 1, padding: "10px 0", borderRadius: 10, cursor: "pointer",
-              background: "#21262d", border: "1px solid #30363d",
-              color: "#8b949e", fontWeight: 700, fontSize: 13,
+              background: "#eef7eb", border: "1px solid #dcebd8",
+              color: "#5d7a67", fontWeight: 700, fontSize: 13,
             }}>
             Editar agente
           </button>

@@ -5,7 +5,8 @@ import { Eye, EyeOff, Zap } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
-import { TiviaBrand } from "@/components/brand/TiviaBrand";
+import { WajeBrand } from "@/components/brand/WajeBrand";
+import { WajeWordmark } from "@/components/brand/WajeWordmark";
 import { getSafeReturnPath } from "@/lib/auth/safe-return-path";
 
 function messageForAuthRequestFailure(err: unknown): string {
@@ -135,7 +136,7 @@ function LoginForm() {
         <aside className="h-[100dvh] w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[460px] md:min-w-[420px]">
           <div className="mx-auto w-full max-w-[430px] p-6 text-[#1c2a1c] md:p-8">
             <div className="mb-8 flex items-center justify-between">
-              <TiviaBrand layout="horizontal" />
+              <WajeBrand layout="horizontal" tone="brand" />
               <Link href="/" className="text-xs font-medium text-[#3f5b44] hover:text-[#1f3a24]">
                 Voltar
               </Link>
@@ -247,7 +248,9 @@ function LoginForm() {
               </svg>
             </span>
             <div>
-              <p className="text-xs font-bold text-[#0b1f10]">TIVIA</p>
+              <p className="text-xs font-bold">
+                <WajeWordmark size="sm" tone="brand" />
+              </p>
               <p className="text-[11px] text-[#527055]">Atendimento com IA</p>
             </div>
           </div>

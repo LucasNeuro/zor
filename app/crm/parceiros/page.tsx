@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
@@ -172,7 +172,7 @@ export default function ParceirosPage() {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        background: "#0d1117",
+        background: "#f8fcf6",
         minHeight: 0,
       }}
     >
@@ -260,7 +260,7 @@ export default function ParceirosPage() {
             <button
               type="button"
               onClick={() => setSelecionados(new Set())}
-              className="text-xs font-semibold text-[#8b949e] hover:text-white"
+              className="text-xs font-semibold text-[#5d7a67] hover:text-white"
             >
               Limpar seleção
             </button>
@@ -268,7 +268,7 @@ export default function ParceirosPage() {
         )}
 
         {semDados && parceirosQuery.isPending && (
-          <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando…</p>
+          <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando…</p>
         )}
         {!semDados && filtrados.length === 0 && (
           <EmptyState message={emptyMessages[aba]} />

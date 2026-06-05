@@ -11,7 +11,7 @@ function shouldRedirectToLogin(): boolean {
   const p = window.location.pathname;
   if (p === "/login" || p.startsWith("/login/")) return false;
   if (p.startsWith("/parceiro/")) return false;
-  return p.startsWith("/crm") || p.startsWith("/office");
+  return p.startsWith("/crm");
 }
 
 function isRefreshOrSessionFailure(err: unknown): boolean {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -19,15 +19,15 @@ const INPUT: React.CSSProperties = {
   width: "100%",
   padding: "12px 14px",
   borderRadius: 10,
-  border: "1px solid #30363d",
-  background: "#161b22",
-  color: "#e6edf3",
+  border: "1px solid #dcebd8",
+  background: "#ffffff",
+  color: "#0b2210",
   fontSize: 14,
   boxSizing: "border-box",
 };
 
 const LABEL: React.CSSProperties = {
-  color: "#8b949e",
+  color: "#5d7a67",
   fontSize: 12,
   fontWeight: 600,
   display: "block",
@@ -37,7 +37,7 @@ const LABEL: React.CSSProperties = {
 const SECTION: React.CSSProperties = {
   marginTop: 4,
   paddingTop: 14,
-  borderTop: "1px solid #21262d",
+  borderTop: "1px solid #eef7eb",
 };
 
 type FormState = {
@@ -207,8 +207,8 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
           maxHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
-          background: "#0d1117",
-          borderLeft: "1px solid #30363d",
+          background: "#f8fcf6",
+          borderLeft: "1px solid #dcebd8",
           boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
         }}
       >
@@ -218,11 +218,11 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
             justifyContent: "space-between",
             alignItems: "center",
             padding: "16px 20px",
-            borderBottom: "1px solid #30363d",
+            borderBottom: "1px solid #dcebd8",
             flexShrink: 0,
           }}
         >
-          <h2 id="empresa-form-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#e6edf3" }}>
+          <h2 id="empresa-form-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0b2210" }}>
             Nova empresa
           </h2>
           <button
@@ -232,7 +232,7 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
             style={{
               background: "transparent",
               border: "none",
-              color: "#8b949e",
+              color: "#5d7a67",
               fontSize: 22,
               cursor: "pointer",
             }}
@@ -337,7 +337,7 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
           </div>
 
           <div style={SECTION}>
-            <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#e6edf3" }}>Endereço</p>
+            <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#0b2210" }}>Endereço</p>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <div style={{ flex: 1 }}>
                 <label style={LABEL}>CEP</label>
@@ -357,8 +357,8 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
                   alignSelf: "flex-end",
                   padding: "12px 14px",
                   borderRadius: 10,
-                  border: "1px solid #30363d",
-                  background: "#161b22",
+                  border: "1px solid #dcebd8",
+                  background: "#ffffff",
                   color: "#c9a24a",
                   fontSize: 12,
                   fontWeight: 700,
@@ -407,7 +407,7 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
         <div
           style={{
             padding: "16px 20px",
-            borderTop: "1px solid #30363d",
+            borderTop: "1px solid #dcebd8",
             flexShrink: 0,
             display: "flex",
             gap: 10,
@@ -421,9 +421,9 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
               flex: 1,
               padding: "12px",
               borderRadius: 10,
-              border: "1px solid #30363d",
+              border: "1px solid #dcebd8",
               background: "transparent",
-              color: "#8b949e",
+              color: "#5d7a67",
               fontSize: 13,
               fontWeight: 600,
               cursor: loading ? "not-allowed" : "pointer",
@@ -440,8 +440,8 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
               padding: "12px",
               borderRadius: 10,
               border: "none",
-              background: !podeSalvar ? "#30363d" : "#003b26",
-              color: !podeSalvar ? "#8b949e" : "#c9a24a",
+              background: !podeSalvar ? "#dcebd8" : "#003b26",
+              color: !podeSalvar ? "#5d7a67" : "#c9a24a",
               fontSize: 13,
               fontWeight: 800,
               cursor: !podeSalvar ? "not-allowed" : "pointer",

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
 import type { Node } from "@xyflow/react";
@@ -309,7 +309,7 @@ const iconWrapStyle: CSSProperties = {
   height: 24,
   borderRadius: 999,
   background: "#161c28",
-  border: "1px solid #2b3544",
+  border: "1px solid #dcebd8",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -319,7 +319,7 @@ const iconWrapStyle: CSSProperties = {
 const headerLabelStyle: CSSProperties = {
   margin: 0,
   fontSize: 12,
-  color: "#e6edf3",
+  color: "#0b2210",
   fontWeight: 700,
   lineHeight: 1.2,
 };
@@ -351,7 +351,7 @@ const closeButtonStyle: CSSProperties = {
   width: 26,
   height: 26,
   borderRadius: 7,
-  border: "1px solid #2b3544",
+  border: "1px solid #dcebd8",
   background: "#161c28",
   color: "#94a3b8",
   cursor: "pointer",

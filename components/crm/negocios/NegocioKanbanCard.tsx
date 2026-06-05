@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties, MouseEvent } from "react";
 import { Pencil } from "lucide-react";
@@ -14,7 +14,7 @@ const STATUS_COLOR: Record<string, string> = {
   em_negociacao: "#f59e0b",
   fechado_ganho: "#22c55e",
   fechado_perdido: "#ef4444",
-  cancelado: "#8b949e",
+  cancelado: "#5d7a67",
 };
 
 export type NegocioKanbanCardData = {
@@ -89,7 +89,7 @@ export function NegocioKanbanCard({
 }: Props) {
   const accent = mercadoAccent(negocio.prefixo_mercado);
   const Icon = mercadoIcon(negocio.prefixo_mercado);
-  const statusColor = STATUS_COLOR[negocio.status] || "#8b949e";
+  const statusColor = STATUS_COLOR[negocio.status] || "#5d7a67";
 
   function stop(e: MouseEvent) {
     e.stopPropagation();
@@ -158,7 +158,7 @@ export function NegocioKanbanCard({
         <div style={{ marginBottom: 6 }}>
           <strong
             style={{
-              color: "#e6edf3",
+              color: "#0b2210",
               fontSize: 13,
               letterSpacing: "-0.02em",
               display: "block",
@@ -167,7 +167,7 @@ export function NegocioKanbanCard({
           >
             {negocio.titulo}
           </strong>
-          <span style={{ color: "#8b949e", fontSize: 11, fontWeight: 600 }}>
+          <span style={{ color: "#5d7a67", fontSize: 11, fontWeight: 600 }}>
             {labelMercadoPrefixo(negocio.prefixo_mercado)}
           </span>
         </div>

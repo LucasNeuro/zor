@@ -14,7 +14,7 @@ export default function LeadLegadoRedirectPage() {
   }, [id, router]);
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#0d1117] text-sm text-[#8b949e]">
+    <div className="flex min-h-full items-center justify-center bg-[#f8fcf6] text-sm text-[#5d7a67]">
       A redirecionar para Leads…
     </div>
   );

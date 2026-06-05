@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 
@@ -20,13 +20,13 @@ type Props<T> = {
 const TH: React.CSSProperties = {
   textAlign: "left",
   padding: "10px 12px",
-  color: "#8b949e",
+  color: "#5d7a67",
   fontSize: 11,
   fontWeight: 600,
   textTransform: "uppercase",
   whiteSpace: "nowrap",
-  borderBottom: "1px solid #30363d",
-  background: "#161b22",
+  borderBottom: "1px solid #dcebd8",
+  background: "#ffffff",
   position: "sticky",
   top: 0,
   zIndex: 2,
@@ -35,7 +35,7 @@ const TH: React.CSSProperties = {
 const TD: React.CSSProperties = {
   padding: "10px 12px",
   fontSize: 13,
-  color: "#e6edf3",
+  color: "#0b2210",
   whiteSpace: "nowrap",
   verticalAlign: "middle",
 };
@@ -43,7 +43,7 @@ const TD: React.CSSProperties = {
 export function CadastroScrollTable<T>({ columns, rows, rowKey, actions, emptyMessage }: Props<T>) {
   if (rows.length === 0 && emptyMessage) {
     return (
-      <p style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: "32px 16px" }}>
+      <p style={{ color: "#5d7a67", fontSize: 13, textAlign: "center", padding: "32px 16px" }}>
         {emptyMessage}
       </p>
     );
@@ -56,9 +56,9 @@ export function CadastroScrollTable<T>({ columns, rows, rowKey, actions, emptyMe
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        border: "1px solid #30363d",
+        border: "1px solid #dcebd8",
         borderRadius: 12,
-        background: "#0d1117",
+        background: "#f8fcf6",
         overflow: "hidden",
       }}
     >
@@ -87,7 +87,7 @@ export function CadastroScrollTable<T>({ columns, rows, rowKey, actions, emptyMe
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={rowKey(row)} style={{ borderTop: "1px solid #21262d" }}>
+              <tr key={rowKey(row)} style={{ borderTop: "1px solid #eef7eb" }}>
                 {columns.map((c) => (
                   <td key={c.id} style={TD}>
                     {c.render(row)}

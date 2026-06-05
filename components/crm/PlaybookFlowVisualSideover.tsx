@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties, ReactNode } from "react";
 import { Component, useEffect, useMemo, useState } from "react";
@@ -153,7 +153,7 @@ const hintStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
-  color: "#8b949e",
+  color: "#5d7a67",
   fontSize: 11,
   lineHeight: 1.45,
 };

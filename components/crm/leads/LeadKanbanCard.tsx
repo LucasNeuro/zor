@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties, MouseEvent } from "react";
 import { MessageCircle, Pencil } from "lucide-react";
@@ -238,7 +238,7 @@ export function LeadKanbanCard({
         <div style={{ marginBottom: 6 }}>
           <strong
             style={{
-              color: "#e6edf3",
+              color: "#0b2210",
               fontSize: 13,
               letterSpacing: "-0.02em",
               display: "-webkit-box",
@@ -254,7 +254,7 @@ export function LeadKanbanCard({
             style={{
               display: "block",
               marginTop: 2,
-              color: "#8b949e",
+              color: "#5d7a67",
               fontSize: 11,
               fontWeight: 600,
               whiteSpace: "nowrap",

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -15,6 +15,6 @@ export default function EmpresasRedirectPage() {
   }, [router, searchParams]);
 
   return (
-    <p style={{ padding: 24, color: "#8b949e", fontSize: 13 }}>A redireccionar para Cadastro…</p>
+    <p style={{ padding: 24, color: "#5d7a67", fontSize: 13 }}>A redireccionar para Cadastro…</p>
   );
 }

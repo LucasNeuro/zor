@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 import Link from "next/link";
@@ -32,11 +32,11 @@ function statusLabel(status?: string | null): string {
 }
 
 function statusCores(status?: string | null, temInstancia?: boolean): { bg: string; fg: string; border: string } {
-  if (!temInstancia) return { bg: "#30363d", fg: "#8b949e", border: "#484f58" };
+  if (!temInstancia) return { bg: "#dcebd8", fg: "#5d7a67", border: "#484f58" };
   const s = (status || "").toLowerCase();
   if (s === "connected") return { bg: "#23863633", fg: "#3fb950", border: "#3fb95044" };
   if (s === "connecting") return { bg: "#bb800926", fg: "#e6c06a", border: "#bb800966" };
-  return { bg: "#30363d", fg: "#8b949e", border: "#484f58" };
+  return { bg: "#dcebd8", fg: "#5d7a67", border: "#484f58" };
 }
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
@@ -48,21 +48,21 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
         gap: 12,
         alignItems: "start",
         padding: "10px 0",
-        borderBottom: "1px solid #21262d",
+        borderBottom: "1px solid #eef7eb",
       }}
     >
       <span
         style={{
           fontSize: 11,
           fontWeight: 700,
-          color: "#8b949e",
+          color: "#5d7a67",
           letterSpacing: 0.4,
           textTransform: "uppercase",
         }}
       >
         {label}
       </span>
-      <span style={{ fontSize: 13, color: "#e6edf3", wordBreak: "break-word" }}>{value}</span>
+      <span style={{ fontSize: 13, color: "#0b2210", wordBreak: "break-word" }}>{value}</span>
     </div>
   );
 }
@@ -146,8 +146,8 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
               <p style={{ margin: 0, color: "#8ea1ba", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
                 CANAL WHATSAPP
               </p>
-              <h2 style={{ margin: "4px 0 0", color: "#e6edf3", fontSize: 18, fontWeight: 800 }}>{agente.nome}</h2>
-              <p style={{ margin: "6px 0 0", color: "#8b949e", fontSize: 12 }}>
+              <h2 style={{ margin: "4px 0 0", color: "#0b2210", fontSize: 18, fontWeight: 800 }}>{agente.nome}</h2>
+              <p style={{ margin: "6px 0 0", color: "#5d7a67", fontSize: 12 }}>
                 <code style={{ color: "#93c5fd", fontSize: 11 }}>{agente.agente_slug}</code>
                 {" · "}
                 {modoLabel}
@@ -162,9 +162,9 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
                 width: 36,
                 height: 36,
                 borderRadius: 8,
-                border: "1px solid #30363d",
-                background: "#21262d",
-                color: "#8b949e",
+                border: "1px solid #dcebd8",
+                background: "#eef7eb",
+                color: "#5d7a67",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -198,15 +198,15 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
           <div
             style={{
               borderRadius: 12,
-              border: "1px solid #30363d",
-              background: "#161b22",
+              border: "1px solid #dcebd8",
+              background: "#ffffff",
               padding: 16,
               marginBottom: 16,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
               <MessageCircle size={20} style={{ color: "#25d366" }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#e6edf3" }}>Estado da conexão</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#0b2210" }}>Estado da conexão</span>
             </div>
 
             <div
@@ -225,7 +225,7 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
               <span style={{ fontSize: 11, fontWeight: 800, color: badge.fg, letterSpacing: 0.5 }}>{rotuloEstado}</span>
             </div>
 
-            <p style={{ margin: "0 0 8px", color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 8px", color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
               Só leitura do estado. Cadastro da instância e QR de ligação ficam na ficha do agente (passos 1 e 2).
             </p>
             {snapshotFmt ? (
@@ -240,8 +240,8 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
           <div
             style={{
               borderRadius: 12,
-              border: "1px solid #30363d",
-              background: "#0d1117",
+              border: "1px solid #dcebd8",
+              background: "#f8fcf6",
               padding: "4px 16px 12px",
               marginBottom: 16,
             }}
@@ -299,7 +299,7 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
               width: "100%",
               marginTop: 8,
               fontSize: 11,
-              color: "#8b949e",
+              color: "#5d7a67",
               textDecoration: "none",
               padding: "4px 0",
             }}

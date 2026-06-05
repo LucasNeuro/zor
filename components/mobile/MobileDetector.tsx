@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
@@ -9,7 +9,7 @@ interface Props { children: React.ReactNode; }
 
 function mobileFallback(children: React.ReactNode) {
   return (
-    <div className="min-h-[100dvh]" style={{ background: "#0d1117" }}>
+    <div className="min-h-[100dvh]" style={{ background: "#f8fcf6" }}>
       {children}
     </div>
   );

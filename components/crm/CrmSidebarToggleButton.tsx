@@ -25,7 +25,7 @@ export function CrmSidebarToggleButton({
     <button
       type="button"
       onClick={toggleSidebar}
-      className={`${visibility} h-8 w-8 flex-shrink-0 touch-manipulation items-center justify-center rounded-full border border-[#2b3544] bg-[#1a2332] text-[#8b949e] shadow-none transition-all duration-200 hover:border-[#c9a24a]/60 hover:text-[#e6edf3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a24a]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${className}`.trim()}
+      className={`${visibility} h-8 w-8 flex-shrink-0 touch-manipulation items-center justify-center rounded-full border border-[#d4e0d7] bg-[#ffffff] text-[#4f665b] shadow-none transition-all duration-200 hover:border-[#c9a24a]/70 hover:text-[#12382b] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a24a]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${className}`.trim()}
       title={sidebarExpanded ? "Recolher menu" : "Expandir menu"}
       aria-expanded={sidebarExpanded}
       aria-label={sidebarExpanded ? "Recolher menu lateral" : "Expandir menu lateral"}

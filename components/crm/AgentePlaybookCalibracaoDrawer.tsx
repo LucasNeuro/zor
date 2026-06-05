@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -121,7 +121,7 @@ export function AgentePlaybookCalibracaoDrawer({
         ? "#f8514912"
         : uploadStatus === "sucesso"
           ? "#23863618"
-          : "#0d1117";
+          : "#f8fcf6";
 
   const carregarConteudo = useCallback(async () => {
     if (!agenteSlug) return;
@@ -530,8 +530,8 @@ export function AgentePlaybookCalibracaoDrawer({
           height: "100vh",
           width: "min(100vw, 1180px)",
           maxWidth: "100%",
-          background: "#0d1117",
-          borderLeft: "1px solid #30363d",
+          background: "#f8fcf6",
+          borderLeft: "1px solid #dcebd8",
           boxShadow: open ? "-12px 0 40px rgba(0,0,0,0.45)" : "none",
           transform: open ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
@@ -544,19 +544,19 @@ export function AgentePlaybookCalibracaoDrawer({
           style={{
             flexShrink: 0,
             padding: "14px 16px",
-            borderBottom: "1px solid #30363d",
+            borderBottom: "1px solid #dcebd8",
             display: "flex",
             flexDirection: "column",
             gap: 10,
-            background: "linear-gradient(180deg, #161b22 0%, #0d1117 100%)",
+            background: "linear-gradient(180deg, #ffffff 0%, #f8fcf6 100%)",
           }}
         >
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <h2 style={{ color: "#e6edf3", fontSize: 15, fontWeight: 700, margin: 0 }}>
+              <h2 style={{ color: "#0b2210", fontSize: 15, fontWeight: 700, margin: 0 }}>
                 Playbook — Calibração
               </h2>
-              <p style={{ color: "#8b949e", fontSize: 12, fontWeight: 600, margin: "4px 0 0" }}>
+              <p style={{ color: "#5d7a67", fontSize: 12, fontWeight: 600, margin: "4px 0 0" }}>
                 {agenteNome}
               </p>
               {meta.generatedAt ? (
@@ -582,8 +582,8 @@ export function AgentePlaybookCalibracaoDrawer({
                 width: 40,
                 height: 40,
                 borderRadius: 10,
-                border: "1px solid #30363d",
-                background: "#21262d",
+                border: "1px solid #dcebd8",
+                background: "#eef7eb",
                 color: "#c9d1d9",
                 cursor: "pointer",
                 display: "flex",
@@ -641,8 +641,8 @@ export function AgentePlaybookCalibracaoDrawer({
                 style={{
                   ...btnToolbar,
                   background:
-                    flowStatus.kind === "ready" ? "#21262d" : "rgba(35, 134, 54, 0.18)",
-                  color: flowStatus.kind === "ready" ? "#8b949e" : "#3fb950",
+                    flowStatus.kind === "ready" ? "#eef7eb" : "rgba(35, 134, 54, 0.18)",
+                  color: flowStatus.kind === "ready" ? "#5d7a67" : "#3fb950",
                 }}
                 title="Mantém o texto actual e acrescenta o bloco json obra10_playbook_flow (template v1) para o WhatsApp"
               >
@@ -702,7 +702,7 @@ export function AgentePlaybookCalibracaoDrawer({
         <div style={{ flexShrink: 0, margin: "10px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
           <PlaybookFlowStatusBanner status={flowStatus} published={!dirty && flowStatusPublicado.kind === "ready"} />
           {dirty && flowStatusPublicado.kind === "ready" ? (
-            <p style={{ margin: 0, color: "#8b949e", fontSize: 10, lineHeight: 1.45 }}>
+            <p style={{ margin: 0, color: "#5d7a67", fontSize: 10, lineHeight: 1.45 }}>
               Versão publicada ainda válida para motor dinâmico. Publique o rascunho para substituir no bucket (
               <code style={{ fontSize: 10 }}>tenant/slug/playbook.md</code>, arquivo único).
             </p>
@@ -726,7 +726,7 @@ export function AgentePlaybookCalibracaoDrawer({
               flexDirection: "column",
               minWidth: 0,
               minHeight: 0,
-              borderRight: "1px solid #30363d",
+              borderRight: "1px solid #dcebd8",
               overflow: "hidden",
             }}
           >
@@ -750,14 +750,14 @@ export function AgentePlaybookCalibracaoDrawer({
                     minHeight: 220,
                     maxHeight: 420,
                     borderRadius: 10,
-                    border: "1px solid #30363d",
-                    background: "#0d1117",
+                    border: "1px solid #dcebd8",
+                    background: "#f8fcf6",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 10,
-                    color: "#8b949e",
+                    color: "#5d7a67",
                   }}
                 >
                   <RefreshCw size={18} className="animate-spin" />
@@ -779,9 +779,9 @@ export function AgentePlaybookCalibracaoDrawer({
                     maxHeight: 420,
                     resize: "none",
                     borderRadius: 10,
-                    border: "1px solid #30363d",
-                    background: "#0d1117",
-                    color: "#e6edf3",
+                    border: "1px solid #dcebd8",
+                    background: "#f8fcf6",
+                    color: "#0b2210",
                     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                     fontSize: 12,
                     lineHeight: 1.5,
@@ -833,10 +833,10 @@ export function AgentePlaybookCalibracaoDrawer({
               style={{
                 flexShrink: 0,
                 padding: "10px 14px",
-                borderBottom: "1px solid #30363d",
+                borderBottom: "1px solid #dcebd8",
               }}
             >
-              <p style={{ margin: 0, color: "#e6edf3", fontSize: 13, fontWeight: 700 }}>
+              <p style={{ margin: 0, color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
                 Chat de calibração
               </p>
               <p style={{ margin: "4px 0 0", color: "#6e7681", fontSize: 10, lineHeight: 1.45 }}>
@@ -855,7 +855,7 @@ export function AgentePlaybookCalibracaoDrawer({
               }}
             >
               {chatMsgs.length === 0 && !chatEnviando ? (
-                <p style={{ color: "#8b949e", fontSize: 12, lineHeight: 1.55, maxWidth: 420 }}>
+                <p style={{ color: "#5d7a67", fontSize: 12, lineHeight: 1.55, maxWidth: 420 }}>
                   Exemplos: «Resume os gaps críticos», «Reescreve a saudação mais curta», «O que falta para cobrir
                   objeções de preço?»
                 </p>
@@ -878,12 +878,12 @@ export function AgentePlaybookCalibracaoDrawer({
                       <div
                         style={{
                           maxWidth: "92%",
-                          background: isUser ? "#1c2a3a" : "#161b22",
-                          border: `1px solid ${isUser ? "#388bfd44" : "#30363d"}`,
+                          background: isUser ? "#1c2a3a" : "#ffffff",
+                          border: `1px solid ${isUser ? "#388bfd44" : "#dcebd8"}`,
                           borderRadius: 10,
                           padding: "10px 12px",
                           fontSize: 12,
-                          color: "#e6edf3",
+                          color: "#0b2210",
                           lineHeight: 1.55,
                           whiteSpace: "pre-wrap",
                         }}
@@ -900,7 +900,7 @@ export function AgentePlaybookCalibracaoDrawer({
                   );
                 })}
                 {chatEnviando ? (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#8b949e", fontSize: 12 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#5d7a67", fontSize: 12 }}>
                     <Bot size={18} color="#86efac" /> A pensar…
                   </div>
                 ) : null}
@@ -912,7 +912,7 @@ export function AgentePlaybookCalibracaoDrawer({
               style={{
                 flexShrink: 0,
                 padding: 12,
-                borderTop: "1px solid #30363d",
+                borderTop: "1px solid #dcebd8",
                 display: "flex",
                 gap: 8,
               }}
@@ -937,9 +937,9 @@ export function AgentePlaybookCalibracaoDrawer({
                   flex: 1,
                   resize: "none",
                   borderRadius: 10,
-                  border: "1px solid #30363d",
-                  background: "#161b22",
-                  color: "#e6edf3",
+                  border: "1px solid #dcebd8",
+                  background: "#ffffff",
+                  color: "#0b2210",
                   fontSize: 12,
                   padding: "10px 12px",
                 }}
@@ -1001,7 +1001,7 @@ const btnToolbar: CSSProperties = {
   padding: "8px 12px",
   borderRadius: 0,
   border: "none",
-  background: "#21262d",
+  background: "#eef7eb",
   color: "#c9d1d9",
   fontSize: 11,
   fontWeight: 700,

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
@@ -60,9 +60,9 @@ const STATUS_LABEL: Record<string, string> = {
   fechamento: "Fechamento", ganho: "Ganho", perdido: "Perdido",
 };
 
-/** MANIFEST: verde #003b26, dourado #c9a24a, fundo #0d1117 */
+/** MANIFEST: verde #003b26, dourado #c9a24a, fundo #f8fcf6 */
 const C = {
-  bg: "bg-[#0d1117]",
+  bg: "bg-[#f8fcf6]",
   bgAlt: "bg-[#0a0e14]",
   border: "border-white/[0.08]",
   gold: "text-[#c9a24a]",
@@ -382,7 +382,7 @@ function AtendimentoContent() {
     <div className={`flex flex-1 min-h-0 flex-col overflow-hidden ${C.bg}`}>
       {isMobile && !leadSel && (
         <div className={`shrink-0 border-b ${C.border} px-3 py-3`}>
-          <h1 className="text-base font-bold text-[#e6edf3]">Atendimento</h1>
+          <h1 className="text-base font-bold text-[#0b2210]">Atendimento</h1>
           <p className="text-xs text-zinc-500">{leads.length} conversas</p>
         </div>
       )}
@@ -662,7 +662,7 @@ function AtendimentoContent() {
                   <p style={{ margin: 0, color: "#c9a24a", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
                     ATENDIMENTO
                   </p>
-                  <h3 style={{ margin: "3px 0 0", color: "#e6edf3", fontSize: 18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <h3 style={{ margin: "3px 0 0", color: "#0b2210", fontSize: 18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     Informações do lead
                   </h3>
                 </div>

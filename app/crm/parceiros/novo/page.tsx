@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -18,8 +18,8 @@ export default function NovoParceiroRedirect() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#0d1117",
-        color: "#8b949e",
+        background: "#f8fcf6",
+        color: "#5d7a67",
         fontSize: 14,
       }}
     >

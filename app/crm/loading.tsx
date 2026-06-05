@@ -1,31 +1,41 @@
-/** Skeleton leve só no segmento CRM — não bloqueia o ecrã inteiro como `app/loading.tsx`. */
+import { CRM_LOADING_SHELL, CRM_SURFACE_CARD } from "@/lib/crm-shell-theme";
+
+/** Skeleton leve no segmento CRM — tema claro TIVIA (sem fundo escuro legado). */
 export default function CrmLoading() {
+  const { background, skeleton, skeletonStrong, rowBorder } = CRM_LOADING_SHELL;
+
   return (
     <div
-      className="flex flex-1 flex-col gap-3 p-4"
-      style={{ background: "#0d1117", minHeight: 120 }}
+      className="flex flex-1 flex-col gap-4 p-4 sm:p-6"
+      style={{ background, minHeight: 120 }}
       aria-busy="true"
       aria-label="A carregar"
     >
-      <div
-        className="h-10 w-full max-w-md animate-pulse rounded-lg"
-        style={{ background: "#21262d" }}
-      />
-      <div className="flex gap-2">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="h-9 flex-1 max-w-[140px] animate-pulse rounded-lg"
-            style={{ background: "#21262d" }}
-          />
-        ))}
-      </div>
-      <div className="mt-2 flex flex-col gap-2">
+      <div className="flex gap-3">
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className="h-16 animate-pulse rounded-xl"
-            style={{ background: "#161b22", border: "1px solid #21262d" }}
+            className="h-20 flex-1 max-w-[180px] animate-pulse rounded-xl"
+            style={{ background: CRM_SURFACE_CARD, border: `1px solid ${rowBorder}` }}
+          />
+        ))}
+      </div>
+
+      <div
+        className="h-10 w-full max-w-lg animate-pulse rounded-xl"
+        style={{ background: skeleton, border: `1px solid ${rowBorder}` }}
+      />
+
+      <div className="flex flex-col gap-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div
+            key={i}
+            className="h-14 animate-pulse rounded-xl"
+            style={{
+              background: i % 2 === 0 ? skeleton : skeletonStrong,
+              border: `1px solid ${rowBorder}`,
+              opacity: 1 - i * 0.06,
+            }}
           />
         ))}
       </div>

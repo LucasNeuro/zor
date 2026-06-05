@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 import { X, type LucideIcon } from "lucide-react";
@@ -86,7 +86,7 @@ export function CadastroPremiumSideover({
                 <p style={{ margin: 0, color: "#8ea1ba", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
                   {kindLabel}
                 </p>
-                <h3 style={{ margin: "3px 0 0", color: "#e6edf3", fontSize: 17, wordBreak: "break-word" }}>
+                <h3 style={{ margin: "3px 0 0", color: "#0b2210", fontSize: 17, wordBreak: "break-word" }}>
                   {title}
                 </h3>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -132,7 +132,7 @@ export function CadastroPremiumSideover({
               gap: 10,
               justifyContent: "flex-end",
               flexWrap: "wrap",
-              background: "#0d1117",
+              background: "#f8fcf6",
             }}
           >
             {footer}

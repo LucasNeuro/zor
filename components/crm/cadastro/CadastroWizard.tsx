@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Building2, User, X } from "lucide-react";
@@ -31,9 +31,9 @@ import {
 } from "@/lib/crm/verificar-documento-disponivel";
 
 const OB = {
-  borda: "var(--obra-borda, #30363d)",
-  texto: "var(--obra-texto, #e6edf3)",
-  texto2: "var(--obra-texto-2, #8b949e)",
+  borda: "var(--obra-borda, #dcebd8)",
+  texto: "var(--obra-texto, #0b2210)",
+  texto2: "var(--obra-texto-2, #5d7a67)",
   dourado: "var(--obra-dourado, #c9a24a)",
   panel: "#0f1620",
   surface: "#141d29",
@@ -44,7 +44,7 @@ const INPUT: React.CSSProperties = {
   padding: "11px 13px",
   borderRadius: 10,
   border: `1px solid ${OB.borda}`,
-  background: "#161b22",
+  background: "#ffffff",
   color: OB.texto,
   fontSize: 14,
   boxSizing: "border-box",
@@ -555,7 +555,7 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                         padding: "14px 16px",
                         borderRadius: 10,
                         border: `2px solid ${ativo ? OB.dourado : OB.borda}`,
-                        background: ativo ? "rgba(201, 162, 74, 0.12)" : "#161b22",
+                        background: ativo ? "rgba(201, 162, 74, 0.12)" : "#ffffff",
                         color: OB.texto,
                         fontWeight: 700,
                         fontSize: 13,
@@ -854,7 +854,7 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                         padding: "0 14px",
                         borderRadius: 10,
                         border: `1px solid ${OB.borda}`,
-                        background: "#21262d",
+                        background: "#eef7eb",
                         color: OB.texto,
                         cursor: "pointer",
                         fontSize: 12,
@@ -954,7 +954,7 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
             gap: 10,
             justifyContent: "flex-end",
             flexShrink: 0,
-            background: "#0d1117",
+            background: "#f8fcf6",
           }}
         >
           <button

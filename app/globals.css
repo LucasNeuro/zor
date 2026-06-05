@@ -12,7 +12,7 @@ html, body {
     height: 100dvh;
     max-height: 100dvh;
     overflow: hidden;
-    background-color: #0d1117;
+    background-color: #f8fcf6;
   }
 }
 
@@ -43,11 +43,11 @@ html, body {
   --brand-muted: #7a786c;
   --brand-line: rgba(18, 56, 43, 0.12);
   --brand-shadow: 0 8px 32px rgba(0, 40, 26, 0.10);
-  /* Dark premium tokens */
-  --obra-dark: #0d1117;
-  --obra-dark-2: #161b22;
-  --obra-dark-3: #21262d;
-  --obra-dark-4: #30363d;
+  /* CRM light-shell tokens (mantidos como --obra-* por compatibilidade) */
+  --obra-dark: #f4f9f2;
+  --obra-dark-2: #edf5ea;
+  --obra-dark-3: #ffffff;
+  --obra-dark-4: #e2ebe4;
   --obra-verde: #003b26;
   --obra-verde-light: #005c3d;
   --obra-verde-glow: rgba(0, 59, 38, 0.3);
@@ -57,16 +57,23 @@ html, body {
   --obra-creme: #f7f4ec;
   --obra-vermelho: #b3261e;
   --obra-vermelho-light: #dc2626;
-  --obra-texto: #e6edf3;
-  --obra-texto-2: #8b949e;
-  --obra-texto-3: #484f58;
-  --obra-borda: #30363d;
-  --obra-borda-2: #21262d;
+  --obra-texto: #12382b;
+  --obra-texto-2: #5f7469;
+  --obra-texto-3: #6f8378;
+  --obra-borda: #d4e0d7;
+  --obra-borda-2: #e2ebe4;
   /* Barras de rolagem — alinhadas ao sideover / DecisionPanel (global) */
   --obra-scrollbar-size: 3px;
-  --obra-scrollbar-thumb: rgba(255, 255, 255, 0.22);
-  --obra-scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
+  --obra-scrollbar-thumb: rgba(18, 56, 43, 0.22);
+  --obra-scrollbar-thumb-hover: rgba(18, 56, 43, 0.36);
   --obra-scrollbar-track: transparent;
+  /* Radius global mais reto/clean para o retrofit TIVIA */
+  --tivia-radius-xs: 4px;
+  --tivia-radius-sm: 6px;
+  --tivia-radius-md: 8px;
+  --tivia-radius-lg: 10px;
+  --tivia-radius-xl: 12px;
+  --tivia-radius-2xl: 14px;
 }
 
 body {
@@ -74,6 +81,14 @@ body {
   color: var(--foreground);
   font-family: var(--font-poppins, system-ui, sans-serif);
 }
+
+/* Redução global de border-radius (mantendo exceções visuais) */
+.rounded-sm { border-radius: var(--tivia-radius-xs) !important; }
+.rounded { border-radius: var(--tivia-radius-sm) !important; }
+.rounded-md { border-radius: var(--tivia-radius-md) !important; }
+.rounded-lg { border-radius: var(--tivia-radius-lg) !important; }
+.rounded-xl { border-radius: var(--tivia-radius-xl) !important; }
+.rounded-2xl { border-radius: var(--tivia-radius-2xl) !important; }
 
 /* Landing TIVIA */
 .tivia-landing-bg {
@@ -501,8 +516,8 @@ body {
 
 .fft-panel {
   position: relative;
-  background: #161b22;
-  border: 1px solid #30363d;
+  background: #ffffff;
+  border: 1px solid #e4f0e1;
   border-radius: 12px;
 }
 
@@ -525,6 +540,6 @@ body {
 }
 
 .canvas-vignette {
-  background: radial-gradient(ellipse at center, transparent 40%, rgba(13,17,23,0.8) 100%);
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(248,252,246,0.85) 100%);
   pointer-events: none;
 }

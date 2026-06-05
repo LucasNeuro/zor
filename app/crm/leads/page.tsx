@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -470,18 +470,18 @@ export default function LeadsPage() {
       actions: (
         <>
           {botaoNovoLead}
-          <div className="inline-flex w-full rounded-lg bg-[#21262d] p-0.5 min-[480px]:w-auto">
+          <div className="inline-flex w-full rounded-lg bg-[#eef7eb] p-0.5 min-[480px]:w-auto">
             <button
               type="button"
               onClick={() => setView("kanban")}
-              className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "kanban" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"}`}
+              className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "kanban" ? "bg-[#dcebd8] text-white" : "text-[#5d7a67] hover:text-[#0b2210]"}`}
             >
               Kanban
             </button>
             <button
               type="button"
               onClick={() => setView("lista")}
-              className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "lista" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"}`}
+              className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "lista" ? "bg-[#dcebd8] text-white" : "text-[#5d7a67] hover:text-[#0b2210]"}`}
             >
               Lista
             </button>
@@ -490,12 +490,12 @@ export default function LeadsPage() {
             value={busca}
             onChange={e => setBusca(e.target.value)}
             placeholder="Buscar lead..."
-            className="w-full min-h-11 min-w-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-44"
+            className="w-full min-h-11 min-w-0 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-44"
           />
           <select
             value={filtroEstagio}
             onChange={e => setFiltroEstagio(e.target.value)}
-            className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
+            className="w-full min-h-11 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
           >
             <option value="">Todos os estágios</option>
             {estagiosKanban.map(e => (
@@ -507,7 +507,7 @@ export default function LeadsPage() {
           <button
             type="button"
             onClick={() => setPipelineConfigOpen(true)}
-            className="min-h-11 shrink-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-xs font-bold text-[#8b949e] hover:text-[#e6edf3] min-[480px]:min-h-10"
+            className="min-h-11 shrink-0 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-xs font-bold text-[#5d7a67] hover:text-[#0b2210] min-[480px]:min-h-10"
             title="Configurar pipeline"
           >
             Pipeline
@@ -521,18 +521,18 @@ export default function LeadsPage() {
   const headerControls = (
     <>
       {botaoNovoLead}
-      <div className="inline-flex w-full rounded-lg bg-[#21262d] p-0.5 min-[480px]:w-auto">
+      <div className="inline-flex w-full rounded-lg bg-[#eef7eb] p-0.5 min-[480px]:w-auto">
         <button
           type="button"
           onClick={() => setView("kanban")}
-          className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "kanban" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"}`}
+          className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "kanban" ? "bg-[#dcebd8] text-white" : "text-[#5d7a67] hover:text-[#0b2210]"}`}
         >
           Kanban
         </button>
         <button
           type="button"
           onClick={() => setView("lista")}
-          className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "lista" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-[#e6edf3]"}`}
+          className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "lista" ? "bg-[#dcebd8] text-white" : "text-[#5d7a67] hover:text-[#0b2210]"}`}
         >
           Lista
         </button>
@@ -541,12 +541,12 @@ export default function LeadsPage() {
         value={busca}
         onChange={e => setBusca(e.target.value)}
         placeholder="Buscar lead..."
-        className="w-full min-h-11 min-w-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-44"
+        className="w-full min-h-11 min-w-0 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-44"
       />
       <select
         value={filtroEstagio}
         onChange={e => setFiltroEstagio(e.target.value)}
-        className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
+        className="w-full min-h-11 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
       >
         <option value="">Todos os estágios</option>
         {estagiosKanban.map(e => (
@@ -558,7 +558,7 @@ export default function LeadsPage() {
       <button
         type="button"
         onClick={() => setPipelineConfigOpen(true)}
-        className="min-h-11 shrink-0 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-xs font-bold text-[#8b949e] hover:text-[#e6edf3] min-[480px]:min-h-10"
+        className="min-h-11 shrink-0 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-xs font-bold text-[#5d7a67] hover:text-[#0b2210] min-[480px]:min-h-10"
       >
         Pipeline
       </button>
@@ -574,7 +574,7 @@ export default function LeadsPage() {
   ) : null;
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f8fcf6]">
 
       {sucessoLead && (
         <div
@@ -585,7 +585,7 @@ export default function LeadsPage() {
           <button
             type="button"
             onClick={() => setSucessoLead(null)}
-            className="border-0 bg-transparent text-lg leading-none text-[#8b949e] hover:text-white"
+            className="border-0 bg-transparent text-lg leading-none text-[#5d7a67] hover:text-white"
             aria-label="Fechar aviso"
           >
             ×
@@ -596,25 +596,25 @@ export default function LeadsPage() {
       {pipelineTabs}
 
       {isMobile && (
-        <div className="sticky top-0 z-20 shrink-0 space-y-2 border-b border-[#30363d] bg-[#161b22] px-3 py-3">
+        <div className="sticky top-0 z-20 shrink-0 space-y-2 border-b border-[#dcebd8] bg-[#ffffff] px-3 py-3">
           <div>
-            <h1 className="text-base font-bold text-[#e6edf3]">{pipelineAtivo?.nome || "Leads"}</h1>
-            <p className="text-[11px] text-[#8b949e]">{leadsDoPipeline.length} leads · tempo real</p>
+            <h1 className="text-base font-bold text-[#0b2210]">{pipelineAtivo?.nome || "Leads"}</h1>
+            <p className="text-[11px] text-[#5d7a67]">{leadsDoPipeline.length} leads · tempo real</p>
           </div>
           <div className="flex flex-col gap-2">{headerControls}</div>
         </div>
       )}
 
       {/* ─── METRICS ─── */}
-      <div className="grid grid-cols-2 gap-px sm:grid-cols-4 flex-shrink-0 bg-[#30363d]">
+      <div className="grid grid-cols-2 gap-px sm:grid-cols-4 flex-shrink-0 bg-[#dcebd8]">
         {[
           { label: "Leads Hoje", value: String(leadsDoPipeline.filter(l => new Date(l.criado_em).toDateString() === hoje).length), cor: "#F97316" },
           { label: "Sem Resposta +24h", value: String(semResposta), cor: semResposta > 0 ? "#EF4444" : "#22C55E" },
           { label: "Em Risco +1h", value: emRisco > 0 ? moeda(emRisco) : "—", cor: emRisco > 0 ? "#EAB308" : "#6B7280" },
           { label: "Pipeline Total", value: moeda(pipeline), cor: "#22C55E" },
         ].map(m => (
-          <div key={m.label} className="bg-[#161b22] px-3 py-2.5 sm:px-5">
-            <p className="mb-0.5 text-xs text-[#8b949e]">{m.label}</p>
+          <div key={m.label} className="bg-[#ffffff] px-3 py-2.5 sm:px-5">
+            <p className="mb-0.5 text-xs text-[#5d7a67]">{m.label}</p>
             <p className="text-base font-black sm:text-lg" style={{ color: m.cor }}>{m.value}</p>
           </div>
         ))}
@@ -645,7 +645,7 @@ export default function LeadsPage() {
                     {total > 0 && <p className="text-xs mt-0.5 font-bold" style={{ color: est.color }}>{moeda(total)}</p>}
                   </div>
                   {/* Cards */}
-                  <div className="flex-1 space-y-2 overflow-y-auto rounded-b-xl border border-t-0 border-[#30363d] bg-[#161b22]/60 p-2 transition-colors"
+                  <div className="flex-1 space-y-2 overflow-y-auto rounded-b-xl border border-t-0 border-[#dcebd8] bg-[#ffffff]/60 p-2 transition-colors"
                     style={{ minHeight: 80, backgroundColor: dragOver === est.id ? est.color + "12" : undefined }}
                     onDragOver={e => { e.preventDefault(); setDragOver(est.id); }}
                     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
@@ -693,13 +693,13 @@ export default function LeadsPage() {
                       <button
                         type="button"
                         onClick={() => abrirDetalhe(lead)}
-                        className="flex w-full min-h-14 flex-col gap-2 rounded-xl border border-[#30363d] bg-[#161b22] p-3 text-left"
+                        className="flex w-full min-h-14 flex-col gap-2 rounded-xl border border-[#dcebd8] bg-[#ffffff] p-3 text-left"
                         style={{ borderLeftWidth: 3, borderLeftColor: borderColor(lead.atualizado_em) }}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-[#e6edf3]">{lead.nome}</p>
-                            {lead.telefone && <p className="text-xs text-[#8b949e]">{lead.telefone}</p>}
+                            <p className="truncate text-sm font-bold text-[#0b2210]">{lead.nome}</p>
+                            {lead.telefone && <p className="text-xs text-[#5d7a67]">{lead.telefone}</p>}
                           </div>
                           {est && (
                             <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: est.color + "25", color: est.color }}>
@@ -709,7 +709,7 @@ export default function LeadsPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           {lead.valor_estimado > 0 && <span className="text-xs font-bold text-[#22C55E]">{moeda(lead.valor_estimado)}</span>}
-                          <span className="ml-auto text-xs text-[#8b949e]">{tempo(lead.atualizado_em)}</span>
+                          <span className="ml-auto text-xs text-[#5d7a67]">{tempo(lead.atualizado_em)}</span>
                         </div>
                         {lead.telefone && (
                           <a
@@ -727,7 +727,7 @@ export default function LeadsPage() {
                   );
                 })}
                 {filtrados.length === 0 && (
-                  <p className="py-12 text-center text-sm text-[#8b949e]">Nenhum lead encontrado</p>
+                  <p className="py-12 text-center text-sm text-[#5d7a67]">Nenhum lead encontrado</p>
                 )}
               </ul>
             ) : (
@@ -800,7 +800,7 @@ export default function LeadsPage() {
           {!isMobile && (
             <div className="flex-1 bg-black/50" onClick={() => { setDetalhe(null); setConfirmandoPerda(false); }} />
           )}
-          <div className={`flex h-full flex-col overflow-hidden border-[#30363d] bg-[#161b22] shadow-2xl ${isMobile ? "w-full" : "w-[520px] border-l"}`}>
+          <div className={`flex h-full flex-col overflow-hidden border-[#dcebd8] bg-[#ffffff] shadow-2xl ${isMobile ? "w-full" : "w-[520px] border-l"}`}>
 
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-800 flex-shrink-0">

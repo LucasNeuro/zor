@@ -1,6 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
+function mapAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("rate limit") || m.includes("email rate limit")) {
+    return "Limite de envio de e-mail do Supabase atingido. Aguarde alguns minutos e tente de novo, ou desative a confirmação por e-mail em Authentication → Providers → Email (só para testes).";
+  }
+  if (m.includes("already registered") || m.includes("already been registered")) {
+    return "Este e-mail já está cadastrado. Use outro e-mail ou entre em Login.";
+  }
+  if (m.includes("invalid") && m.includes("email")) {
+    return "E-mail recusado pelo Supabase. Verifique o endereço ou as regras do projeto.";
+  }
+  return message;
+}
+
 function supabaseConfigError(): string | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
@@ -49,7 +63,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: mapAuthError(error.message) }, { status: 400 });
   }
 
   const user = data.user;

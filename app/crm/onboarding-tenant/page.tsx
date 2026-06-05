@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -47,30 +47,30 @@ export default function OnboardingTenantPage() {
   }, []);
 
   return (
-    <div className="mx-auto min-h-full max-w-2xl bg-[#0d1117] px-4 py-8 text-[#e6edf3]">
+    <div className="mx-auto min-h-full max-w-2xl bg-[#f8fcf6] px-4 py-8 text-[#0b2210]">
       <h1 className="text-xl font-bold">Onboarding do tenant</h1>
-      <p className="mt-1 text-sm text-[#8b949e]">
-        Checklist vivo para colocar o CRM Obra10+ em produção no seu escritório.
+      <p className="mt-1 text-sm text-[#5d7a67]">
+        Checklist vivo para colocar o CRM Waje em produção no seu escritório.
       </p>
 
       {loading ? (
-        <p className="mt-8 text-sm text-[#8b949e]">A verificar estado…</p>
+        <p className="mt-8 text-sm text-[#5d7a67]">A verificar estado…</p>
       ) : data?.error ? (
         <p className="mt-8 text-sm text-[#ff7b72]">{data.error}</p>
       ) : (
         <>
-          <div className="mt-6 rounded-xl border border-[#30363d] bg-[#161b22] p-4">
+          <div className="mt-6 rounded-xl border border-[#dcebd8] bg-[#ffffff] p-4">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-bold">Progresso</span>
               <span className="text-sm tabular-nums text-[#c9a24a]">{data?.progress ?? 0}%</span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#21262d]">
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#eef7eb]">
               <div
                 className="h-full rounded-full bg-[#c9a24a] transition-all"
                 style={{ width: `${data?.progress ?? 0}%` }}
               />
             </div>
-            <p className="mt-2 text-xs text-[#8b949e]">
+            <p className="mt-2 text-xs text-[#5d7a67]">
               {data?.completed}/{data?.total} passos —{" "}
               {data?.ready ? "Pronto para operar" : "Conclua os itens em falta"}
             </p>
@@ -80,7 +80,7 @@ export default function OnboardingTenantPage() {
             {(data?.steps ?? []).map((step, i) => (
               <li
                 key={step.id}
-                className="flex gap-3 rounded-xl border border-[#30363d] bg-[#161b22] p-4"
+                className="flex gap-3 rounded-xl border border-[#dcebd8] bg-[#ffffff] p-4"
               >
                 {step.ok ? (
                   <CheckCircle2 className="h-5 w-5 shrink-0 text-[#3fb950]" />
@@ -91,7 +91,7 @@ export default function OnboardingTenantPage() {
                   <p className="text-sm font-bold">
                     {i + 1}. {step.label}
                   </p>
-                  <p className="mt-1 text-xs text-[#8b949e]">{step.detail}</p>
+                  <p className="mt-1 text-xs text-[#5d7a67]">{step.detail}</p>
                   {step.href && !step.ok && (
                     <Link
                       href={step.href}

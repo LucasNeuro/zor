@@ -63,11 +63,9 @@ export function ContextMenu({ metricas, onNavegar, onItemClick }: ContextMenuPro
       ],
     },
     {
-      title: "Configuração",
+      title: "Conta",
       items: [
-        { label: "Agentes IA", href: "/crm/agentes" },
-        { label: "Novo agente", href: "/crm/agentes/novo" },
-        { label: "Integrações", href: "/crm/integracoes" },
+        { label: "Conta", href: "/crm/configuracoes" },
       ],
     },
   ];
@@ -84,7 +82,7 @@ export function ContextMenu({ metricas, onNavegar, onItemClick }: ContextMenuPro
     >
       {/* Logo */}
       <div style={{ padding: "12px 12px 8px", borderBottom: "1px solid var(--obra-borda, #30363d)" }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--obra-dourado, #c9a24a)", letterSpacing: "0.04em" }}>OBRA10+</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#3f9848", letterSpacing: "0.04em" }}>waje</div>
         <div style={{ fontSize: 9, color: "var(--obra-texto-3, #484f58)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Escritório Virtual</div>
       </div>
 

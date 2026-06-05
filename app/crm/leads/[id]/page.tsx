@@ -409,7 +409,7 @@ export default function LeadFichaPage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center text-sm"
-        style={{ backgroundColor: BG_DEEP, color: "#8b949e" }}
+        style={{ backgroundColor: BG_DEEP, color: "#5d7a67" }}
       >
         Carregando ficha…
       </div>
@@ -633,7 +633,7 @@ export default function LeadFichaPage() {
                             }}
                           >
                             <div className="flex flex-wrap items-baseline justify-between gap-2">
-                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8b949e]">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5d7a67]">
                                 {String(at.tipo || "evento").replace(/_/g, " ")}
                               </span>
                               <time
@@ -671,7 +671,7 @@ export default function LeadFichaPage() {
                 style={{
                   borderColor: BORDER_SUBTLE,
                   backgroundColor: "rgba(10, 16, 24, 0.9)",
-                  color: "#8b949e",
+                  color: "#5d7a67",
                 }}
               >
                 <p className="font-medium text-gray-300">Memórias e schema</p>
@@ -754,14 +754,14 @@ export default function LeadFichaPage() {
                       <h2 className="text-sm font-semibold text-white" title={`ID técnico (copiar): ${id}`}>
                         Registo CRM
                       </h2>
-                      <p className="mt-1 text-[11px] leading-relaxed text-[#8b949e]">
+                      <p className="mt-1 text-[11px] leading-relaxed text-[#5d7a67]">
                         {pessoaHub ? (
                           <>
                             <span className="text-[#6b7280]">Participante</span>{" "}
                             {pessoaHub.codigo ? (
                               <span className="font-mono font-semibold text-[#c9a24a]">{pessoaHub.codigo}</span>
                             ) : (
-                              <span className="text-[#8b949e]">(sem código PES)</span>
+                              <span className="text-[#5d7a67]">(sem código PES)</span>
                             )}
                             {pessoaHub.nome ? (
                               <>
@@ -778,7 +778,7 @@ export default function LeadFichaPage() {
                           </>
                         )}
                       </p>
-                      <p className="mt-2 text-xs leading-relaxed text-[#8b949e]">
+                      <p className="mt-2 text-xs leading-relaxed text-[#5d7a67]">
                         <span className="text-gray-300">{(lead.telefone as string) || "—"}</span>
                         {" · "}
                         <span>{(lead.origem as string) || "—"}</span>

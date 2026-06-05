@@ -31,7 +31,7 @@ export default function MobileHeader({ activeTab, criticalCount, onlineCount }: 
       paddingTop: "env(safe-area-inset-top)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 15, fontWeight: 800, color: "#22c55e" }}>obra10+</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: "#3f9848" }}>waje</span>
         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
           {TAB_TITLES[activeTab] ?? activeTab}
         </span>

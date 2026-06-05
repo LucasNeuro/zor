@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Bot, type LucideIcon } from "lucide-react";
 
@@ -25,7 +25,7 @@ export type CrmBotRingAvatarProps = {
 
 /**
  * Circular CRM avatar: dark core, faint inner ring, optional progress arc, soft accent glow.
- * Matches escritório glass-card tone (`#0d1117`-family centres).
+ * Matches escritório glass-card tone (`#f8fcf6`-family centres).
  */
 export function CrmBotRingAvatar({
   progress,
@@ -133,7 +133,7 @@ export function CrmBotRingAvatar({
           width: core,
           height: core,
           borderRadius: "50%",
-          background: `linear-gradient(165deg, ${accent}2b 0%, #0d1117 52%, #0a0f14 100%)`,
+          background: `linear-gradient(165deg, ${accent}2b 0%, #f8fcf6 52%, #0a0f14 100%)`,
           border: `1px solid ${dim ? `${accent}33` : `${accent}55`}`,
           display: "flex",
           alignItems: "center",

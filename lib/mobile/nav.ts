@@ -34,8 +34,7 @@ export const MOBILE_MORE_ITEMS: MobileMoreItem[] = [
   { label: "Parceiros", href: "/crm/parceiros" },
   { label: "Financeiro", href: "/crm/financeiro" },
   { label: "Relatórios", href: "/crm/relatorios" },
-  { label: "Configurações", href: "/crm/configuracoes" },
-  { label: "Integrações", href: "/crm/integracoes" },
+  { label: "Conta", href: "/crm/configuracoes" },
 ];
 
 const SHEET_PREFIXES = [
@@ -49,7 +48,6 @@ const SHEET_PREFIXES = [
   "/crm/financeiro",
   "/crm/relatorios",
   "/crm/configuracoes",
-  "/crm/integracoes",
   "/crm/pessoas",
   "/crm/empresas",
   "/crm/imoveis",
@@ -67,7 +65,6 @@ const SHEET_PREFIXES = [
 
 /** Aba inferior ativa para a rota atual. */
 export function mobileTabIdFromPath(pathname: string): MobileTabId {
-  if (pathname === "/office") return "escritorio";
   if (pathname.startsWith("/crm/atendimento")) return "atendimento";
   if (pathname.startsWith("/crm/trafego")) return "marketing";
   if (pathname === "/crm" || pathname === "/crm/") return "pulso";
@@ -78,12 +75,15 @@ export function mobileTabIdFromPath(pathname: string): MobileTabId {
 
 export function isMobileShellRoute(pathname: string): boolean {
   if (pathname.startsWith("/parceiro/")) return false;
+  if (pathname.startsWith("/fornecedor/")) return false;
+  if (pathname.startsWith("/office/") || pathname === "/office") return false;
+  if (pathname.startsWith("/agentes/") || pathname === "/agentes") return false;
+  if (pathname.startsWith("/comando/") || pathname === "/comando") return false;
   if (pathname === "/login" || pathname.startsWith("/login/")) return false;
   return true;
 }
 
 export function mobilePageTitle(pathname: string): string {
-  if (pathname === "/office") return "Escritório";
   if (pathname === "/crm") return "Pulso";
   if (pathname === "/crm/leads") return "Leads";
   if (pathname.startsWith("/crm/leads/")) return "Lead";
@@ -96,9 +96,8 @@ export function mobilePageTitle(pathname: string): string {
   if (pathname === "/crm/financeiro" || pathname.startsWith("/crm/financeiro/")) return "Financeiro";
   if (pathname.startsWith("/crm/negocios")) return "Negócios";
   if (pathname.startsWith("/crm/parceiros")) return "Parceiros";
-  if (pathname === "/crm/configuracoes") return "Configurações";
-  if (pathname === "/crm/integracoes") return "Integrações";
-  return "Obra10+";
+  if (pathname === "/crm/configuracoes") return "Conta";
+  return "Waje";
 }
 
 /** Rotas secundárias (sheet): exibir header com voltar. */

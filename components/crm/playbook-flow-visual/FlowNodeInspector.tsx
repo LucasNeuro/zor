@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
 import type { Node } from "@xyflow/react";
@@ -171,9 +171,9 @@ const panelStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
-  border: "1px solid #2b3544",
+  border: "1px solid #dcebd8",
   borderRadius: 12,
-  background: "linear-gradient(180deg, #121926 0%, #0d1117 55%)",
+  background: "linear-gradient(180deg, #ffffff 0%, #f8fcf6 55%)",
   padding: "12px 14px",
   flex: 1,
   minHeight: 0,
@@ -182,7 +182,7 @@ const panelStyle: CSSProperties = {
 
 const panelTitleStyle: CSSProperties = {
   margin: 0,
-  color: "#e6edf3",
+  color: "#0b2210",
   fontSize: 12,
   fontWeight: 700,
 };
@@ -231,8 +231,8 @@ const labelStyle: CSSProperties = {
 const idCodeStyle: CSSProperties = {
   fontSize: 11,
   color: "#9ecbff",
-  background: "#161b22",
-  border: "1px solid #21262d",
+  background: "#ffffff",
+  border: "1px solid #eef7eb",
   borderRadius: 6,
   padding: "4px 8px",
   fontFamily: "monospace",
@@ -243,7 +243,7 @@ const inputStyle: CSSProperties = {
   border: "1px solid #2a3545",
   borderRadius: 8,
   background: "#151d28",
-  color: "#e6edf3",
+  color: "#0b2210",
   padding: "6px 8px",
   fontSize: 12,
   outline: "none",
@@ -255,7 +255,7 @@ const textareaStyle: CSSProperties = {
   border: "1px solid #2a3545",
   borderRadius: 8,
   background: "#151d28",
-  color: "#e6edf3",
+  color: "#0b2210",
   padding: "6px 8px",
   fontSize: 11,
   resize: "vertical",
@@ -292,7 +292,7 @@ const optionNumStyle: CSSProperties = {
 const optionInputStyle: CSSProperties = {
   flex: 1,
   fontSize: 11,
-  color: "#e6edf3",
+  color: "#0b2210",
   background: "transparent",
   border: "none",
   outline: "none",

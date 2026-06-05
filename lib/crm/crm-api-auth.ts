@@ -58,3 +58,54 @@ export function normalizeAppRole(role: string): AppRole | null {
   const r = role.trim().toLowerCase();
   return (APP_ROLES as readonly string[]).includes(r) ? (r as AppRole) : null;
 }
+
+export type CrmActor = {
+  authId: string;
+  role: string;
+  status: string;
+};
+
+export async function getCrmActor(request: Request): Promise<CrmActor | null> {
+  const authId = request.headers.get("x-caller-auth-id")?.trim();
+  if (!authId) return null;
+
+  const { data, error } = await crmDb()
+    .from("users")
+    .select("role, status")
+    .eq("auth_id", authId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    authId,
+    role: String(data.role ?? ""),
+    status: String(data.status ?? ""),
+  };
+}
+
+export async function requireCrmOwner(request: Request): Promise<NextResponse | null> {
+  const config = crmApiConfigError();
+  if (config) return config;
+  const keyErr = requireInternalApiKey(request);
+  if (keyErr) return keyErr;
+
+  const actor = await getCrmActor(request);
+  if (!actor) {
+    return NextResponse.json(
+      { error: "Cabeçalho x-caller-auth-id obrigatório para esta operação." },
+      { status: 403 }
+    );
+  }
+  if (actor.status.trim().toLowerCase() !== "ativo") {
+    return NextResponse.json({ error: "Conta inativa." }, { status: 403 });
+  }
+  if (actor.role.trim().toLowerCase() !== "owner") {
+    return NextResponse.json(
+      { error: "Apenas o owner da empresa pode executar esta ação." },
+      { status: 403 }
+    );
+  }
+
+  return null;
+}

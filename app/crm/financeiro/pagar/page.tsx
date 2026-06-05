@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -61,14 +61,14 @@ function ContasPagarInner() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#0d1117]">
-      <div className="sticky top-0 z-10 shrink-0 border-b border-[#30363d] bg-[#161b22] px-3 py-3 sm:px-6">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f8fcf6]">
+      <div className="sticky top-0 z-10 shrink-0 border-b border-[#dcebd8] bg-[#ffffff] px-3 py-3 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <Link href="/crm/financeiro" className="text-[11px] font-bold text-[#c9a24a] hover:underline">
               ← Visão financeira
             </Link>
-            <h1 className="mt-1 text-lg font-bold text-[#e6edf3]">Contas a pagar</h1>
+            <h1 className="mt-1 text-lg font-bold text-[#0b2210]">Contas a pagar</h1>
           </div>
           <div className="flex gap-2">
             <button
@@ -88,13 +88,13 @@ function ContasPagarInner() {
                     const blob = await res.blob();
                     const a = document.createElement("a");
                     a.href = URL.createObjectURL(blob);
-                    a.download = `obra10-contas-pagar-${new Date().toISOString().slice(0, 10)}.csv`;
+                    a.download = `waje-contas-pagar-${new Date().toISOString().slice(0, 10)}.csv`;
                     a.click();
                     URL.revokeObjectURL(a.href);
                   })
                   .catch(() => {});
               }}
-              className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-xs font-bold text-[#8b949e]"
+              className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 text-xs font-bold text-[#5d7a67]"
             >
               <Download className="h-4 w-4" aria-hidden />
               CSV
@@ -104,7 +104,7 @@ function ContasPagarInner() {
         <div className="mt-3 flex flex-wrap gap-2">
           <Link
             href="/crm/financeiro/pagar"
-            className={`min-h-10 rounded-lg px-3 py-2 text-xs font-bold ${!statusFiltro && !vencido && !proximos ? "bg-[#30363d] text-white" : "bg-[#21262d] text-[#8b949e]"}`}
+            className={`min-h-10 rounded-lg px-3 py-2 text-xs font-bold ${!statusFiltro && !vencido && !proximos ? "bg-[#dcebd8] text-white" : "bg-[#eef7eb] text-[#5d7a67]"}`}
           >
             Todas
           </Link>
@@ -112,20 +112,20 @@ function ContasPagarInner() {
             <Link
               key={s.id}
               href={`/crm/financeiro/pagar?status=${s.id}`}
-              className={`min-h-10 rounded-lg px-3 py-2 text-xs font-bold ${statusFiltro === s.id && !vencido ? "bg-[#30363d] text-white" : "bg-[#21262d] text-[#8b949e]"}`}
+              className={`min-h-10 rounded-lg px-3 py-2 text-xs font-bold ${statusFiltro === s.id && !vencido ? "bg-[#dcebd8] text-white" : "bg-[#eef7eb] text-[#5d7a67]"}`}
             >
               {s.label}
             </Link>
           ))}
           <Link
             href="/crm/financeiro/pagar?status=pendente&vencido=1"
-            className={`min-h-10 rounded-lg px-3 py-2 text-xs font-bold ${vencido ? "bg-[#b3261e] text-white" : "bg-[#21262d] text-[#8b949e]"}`}
+            className={`min-h-10 rounded-lg px-3 py-2 text-xs font-bold ${vencido ? "bg-[#b3261e] text-white" : "bg-[#eef7eb] text-[#5d7a67]"}`}
           >
             Vencidas
           </Link>
           <Link
             href="/crm/financeiro/pagar?status=pendente&proximos=7"
-            className={`min-h-10 rounded-lg px-3 py-2 text-xs font-bold ${proximos === "7" ? "bg-[#c9a24a] text-[#003b26]" : "bg-[#21262d] text-[#8b949e]"}`}
+            className={`min-h-10 rounded-lg px-3 py-2 text-xs font-bold ${proximos === "7" ? "bg-[#c9a24a] text-[#003b26]" : "bg-[#eef7eb] text-[#5d7a67]"}`}
           >
             7 dias
           </Link>
@@ -136,7 +136,7 @@ function ContasPagarInner() {
         {carregando ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-xl bg-[#21262d]" />
+              <div key={i} className="h-20 animate-pulse rounded-xl bg-[#eef7eb]" />
             ))}
           </div>
         ) : (
@@ -163,7 +163,7 @@ export default function ContasPagarPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-[#0d1117] p-6 text-sm text-[#8b949e]">
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-[#f8fcf6] p-6 text-sm text-[#5d7a67]">
           Carregando contas a pagar…
         </div>
       }

@@ -96,7 +96,7 @@ export function Obra10BrandHeader({
           className={`truncate font-bold leading-none tracking-[0.04em] ${s.titleSize} ${titleClassName}`}
           style={{ color: nameColor }}
         >
-          OBRA10
+          Waje
         </p>
         <p
           className={`truncate leading-none tracking-[0.1em] ${s.subSize} ${subtitleClassName}`}
@@ -125,7 +125,7 @@ export function Obra10BrandHeaderLink({
   return (
     <Link
       href={href}
-      title={title ?? "Obra10 — início"}
+      title={title ?? "Waje — início"}
       className={`flex min-w-0 items-center rounded-xl transition-opacity hover:opacity-80 active:opacity-60 ${className}`}
     >
       <Obra10BrandHeader {...rest} />

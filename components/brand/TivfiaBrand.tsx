@@ -1,1 +1,1 @@
-export { TiviaBrand as TivfiaBrand } from "@/components/brand/TiviaBrand";
+export { WajeBrand as TivfiaBrand } from "@/components/brand/WajeBrand";

@@ -43,10 +43,10 @@ function formatData(iso: string | null): string {
 function Campo({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: "#8b949e", textTransform: "uppercase" }}>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: "#5d7a67", textTransform: "uppercase" }}>
         {label}
       </p>
-      <p style={{ margin: "4px 0 0", fontSize: 14, color: "#e6edf3", lineHeight: 1.4 }}>{value}</p>
+      <p style={{ margin: "4px 0 0", fontSize: 14, color: "#0b2210", lineHeight: 1.4 }}>{value}</p>
     </div>
   );
 }
@@ -165,27 +165,27 @@ export default function EmpresaDetalhePage() {
       <div
         style={{
           minHeight: "100%",
-          background: "#0d1117",
+          background: "#f8fcf6",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando...</p>
+        <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando...</p>
       </div>
     );
   }
 
   if (!empresa) {
     return (
-      <div style={{ minHeight: "100%", background: "#0d1117", padding: 24 }}>
+      <div style={{ minHeight: "100%", background: "#f8fcf6", padding: 24 }}>
         <button
           type="button"
           onClick={() => router.push("/crm/empresas")}
           style={{
             background: "none",
             border: "none",
-            color: "#8b949e",
+            color: "#5d7a67",
             cursor: "pointer",
             fontSize: 13,
             marginBottom: 16,
@@ -210,14 +210,14 @@ export default function EmpresaDetalhePage() {
     .join(" · ");
 
   return (
-    <div style={{ minHeight: "100%", background: "#0d1117" }}>
+    <div style={{ minHeight: "100%", background: "#f8fcf6" }}>
       <div
         style={{
           position: "sticky",
           top: 0,
           zIndex: 10,
-          background: "#161b22",
-          borderBottom: "1px solid #30363d",
+          background: "#ffffff",
+          borderBottom: "1px solid #dcebd8",
           padding: "14px 20px",
         }}
       >
@@ -227,7 +227,7 @@ export default function EmpresaDetalhePage() {
           style={{
             background: "none",
             border: "none",
-            color: "#8b949e",
+            color: "#5d7a67",
             cursor: "pointer",
             fontSize: 13,
             marginBottom: 10,
@@ -240,20 +240,20 @@ export default function EmpresaDetalhePage() {
           <div style={{ flex: 1, minWidth: 200 }}>
             {editando ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <input value={empresa.razao_social} onChange={(e) => setEmpresa((x) => (x ? { ...x, razao_social: e.target.value } : x))} placeholder="Razão social" style={{ padding: 8, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }} />
-                <input value={empresa.nome_fantasia ?? ""} onChange={(e) => setEmpresa((x) => (x ? { ...x, nome_fantasia: e.target.value } : x))} placeholder="Nome fantasia" style={{ padding: 8, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }} />
-                <input value={empresa.cnpj ?? ""} onChange={(e) => setEmpresa((x) => (x ? { ...x, cnpj: e.target.value } : x))} placeholder="CNPJ" style={{ padding: 8, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }} />
+                <input value={empresa.razao_social} onChange={(e) => setEmpresa((x) => (x ? { ...x, razao_social: e.target.value } : x))} placeholder="Razão social" style={{ padding: 8, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }} />
+                <input value={empresa.nome_fantasia ?? ""} onChange={(e) => setEmpresa((x) => (x ? { ...x, nome_fantasia: e.target.value } : x))} placeholder="Nome fantasia" style={{ padding: 8, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }} />
+                <input value={empresa.cnpj ?? ""} onChange={(e) => setEmpresa((x) => (x ? { ...x, cnpj: e.target.value } : x))} placeholder="CNPJ" style={{ padding: 8, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }} />
                 <button type="button" disabled={salvandoEdicao} onClick={() => void salvarEdicao()} style={{ padding: "8px 12px", borderRadius: 8, background: "#c9a24a", color: "#003b26", border: "none", fontWeight: 700, cursor: "pointer" }}>{salvandoEdicao ? "Salvando…" : "Guardar"}</button>
               </div>
             ) : (
               <>
-                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#e6edf3" }}>
+                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#0b2210" }}>
                   {empresa.razao_social}
                 </h1>
                 {empresa.nome_fantasia && (
-                  <p style={{ margin: "4px 0 0", fontSize: 13, color: "#8b949e" }}>{empresa.nome_fantasia}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: 13, color: "#5d7a67" }}>{empresa.nome_fantasia}</p>
                 )}
-                <p style={{ margin: "6px 0 0", fontSize: 12, color: "#8b949e" }}>
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: "#5d7a67" }}>
                   {empresa.codigo || "—"}
                   {empresa.cnpj ? ` · CNPJ ${formatarCnpjMascara(empresa.cnpj)}` : ""}
                 </p>
@@ -261,7 +261,7 @@ export default function EmpresaDetalhePage() {
             )}
           </div>
           {!editando && (
-            <button type="button" onClick={() => setEditando(true)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #30363d", background: "#21262d", color: "#c9a24a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            <button type="button" onClick={() => setEditando(true)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #dcebd8", background: "#eef7eb", color: "#c9a24a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
               Editar
             </button>
           )}
@@ -272,9 +272,9 @@ export default function EmpresaDetalhePage() {
                 fontWeight: 700,
                 padding: "4px 10px",
                 borderRadius: 20,
-                background: acessoAtivo ? "#22c55e22" : "#8b949e22",
-                color: acessoAtivo ? "#22c55e" : "#8b949e",
-                border: `1px solid ${acessoAtivo ? "#22c55e55" : "#8b949e55"}`,
+                background: acessoAtivo ? "#22c55e22" : "#5d7a6722",
+                color: acessoAtivo ? "#22c55e" : "#5d7a67",
+                border: `1px solid ${acessoAtivo ? "#22c55e55" : "#5d7a6755"}`,
               }}
             >
               {acessoAtivo ? "Acesso habilitado" : "Acesso desabilitado"}
@@ -286,9 +286,9 @@ export default function EmpresaDetalhePage() {
               style={{
                 padding: "8px 14px",
                 borderRadius: 8,
-                border: "1px solid #30363d",
+                border: "1px solid #dcebd8",
                 background: acessoAtivo ? "transparent" : "#003b26",
-                color: acessoAtivo ? "#8b949e" : "#c9a24a",
+                color: acessoAtivo ? "#5d7a67" : "#c9a24a",
                 fontSize: 12,
                 fontWeight: 700,
                 cursor: salvandoAcesso ? "wait" : "pointer",
@@ -346,14 +346,14 @@ export default function EmpresaDetalhePage() {
                 style={{
                   padding: 16,
                   borderRadius: 10,
-                  border: "1px solid #30363d",
-                  background: "#161b22",
+                  border: "1px solid #dcebd8",
+                  background: "#ffffff",
                   display: "flex",
                   flexDirection: "column",
                   gap: 12,
                 }}
               >
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e6edf3" }}>Endereço</p>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#0b2210" }}>Endereço</p>
                 <Campo label="CEP" value={empresa.cep ? formatarCepMascara(empresa.cep) : "—"} />
                 <Campo label="Endereço completo" value={endereco || "—"} />
               </div>
@@ -362,12 +362,12 @@ export default function EmpresaDetalhePage() {
           {tab === "vinculos" && (
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {(vinculos?.pessoas ?? []).length === 0 ? (
-                <li style={{ color: "#8b949e", fontSize: 13 }}>Nenhuma pessoa vinculada.</li>
+                <li style={{ color: "#5d7a67", fontSize: 13 }}>Nenhuma pessoa vinculada.</li>
               ) : (
                 vinculos?.pessoas.map((p) => (
                   <li
                     key={p.pessoa_id}
-                    style={{ padding: "12px 0", borderBottom: "1px solid #30363d" }}
+                    style={{ padding: "12px 0", borderBottom: "1px solid #dcebd8" }}
                   >
                     <Link
                       href={`/crm/pessoas/${p.pessoa_id}`}
@@ -377,7 +377,7 @@ export default function EmpresaDetalhePage() {
                       {p.nome}
                     </Link>
                     {p.cargo ? (
-                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#8b949e" }}>{p.cargo}</p>
+                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#5d7a67" }}>{p.cargo}</p>
                     ) : null}
                   </li>
                 ))
@@ -387,10 +387,10 @@ export default function EmpresaDetalhePage() {
           {tab === "relacionados" && (
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {(vinculos?.negocios ?? []).length === 0 ? (
-                <li style={{ color: "#8b949e", fontSize: 13 }}>Nenhum negócio vinculado.</li>
+                <li style={{ color: "#5d7a67", fontSize: 13 }}>Nenhum negócio vinculado.</li>
               ) : (
                 vinculos?.negocios.map((n) => (
-                  <li key={n.id} style={{ padding: "8px 0", borderBottom: "1px solid #30363d" }}>
+                  <li key={n.id} style={{ padding: "8px 0", borderBottom: "1px solid #dcebd8" }}>
                     <Link
                       href={`/crm/negocios?destaque=${n.id}`}
                       style={{ color: "#c9a24a", textDecoration: "none", fontWeight: 600 }}

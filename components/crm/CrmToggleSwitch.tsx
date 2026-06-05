@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 export function CrmToggleSwitch({
   checked,
@@ -25,7 +25,7 @@ export function CrmToggleSwitch({
         borderRadius: 999,
         border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
-        background: checked ? "linear-gradient(180deg, #3fb950 0%, #2ea043 100%)" : "#21262d",
+        background: checked ? "linear-gradient(180deg, #3fb950 0%, #2ea043 100%)" : "#eef7eb",
         boxShadow: checked ? "inset 0 1px 0 rgba(255,255,255,0.12)" : "inset 0 1px 0 rgba(0,0,0,0.2)",
         position: "relative",
         flexShrink: 0,

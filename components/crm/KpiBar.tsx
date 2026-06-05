@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 export type Kpi = { label: string; value: number | string; color?: string };
 
@@ -11,8 +11,8 @@ export function KpiBar({ kpis }: Props) {
         <div
           key={i}
           style={{
-            background: "#161b22",
-            border: "1px solid #30363d",
+            background: "#ffffff",
+            border: "1px solid #dcebd8",
             borderRadius: 10,
             padding: "10px 16px",
             minWidth: 80,
@@ -29,7 +29,7 @@ export function KpiBar({ kpis }: Props) {
           >
             {k.value}
           </p>
-          <p style={{ color: "#8b949e", fontSize: 11, margin: "4px 0 0", fontWeight: 500 }}>
+          <p style={{ color: "#5d7a67", fontSize: 11, margin: "4px 0 0", fontWeight: 500 }}>
             {k.label}
           </p>
         </div>

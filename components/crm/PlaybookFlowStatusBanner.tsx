@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, FileText, Info } from "lucide-react";
@@ -92,7 +92,7 @@ function Banner({
     success: { bg: "#2386361a", border: "#23863655", fg: "#7ee787", title: "#aff5b4" },
     warning: { bg: "#c9a24a14", border: "#c9a24a44", fg: "#d6b976", title: "#e3c77a" },
     danger: { bg: "#f8514914", border: "#f8514944", fg: "#ffaba8", title: "#ffb4b0" },
-    neutral: { bg: "#21262d", border: "#30363d", fg: "#8b949e", title: "#c9d1d9" },
+    neutral: { bg: "#eef7eb", border: "#dcebd8", fg: "#5d7a67", title: "#c9d1d9" },
   }[tone];
 
   return (

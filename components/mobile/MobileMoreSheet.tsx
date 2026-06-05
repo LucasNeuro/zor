@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
@@ -35,15 +35,15 @@ export function MobileMoreSheet({
         onClick={onClose}
       />
       <div
-        className="relative max-h-[75dvh] overflow-hidden rounded-t-2xl border border-[#30363d] bg-[#161b22]"
+        className="relative max-h-[75dvh] overflow-hidden rounded-t-2xl border border-[#dcebd8] bg-[#ffffff]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 12px)" }}
       >
-        <div className="flex items-center justify-between border-b border-[#30363d] px-4 py-3">
-          <p className="text-sm font-bold text-[#e6edf3]">Mais opções</p>
+        <div className="flex items-center justify-between border-b border-[#dcebd8] px-4 py-3">
+          <p className="text-sm font-bold text-[#0b2210]">Mais opções</p>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#21262d] text-[#e6edf3]"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef7eb] text-[#0b2210]"
             aria-label="Fechar"
           >
             <X className="h-5 w-5" />
@@ -56,7 +56,7 @@ export function MobileMoreSheet({
               <li key={item.href}>
                 <button
                   type="button"
-                  className="flex w-full min-h-12 items-center justify-between gap-2 rounded-xl px-4 py-3 text-left text-sm font-semibold text-[#e6edf3] hover:bg-[#21262d]"
+                  className="flex w-full min-h-12 items-center justify-between gap-2 rounded-xl px-4 py-3 text-left text-sm font-semibold text-[#0b2210] hover:bg-[#eef7eb]"
                   onClick={() => {
                     onClose();
                     router.push(item.href);

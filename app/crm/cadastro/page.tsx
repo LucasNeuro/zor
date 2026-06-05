@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -551,7 +551,7 @@ export default function CadastroPage() {
             <p className="mt-0.5 font-mono text-[10px] text-[#c9a24a]/90">{String(e.codigo)}</p>
           )}
           {e.cnpj != null && String(e.cnpj).trim() !== "" && (
-            <p className="text-xs text-[#8b949e]">{String(e.cnpj)}</p>
+            <p className="text-xs text-[#5d7a67]">{String(e.cnpj)}</p>
           )}
         </>
       ),
@@ -565,7 +565,7 @@ export default function CadastroPage() {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        background: "#0d1117",
+        background: "#f8fcf6",
         minHeight: 0,
       }}
     >
@@ -593,7 +593,7 @@ export default function CadastroPage() {
             style={{
               border: "none",
               background: "transparent",
-              color: "#8b949e",
+              color: "#5d7a67",
               cursor: "pointer",
               fontSize: 18,
               lineHeight: 1,
@@ -639,7 +639,7 @@ export default function CadastroPage() {
             <button
               type="button"
               onClick={() => setSelecionados(new Set())}
-              className="text-xs font-semibold text-[#8b949e] hover:text-white"
+              className="text-xs font-semibold text-[#5d7a67] hover:text-white"
             >
               Limpar seleção
             </button>
@@ -655,7 +655,7 @@ export default function CadastroPage() {
         {filtroRegisto === "contactos" && (
           <>
             {pessoasCarregando && (
-              <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando…</p>
+              <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando…</p>
             )}
             {!pessoasCarregando && pessoas.length === 0 && (
               <EmptyState message="Nenhum cadastro. Use «Novo cadastro» ou ajuste os filtros." />
@@ -694,7 +694,7 @@ export default function CadastroPage() {
         {filtroRegisto === "empresas" && (
           <>
             {empresasCarregando && (
-              <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando…</p>
+              <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando…</p>
             )}
             {!empresasCarregando && empresas.length === 0 && (
               <EmptyState message="Nenhuma empresa. Use «Novo cadastro» (PJ) ou ajuste os filtros." />

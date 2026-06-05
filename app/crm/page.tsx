@@ -38,7 +38,7 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/crm/analytics"
-            className="flex items-center gap-1.5 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-xs font-bold text-[#e6edf3] transition-colors hover:border-[#c9a24a55] hover:text-[#c9a24a]"
+            className="flex items-center gap-1.5 rounded-lg border border-[#dcebd8] bg-white px-3 py-1.5 text-xs font-bold text-[#0b2210] transition-colors hover:border-[#3f9848] hover:text-[#3f9848]"
           >
             <BarChart3 className="h-3.5 w-3.5" />
             Ver tendências
@@ -46,7 +46,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/crm/leads")}
-            className="flex items-center gap-1.5 rounded-lg border border-[#c9a24a44] bg-[#003b2622] px-3 py-1.5 text-xs font-bold text-[#c9a24a] hover:bg-[#003b2640]"
+            className="flex items-center gap-1.5 rounded-lg border border-[#3f984844] bg-[#3f984814] px-3 py-1.5 text-xs font-bold text-[#2d7a36] hover:bg-[#3f984828]"
           >
             <UserPlus className="h-3.5 w-3.5" />
             Leads
@@ -54,7 +54,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/crm/parceiros/novo")}
-            className="rounded-lg border border-[#30363d] px-3 py-1.5 text-xs font-bold text-[#60a5fa] hover:bg-[#21262d]"
+            className="rounded-lg border border-[#dcebd8] px-3 py-1.5 text-xs font-bold text-[#2563eb] hover:bg-[#eef7eb]"
           >
             + Parceiro
           </button>
@@ -123,18 +123,18 @@ export default function DashboardPage() {
 
   return (
     <div
-      className={`bg-[#0d1117] ${isMobile ? "min-h-0 px-3 pb-6 pt-1" : "min-h-screen px-4 py-5 sm:px-6 sm:py-6"}`}
+      className={`bg-[#f8fcf6] ${isMobile ? "min-h-0 px-3 pb-6 pt-1" : "min-h-screen px-4 py-5 sm:px-6 sm:py-6"}`}
     >
       <div className="mx-auto w-full max-w-[1400px] space-y-6">
         {isMobile && (
-          <div className="flex items-center justify-between gap-2 rounded-2xl border border-[#2b3544] bg-[#121926] px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-[#dcebd8] bg-white px-3.5 py-3 shadow-sm">
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-[#e6edf3]">Dashboard</h1>
-              <p className="text-xs capitalize text-[#8b949e]">{dataHoje}</p>
+              <h1 className="text-lg font-bold tracking-tight text-[#0b2210]">Dashboard</h1>
+              <p className="text-xs capitalize text-[#5d7a67]">{dataHoje}</p>
             </div>
             <Link
               href="/crm/analytics"
-              className="flex min-h-10 items-center gap-1.5 rounded-xl border border-[#30363d] bg-[#21262d] px-3 text-xs font-bold text-[#c9a24a]"
+              className="flex min-h-10 items-center gap-1.5 rounded-xl border border-[#dcebd8] bg-[#eef7eb] px-3 text-xs font-bold text-[#3f9848]"
             >
               <BarChart3 className="h-3.5 w-3.5" />
               Tendências

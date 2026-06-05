@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -33,7 +33,7 @@ const BAR: CSSProperties = {
   background: "rgba(13, 17, 23, 0.94)",
   backdropFilter: "blur(10px)",
   WebkitBackdropFilter: "blur(10px)",
-  borderBottom: "1px solid #30363d",
+  borderBottom: "1px solid #dcebd8",
   boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
 };
 
@@ -82,7 +82,7 @@ export function CrmStickyTabs({
                 minWidth: useScroll ? undefined : 0,
                 paddingLeft: useScroll ? 14 : undefined,
                 paddingRight: useScroll ? 14 : undefined,
-                color: active ? "#c9a24a" : "#8b949e",
+                color: active ? "#c9a24a" : "#5d7a67",
                 background: "transparent",
                 cursor: "pointer",
                 outline: "none",

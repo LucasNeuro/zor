@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -63,11 +63,11 @@ function PedidosPageInner() {
   }
 
   return (
-    <div className="min-h-full bg-[#0d1117] p-4 sm:p-6">
+    <div className="min-h-full bg-[#f8fcf6] p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-[#e6edf3]">Pedidos de material</h1>
-          <p className="text-xs text-[#8b949e]">Criar e acompanhar pedidos por obra</p>
+          <h1 className="text-lg font-bold text-[#0b2210]">Pedidos de material</h1>
+          <p className="text-xs text-[#5d7a67]">Criar e acompanhar pedidos por obra</p>
         </div>
         <button
           type="button"
@@ -84,9 +84,9 @@ function PedidosPageInner() {
       ) : (
         <ul className="space-y-2">
           {pedidos.map((p) => (
-            <li key={p.id} className="rounded-xl border border-[#30363d] bg-[#161b22] p-4">
-              <p className="font-bold text-[#e6edf3]">{p.descricao}</p>
-              <p className="text-xs text-[#8b949e]">{p.codigo}</p>
+            <li key={p.id} className="rounded-xl border border-[#dcebd8] bg-[#ffffff] p-4">
+              <p className="font-bold text-[#0b2210]">{p.descricao}</p>
+              <p className="text-xs text-[#5d7a67]">{p.codigo}</p>
               {p.obra_id && (
                 <Link href={`/crm/obras/${p.obra_id}`} className="mt-1 inline-block text-xs font-bold text-[#c9a24a]">
                   Ver obra
@@ -95,7 +95,7 @@ function PedidosPageInner() {
               <select
                 value={p.status}
                 onChange={(e) => void mudarStatus(p.id, e.target.value)}
-                className="mt-2 block min-h-9 rounded-lg border border-[#30363d] bg-[#21262d] px-2 text-xs text-[#e6edf3]"
+                className="mt-2 block min-h-9 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-2 text-xs text-[#0b2210]"
               >
                 {STATUS_OPTS.map((s) => (
                   <option key={s} value={s}>
@@ -110,22 +110,22 @@ function PedidosPageInner() {
 
       {modal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-xl border border-[#30363d] bg-[#161b22] p-4">
+          <div className="w-full max-w-md rounded-xl border border-[#dcebd8] bg-[#ffffff] p-4">
             <h2 className="text-sm font-bold">Novo pedido</h2>
             <textarea
               placeholder="Descrição *"
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
-              className="mt-3 w-full min-h-20 rounded-lg border border-[#30363d] bg-[#21262d] p-3 text-sm text-[#e6edf3]"
+              className="mt-3 w-full min-h-20 rounded-lg border border-[#dcebd8] bg-[#eef7eb] p-3 text-sm text-[#0b2210]"
             />
             <input
               placeholder="ID da obra (opcional)"
               value={obraId}
               onChange={(e) => setObraId(e.target.value)}
-              className="mt-2 w-full min-h-10 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-sm text-[#e6edf3]"
+              className="mt-2 w-full min-h-10 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 text-sm text-[#0b2210]"
             />
             <div className="mt-4 flex gap-2">
-              <button type="button" onClick={() => setModal(false)} className="flex-1 min-h-10 rounded-lg bg-[#21262d] text-xs">
+              <button type="button" onClick={() => setModal(false)} className="flex-1 min-h-10 rounded-lg bg-[#eef7eb] text-xs">
                 Cancelar
               </button>
               <button
@@ -146,7 +146,7 @@ function PedidosPageInner() {
 
 export default function PedidosPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-[#8b949e]">Carregando pedidos…</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-[#5d7a67]">Carregando pedidos…</div>}>
       <PedidosPageInner />
     </Suspense>
   );

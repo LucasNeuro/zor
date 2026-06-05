@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 export type Pill = { id: string; label: string };
 
@@ -21,9 +21,9 @@ export function FilterPills({ pills, active, onChange }: Props) {
             fontSize: 12,
             fontWeight: 700,
             cursor: "pointer",
-            border: active === p.id ? "1px solid #c9a24a" : "1px solid #30363d",
+            border: active === p.id ? "1px solid #c9a24a" : "1px solid #dcebd8",
             background: active === p.id ? "#c9a24a22" : "transparent",
-            color: active === p.id ? "#c9a24a" : "#8b949e",
+            color: active === p.id ? "#c9a24a" : "#5d7a67",
           }}
         >
           {p.label}

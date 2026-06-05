@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { TrendingUp } from "lucide-react";
@@ -46,10 +46,10 @@ export function CrmLeadsEntradaPeriodo({ pontos, periodo }: Props) {
   const max = Math.max(1, ...exibir.map((p) => p.count));
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-[#30363d] bg-[#161b22] p-3">
+    <div className="flex h-full flex-col rounded-xl border border-[#dcebd8] bg-[#ffffff] p-3">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#8b949e]">Entrada de leads</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#5d7a67]">Entrada de leads</p>
           <p className="mt-0.5 text-[10px] leading-snug text-[#6e7681]">
             Novos cadastros {porSemana ? "por semana" : "por dia"} · {periodoLabel(periodo)}
           </p>
@@ -58,17 +58,17 @@ export function CrmLeadsEntradaPeriodo({ pontos, periodo }: Props) {
       </div>
 
       <div className="mb-2 grid grid-cols-3 gap-1 text-center">
-        <div className="rounded-md bg-[#0d1117] px-1 py-1.5">
+        <div className="rounded-md bg-[#f8fcf6] px-1 py-1.5">
           <p className="text-[9px] text-[#6e7681]">Total</p>
-          <p className="text-sm font-black tabular-nums text-[#e6edf3]">{total}</p>
+          <p className="text-sm font-black tabular-nums text-[#0b2210]">{total}</p>
         </div>
-        <div className="rounded-md bg-[#0d1117] px-1 py-1.5">
+        <div className="rounded-md bg-[#f8fcf6] px-1 py-1.5">
           <p className="text-[9px] text-[#6e7681]">{porSemana ? "Média/sem." : "Média/dia"}</p>
           <p className="text-sm font-black tabular-nums text-[#c9a24a]">{media}</p>
         </div>
-        <div className="rounded-md bg-[#0d1117] px-1 py-1.5">
+        <div className="rounded-md bg-[#f8fcf6] px-1 py-1.5">
           <p className="text-[9px] text-[#6e7681]">Pico</p>
-          <p className="text-sm font-black tabular-nums text-[#e6edf3]">
+          <p className="text-sm font-black tabular-nums text-[#0b2210]">
             {pico.count}
             {pico.count > 0 && (
               <span className="block text-[8px] font-normal text-[#6e7681]">{pico.label}</span>
@@ -91,7 +91,7 @@ export function CrmLeadsEntradaPeriodo({ pontos, periodo }: Props) {
               className="group flex min-w-0 flex-1 flex-col items-center"
               title={`${p.label}: ${p.count} lead${p.count !== 1 ? "s" : ""}`}
             >
-              <span className="mb-0.5 text-[9px] font-bold tabular-nums text-[#8b949e] opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="mb-0.5 text-[9px] font-bold tabular-nums text-[#5d7a67] opacity-0 transition-opacity group-hover:opacity-100">
                 {p.count > 0 ? p.count : ""}
               </span>
               <div

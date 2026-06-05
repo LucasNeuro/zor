@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
@@ -98,10 +98,10 @@ export default function MobileShell({ children }: Props) {
   const showSubHeader = needsMobileSubHeader(pathname);
 
   return (
-    <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-[#0d1117]">
+    <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-[#f8fcf6]">
       {showSubHeader && (
         <div
-          className="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-[#30363d] bg-[#161b22]/95 px-4 backdrop-blur-md"
+          className="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-[#dcebd8] bg-[#ffffff]/95 px-4 backdrop-blur-md"
           style={{
             paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
             paddingBottom: "12px",
@@ -111,12 +111,12 @@ export default function MobileShell({ children }: Props) {
           <button
             type="button"
             onClick={voltar}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#21262d] text-lg text-white"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#eef7eb] text-lg text-white"
             aria-label="Voltar"
           >
             ←
           </button>
-          <h1 className="min-w-0 flex-1 truncate text-base font-bold text-[#e6edf3]">
+          <h1 className="min-w-0 flex-1 truncate text-base font-bold text-[#0b2210]">
             {mobilePageTitle(pathname)}
           </h1>
         </div>
@@ -130,7 +130,7 @@ export default function MobileShell({ children }: Props) {
       </div>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-[#30363d] bg-[#161b22] shadow-[0_-1px_0_0_#30363d]"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-[#dcebd8] bg-[#ffffff] shadow-[0_-1px_0_0_#dcebd8]"
         style={{
           paddingBottom: "max(8px, env(safe-area-inset-bottom, 0px))",
           paddingLeft: "env(safe-area-inset-left, 0px)",

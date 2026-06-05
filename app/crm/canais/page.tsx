@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -24,17 +24,17 @@ const TH: React.CSSProperties = {
   padding: "10px 12px",
   fontSize: 11,
   fontWeight: 700,
-  color: "#8b949e",
+  color: "#5d7a67",
   letterSpacing: 0.5,
   textTransform: "uppercase",
-  borderBottom: "1px solid #30363d",
-  background: "#161b22",
+  borderBottom: "1px solid #dcebd8",
+  background: "#ffffff",
 };
 
 const TD: React.CSSProperties = {
   padding: "12px",
   fontSize: 13,
-  color: "#e6edf3",
+  color: "#0b2210",
   verticalAlign: "middle",
 };
 
@@ -66,7 +66,7 @@ function statusCores(status?: string | null): { bg: string; fg: string; border: 
   const s = (status || "").toLowerCase();
   if (s === "connected") return { bg: "#23863633", fg: "#3fb950", border: "#3fb95044" };
   if (s === "connecting") return { bg: "#bb800926", fg: "#e6c06a", border: "#bb800966" };
-  return { bg: "#30363d", fg: "#8b949e", border: "#484f58" };
+  return { bg: "#dcebd8", fg: "#5d7a67", border: "#484f58" };
 }
 
 export default function CanaisPage() {
@@ -119,9 +119,9 @@ export default function CanaisPage() {
           disabled={refreshing || loadingInicial}
           className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold"
           style={{
-            background: "#21262d",
+            background: "#eef7eb",
             color: "#c9a24a",
-            border: "1px solid #30363d",
+            border: "1px solid #dcebd8",
             cursor: refreshing || loadingInicial ? "wait" : "pointer",
           }}
         >
@@ -157,7 +157,7 @@ export default function CanaisPage() {
   }, [agentes]);
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: 24 }}>
+    <div style={{ height: "100%", overflowY: "auto", background: "#f8fcf6", padding: 24 }}>
       <div
         style={{
           display: "grid",
@@ -176,17 +176,17 @@ export default function CanaisPage() {
             style={{
               padding: "14px 16px",
               borderRadius: 12,
-              background: "#161b22",
-              border: "1px solid #30363d",
+              background: "#ffffff",
+              border: "1px solid #dcebd8",
             }}
           >
-            <p style={{ margin: 0, fontSize: 11, color: "#8b949e", fontWeight: 600 }}>{k.label}</p>
+            <p style={{ margin: 0, fontSize: 11, color: "#5d7a67", fontWeight: 600 }}>{k.label}</p>
             <p style={{ margin: "6px 0 0", fontSize: 22, fontWeight: 800, color: k.color }}>{k.value}</p>
           </div>
         ))}
       </div>
 
-      <p style={{ margin: "0 0 16px", color: "#8b949e", fontSize: 13, lineHeight: 1.5, maxWidth: 720 }}>
+      <p style={{ margin: "0 0 16px", color: "#5d7a67", fontSize: 13, lineHeight: 1.5, maxWidth: 720 }}>
         Visão operacional: só estado da conexão. <strong style={{ color: "#c9a24a" }}>Cadastrar instância</strong> (nome,
         proxy, token UAZAPI) é na ficha do agente; <strong style={{ color: "#c9a24a" }}>QR / pareamento</strong> é um
         passo à parte, quando for ligar o WhatsApp ao telefone.
@@ -209,7 +209,7 @@ export default function CanaisPage() {
       ) : null}
 
       {loadingInicial ? (
-        <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando canais…</p>
+        <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando canais…</p>
       ) : filtrados.length === 0 ? (
         <EmptyState
           message={
@@ -242,12 +242,12 @@ export default function CanaisPage() {
                     : a.modo_operacao || "—";
                 const temInst = Boolean((a.uazapi_instance_id || "").trim());
                 return (
-                  <tr key={a.agente_slug} style={{ borderBottom: "1px solid #21262d" }}>
+                  <tr key={a.agente_slug} style={{ borderBottom: "1px solid #eef7eb" }}>
                     <td style={{ ...TD, fontWeight: 600 }}>{a.nome}</td>
-                    <td style={{ ...TD, color: "#8b949e", fontSize: 12 }}>
+                    <td style={{ ...TD, color: "#5d7a67", fontSize: 12 }}>
                       <code>{a.agente_slug}</code>
                     </td>
-                    <td style={{ ...TD, color: "#8b949e", fontSize: 12 }}>
+                    <td style={{ ...TD, color: "#5d7a67", fontSize: 12 }}>
                       {temInst ? a.uazapi_instance_name || a.uazapi_instance_id : "—"}
                     </td>
                     <td style={TD}>
@@ -265,7 +265,7 @@ export default function CanaisPage() {
                         {temInst ? statusLabel(a.uazapi_connection_status) : "Sem instância"}
                       </span>
                     </td>
-                    <td style={{ ...TD, color: "#8b949e", fontSize: 12, maxWidth: 200 }}>{modo}</td>
+                    <td style={{ ...TD, color: "#5d7a67", fontSize: 12, maxWidth: 200 }}>{modo}</td>
                     <td style={{ ...TD, textAlign: "center" }}>
                       <button
                         type="button"
@@ -275,8 +275,8 @@ export default function CanaisPage() {
                           width: 36,
                           height: 36,
                           borderRadius: 8,
-                          border: "1px solid #30363d",
-                          background: "#21262d",
+                          border: "1px solid #dcebd8",
+                          background: "#eef7eb",
                           color: "#c9a24a",
                           cursor: "pointer",
                           display: "inline-flex",

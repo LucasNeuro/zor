@@ -10,34 +10,34 @@ import {
   Workflow,
   Zap,
 } from "lucide-react";
-import { TiviaBrand } from "@/components/brand/TiviaBrand";
+import { WajeBrand } from "@/components/brand/WajeBrand";
 import { ScrollReveal } from "@/components/landing/ScrollReveal";
 
 export const metadata: Metadata = {
-  title: "TIVIA | Plataforma de IA para Atendimento e CRM",
+  title: "Waje | Plataforma de IA para Atendimento e CRM",
   description:
-    "A TIVIA centraliza atendimento WhatsApp, CRM e agentes de IA com operação humana assistida para PMEs e profissionais autônomos.",
+    "A Waje centraliza atendimento WhatsApp, CRM e agentes de IA com operação humana assistida para PMEs e profissionais autônomos.",
   alternates: { canonical: "/" },
   openGraph: {
-    title: "TIVIA | IA para atendimento e CRM",
+    title: "Waje | IA para atendimento e CRM",
     description:
       "Atenda mais rápido com agentes de IA, fluxo human-in-the-loop e gestão multitenant em uma única plataforma.",
     url: "/",
-    siteName: "TIVIA",
+    siteName: "Waje",
     type: "website",
     locale: "pt_BR",
   },
   twitter: {
     card: "summary_large_image",
-    title: "TIVIA | IA para atendimento e CRM",
+    title: "Waje | IA para atendimento e CRM",
     description: "Plataforma de atendimento com agentes de IA, WhatsApp e CRM para PMEs.",
   },
 };
 
 const faqItems = [
   {
-    question: "A TIVIA substitui totalmente o atendimento humano?",
-    answer: "Não. A TIVIA acelera a operação com IA e mantém o humano no ciclo para decisões críticas.",
+    question: "A Waje substitui totalmente o atendimento humano?",
+    answer: "Não. A Waje acelera a operação com IA e mantém o humano no ciclo para decisões críticas.",
   },
   {
     question: "Posso começar somente com WhatsApp?",
@@ -56,13 +56,13 @@ const jsonLd = {
   "@graph": [
     {
       "@type": "Organization",
-      name: "TIVIA",
-      url: "https://tivia.app",
+      name: "Waje",
+      url: "https://waje.com.br",
       description: "Plataforma de atendimento com agentes de IA, CRM e operação human-in-the-loop.",
     },
     {
       "@type": "SoftwareApplication",
-      name: "TIVIA",
+      name: "Waje",
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       inLanguage: "pt-BR",
@@ -339,7 +339,7 @@ export default function HomePage() {
       <header className="fixed left-0 right-0 top-0 z-40 border-b border-[#dce7d8] bg-white/95 shadow-[0_4px_24px_rgba(15,40,20,0.07)] backdrop-blur-md">
         <div className="mx-auto w-full max-w-7xl px-4 py-3 md:px-6">
           <nav className="flex flex-wrap items-center justify-between gap-3">
-            <TiviaBrand layout="horizontal" className="items-center text-left" />
+            <WajeBrand layout="horizontal" tone="brand" className="items-center text-left" />
             <div className="hidden items-center gap-7 text-sm font-medium text-[#3f5b44] md:flex">
               <a href="#produto" className="transition hover:text-[#1f3a24]">Produto</a>
               <a href="#como-funciona" className="transition hover:text-[#1f3a24]">Como funciona</a>
@@ -386,7 +386,7 @@ export default function HomePage() {
                   Atendimento com IA e operação humana em total controle.
                 </h1>
                 <p className="hero-desc max-w-2xl text-base leading-relaxed text-white/80 md:text-lg">
-                  A TIVIA integra WhatsApp, CRM e automações para seu time atender melhor, vender mais e manter governança operacional.
+                  A Waje integra WhatsApp, CRM e automações para seu time atender melhor, vender mais e manter governança operacional.
                 </p>
                 <div className="hero-ctas flex flex-wrap gap-3 pt-1">
                   <Link
@@ -609,7 +609,7 @@ export default function HomePage() {
                 href="/cadastro"
                 className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#0b1f10] px-7 text-[15px] font-semibold text-[#92ff00] shadow-[0_4px_18px_rgba(11,31,16,0.28)] transition hover:bg-[#162c1c]"
               >
-                Criar conta na TIVIA
+                Criar conta na Waje
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link

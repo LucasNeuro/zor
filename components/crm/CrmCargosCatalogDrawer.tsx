@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ChangeEventHandler, CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -43,11 +43,11 @@ const OB = {
   verde: "var(--obra-verde, #003b26)",
   dourado: "var(--obra-dourado, #c9a24a)",
   douradoLight: "var(--obra-dourado-light, #e0b86a)",
-  borda: "var(--obra-borda, #30363d)",
-  texto: "var(--obra-texto, #e6edf3)",
-  texto2: "var(--obra-texto-2, #8b949e)",
+  borda: "var(--obra-borda, #dcebd8)",
+  texto: "var(--obra-texto, #0b2210)",
+  texto2: "var(--obra-texto-2, #5d7a67)",
   texto3: "var(--obra-texto-3, #484f58)",
-  surface: "var(--obra-dark-3, #21262d)",
+  surface: "var(--obra-dark-3, #eef7eb)",
   panel: "#0f1620",
   danger: "#f85149",
   dangerMuted: "rgba(248, 81, 73, 0.14)",
@@ -75,7 +75,7 @@ function toolbarIconButtonStyle(variant: ToolbarIconVariant, disabled: boolean):
     return {
       ...base,
       border: `1px solid ${OB.borda}`,
-      background: "#161b22",
+      background: "#ffffff",
       color: OB.texto3,
       opacity: 0.72,
     };
@@ -312,7 +312,7 @@ function mergeSugestao(prev: CargoFormFields, s: Record<string, unknown>): Cargo
 }
 
 const inp = {
-  background: "#161b22",
+  background: "#ffffff",
   border: `1px solid ${OB.borda}`,
   color: OB.texto,
   borderRadius: 8,
@@ -385,7 +385,7 @@ function ObraCheckbox({
           border: `1px solid ${
             checked || parcial ? "rgba(201, 162, 74, 0.45)" : OB.borda
           }`,
-          background: checked ? OB.verde : parcial ? "rgba(201, 162, 74, 0.12)" : "#161b22",
+          background: checked ? OB.verde : parcial ? "rgba(201, 162, 74, 0.12)" : "#ffffff",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -961,7 +961,7 @@ export function CrmCargosCatalogDrawer({
                       minWidth: 72,
                       height: 32,
                       boxSizing: "border-box",
-                      background: "#161b22",
+                      background: "#ffffff",
                       border: `1px solid ${OB.borda}`,
                       color: OB.texto,
                       borderRadius: 8,
@@ -979,7 +979,7 @@ export function CrmCargosCatalogDrawer({
                       maxWidth: "min(168px, 34vw)",
                       height: 32,
                       boxSizing: "border-box",
-                      background: "#161b22",
+                      background: "#ffffff",
                       border: `1px solid ${OB.borda}`,
                       color: OB.texto,
                       borderRadius: 8,
@@ -1386,7 +1386,7 @@ export function CrmCargosCatalogDrawer({
                               <p
                                 style={{
                                   margin: 0,
-                                  color: "#e6edf3",
+                                  color: "#0b2210",
                                   fontSize: 13,
                                   fontWeight: 700,
                                   whiteSpace: "nowrap",
@@ -2016,10 +2016,10 @@ export function CrmCargosCatalogDrawer({
         {confirmExclusaoCargo?.kind === "one" ? (
           <>
             <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
-              O cargo <strong style={{ color: "#e6edf3" }}>«{confirmExclusaoCargo.rotulo}»</strong> (
+              O cargo <strong style={{ color: "#0b2210" }}>«{confirmExclusaoCargo.rotulo}»</strong> (
               <code style={{ color: "#c9a24a" }}>@{confirmExclusaoCargo.slug}</code>) será removido do catálogo.
             </p>
-            <p style={{ margin: "10px 0 0", color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: "10px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
               Se existirem agentes com este título, a operação será bloqueada.
             </p>
           </>
@@ -2044,13 +2044,13 @@ export function CrmCargosCatalogDrawer({
         {confirmExclusaoCargo?.kind === "batch" ? (
           <>
             <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
-              Serão eliminados <strong style={{ color: "#e6edf3" }}>{confirmExclusaoCargo.slugs.length}</strong>{" "}
+              Serão eliminados <strong style={{ color: "#0b2210" }}>{confirmExclusaoCargo.slugs.length}</strong>{" "}
               cargo(s) do catálogo.
             </p>
             <p
               style={{
                 margin: "10px 0 0",
-                color: "#8b949e",
+                color: "#5d7a67",
                 fontSize: 11,
                 lineHeight: 1.45,
                 fontFamily: "ui-monospace, monospace",
@@ -2062,7 +2062,7 @@ export function CrmCargosCatalogDrawer({
                 ? ` … (+${confirmExclusaoCargo.slugs.length - 10})`
                 : ""}
             </p>
-            <p style={{ margin: "10px 0 0", color: "#8b949e", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: "10px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
               Linhas em uso por agentes não serão apagadas e aparecerão no relatório de erros.
             </p>
           </>

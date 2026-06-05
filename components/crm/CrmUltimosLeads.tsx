@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -29,38 +29,38 @@ export function CrmUltimosLeads({
 }) {
   if (loading) {
     return (
-      <div className="h-full animate-pulse rounded-2xl border border-[#2b3544] bg-[#121926] p-4">
-        <div className="mb-3 h-4 w-40 rounded bg-[#21262d]" />
+      <div className="h-full animate-pulse rounded-2xl border border-[#e8f0e6] bg-[#ffffff] p-4">
+        <div className="mb-3 h-4 w-40 rounded bg-[#e8f0e6]" />
         {[1, 2, 3].map((i) => (
-          <div key={i} className="mb-2 h-10 rounded-xl bg-[#21262d]" />
+          <div key={i} className="mb-2 h-10 rounded-xl bg-[#dcebd8]" />
         ))}
       </div>
     );
   }
 
   return (
-    <section className="h-full rounded-2xl border border-[#2b3544] bg-[#121926] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+    <section className="h-full rounded-2xl border border-[#dcebd8] bg-[#ffffff] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="m-0 text-sm font-bold tracking-tight text-[#e6edf3]">Últimos movimentos</h2>
+        <h2 className="m-0 text-sm font-bold tracking-tight text-[#0b2210]">Últimos movimentos</h2>
         <Link
           href="/crm/leads"
-          className="rounded-lg border border-[#30363d] px-2 py-1 text-xs font-bold text-[#c9a24a] transition-colors hover:border-[#c9a24a55]"
+          className="rounded-lg border border-[#dcebd8] px-2 py-1 text-xs font-bold text-[#c9a24a] transition-colors hover:border-[#c9a24a55]"
         >
           Ver todos
         </Link>
       </div>
       {leads.length === 0 ? (
-        <p className="text-sm text-[#8b949e]">Nenhum lead cadastrado ainda.</p>
+        <p className="text-sm text-[#5d7a67]">Nenhum lead cadastrado ainda.</p>
       ) : (
         <ul className="m-0 list-none space-y-1 p-0">
           {leads.map((l) => (
             <li key={l.id}>
               <Link
                 href={`/crm/leads/${l.id}`}
-                className="flex items-center justify-between gap-2 rounded-xl border border-transparent px-2.5 py-2 transition-colors hover:border-[#2b3544] hover:bg-[#0f1520]"
+                className="flex items-center justify-between gap-2 rounded-xl border border-transparent px-2.5 py-2 transition-colors hover:border-[#dcebd8] hover:bg-[#0f1520]"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[#e6edf3]">
+                  <p className="truncate text-sm font-semibold text-[#0b2210]">
                     {l.nome || `Lead ${l.id.slice(0, 8)}`}
                   </p>
                   <p className="text-xs text-[#6e7681]">

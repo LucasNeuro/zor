@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 
@@ -53,7 +53,7 @@ export function CrmConfirmDialog({
         style={{
           maxWidth: 440,
           width: "100%",
-          background: "#161b22",
+          background: "#ffffff",
           borderWidth: 1,
           borderStyle: "solid",
           borderColor: danger ? "rgba(179, 38, 30, 0.45)" : "rgba(201, 162, 74, 0.35)",
@@ -69,7 +69,7 @@ export function CrmConfirmDialog({
             padding: "18px 20px 8px",
             fontSize: 16,
             fontWeight: 700,
-            color: "#e6edf3",
+            color: "#0b2210",
             letterSpacing: "-0.02em",
           }}
         >
@@ -78,7 +78,7 @@ export function CrmConfirmDialog({
         <div
           style={{
             padding: "0 20px 16px",
-            color: "#8b949e",
+            color: "#5d7a67",
             fontSize: 13,
             lineHeight: 1.55,
           }}
@@ -93,7 +93,7 @@ export function CrmConfirmDialog({
             padding: "12px 20px 18px",
             borderTopWidth: 1,
             borderTopStyle: "solid",
-            borderTopColor: "#30363d",
+            borderTopColor: "#dcebd8",
           }}
         >
           <button
@@ -109,9 +109,9 @@ export function CrmConfirmDialog({
               opacity: loading ? 0.6 : 1,
               borderWidth: 1,
               borderStyle: "solid",
-              borderColor: "#30363d",
-              background: "#21262d",
-              color: "#8b949e",
+              borderColor: "#dcebd8",
+              background: "#eef7eb",
+              color: "#5d7a67",
             }}
           >
             {cancelLabel}

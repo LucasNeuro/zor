@@ -443,21 +443,21 @@ export default function AgentePage() {
 
   if (carregando) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0d1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando agente...</p>
+      <div style={{ minHeight: "100vh", background: "#f8fcf6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando agente...</p>
       </div>
     );
   }
 
   if (!agente) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0d1117", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
-        <p style={{ color: "#8b949e", fontSize: 13 }}>Agente não encontrado.</p>
+      <div style={{ minHeight: "100vh", background: "#f8fcf6", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+        <p style={{ color: "#5d7a67", fontSize: 13 }}>Agente não encontrado.</p>
         <button
           onClick={() => router.push("/crm/agentes")}
           style={{
             padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-            background: "#161b22", border: "1px solid #30363d", color: "#8b949e", cursor: "pointer",
+            background: "#ffffff", border: "1px solid #dcebd8", color: "#5d7a67", cursor: "pointer",
           }}
         >
           ← Voltar para agentes
@@ -466,32 +466,32 @@ export default function AgentePage() {
     );
   }
 
-  const segCor = SEGMENTO_COR[agente.area || ""] || "#8b949e";
-  const nivelCor = NIVEL_COR[nivelTag(agente.nivel)] || "#8b949e";
+  const segCor = SEGMENTO_COR[agente.area || ""] || "#5d7a67";
+  const nivelCor = NIVEL_COR[nivelTag(agente.nivel)] || "#5d7a67";
   const statusBadge = badgeStatusAgente(agente);
 
   const chipStyle = (ativo: boolean): React.CSSProperties => ({
     padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700,
     cursor: "pointer",
-    border: `1px solid ${ativo ? "#c9a24a" : "#30363d"}`,
-    background: ativo ? "#c9a24a22" : "#161b22",
-    color: ativo ? "#c9a24a" : "#8b949e",
+    border: `1px solid ${ativo ? "#c9a24a" : "#dcebd8"}`,
+    background: ativo ? "#c9a24a22" : "#ffffff",
+    color: ativo ? "#c9a24a" : "#5d7a67",
     transition: "all 150ms",
   });
 
   const inputStyle: React.CSSProperties = {
-    background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3",
+    background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210",
     borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none",
     width: "100%", boxSizing: "border-box",
   };
 
   const inputDisabledStyle: React.CSSProperties = {
     ...inputStyle,
-    color: "#8b949e", cursor: "not-allowed", opacity: 0.6,
+    color: "#5d7a67", cursor: "not-allowed", opacity: 0.6,
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0d1117" }}>
+    <div style={{ minHeight: "100vh", background: "#f8fcf6" }}>
 
       {/* MODAL ARQUIVAR */}
       {showArquivar && (
@@ -503,14 +503,14 @@ export default function AgentePage() {
           }}
         >
           <div style={{
-            background: "#161b22", border: "1px solid #30363d", borderRadius: 16,
+            background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 16,
             padding: 28, width: "100%", maxWidth: 460,
           }}>
-            <h2 style={{ color: "#e6edf3", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
+            <h2 style={{ color: "#0b2210", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
               Arquivar agente
             </h2>
-            <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 14px" }}>
-              Agente: <strong style={{ color: "#e6edf3" }}>{agente.nome}</strong>
+            <p style={{ color: "#5d7a67", fontSize: 13, margin: "0 0 14px" }}>
+              Agente: <strong style={{ color: "#0b2210" }}>{agente.nome}</strong>
             </p>
 
             {/* Aviso */}
@@ -523,7 +523,7 @@ export default function AgentePage() {
               </p>
             </div>
 
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 8 }}>
               Motivo do arquivamento <span style={{ color: "#ef4444" }}>*</span>
             </label>
             <textarea
@@ -533,7 +533,7 @@ export default function AgentePage() {
               rows={3}
               style={{
                 ...inputStyle, resize: "none", marginBottom: 6,
-                border: `1px solid ${motivoArquivamento.length > 0 && motivoArquivamento.trim().length < 10 ? "#ef4444" : "#30363d"}`,
+                border: `1px solid ${motivoArquivamento.length > 0 && motivoArquivamento.trim().length < 10 ? "#ef4444" : "#dcebd8"}`,
               }}
             />
             {motivoArquivamento.length > 0 && motivoArquivamento.trim().length < 10 && (
@@ -547,8 +547,8 @@ export default function AgentePage() {
                 onClick={() => setShowArquivar(false)}
                 style={{
                   flex: 1, padding: "10px 0", borderRadius: 8,
-                  background: "#21262d", border: "1px solid #30363d",
-                  color: "#8b949e", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  background: "#eef7eb", border: "1px solid #dcebd8",
+                  color: "#5d7a67", fontSize: 13, fontWeight: 700, cursor: "pointer",
                 }}
               >
                 Cancelar
@@ -558,7 +558,7 @@ export default function AgentePage() {
                 disabled={arquivando || motivoArquivamento.trim().length < 10}
                 style={{
                   flex: 1, padding: "10px 0", borderRadius: 8,
-                  background: motivoArquivamento.trim().length >= 10 ? "#dc2626" : "#30363d",
+                  background: motivoArquivamento.trim().length >= 10 ? "#dc2626" : "#dcebd8",
                   border: "none", color: "white", fontSize: 13, fontWeight: 700,
                   cursor: arquivando || motivoArquivamento.trim().length < 10 ? "not-allowed" : "pointer",
                   opacity: arquivando ? 0.6 : 1,
@@ -590,19 +590,19 @@ export default function AgentePage() {
         >
           <div
             style={{
-              background: "#161b22",
-              border: "1px solid #30363d",
+              background: "#ffffff",
+              border: "1px solid #dcebd8",
               borderRadius: 16,
               padding: 28,
               width: "100%",
               maxWidth: 480,
             }}
           >
-            <h2 style={{ color: "#e6edf3", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
+            <h2 style={{ color: "#0b2210", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
               Limpar memórias do agente
             </h2>
-            <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 14px", lineHeight: 1.55 }}>
-              Remove aprendizados persistentes de <strong style={{ color: "#e6edf3" }}>{agente.nome}</strong> e zera o
+            <p style={{ color: "#5d7a67", fontSize: 13, margin: "0 0 14px", lineHeight: 1.55 }}>
+              Remove aprendizados persistentes de <strong style={{ color: "#0b2210" }}>{agente.nome}</strong> e zera o
               fluxo conversacional de todos os leads atribuídos a este agente — incluindo playbook WhatsApp (
               <code style={{ fontSize: 11 }}>wa_playbook_*</code>), menu de triagem, memórias de lead e estado da
               sessão. Útil para testar o atendimento do zero (ex.: enviar &quot;Olá&quot; de novo).
@@ -620,7 +620,7 @@ export default function AgentePage() {
                 <strong>{contagemMemorias.memoriasLead}</strong> memória(s) de lead).
               </p>
             ) : (
-              <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 12px" }}>A contar registos…</p>
+              <p style={{ color: "#5d7a67", fontSize: 12, margin: "0 0 12px" }}>A contar registos…</p>
             )}
             <label
               style={{
@@ -654,9 +654,9 @@ export default function AgentePage() {
                   flex: 1,
                   padding: "10px 0",
                   borderRadius: 8,
-                  background: "#21262d",
-                  border: "1px solid #30363d",
-                  color: "#8b949e",
+                  background: "#eef7eb",
+                  border: "1px solid #dcebd8",
+                  color: "#5d7a67",
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: limpandoMemorias ? "not-allowed" : "pointer",
@@ -698,23 +698,23 @@ export default function AgentePage() {
           }}
         >
           <div style={{
-            background: "#161b22", border: "1px solid #30363d", borderRadius: 16,
+            background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 16,
             padding: 28, width: "100%", maxWidth: 420,
           }}>
-            <h2 style={{ color: "#e6edf3", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
+            <h2 style={{ color: "#0b2210", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
               Confirmar alterações
             </h2>
-            <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 20px", lineHeight: 1.5 }}>
+            <p style={{ color: "#5d7a67", fontSize: 13, margin: "0 0 20px", lineHeight: 1.5 }}>
               Confirmar alterações no agente{" "}
-              <strong style={{ color: "#e6edf3" }}>{nome}</strong>?
+              <strong style={{ color: "#0b2210" }}>{nome}</strong>?
             </p>
             <div style={{ display: "flex", gap: 10 }}>
               <button
                 onClick={() => setShowConfirmSalvar(false)}
                 style={{
                   flex: 1, padding: "10px 0", borderRadius: 8,
-                  background: "#21262d", border: "1px solid #30363d",
-                  color: "#8b949e", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  background: "#eef7eb", border: "1px solid #dcebd8",
+                  color: "#5d7a67", fontSize: 13, fontWeight: 700, cursor: "pointer",
                 }}
               >
                 Cancelar
@@ -740,8 +740,8 @@ export default function AgentePage() {
       {/* HEADER */}
       <div style={{
         position: "sticky", top: 0, zIndex: 50,
-        background: "linear-gradient(180deg, #161b22 0%, #0d1117 100%)",
-        borderBottom: "1px solid #30363d",
+        background: "linear-gradient(180deg, #ffffff 0%, #f8fcf6 100%)",
+        borderBottom: "1px solid #dcebd8",
         boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
         padding: "18px 24px 14px",
       }}>
@@ -755,8 +755,8 @@ export default function AgentePage() {
                 width: 36,
                 height: 36,
                 borderRadius: 10,
-                border: "1px solid #30363d",
-                background: "#21262d",
+                border: "1px solid #dcebd8",
+                background: "#eef7eb",
                 color: "#c9d1d9",
                 cursor: "pointer",
                 display: "flex",
@@ -772,7 +772,7 @@ export default function AgentePage() {
                 width: 56,
                 height: 56,
                 borderRadius: 16,
-                background: `linear-gradient(135deg, ${segCor} 0%, #0d1117 140%)`,
+                background: `linear-gradient(135deg, ${segCor} 0%, #f8fcf6 140%)`,
                 border: `1px solid ${segCor}55`,
                 display: "flex",
                 alignItems: "center",
@@ -787,10 +787,10 @@ export default function AgentePage() {
               {iniciais(agente.nome)}
             </div>
             <div style={{ minWidth: 0 }}>
-              <h1 style={{ color: "#e6edf3", fontSize: 20, fontWeight: 800, margin: "0 0 4px", letterSpacing: -0.2 }}>
+              <h1 style={{ color: "#0b2210", fontSize: 20, fontWeight: 800, margin: "0 0 4px", letterSpacing: -0.2 }}>
                 {agente.nome}
               </h1>
-              <p style={{ color: "#8b949e", fontSize: 12, margin: "0 0 8px", lineHeight: 1.45 }}>
+              <p style={{ color: "#5d7a67", fontSize: 12, margin: "0 0 8px", lineHeight: 1.45 }}>
                 {agente.cargo}
                 <span style={{ color: "#484f58", marginLeft: 8 }}>@{agente.agente_slug}</span>
               </p>
@@ -896,16 +896,16 @@ export default function AgentePage() {
           </div>
 
           <div style={{
-            background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 20,
+            background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 20,
             display: "flex", flexDirection: "column", gap: 16,
           }}>
-            <h2 style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
+            <h2 style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
               Configurações fixas
             </h2>
             <p style={{ fontSize: 11, color: "#64748b", margin: "-4px 0 0", lineHeight: 1.45 }}>{INFERENCIA_IA_CRM_COPIA}</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
               <div>
-                <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>Cargo</label>
+                <label style={{ fontSize: 11, color: "#5d7a67", display: "block", marginBottom: 4 }}>Cargo</label>
                 <input
                   value={agente.cargo || "—"}
                   disabled
@@ -913,7 +913,7 @@ export default function AgentePage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>Área</label>
+                <label style={{ fontSize: 11, color: "#5d7a67", display: "block", marginBottom: 4 }}>Área</label>
                 <input
                   value={agente.area || "—"}
                   disabled
@@ -921,7 +921,7 @@ export default function AgentePage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: "#8b949e", display: "block", marginBottom: 4 }}>Nível</label>
+                <label style={{ fontSize: 11, color: "#5d7a67", display: "block", marginBottom: 4 }}>Nível</label>
                 <div style={{
                   ...inputDisabledStyle, display: "flex", alignItems: "center", gap: 8,
                   padding: "6px 12px",
@@ -944,16 +944,16 @@ export default function AgentePage() {
 
         {/* BLOCO: Configurações editáveis */}
         <div style={{
-          background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 20,
+          background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 20,
           display: "flex", flexDirection: "column", gap: 20,
         }}>
-          <h2 style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
+          <h2 style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
             Configurações editáveis
           </h2>
 
           {/* Nome */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 8 }}>
               Nome
             </label>
             <input
@@ -965,7 +965,7 @@ export default function AgentePage() {
 
           {/* Mercados */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 10 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 10 }}>
               Mercados
             </label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -983,13 +983,13 @@ export default function AgentePage() {
 
           {/* Personalidade — 5 eixos */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 14 }}>
               Personalidade
             </label>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
               {EIXOS.map((eixo, i) => (
                 <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ fontSize: 11, color: "#8b949e", fontWeight: 700 }}>{eixo.nome}</span>
+                  <span style={{ fontSize: 11, color: "#5d7a67", fontWeight: 700 }}>{eixo.nome}</span>
                   <div style={{ display: "flex", gap: 6 }}>
                     {[1, 2, 3, 4, 5].map((v) => {
                       const ativo = valores[i] === v;
@@ -999,9 +999,9 @@ export default function AgentePage() {
                           onClick={() => setValor(i, v)}
                           style={{
                             width: 34, height: 34, borderRadius: "50%", fontSize: 12, fontWeight: 700,
-                            cursor: "pointer", border: `2px solid ${ativo ? "#c9a24a" : "#30363d"}`,
-                            background: ativo ? "#c9a24a" : "#0d1117",
-                            color: ativo ? "#003b26" : "#8b949e",
+                            cursor: "pointer", border: `2px solid ${ativo ? "#c9a24a" : "#dcebd8"}`,
+                            background: ativo ? "#c9a24a" : "#f8fcf6",
+                            color: ativo ? "#003b26" : "#5d7a67",
                             transition: "all 150ms",
                           }}
                         >
@@ -1017,7 +1017,7 @@ export default function AgentePage() {
 
           {/* Horário */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 10 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 10 }}>
               Horário de atendimento
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1027,7 +1027,7 @@ export default function AgentePage() {
                 onChange={(e) => setHorarioInicio(e.target.value)}
                 style={{ ...inputStyle, width: "auto" }}
               />
-              <span style={{ color: "#8b949e", fontSize: 13 }}>até</span>
+              <span style={{ color: "#5d7a67", fontSize: 13 }}>até</span>
               <input
                 type="time"
                 value={horarioFim}
@@ -1039,7 +1039,7 @@ export default function AgentePage() {
 
           {/* Dias da semana */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 10 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 10 }}>
               Dias da semana
             </label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1060,7 +1060,7 @@ export default function AgentePage() {
 
           {/* Bio */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 8 }}>
               Bio
             </label>
             <textarea
@@ -1073,7 +1073,7 @@ export default function AgentePage() {
 
           {/* Tom de voz */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 8 }}>
               Tom de voz
             </label>
             <input
@@ -1085,7 +1085,7 @@ export default function AgentePage() {
 
           {/* Estilo de comunicação */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 8 }}>
               Estilo de comunicação
             </label>
             <input
@@ -1097,7 +1097,7 @@ export default function AgentePage() {
 
           {/* System prompt base */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 8 }}>
               System prompt base
             </label>
             <textarea
@@ -1110,7 +1110,7 @@ export default function AgentePage() {
 
           <div
             style={{
-              borderTop: "1px solid #30363d",
+              borderTop: "1px solid #dcebd8",
               paddingTop: 18,
             }}
           >
@@ -1197,8 +1197,8 @@ export default function AgentePage() {
                 fontSize: 12,
                 fontWeight: 700,
                 cursor: mistralProvisionar && !syncMistralLoading ? "pointer" : "not-allowed",
-                border: "1px solid #30363d",
-                background: mistralProvisionar ? "#161b22" : "#0d1117",
+                border: "1px solid #dcebd8",
+                background: mistralProvisionar ? "#ffffff" : "#f8fcf6",
                 color: mistralProvisionar ? "#c9a24a" : "#484f58",
               }}
             >
@@ -1248,9 +1248,9 @@ function HeaderActionGroup({ children }: { children: ReactNode }) {
         display: "inline-flex",
         alignItems: "stretch",
         borderRadius: 12,
-        border: "1px solid #30363d",
+        border: "1px solid #dcebd8",
         overflow: "hidden",
-        background: "#0d1117",
+        background: "#f8fcf6",
         boxShadow: "0 4px 18px rgba(0,0,0,0.28)",
         flexShrink: 0,
       }}
@@ -1278,7 +1278,7 @@ function HeaderActionButton({
   const palette =
     variant === "ai"
       ? { bg: "#2e106418", hoverBg: "#2e106428", color: "#c4b5fd", divider: "#6d28d944" }
-      : { bg: "#21262d", hoverBg: "#30363d", color: "#c9d1d9", divider: "#30363d" };
+      : { bg: "#eef7eb", hoverBg: "#dcebd8", color: "#c9d1d9", divider: "#dcebd8" };
 
   return (
     <button

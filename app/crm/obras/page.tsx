@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -48,8 +48,8 @@ export default function ObrasPage() {
   }
 
   return (
-    <div style={{ padding: 24, background: "#0d1117", minHeight: "100%" }}>
-      <h1 style={{ margin: "0 0 16px", color: "#e6edf3" }}>Obras</h1>
+    <div style={{ padding: 24, background: "#f8fcf6", minHeight: "100%" }}>
+      <h1 style={{ margin: "0 0 16px", color: "#0b2210" }}>Obras</h1>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
         <input
@@ -60,9 +60,9 @@ export default function ObrasPage() {
             flex: 1,
             padding: "10px 12px",
             borderRadius: 8,
-            border: "1px solid #30363d",
-            background: "#161b22",
-            color: "#e6edf3",
+            border: "1px solid #dcebd8",
+            background: "#ffffff",
+            color: "#0b2210",
           }}
         />
         <button
@@ -84,7 +84,7 @@ export default function ObrasPage() {
       </div>
 
       {carregando ? (
-        <p style={{ color: "#8b949e" }}>Carregando...</p>
+        <p style={{ color: "#5d7a67" }}>Carregando...</p>
       ) : obras.length === 0 ? (
         <EmptyState message="Nenhuma obra cadastrada." />
       ) : (
@@ -97,17 +97,17 @@ export default function ObrasPage() {
                 display: "block",
                 padding: 14,
                 borderRadius: 10,
-                border: "1px solid #30363d",
-                background: "#161b22",
+                border: "1px solid #dcebd8",
+                background: "#ffffff",
                 textDecoration: "none",
-                color: "#e6edf3",
+                color: "#0b2210",
               }}
             >
               <strong>{o.titulo}</strong>
-              <span style={{ marginLeft: 8, fontSize: 11, color: "#8b949e", fontFamily: "monospace" }}>
+              <span style={{ marginLeft: 8, fontSize: 11, color: "#5d7a67", fontFamily: "monospace" }}>
                 {o.codigo}
               </span>
-              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#8b949e" }}>
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#5d7a67" }}>
                 {o.status} · {[o.cidade, o.estado].filter(Boolean).join(" / ") || "—"}
               </p>
             </Link>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -128,7 +128,7 @@ const TIPO_COR: Record<string, string> = {
   /** Verde legível no fundo escuro (antes #003b26 parecia “apagado”). */
   continuo: "#4ade80",
   programado: "#c9a24a",
-  gatilho: "#8b949e",
+  gatilho: "#5d7a67",
 };
 
 function cicloTipoIcon(tipo: string) {
@@ -145,7 +145,7 @@ function slugParaApiCiclos(agenteSlug: string): string {
 
 const STATUS_COR: Record<string, string> = {
   sucesso: "#4ade80",
-  sem_acao: "#8b949e",
+  sem_acao: "#5d7a67",
   erro: "#b3261e",
   rodando: "#c9a24a",
   nunca_executado: "#484f58",
@@ -802,7 +802,7 @@ export default function CiclosPage() {
           <button
             onClick={abrirNovoCiclo}
             className="rounded px-2 py-1 font-semibold"
-            style={{ background: "#21262d", color: "#c9a24a", border: "1px solid #30363d" }}
+            style={{ background: "#eef7eb", color: "#c9a24a", border: "1px solid #dcebd8" }}
           >
             Novo ciclo
           </button>
@@ -812,8 +812,8 @@ export default function CiclosPage() {
           <span
             className="rounded px-2 py-1"
             style={{
-              background: alertas.length > 0 ? "#b3261e30" : "#21262d",
-              color: alertas.length > 0 ? "#b3261e" : "#8b949e",
+              background: alertas.length > 0 ? "#b3261e30" : "#eef7eb",
+              color: alertas.length > 0 ? "#b3261e" : "#5d7a67",
             }}
           >
             {alertas.length} alertas
@@ -826,7 +826,7 @@ export default function CiclosPage() {
 
   return (
     <>
-    <div style={{ background: "#0d1117", minHeight: "100vh" }}>
+    <div style={{ background: "#f8fcf6", minHeight: "100vh" }}>
       <CrmStickyTabs
         activeId={aba}
         onChange={(id) => setAba(id as typeof aba)}
@@ -845,7 +845,7 @@ export default function CiclosPage() {
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: "#8b949e",
+                  color: "#5d7a67",
                   margin: "0 0 10px",
                   letterSpacing: 0.5,
                 }}
@@ -894,7 +894,7 @@ export default function CiclosPage() {
                     fontSize: 12,
                     background: "#121923",
                     border: "1px solidrgb(13, 13, 13)",
-                    color: "#e6edf3",
+                    color: "#0b2210",
                   }}
                 />
                 {ciclosTodos.length > 0 && (
@@ -943,12 +943,12 @@ export default function CiclosPage() {
             )}
 
             {ciclosTodos.length === 0 && (
-              <p style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
+              <p style={{ color: "#5d7a67", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
                 Nenhum ciclo cadastrado
               </p>
             )}
             {ciclosTodos.length > 0 && ciclosFiltrados.length === 0 && (
-              <p style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
+              <p style={{ color: "#5d7a67", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
                 Nenhum ciclo corresponde à busca
               </p>
             )}
@@ -957,7 +957,7 @@ export default function CiclosPage() {
                 {ciclosFiltrados.map((c) => {
                   const tipoCor = TIPO_COR[c.tipo] || "#3b82f6";
                   const st = c.ultimo_status || "nunca_executado";
-                  const stCor = STATUS_COR[st] || "#8b949e";
+                  const stCor = STATUS_COR[st] || "#5d7a67";
                   const ativo = c.ativo !== false;
                   const selecionado = drawerOpen && selectedCicloId === c.id;
                   const execProgress =
@@ -1244,15 +1244,15 @@ export default function CiclosPage() {
             {logs.length === 0 ? (
               <p className="text-center py-8 text-sm" style={{ color: "#484f58" }}>Nenhuma execução registrada ainda</p>
             ) : logs.map(l => (
-              <div key={l.id as string} className="rounded-xl p-3" style={{ background: "#161b22", border: "1px solid #30363d" }}>
+              <div key={l.id as string} className="rounded-xl p-3" style={{ background: "#ffffff", border: "1px solid #dcebd8" }}>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-white font-bold text-sm">{l.agente_slug as string}</p>
                   <span className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: `${STATUS_COR[l.status as string] || "#8b949e"}30`, color: STATUS_COR[l.status as string] || "#8b949e" }}>
+                    style={{ background: `${STATUS_COR[l.status as string] || "#5d7a67"}30`, color: STATUS_COR[l.status as string] || "#5d7a67" }}>
                     {l.status as string}
                   </span>
                 </div>
-                <p className="text-xs" style={{ color: "#8b949e" }}>{tempoRelativo(l.iniciado_em as string)}</p>
+                <p className="text-xs" style={{ color: "#5d7a67" }}>{tempoRelativo(l.iniciado_em as string)}</p>
                 {typeof l.erro === "string" && <p className="text-xs mt-1" style={{ color: "#b3261e" }}>{l.erro}</p>}
                 {Array.isArray(l.acoes_tomadas) && (l.acoes_tomadas as string[]).length > 0 && (
                   <div className="mt-1 space-y-0.5">
@@ -1271,15 +1271,15 @@ export default function CiclosPage() {
             {alertas.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-2xl mb-2">✓</p>
-                <p className="font-bold" style={{ color: "#e6edf3" }}>Nenhum alerta pendente</p>
+                <p className="font-bold" style={{ color: "#0b2210" }}>Nenhum alerta pendente</p>
                 <p className="text-xs mt-1" style={{ color: "#484f58" }}>Operação saudável</p>
               </div>
             ) : alertas.map(a => {
-              const cor = a.tipo === "critico" ? "#b3261e" : a.tipo === "importante" ? "#c9a24a" : a.tipo === "sugestao" ? "#003b26" : "#8b949e";
+              const cor = a.tipo === "critico" ? "#b3261e" : a.tipo === "importante" ? "#c9a24a" : a.tipo === "sugestao" ? "#003b26" : "#5d7a67";
               return (
                 <div key={a.id as string} className="rounded-xl p-3"
                   style={{
-                    background: "#161b22",
+                    background: "#ffffff",
                     borderTop: `1px solid ${cor}44`,
                     borderRight: `1px solid ${cor}44`,
                     borderBottom: `1px solid ${cor}44`,
@@ -1293,11 +1293,11 @@ export default function CiclosPage() {
                         <span className="text-xs" style={{ color: "#484f58" }}>{a.agente_slug as string}</span>
                       </div>
                       <p className="text-white font-bold text-sm">{a.titulo as string}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "#8b949e" }}>{a.mensagem as string}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "#5d7a67" }}>{a.mensagem as string}</p>
                     </div>
                     <button onClick={() => resolverAlerta(a.id as string)}
                       className="ml-2 text-xs px-2 py-1 rounded-lg flex-shrink-0"
-                      style={{ background: "#21262d", color: "#c9a24a", border: "none", cursor: "pointer" }}>
+                      style={{ background: "#eef7eb", color: "#c9a24a", border: "none", cursor: "pointer" }}>
                       Resolver
                     </button>
                   </div>
@@ -1317,12 +1317,12 @@ export default function CiclosPage() {
         >
           <aside
             className="h-full w-full max-w-xl border-l p-4 overflow-auto"
-            style={{ background: "#0d1117", borderColor: "#30363d" }}
+            style={{ background: "#f8fcf6", borderColor: "#dcebd8" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-4">
               <div>
-                <p className="text-xs uppercase" style={{ color: "#8b949e" }}>
+                <p className="text-xs uppercase" style={{ color: "#5d7a67" }}>
                   {drawerMode === "create" ? "Novo ciclo" : "Editar ciclo"}
                 </p>
                 <h2 className="text-lg font-semibold text-white">
@@ -1332,20 +1332,20 @@ export default function CiclosPage() {
               <button
                 onClick={() => setDrawerOpen(false)}
                 className="text-sm px-2 py-1 rounded"
-                style={{ background: "#21262d", color: "#8b949e", border: "1px solid #30363d" }}
+                style={{ background: "#eef7eb", color: "#5d7a67", border: "1px solid #dcebd8" }}
               >
                 Fechar
               </button>
             </div>
 
             {formLoading ? (
-              <p className="text-sm" style={{ color: "#8b949e" }}>Carregando...</p>
+              <p className="text-sm" style={{ color: "#5d7a67" }}>Carregando...</p>
             ) : (
               <>
                 {drawerMode === "edit" && selectedCicloId && (
                   <div
                     className="mb-4 flex w-full overflow-hidden rounded-lg"
-                    style={{ border: "1px solid #30363d" }}
+                    style={{ border: "1px solid #dcebd8" }}
                   >
                     {(["dados", "timeline"] as const).map((tab, i) => (
                       <button
@@ -1357,9 +1357,9 @@ export default function CiclosPage() {
                           margin: 0,
                           borderRadius: 0,
                           border: "none",
-                          borderLeft: i > 0 ? "1px solid #30363d" : "none",
-                          background: drawerSubTab === tab ? "#1b2532" : "#161b22",
-                          color: drawerSubTab === tab ? "#c9a24a" : "#8b949e",
+                          borderLeft: i > 0 ? "1px solid #dcebd8" : "none",
+                          background: drawerSubTab === tab ? "#1b2532" : "#ffffff",
+                          color: drawerSubTab === tab ? "#c9a24a" : "#5d7a67",
                           cursor: "pointer",
                           textTransform: tab === "timeline" ? "none" : "capitalize",
                         }}
@@ -1372,14 +1372,14 @@ export default function CiclosPage() {
 
                 {drawerMode === "edit" && drawerSubTab === "timeline" && selectedCicloId ? (
                   <div className="space-y-2">
-                    <p className="text-xs" style={{ color: "#8b949e" }}>
+                    <p className="text-xs" style={{ color: "#5d7a67" }}>
                       Execuções registradas em <code style={{ color: "#c9a24a" }}>hub_ciclos_log</code> para este ciclo (últimas 50).
                     </p>
                     {timelineLoading ? (
-                      <p className="text-sm" style={{ color: "#8b949e" }}>Carregando histórico…</p>
+                      <p className="text-sm" style={{ color: "#5d7a67" }}>Carregando histórico…</p>
                     ) : timelineLogs.length === 0 ? (
-                      <div className="rounded-lg p-4 space-y-2" style={{ background: "#161b22", border: "1px solid #30363d" }}>
-                        <p className="text-sm m-0" style={{ color: "#8b949e" }}>
+                      <div className="rounded-lg p-4 space-y-2" style={{ background: "#ffffff", border: "1px solid #dcebd8" }}>
+                        <p className="text-sm m-0" style={{ color: "#5d7a67" }}>
                           Ainda não há linhas em <span style={{ color: "#c9a24a" }}>hub_ciclos_log</span> com o identificador deste ciclo.
                         </p>
                         <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.5 }}>
@@ -1389,7 +1389,7 @@ export default function CiclosPage() {
                         </p>
                       </div>
                     ) : (
-                      <ul className="space-y-2 pl-0 list-none m-0" style={{ borderLeft: "2px solid #30363d", marginLeft: 8, paddingLeft: 16 }}>
+                      <ul className="space-y-2 pl-0 list-none m-0" style={{ borderLeft: "2px solid #dcebd8", marginLeft: 8, paddingLeft: 16 }}>
                         {timelineLogs.map((log) => {
                           const st = String(log.status ?? "");
                           return (
@@ -1408,22 +1408,22 @@ export default function CiclosPage() {
                                   background: STATUS_COR[st] || "#484f58",
                                 }}
                               />
-                              <div className="rounded-lg p-3" style={{ background: "#161b22", border: "1px solid #30363d" }}>
+                              <div className="rounded-lg p-3" style={{ background: "#ffffff", border: "1px solid #dcebd8" }}>
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                                  <span className="text-xs font-bold" style={{ color: "#e6edf3" }}>
+                                  <span className="text-xs font-bold" style={{ color: "#0b2210" }}>
                                     {log.agente_slug as string}
                                   </span>
                                   <span
                                     className="text-xs px-2 py-0.5 rounded-full"
                                     style={{
-                                      background: `${STATUS_COR[st] || "#8b949e"}30`,
-                                      color: STATUS_COR[st] || "#8b949e",
+                                      background: `${STATUS_COR[st] || "#5d7a67"}30`,
+                                      color: STATUS_COR[st] || "#5d7a67",
                                     }}
                                   >
                                     {st || "—"}
                                   </span>
                                 </div>
-                                <p className="text-xs mt-1" style={{ color: "#8b949e" }}>
+                                <p className="text-xs mt-1" style={{ color: "#5d7a67" }}>
                                   {tempoRelativo(log.iniciado_em as string)}
                                   {log.finalizado_em ? ` · fim ${tempoRelativo(log.finalizado_em as string)}` : ""}
                                 </p>
@@ -1447,39 +1447,39 @@ export default function CiclosPage() {
                 ) : (
               <div className="space-y-3">
                 <label className="block">
-                  <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Agente slug</span>
+                  <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>Agente slug</span>
                   <input
                     value={fAgenteSlug}
                     onChange={(e) => setFAgenteSlug(e.target.value)}
                     className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
+                    style={{ background: "#ffffff", border: "1px solid #dcebd8", color: "#0b2210" }}
                     placeholder="ex.: gerente_atendimento"
                   />
                 </label>
                 {agenteSomenteCanalWa && (
                   <p
                     className="text-xs m-0 rounded-lg p-3 leading-relaxed"
-                    style={{ background: "#1b2532", border: "1px solid #30363d", color: "#8b949e" }}
+                    style={{ background: "#1b2532", border: "1px solid #dcebd8", color: "#5d7a67" }}
                   >
                     Agente <strong style={{ color: "#c9a24a" }}>{MODO_OPERACAO_LABEL.canal_whatsapp}</strong>
                     : a conversa ao vivo é pelo webhook UAZAPI. Use ciclo{" "}
-                    <strong style={{ color: "#e6edf3" }}>gatilho</strong> para registo no hub; agendamento cron
+                    <strong style={{ color: "#0b2210" }}>gatilho</strong> para registo no hub; agendamento cron
                     só faz sentido para <strong style={{ color: "#c9a24a" }}>follow-up</strong> (nome ou dispatch
                     atendente/followup).
                   </p>
                 )}
                 <label className="block">
-                  <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Nome</span>
+                  <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>Nome</span>
                   <input
                     value={fNome}
                     onChange={(e) => setFNome(e.target.value)}
                     className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
+                    style={{ background: "#ffffff", border: "1px solid #dcebd8", color: "#0b2210" }}
                   />
                 </label>
                 <label className="block">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                    <span className="text-xs block" style={{ color: "#8b949e" }}>
+                    <span className="text-xs block" style={{ color: "#5d7a67" }}>
                       Descrição
                     </span>
                     <button
@@ -1488,9 +1488,9 @@ export default function CiclosPage() {
                       disabled={sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()}
                       className="inline-flex items-center gap-1.5 text-xs font-bold rounded-md px-2 py-1"
                       style={{
-                        background: "#21262d",
+                        background: "#eef7eb",
                         color: "#c9a24a",
-                        border: "1px solid #30363d",
+                        border: "1px solid #dcebd8",
                         cursor:
                           sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()
                             ? "not-allowed"
@@ -1508,22 +1508,22 @@ export default function CiclosPage() {
                     onChange={(e) => setFDescricao(e.target.value)}
                     rows={3}
                     className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
+                    style={{ background: "#ffffff", border: "1px solid #dcebd8", color: "#0b2210" }}
                   />
                 </label>
                 {esconderAgendamentoCron ? (
                   <div
                     className="rounded-lg p-3 space-y-2"
-                    style={{ background: "#161b22", border: "1px solid #30363d" }}
+                    style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
                   >
                     <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>
                       Canal WhatsApp — sem agendamento cron
                     </p>
-                    <p className="text-xs m-0 leading-relaxed" style={{ color: "#8b949e" }}>
-                      Este agente atua sob <strong style={{ color: "#e6edf3" }}>interação</strong> (mensagens
-                      UAZAPI). O tipo do ciclo fica em <strong style={{ color: "#e6edf3" }}>gatilho</strong> para
+                    <p className="text-xs m-0 leading-relaxed" style={{ color: "#5d7a67" }}>
+                      Este agente atua sob <strong style={{ color: "#0b2210" }}>interação</strong> (mensagens
+                      UAZAPI). O tipo do ciclo fica em <strong style={{ color: "#0b2210" }}>gatilho</strong> para
                       documentação no hub. Para cadências de follow-up programadas, use um nome com «follow» ou
-                      configure <code style={{ color: "#8b949e" }}>dispatch.atendente/followup</code> e abra os
+                      configure <code style={{ color: "#5d7a67" }}>dispatch.atendente/followup</code> e abra os
                       parâmetros de follow-up abaixo.
                     </p>
                   </div>
@@ -1532,10 +1532,10 @@ export default function CiclosPage() {
                   open={agendaDetailsAberto}
                   onToggle={(e) => setAgendaDetailsAberto(e.currentTarget.open)}
                   className="rounded-lg"
-                  style={{ background: "#161b22", border: "1px solid #30363d" }}
+                  style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
                 >
                   <summary
-                    className="cursor-pointer list-none flex items-center gap-2 p-3 select-none outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#161b22] focus-visible:ring-[#c9a24a66]"
+                    className="cursor-pointer list-none flex items-center gap-2 p-3 select-none outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ffffff] focus-visible:ring-[#c9a24a66]"
                     style={{ color: "#c9a24a" }}
                     aria-expanded={agendaDetailsAberto}
                   >
@@ -1554,8 +1554,8 @@ export default function CiclosPage() {
                   </summary>
                   <div className="space-y-3 px-3 pb-3">
                   <p className="text-xs m-0 leading-relaxed" style={{ color: "#484f58" }}>
-                    O runner lê <code style={{ color: "#8b949e" }}>hub_ciclos_ia</code> (ex.:{" "}
-                    <code style={{ color: "#8b949e" }}>/api/cron/dispatch-ciclos</code>
+                    O runner lê <code style={{ color: "#5d7a67" }}>hub_ciclos_ia</code> (ex.:{" "}
+                    <code style={{ color: "#5d7a67" }}>/api/cron/dispatch-ciclos</code>
                     ). Escolha o modo abaixo; os campos técnicos são gerados em função dele.
                   </p>
                   <div className="grid gap-2">
@@ -1596,23 +1596,23 @@ export default function CiclosPage() {
                           }}
                           className="w-full text-left rounded-lg p-3 transition-colors"
                           style={{
-                            border: sel ? "1px solid rgba(201, 162, 74, 0.55)" : "1px solid #30363d",
-                            background: sel ? "#1b2532" : "#0d1117",
+                            border: sel ? "1px solid rgba(201, 162, 74, 0.55)" : "1px solid #dcebd8",
+                            background: sel ? "#1b2532" : "#f8fcf6",
                             cursor: "pointer",
                           }}
                         >
                           <div className="flex items-start gap-2">
                             <span
                               className="mt-0.5 inline-flex rounded-md p-1"
-                              style={{ background: sel ? "#c9a24a22" : "#21262d", color: sel ? "#c9a24a" : "#8b949e" }}
+                              style={{ background: sel ? "#c9a24a22" : "#eef7eb", color: sel ? "#c9a24a" : "#5d7a67" }}
                             >
                               <Icon size={16} aria-hidden />
                             </span>
                             <span>
-                              <span className="block text-sm font-bold" style={{ color: "#e6edf3" }}>
+                              <span className="block text-sm font-bold" style={{ color: "#0b2210" }}>
                                 {opt.title}
                               </span>
-                              <span className="block text-xs mt-0.5" style={{ color: "#8b949e" }}>
+                              <span className="block text-xs mt-0.5" style={{ color: "#5d7a67" }}>
                                 {opt.sub}
                               </span>
                             </span>
@@ -1624,14 +1624,14 @@ export default function CiclosPage() {
 
                 {(fTipo === "continuo" || fTipo === "programado") && (
                   <label className="block">
-                    <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>
+                    <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>
                       Intervalo mínimo (minutos)
                     </span>
                     <input
                       value={fIntervalo}
                       onChange={(e) => setFIntervalo(e.target.value)}
                       className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
+                      style={{ background: "#ffffff", border: "1px solid #dcebd8", color: "#0b2210" }}
                       placeholder={fTipo === "continuo" ? "ex.: 15" : "ex.: 360"}
                     />
                     <p className="text-xs mt-1 m-0" style={{ color: "#484f58" }}>
@@ -1643,13 +1643,13 @@ export default function CiclosPage() {
                 {fTipo === "programado" && (
                   <div
                     className="rounded-lg p-3 space-y-3"
-                    style={{ background: "#161b22", border: "1px solid #30363d" }}
+                    style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>
                         Horário fixo (UTC) e dias da semana
                       </p>
-                      <label className="flex items-center gap-2 text-xs m-0 cursor-pointer" style={{ color: "#8b949e" }}>
+                      <label className="flex items-center gap-2 text-xs m-0 cursor-pointer" style={{ color: "#5d7a67" }}>
                         <input
                           type="checkbox"
                           checked={cronEditorLivre}
@@ -1673,7 +1673,7 @@ export default function CiclosPage() {
                       <>
                         <div className="flex flex-wrap gap-3">
                           <label className="m-0">
-                            <span className="text-xs block mb-1" style={{ color: "#8b949e" }}>
+                            <span className="text-xs block mb-1" style={{ color: "#5d7a67" }}>
                               Hora (0–23 UTC)
                             </span>
                             <input
@@ -1685,11 +1685,11 @@ export default function CiclosPage() {
                                 setCronHr(Math.min(23, Math.max(0, Number.parseInt(e.target.value, 10) || 0)))
                               }
                               className="w-24 rounded-lg px-3 py-2 text-sm"
-                              style={{ background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3" }}
+                              style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
                             />
                           </label>
                           <label className="m-0">
-                            <span className="text-xs block mb-1" style={{ color: "#8b949e" }}>
+                            <span className="text-xs block mb-1" style={{ color: "#5d7a67" }}>
                               Minuto (0–59)
                             </span>
                             <input
@@ -1701,12 +1701,12 @@ export default function CiclosPage() {
                                 setCronMin(Math.min(59, Math.max(0, Number.parseInt(e.target.value, 10) || 0)))
                               }
                               className="w-24 rounded-lg px-3 py-2 text-sm"
-                              style={{ background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3" }}
+                              style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
                             />
                           </label>
                         </div>
                         <div>
-                          <span className="text-xs block mb-2" style={{ color: "#8b949e" }}>
+                          <span className="text-xs block mb-2" style={{ color: "#5d7a67" }}>
                             Dias em que corre (UTC)
                           </span>
                           <div className="flex flex-wrap gap-1.5">
@@ -1719,9 +1719,9 @@ export default function CiclosPage() {
                                   onClick={() => toggleCronDia(dow)}
                                   className="text-xs font-bold rounded-md px-2.5 py-1.5"
                                   style={{
-                                    border: on ? "1px solid #c9a24a" : "1px solid #30363d",
-                                    background: on ? "#c9a24a22" : "#0d1117",
-                                    color: on ? "#c9a24a" : "#8b949e",
+                                    border: on ? "1px solid #c9a24a" : "1px solid #dcebd8",
+                                    background: on ? "#c9a24a22" : "#f8fcf6",
+                                    color: on ? "#c9a24a" : "#5d7a67",
                                     cursor: "pointer",
                                   }}
                                 >
@@ -1732,22 +1732,22 @@ export default function CiclosPage() {
                           </div>
                         </div>
                         <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.45 }}>
-                          O dispatch usa <strong style={{ color: "#8b949e" }}>UTC</strong>. Para 09:00 em Brasília
-                          (≈ UTC−3), indique por exemplo <strong style={{ color: "#8b949e" }}>12</strong> na hora
+                          O dispatch usa <strong style={{ color: "#5d7a67" }}>UTC</strong>. Para 09:00 em Brasília
+                          (≈ UTC−3), indique por exemplo <strong style={{ color: "#5d7a67" }}>12</strong> na hora
                           UTC. Expressão gerada:{" "}
                           <code style={{ color: "#c9a24a" }}>{buildCronUtc(cronMin, cronHr, cronDias)}</code>
                         </p>
                       </>
                     ) : (
                       <label className="block m-0">
-                        <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>
+                        <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>
                           Expressão cron (5 campos, UTC)
                         </span>
                         <input
                           value={fCron}
                           onChange={(e) => setFCron(e.target.value)}
                           className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                          style={{ background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3" }}
+                          style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
                           placeholder="ex.: 0 12 * * 1-5"
                         />
                       </label>
@@ -1756,7 +1756,7 @@ export default function CiclosPage() {
                 )}
 
                 {fTipo === "gatilho" && (
-                  <p className="text-xs m-0 rounded-lg p-3" style={{ background: "#0d1117", border: "1px solid #30363d", color: "#8b949e" }}>
+                  <p className="text-xs m-0 rounded-lg p-3" style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#5d7a67" }}>
                     Este modo não agenda sozinho: use <strong style={{ color: "#c9a24a" }}>Executar</strong> no card ou ligue o ciclo a filas/webhooks na sua integração.
                   </p>
                 )}
@@ -1766,14 +1766,14 @@ export default function CiclosPage() {
                 {!mostrarBlocoFollowup ? (
                   <div
                     className="rounded-lg p-3 space-y-2"
-                    style={{ background: "#161b22", border: "1px solid #30363d" }}
+                    style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
                   >
-                    <p className="text-xs m-0" style={{ color: "#8b949e", lineHeight: 1.5 }}>
+                    <p className="text-xs m-0" style={{ color: "#5d7a67", lineHeight: 1.5 }}>
                       <strong style={{ color: "#c9a24a" }}>Follow-up WhatsApp</strong> — horas por passo e
                       pré-visualização do hub aplicam-se sobretudo a ciclos de atendimento (ex.: «follow» no nome ou{" "}
-                      <code style={{ color: "#8b949e" }}>dispatch</code>{" "}
-                      <code style={{ color: "#8b949e" }}>atendente</code> /{" "}
-                      <code style={{ color: "#8b949e" }}>followup</code>
+                      <code style={{ color: "#5d7a67" }}>dispatch</code>{" "}
+                      <code style={{ color: "#5d7a67" }}>atendente</code> /{" "}
+                      <code style={{ color: "#5d7a67" }}>followup</code>
                       ). Para outros tipos de ciclo pode ignorar.
                     </p>
                     <button
@@ -1784,9 +1784,9 @@ export default function CiclosPage() {
                       }}
                       className="text-xs font-bold px-2.5 py-1.5 rounded-md"
                       style={{
-                        background: "#21262d",
+                        background: "#eef7eb",
                         color: "#c9a24a",
-                        border: "1px solid #30363d",
+                        border: "1px solid #dcebd8",
                         cursor: "pointer",
                       }}
                     >
@@ -1797,12 +1797,12 @@ export default function CiclosPage() {
                 <details
                   key={`adv-followup-${drawerMode}-${selectedCicloId ?? "novo"}`}
                   className="rounded-lg"
-                  style={{ background: "#161b22", border: "1px solid #30363d" }}
+                  style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
                   open={followupDetailsAberto}
                   onToggle={(e) => setFollowupDetailsAberto(e.currentTarget.open)}
                 >
                   <summary
-                    className="cursor-pointer list-none flex items-center gap-2 p-3 select-none outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#161b22] focus-visible:ring-[#c9a24a66]"
+                    className="cursor-pointer list-none flex items-center gap-2 p-3 select-none outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ffffff] focus-visible:ring-[#c9a24a66]"
                     style={{ color: "#c9a24a" }}
                     aria-expanded={followupDetailsAberto}
                   >
@@ -1824,24 +1824,24 @@ export default function CiclosPage() {
                     <p
                       className="text-xs m-0 rounded-md px-2 py-1.5"
                       style={{
-                        background: "#21262d",
-                        border: "1px solid #30363d",
-                        color: "#8b949e",
+                        background: "#eef7eb",
+                        border: "1px solid #dcebd8",
+                        color: "#5d7a67",
                         lineHeight: 1.45,
                       }}
                     >
                       Secção aberta manualmente — use só se este ciclo alimentar{" "}
-                      <code style={{ color: "#8b949e" }}>/api/ciclos/atendente?ciclo=followup</code> ou equivalente.
+                      <code style={{ color: "#5d7a67" }}>/api/ciclos/atendente?ciclo=followup</code> ou equivalente.
                     </p>
                   )}
                   <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.45 }}>
-                    Valores gravados em <code style={{ color: "#8b949e" }}>configuracoes</code> (horas por passo e dias
-                    até arquivar); textos das mensagens vêm de <code style={{ color: "#8b949e" }}>hub_followup_config</code>.
+                    Valores gravados em <code style={{ color: "#5d7a67" }}>configuracoes</code> (horas por passo e dias
+                    até arquivar); textos das mensagens vêm de <code style={{ color: "#5d7a67" }}>hub_followup_config</code>.
                   </p>
                   <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>Parâmetros de follow-up</p>
                   <label className="block m-0">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                      <span className="text-xs block" style={{ color: "#8b949e" }}>
+                      <span className="text-xs block" style={{ color: "#5d7a67" }}>
                         Horas para lembretes (lista, separadas por vírgula)
                       </span>
                       <button
@@ -1850,9 +1850,9 @@ export default function CiclosPage() {
                         disabled={sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()}
                         className="inline-flex items-center gap-1.5 text-xs font-bold rounded-md px-2 py-1"
                         style={{
-                          background: "#21262d",
+                          background: "#eef7eb",
                           color: "#c9a24a",
-                          border: "1px solid #30363d",
+                          border: "1px solid #dcebd8",
                           cursor:
                             sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()
                               ? "not-allowed"
@@ -1879,9 +1879,9 @@ export default function CiclosPage() {
                           onClick={() => setFHorasFollowup(p.v)}
                           className="text-xs px-2 py-1 rounded"
                           style={{
-                            background: "#0d1117",
-                            border: "1px solid #30363d",
-                            color: "#8b949e",
+                            background: "#f8fcf6",
+                            border: "1px solid #dcebd8",
+                            color: "#5d7a67",
                             cursor: "pointer",
                           }}
                         >
@@ -1893,7 +1893,7 @@ export default function CiclosPage() {
                       value={fHorasFollowup}
                       onChange={(e) => setFHorasFollowup(e.target.value)}
                       className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3" }}
+                      style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
                       placeholder="ex.: 2, 24, 48"
                     />
                     <span className="text-xs mt-1 block" style={{ color: "#484f58" }}>
@@ -1901,7 +1901,7 @@ export default function CiclosPage() {
                     </span>
                   </label>
                   <label className="block m-0">
-                    <span className="text-xs mb-1 block" style={{ color: "#8b949e" }}>Arquivar lead após quantos dias sem resposta</span>
+                    <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>Arquivar lead após quantos dias sem resposta</span>
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {[7, 14, 21, 30].map((d) => (
                         <button
@@ -1910,9 +1910,9 @@ export default function CiclosPage() {
                           onClick={() => setFArquivarAposDias(String(d))}
                           className="text-xs px-2 py-1 rounded"
                           style={{
-                            background: "#0d1117",
-                            border: "1px solid #30363d",
-                            color: "#8b949e",
+                            background: "#f8fcf6",
+                            border: "1px solid #dcebd8",
+                            color: "#5d7a67",
                             cursor: "pointer",
                           }}
                         >
@@ -1926,24 +1926,24 @@ export default function CiclosPage() {
                       value={fArquivarAposDias}
                       onChange={(e) => setFArquivarAposDias(e.target.value)}
                       className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: "#0d1117", border: "1px solid #30363d", color: "#e6edf3" }}
+                      style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
                     />
                   </label>
 
-                  <div className="rounded-lg p-3 space-y-2" style={{ background: "#0d1117", border: "1px solid #30363d" }}>
+                  <div className="rounded-lg p-3 space-y-2" style={{ background: "#f8fcf6", border: "1px solid #dcebd8" }}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-bold m-0" style={{ color: "#e6edf3" }}>Pré-visualizar merge com hub_followup_config</p>
+                      <p className="text-xs font-bold m-0" style={{ color: "#0b2210" }}>Pré-visualizar merge com hub_followup_config</p>
                       {mercadosPreviewOptions.length > 1 && (
-                        <label className="flex items-center gap-2 m-0 text-xs" style={{ color: "#8b949e" }}>
+                        <label className="flex items-center gap-2 m-0 text-xs" style={{ color: "#5d7a67" }}>
                           <span>Mercado</span>
                           <select
                             value={previewMercado}
                             onChange={(e) => setPreviewMercado(e.target.value)}
                             className="rounded px-2 py-1 text-xs"
                             style={{
-                              background: "#161b22",
-                              border: "1px solid #30363d",
-                              color: "#e6edf3",
+                              background: "#ffffff",
+                              border: "1px solid #dcebd8",
+                              color: "#0b2210",
                             }}
                           >
                             {mercadosPreviewOptions.map((m) => (
@@ -1954,19 +1954,19 @@ export default function CiclosPage() {
                       )}
                     </div>
                     {followupHubLoading ? (
-                      <p className="text-xs m-0" style={{ color: "#8b949e" }}>Carregando passos do hub…</p>
+                      <p className="text-xs m-0" style={{ color: "#5d7a67" }}>Carregando passos do hub…</p>
                     ) : followupHubError ? (
                       <p className="text-xs m-0" style={{ color: "#b3261e" }}>{followupHubError}</p>
                     ) : mergePreviewLinhas.length === 0 ? (
-                      <p className="text-xs m-0" style={{ color: "#8b949e" }}>
+                      <p className="text-xs m-0" style={{ color: "#5d7a67" }}>
                         Nenhum passo ativo para «{previewMercado}» (com fallback geral). Cadastre linhas em hub_followup_config.
                       </p>
                     ) : (
                       <>
-                        <div className="overflow-x-auto rounded-md" style={{ border: "1px solid #30363d" }}>
-                          <table className="w-full text-xs border-collapse" style={{ color: "#e6edf3" }}>
+                        <div className="overflow-x-auto rounded-md" style={{ border: "1px solid #dcebd8" }}>
+                          <table className="w-full text-xs border-collapse" style={{ color: "#0b2210" }}>
                             <thead>
-                              <tr style={{ background: "#161b22", color: "#8b949e", textAlign: "left" }}>
+                              <tr style={{ background: "#ffffff", color: "#5d7a67", textAlign: "left" }}>
                                 <th className="px-2 py-1.5 font-semibold">Passo</th>
                                 <th className="px-2 py-1.5 font-semibold">Hub (h)</th>
                                 <th className="px-2 py-1.5 font-semibold">Após merge (h)</th>
@@ -1975,19 +1975,19 @@ export default function CiclosPage() {
                             </thead>
                             <tbody>
                               {mergePreviewLinhas.map((row) => (
-                                <tr key={row.passo} style={{ borderTop: "1px solid #30363d" }}>
+                                <tr key={row.passo} style={{ borderTop: "1px solid #dcebd8" }}>
                                   <td className="px-2 py-1.5">{row.passo}</td>
                                   <td className="px-2 py-1.5">{row.hubHoras}</td>
                                   <td
                                     className="px-2 py-1.5 font-semibold"
                                     style={{
                                       color:
-                                        row.mergeHoras !== row.hubHoras ? "#c9a24a" : "#e6edf3",
+                                        row.mergeHoras !== row.hubHoras ? "#c9a24a" : "#0b2210",
                                     }}
                                   >
                                     {row.mergeHoras}
                                   </td>
-                                  <td className="px-2 py-1.5" style={{ color: "#8b949e" }}>
+                                  <td className="px-2 py-1.5" style={{ color: "#5d7a67" }}>
                                     {row.usaLista ? "lista do ciclo" : "hub"}
                                   </td>
                                 </tr>
@@ -2003,7 +2003,7 @@ export default function CiclosPage() {
                                 followupCompat.listaReplicadaAlemDoTamanho ||
                                 followupCompat.intervaloMaiorQueMenorMerge
                                   ? "#c9a24a"
-                                  : "#8b949e",
+                                  : "#5d7a67",
                             }}
                           >
                             {followupCompat.avisos.map((t: string, i: number) => (
@@ -2033,9 +2033,9 @@ export default function CiclosPage() {
                           onClick={preencherHorasDoHubNoForm}
                           className="text-xs px-2 py-1.5 rounded"
                           style={{
-                            background: "#21262d",
+                            background: "#eef7eb",
                             color: "#c9a24a",
-                            border: "1px solid #30363d",
+                            border: "1px solid #dcebd8",
                             cursor: "pointer",
                           }}
                         >
@@ -2047,11 +2047,11 @@ export default function CiclosPage() {
 
                   {Object.keys(extraConfig).length > 0 && (
                     <p className="text-xs m-0" style={{ color: "#484f58" }}>
-                      Este ciclo tem mais campos técnicos em <code style={{ color: "#8b949e" }}>configuracoes</code>; eles são mantidos ao salvar (sem editar aqui).
+                      Este ciclo tem mais campos técnicos em <code style={{ color: "#5d7a67" }}>configuracoes</code>; eles são mantidos ao salvar (sem editar aqui).
                     </p>
                   )}
                   <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.45 }}>
-                    O texto de cada mensagem continua a vir de <code style={{ color: "#8b949e" }}>hub_followup_config</code> por mercado e passo.
+                    O texto de cada mensagem continua a vir de <code style={{ color: "#5d7a67" }}>hub_followup_config</code> por mercado e passo.
                   </p>
                   </div>
                 </details>
@@ -2062,7 +2062,7 @@ export default function CiclosPage() {
                     checked={fAtivo}
                     onChange={(e) => setFAtivo(e.target.checked)}
                   />
-                  <span className="text-sm" style={{ color: "#e6edf3" }}>Ciclo ativo</span>
+                  <span className="text-sm" style={{ color: "#0b2210" }}>Ciclo ativo</span>
                 </label>
                 {erroDrawer && (
                   <p className="text-sm" style={{ color: "#b3261e" }}>{erroDrawer}</p>
@@ -2115,7 +2115,7 @@ export default function CiclosPage() {
         onConfirm={() => void confirmarExcluirCicloModal()}
       >
         <p style={{ margin: "0 0 10px" }}>
-          O ciclo <strong style={{ color: "#e6edf3" }}>«{dialogExcluirCiclo?.nome}»</strong> será removido de{" "}
+          O ciclo <strong style={{ color: "#0b2210" }}>«{dialogExcluirCiclo?.nome}»</strong> será removido de{" "}
           <code style={{ color: "#c9a24a" }}>hub_ciclos_ia</code> juntamente com as linhas de execução associadas em{" "}
           <code style={{ color: "#c9a24a" }}>hub_ciclos_log</code> (mesma transação no servidor, com autorização de
           exclusão).
@@ -2134,7 +2134,7 @@ export default function CiclosPage() {
         onConfirm={() => void confirmarLimparAgendamentoCiclo()}
       >
         <p style={{ margin: 0 }}>
-          Para <strong style={{ color: "#e6edf3" }}>«{dialogLimparCiclo?.nome}»</strong> vamos anular{" "}
+          Para <strong style={{ color: "#0b2210" }}>«{dialogLimparCiclo?.nome}»</strong> vamos anular{" "}
           <code style={{ color: "#c9a24a" }}>cron_expressao</code> e <code style={{ color: "#c9a24a" }}>intervalo_minutos</code>.
           O ciclo continua cadastrado; pode voltar a editar o agendamento quando quiser.
         </p>

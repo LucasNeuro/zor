@@ -65,13 +65,13 @@ function Campo({ label, value }: { label: string; value: string }) {
           margin: 0,
           fontSize: 11,
           fontWeight: 600,
-          color: "#8b949e",
+          color: "#5d7a67",
           textTransform: "uppercase",
         }}
       >
         {label}
       </p>
-      <p style={{ margin: "4px 0 0", fontSize: 14, color: "#e6edf3", lineHeight: 1.4 }}>
+      <p style={{ margin: "4px 0 0", fontSize: 14, color: "#0b2210", lineHeight: 1.4 }}>
         {value}
       </p>
     </div>
@@ -164,27 +164,27 @@ export default function PessoaDetalhePage() {
       <div
         style={{
           minHeight: "100%",
-          background: "#0d1117",
+          background: "#f8fcf6",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando...</p>
+        <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando...</p>
       </div>
     );
   }
 
   if (!pessoa) {
     return (
-      <div style={{ minHeight: "100%", background: "#0d1117", padding: 24 }}>
+      <div style={{ minHeight: "100%", background: "#f8fcf6", padding: 24 }}>
         <button
           type="button"
           onClick={() => router.push("/crm/pessoas")}
           style={{
             background: "none",
             border: "none",
-            color: "#8b949e",
+            color: "#5d7a67",
             cursor: "pointer",
             fontSize: 13,
             marginBottom: 16,
@@ -209,17 +209,17 @@ export default function PessoaDetalhePage() {
     .join(" · ");
 
   const tipoCor =
-    pessoa.tipo_pessoa === "PF" ? "#3b82f6" : pessoa.tipo_pessoa === "PJ" ? "#10b981" : "#8b949e";
+    pessoa.tipo_pessoa === "PF" ? "#3b82f6" : pessoa.tipo_pessoa === "PJ" ? "#10b981" : "#5d7a67";
 
   return (
-    <div style={{ minHeight: "100%", background: "#0d1117" }}>
+    <div style={{ minHeight: "100%", background: "#f8fcf6" }}>
       <div
         style={{
           position: "sticky",
           top: 0,
           zIndex: 10,
-          background: "#161b22",
-          borderBottom: "1px solid #30363d",
+          background: "#ffffff",
+          borderBottom: "1px solid #dcebd8",
           padding: "14px 20px",
         }}
       >
@@ -229,7 +229,7 @@ export default function PessoaDetalhePage() {
           style={{
             background: "none",
             border: "none",
-            color: "#8b949e",
+            color: "#5d7a67",
             cursor: "pointer",
             fontSize: 13,
             marginBottom: 10,
@@ -245,19 +245,19 @@ export default function PessoaDetalhePage() {
                 <input
                   value={pessoa.nome}
                   onChange={(e) => setPessoa((p) => (p ? { ...p, nome: e.target.value } : p))}
-                  style={{ padding: 8, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }}
+                  style={{ padding: 8, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }}
                 />
                 <input
                   value={pessoa.telefone ?? ""}
                   onChange={(e) => setPessoa((p) => (p ? { ...p, telefone: e.target.value } : p))}
                   placeholder="Telefone"
-                  style={{ padding: 8, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }}
+                  style={{ padding: 8, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }}
                 />
                 <input
                   value={pessoa.email ?? ""}
                   onChange={(e) => setPessoa((p) => (p ? { ...p, email: e.target.value } : p))}
                   placeholder="E-mail"
-                  style={{ padding: 8, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }}
+                  style={{ padding: 8, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }}
                 />
                 <button type="button" disabled={salvando} onClick={() => void salvarEdicao()} style={{ padding: "8px 12px", borderRadius: 8, background: "#c9a24a", color: "#003b26", border: "none", fontWeight: 700, cursor: "pointer" }}>
                   {salvando ? "Salvando…" : "Guardar"}
@@ -265,10 +265,10 @@ export default function PessoaDetalhePage() {
               </div>
             ) : (
               <>
-                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#e6edf3" }}>
+                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#0b2210" }}>
                   {pessoa.nome}
                 </h1>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#8b949e" }}>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#5d7a67" }}>
                   {pessoa.codigo || "—"}
                   {pessoa.telefone ? ` · ${pessoa.telefone}` : ""}
                 </p>
@@ -276,7 +276,7 @@ export default function PessoaDetalhePage() {
             )}
           </div>
           {!editando && (
-            <button type="button" onClick={() => setEditando(true)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #30363d", background: "#21262d", color: "#c9a24a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            <button type="button" onClick={() => setEditando(true)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #dcebd8", background: "#eef7eb", color: "#c9a24a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
               Editar
             </button>
           )}
@@ -338,14 +338,14 @@ export default function PessoaDetalhePage() {
                 style={{
                   padding: 16,
                   borderRadius: 10,
-                  border: "1px solid #30363d",
-                  background: "#161b22",
+                  border: "1px solid #dcebd8",
+                  background: "#ffffff",
                   display: "flex",
                   flexDirection: "column",
                   gap: 12,
                 }}
               >
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e6edf3" }}>Endereço</p>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#0b2210" }}>Endereço</p>
                 <Campo label="CEP" value={pessoa.cep ? formatarCepMascara(pessoa.cep) : "—"} />
                 <Campo label="Endereço completo" value={endereco || "—"} />
               </div>
@@ -354,14 +354,14 @@ export default function PessoaDetalhePage() {
           {tab === "vinculos" && (
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {(vinculos?.empresas ?? []).length === 0 ? (
-                <li style={{ color: "#8b949e", fontSize: 13 }}>Nenhum vínculo com empresa.</li>
+                <li style={{ color: "#5d7a67", fontSize: 13 }}>Nenhum vínculo com empresa.</li>
               ) : (
                 vinculos?.empresas.map((e) => (
                   <li
                     key={e.empresa_id}
                     style={{
                       padding: "12px 0",
-                      borderBottom: "1px solid #30363d",
+                      borderBottom: "1px solid #dcebd8",
                     }}
                   >
                     <Link
@@ -372,7 +372,7 @@ export default function PessoaDetalhePage() {
                       {e.razao_social}
                     </Link>
                     {e.cargo ? (
-                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#8b949e" }}>{e.cargo}</p>
+                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#5d7a67" }}>{e.cargo}</p>
                     ) : null}
                   </li>
                 ))
@@ -382,22 +382,22 @@ export default function PessoaDetalhePage() {
           {tab === "relacionados" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               <div>
-                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#8b949e" }}>
+                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#5d7a67" }}>
                   LEADS
                 </p>
                 <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
                   {(vinculos?.leads ?? []).length === 0 ? (
-                    <li style={{ color: "#8b949e", fontSize: 13 }}>Nenhum lead vinculado.</li>
+                    <li style={{ color: "#5d7a67", fontSize: 13 }}>Nenhum lead vinculado.</li>
                   ) : (
                     vinculos?.leads.map((l) => (
-                      <li key={l.id} style={{ padding: "8px 0", borderBottom: "1px solid #30363d" }}>
+                      <li key={l.id} style={{ padding: "8px 0", borderBottom: "1px solid #dcebd8" }}>
                         <Link
                           href={`/crm/leads/${l.id}`}
                           style={{ color: "#c9a24a", textDecoration: "none", fontWeight: 600 }}
                         >
                           {l.nome}
                         </Link>
-                        <span style={{ marginLeft: 8, fontSize: 11, color: "#8b949e" }}>
+                        <span style={{ marginLeft: 8, fontSize: 11, color: "#5d7a67" }}>
                           {l.estagio}
                         </span>
                       </li>
@@ -406,15 +406,15 @@ export default function PessoaDetalhePage() {
                 </ul>
               </div>
               <div>
-                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#8b949e" }}>
+                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#5d7a67" }}>
                   NEGÓCIOS
                 </p>
                 <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
                   {(vinculos?.negocios ?? []).length === 0 ? (
-                    <li style={{ color: "#8b949e", fontSize: 13 }}>Nenhum negócio vinculado.</li>
+                    <li style={{ color: "#5d7a67", fontSize: 13 }}>Nenhum negócio vinculado.</li>
                   ) : (
                     vinculos?.negocios.map((n) => (
-                      <li key={n.id} style={{ padding: "8px 0", borderBottom: "1px solid #30363d" }}>
+                      <li key={n.id} style={{ padding: "8px 0", borderBottom: "1px solid #dcebd8" }}>
                         <Link
                           href={`/crm/negocios?destaque=${n.id}`}
                           style={{ color: "#c9a24a", textDecoration: "none", fontWeight: 600 }}

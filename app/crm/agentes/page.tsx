@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { Activity, ChevronRight, Clock, MessageCircle, Power, Trash2, Webhook, X, Zap } from "lucide-react";
@@ -659,7 +659,7 @@ function AgentesView() {
             onClick={() => setDrawerCargosOpen(true)}
             style={{
               background: "rgba(0,0,0,0.28)",
-              color: "var(--obra-texto, #e6edf3)",
+              color: "var(--obra-texto, #0b2210)",
               border: "none",
               padding: "12px 18px",
               fontSize: 12,
@@ -806,9 +806,9 @@ function AgentesView() {
 
   return (
     <>
-      <div style={{ minHeight: "100vh", background: "#0d1117", padding: "24px" }}>
+      <div style={{ minHeight: "100vh", background: "#f8fcf6", padding: "24px" }}>
         <div style={{ marginBottom: 18 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "#8b949e", margin: "0 0 10px", letterSpacing: 0.5 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: "#5d7a67", margin: "0 0 10px", letterSpacing: 0.5 }}>
             LISTA
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
@@ -856,7 +856,7 @@ function AgentesView() {
                   cursor: "pointer",
                   background: "#121923",
                   border: "1px solid #293241",
-                  color: "#e6edf3",
+                  color: "#0b2210",
                 }}
               >
                 <option value="">Todos os segmentos</option>
@@ -880,7 +880,7 @@ function AgentesView() {
                 fontSize: 12,
                 background: "#121923",
                 border: "1px solid #293241",
-                color: "#e6edf3",
+                color: "#0b2210",
               }}
             />
             {!carregando && !erroLista && agentes.length > 0 && (
@@ -909,11 +909,11 @@ function AgentesView() {
         )}
 
         {carregando ? (
-          <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando...</p>
+          <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando...</p>
         ) : agentes.length === 0 && !erroLista ? (
-          <p style={{ color: "#8b949e", fontSize: 13 }}>Nenhum agente encontrado.</p>
+          <p style={{ color: "#5d7a67", fontSize: 13 }}>Nenhum agente encontrado.</p>
         ) : agentesFiltrados.length === 0 ? (
-          <p style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
+          <p style={{ color: "#5d7a67", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
             Nenhum agente corresponde à busca ou ao filtro
           </p>
         ) : (
@@ -1162,8 +1162,8 @@ function AgentesView() {
               bottom: 0,
               width: "min(620px, 100vw)",
               zIndex: 50,
-              background: "#0d1117",
-              borderLeft: "1px solid #30363d",
+              background: "#f8fcf6",
+              borderLeft: "1px solid #dcebd8",
               boxShadow: "-8px 0 32px rgba(0,0,0,0.45)",
               display: "flex",
               flexDirection: "column",
@@ -1215,7 +1215,7 @@ function AgentesView() {
                   />
                   <div style={{ minWidth: 0 }}>
                   <p style={{ margin: 0, color: "#8ea1ba", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>MODELO</p>
-                  <h3 style={{ margin: "3px 0 0", color: "#e6edf3", fontSize: 17 }}>
+                  <h3 style={{ margin: "3px 0 0", color: "#0b2210", fontSize: 17 }}>
                     {detailAgente?.nome || selectedSlug}
                   </h3>
                   <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -1261,13 +1261,13 @@ function AgentesView() {
 
             <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
               {detailLoading ? (
-                <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando dados do modelo...</p>
+                <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando dados do modelo...</p>
               ) : detailErro ? (
                 <div style={{ color: "#f87171", background: "#3a1518", border: "1px solid #7f1d1d", borderRadius: 8, padding: 10, fontSize: 13 }}>
                   {detailErro}
                 </div>
               ) : !detailAgente ? (
-                <p style={{ color: "#8b949e", fontSize: 13 }}>Modelo não encontrado.</p>
+                <p style={{ color: "#5d7a67", fontSize: 13 }}>Modelo não encontrado.</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {operacaoErro && (
@@ -1431,7 +1431,7 @@ function AgentesView() {
                                   </div>
                                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
                                   <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                                    <strong style={{ color: "#e6edf3", fontSize: 14, letterSpacing: "-0.02em" }}>
+                                    <strong style={{ color: "#0b2210", fontSize: 14, letterSpacing: "-0.02em" }}>
                                       {String(row.nome || "—")}
                                     </strong>
                                     <span
@@ -1588,7 +1588,7 @@ function AgentesView() {
                             </p>
                           }
                         >
-                          <strong style={{ color: "#e6edf3", fontSize: 13, fontWeight: 800 }}>Nada registado ainda</strong>
+                          <strong style={{ color: "#0b2210", fontSize: 13, fontWeight: 800 }}>Nada registado ainda</strong>
                           <p style={{ margin: "6px 0 0", color: "#7f90a8", fontSize: 11, lineHeight: 1.45 }}>
                             Normal antes da primeira mensagem no canal ou da primeira execução agendada.
                           </p>
@@ -1615,7 +1615,7 @@ function AgentesView() {
                                 </span>
                               }
                             >
-                              <strong style={{ color: "#e6edf3", fontSize: 12, fontWeight: 800 }}>{ev.titulo}</strong>
+                              <strong style={{ color: "#0b2210", fontSize: 12, fontWeight: 800 }}>{ev.titulo}</strong>
                               <p style={{ margin: "6px 0 0", color: "#9cb0c9", fontSize: 11, lineHeight: 1.45 }}>
                                 {ev.detalhe.length > 200 ? `${ev.detalhe.slice(0, 200)}…` : ev.detalhe}
                               </p>
@@ -1653,7 +1653,7 @@ function AgentesView() {
                           }
                         >
                           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                            <strong style={{ color: "#e6edf3", fontSize: 14, fontWeight: 800 }}>{detailAgente.nome}</strong>
+                            <strong style={{ color: "#0b2210", fontSize: 14, fontWeight: 800 }}>{detailAgente.nome}</strong>
                             <span
                               style={{
                                 fontSize: 10,
@@ -1754,7 +1754,7 @@ function AgentesView() {
                   </p>
                   <div>
                     <label style={{ color: "#d7e3f4", fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>Nome</label>
-                    <input value={editNome} onChange={(e) => setEditNome(e.target.value)} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#e6edf3", borderRadius: 8, padding: "9px 11px", fontSize: 13 }} />
+                    <input value={editNome} onChange={(e) => setEditNome(e.target.value)} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#0b2210", borderRadius: 8, padding: "9px 11px", fontSize: 13 }} />
                   </div>
 
                   <div>
@@ -1778,17 +1778,17 @@ function AgentesView() {
 
                   <div>
                     <label style={{ color: "#d7e3f4", fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>Bio</label>
-                    <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} rows={3} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#e6edf3", borderRadius: 8, padding: "9px 11px", fontSize: 13, resize: "vertical" }} />
+                    <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} rows={3} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#0b2210", borderRadius: 8, padding: "9px 11px", fontSize: 13, resize: "vertical" }} />
                   </div>
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <div>
                       <label style={{ color: "#d7e3f4", fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>Tom</label>
-                      <input value={editTom} onChange={(e) => setEditTom(e.target.value)} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#e6edf3", borderRadius: 8, padding: "9px 11px", fontSize: 13 }} />
+                      <input value={editTom} onChange={(e) => setEditTom(e.target.value)} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#0b2210", borderRadius: 8, padding: "9px 11px", fontSize: 13 }} />
                     </div>
                     <div>
                       <label style={{ color: "#d7e3f4", fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>Estilo</label>
-                      <input value={editEstilo} onChange={(e) => setEditEstilo(e.target.value)} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#e6edf3", borderRadius: 8, padding: "9px 11px", fontSize: 13 }} />
+                      <input value={editEstilo} onChange={(e) => setEditEstilo(e.target.value)} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#0b2210", borderRadius: 8, padding: "9px 11px", fontSize: 13 }} />
                     </div>
                   </div>
 
@@ -1796,7 +1796,7 @@ function AgentesView() {
                     <label style={{ color: "#d7e3f4", fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>
                       Instruções base para a IA
                     </label>
-                    <textarea value={editPrompt} onChange={(e) => setEditPrompt(e.target.value)} rows={7} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#e6edf3", borderRadius: 8, padding: "9px 11px", fontSize: 13, resize: "vertical", lineHeight: 1.5 }} />
+                    <textarea value={editPrompt} onChange={(e) => setEditPrompt(e.target.value)} rows={7} style={{ width: "100%", background: "#121b27", border: "1px solid #314056", color: "#0b2210", borderRadius: 8, padding: "9px 11px", fontSize: 13, resize: "vertical", lineHeight: 1.5 }} />
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#141d29", border: "1px solid #2c384b", borderRadius: 8, padding: "10px 12px" }}>
@@ -1839,9 +1839,9 @@ function AgentesView() {
         onConfirm={() => void confirmarExcluirAgente()}
       >
         <p style={{ margin: "0 0 10px" }}>
-          O agente <strong style={{ color: "#e6edf3" }}>«{dialogExcluirAgente?.nome}»</strong> (
+          O agente <strong style={{ color: "#0b2210" }}>«{dialogExcluirAgente?.nome}»</strong> (
           <code style={{ color: "#c9a24a" }}>{dialogExcluirAgente?.agente_slug}</code>) será removido com todos os
-          dados ligados no Hub: identidade, conhecimento, <strong style={{ color: "#e6edf3" }}>ciclos IA</strong>,
+          dados ligados no Hub: identidade, conhecimento, <strong style={{ color: "#0b2210" }}>ciclos IA</strong>,
           conversas e logs, documentos RAG (embeddings e ficheiros), filas WhatsApp, briefing interno e playbook no
           Storage quando existir.
         </p>
@@ -1853,7 +1853,7 @@ function AgentesView() {
 
 export default function AgentesPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0d1117", padding: 24, color: "#8b949e" }}>Carregando...</div>}>
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#f8fcf6", padding: 24, color: "#5d7a67" }}>Carregando...</div>}>
       <AgentesView />
     </Suspense>
   );

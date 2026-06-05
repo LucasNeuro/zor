@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 type Props = {
   value: string;
@@ -16,9 +16,9 @@ export function SearchBar({ value, onChange, placeholder = "Buscar..." }: Props)
         width: "100%",
         padding: "8px 12px",
         borderRadius: 8,
-        background: "#21262d",
-        border: "1px solid #30363d",
-        color: "#e6edf3",
+        background: "#eef7eb",
+        border: "1px solid #dcebd8",
+        color: "#0b2210",
         fontSize: 13,
         outline: "none",
         boxSizing: "border-box",

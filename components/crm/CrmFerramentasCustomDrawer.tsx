@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -32,11 +32,11 @@ const OB = {
   verde: "var(--obra-verde, #003b26)",
   dourado: "var(--obra-dourado, #c9a24a)",
   douradoLight: "var(--obra-dourado-light, #e0b86a)",
-  borda: "var(--obra-borda, #30363d)",
-  texto: "var(--obra-texto, #e6edf3)",
-  texto2: "var(--obra-texto-2, #8b949e)",
+  borda: "var(--obra-borda, #dcebd8)",
+  texto: "var(--obra-texto, #0b2210)",
+  texto2: "var(--obra-texto-2, #5d7a67)",
   texto3: "var(--obra-texto-3, #484f58)",
-  surface: "var(--obra-dark-3, #21262d)",
+  surface: "var(--obra-dark-3, #eef7eb)",
   panel: "#0f1620",
   danger: "#f85149",
   dangerMuted: "rgba(248, 81, 73, 0.14)",
@@ -73,7 +73,7 @@ function toolbarIconButtonStyle(variant: ToolbarIconVariant, disabled: boolean):
     return {
       ...base,
       border: `1px solid ${OB.borda}`,
-      background: "#161b22",
+      background: "#ffffff",
       color: OB.texto3,
       opacity: 0.72,
     };
@@ -128,7 +128,7 @@ function toolbarIconButtonStyle(variant: ToolbarIconVariant, disabled: boolean):
 }
 
 const inp: CSSProperties = {
-  background: "#161b22",
+  background: "#ffffff",
   border: `1px solid ${OB.borda}`,
   color: OB.texto,
   borderRadius: 8,
@@ -665,7 +665,7 @@ export function CrmFerramentasCustomDrawer({
                       minWidth: 72,
                       height: 32,
                       boxSizing: "border-box",
-                      background: "#161b22",
+                      background: "#ffffff",
                       border: `1px solid ${OB.borda}`,
                       color: OB.texto,
                       borderRadius: 8,
@@ -684,7 +684,7 @@ export function CrmFerramentasCustomDrawer({
                       maxWidth: "min(200px, 40vw)",
                       height: 32,
                       boxSizing: "border-box",
-                      background: "#161b22",
+                      background: "#ffffff",
                       border: `1px solid ${OB.borda}`,
                       color: OB.texto,
                       borderRadius: 8,
@@ -1006,7 +1006,7 @@ export function CrmFerramentasCustomDrawer({
                               <p
                                 style={{
                                   margin: 0,
-                                  color: "#e6edf3",
+                                  color: "#0b2210",
                                   fontSize: 13,
                                   fontWeight: 700,
                                   whiteSpace: "nowrap",
@@ -1474,7 +1474,7 @@ export function CrmFerramentasCustomDrawer({
               Eliminar ferramenta custom?
             </h4>
             <p id="confirm-del-desc" style={{ margin: 0, color: OB.texto2, fontSize: 13, lineHeight: 1.5 }}>
-              <strong style={{ color: "#e6edf3" }}>{confirmDeleteRow.titulo}</strong>
+              <strong style={{ color: "#0b2210" }}>{confirmDeleteRow.titulo}</strong>
               <br />
               <code style={{ fontSize: 12, color: "#93c5fd" }}>{confirmDeleteRow.ferramenta_key}</code>
               <br />

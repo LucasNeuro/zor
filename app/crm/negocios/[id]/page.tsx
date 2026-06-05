@@ -122,7 +122,7 @@ export default function NegocioDetalhePage() {
   }
 
   if (carregando) {
-    return <p style={{ padding: 24, color: "#8b949e" }}>Carregando...</p>;
+    return <p style={{ padding: 24, color: "#5d7a67" }}>Carregando...</p>;
   }
 
   if (!negocio) {
@@ -137,31 +137,31 @@ export default function NegocioDetalhePage() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, color: "#e6edf3" }}>
+    <div style={{ padding: 24, maxWidth: 900, color: "#0b2210" }}>
       <button
         type="button"
         onClick={() => router.push("/crm/negocios")}
-        style={{ background: "none", border: "none", color: "#8b949e", cursor: "pointer", marginBottom: 16 }}
+        style={{ background: "none", border: "none", color: "#5d7a67", cursor: "pointer", marginBottom: 16 }}
       >
         ← Negócios
       </button>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
         <h1 style={{ margin: 0, fontSize: 22, flex: 1 }}>{negocio.titulo}</h1>
-        <button type="button" onClick={() => setEditando((e) => !e)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #30363d", background: "#21262d", color: "#c9a24a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+        <button type="button" onClick={() => setEditando((e) => !e)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #dcebd8", background: "#eef7eb", color: "#c9a24a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
           {editando ? "Cancelar" : "Editar"}
         </button>
         <button type="button" onClick={() => void arquivar()} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #f8514944", background: "transparent", color: "#f85149", fontSize: 12, cursor: "pointer" }}>
           Arquivar
         </button>
       </div>
-      <p style={{ margin: 0, color: "#8b949e", fontFamily: "monospace" }}>{negocio.codigo}</p>
+      <p style={{ margin: 0, color: "#5d7a67", fontFamily: "monospace" }}>{negocio.codigo}</p>
 
       {editando && (
-        <div style={{ marginTop: 16, padding: 16, borderRadius: 12, border: "1px solid #30363d", background: "#161b22" }}>
-          <input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Título" style={{ width: "100%", marginBottom: 8, padding: 10, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }} />
-          <textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} placeholder="Descrição" style={{ width: "100%", marginBottom: 8, minHeight: 80, padding: 10, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }} />
-          <input value={form.valor_estimado} onChange={(e) => setForm((f) => ({ ...f, valor_estimado: e.target.value }))} placeholder="Valor estimado" type="number" style={{ width: "100%", marginBottom: 8, padding: 10, borderRadius: 8, border: "1px solid #30363d", background: "#0d1117", color: "#e6edf3" }} />
+        <div style={{ marginTop: 16, padding: 16, borderRadius: 12, border: "1px solid #dcebd8", background: "#ffffff" }}>
+          <input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Título" style={{ width: "100%", marginBottom: 8, padding: 10, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }} />
+          <textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} placeholder="Descrição" style={{ width: "100%", marginBottom: 8, minHeight: 80, padding: 10, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }} />
+          <input value={form.valor_estimado} onChange={(e) => setForm((f) => ({ ...f, valor_estimado: e.target.value }))} placeholder="Valor estimado" type="number" style={{ width: "100%", marginBottom: 8, padding: 10, borderRadius: 8, border: "1px solid #dcebd8", background: "#f8fcf6", color: "#0b2210" }} />
           <button type="button" disabled={salvando} onClick={() => void salvarEdicao()} style={{ padding: "10px 16px", borderRadius: 8, background: "#c9a24a", color: "#003b26", border: "none", fontWeight: 700, cursor: "pointer" }}>
             {salvando ? "Salvando…" : "Guardar"}
           </button>
@@ -170,24 +170,24 @@ export default function NegocioDetalhePage() {
 
       <div style={{ marginTop: 16, display: "flex", gap: 12, fontSize: 12 }}>
         <Link href={`/crm/projetos?negocio_id=${negocio.id}`} style={{ color: "#c9a24a", fontWeight: 700 }}>Projetos</Link>
-        <Link href="/crm/obras" style={{ color: "#8b949e" }}>Obras</Link>
+        <Link href="/crm/obras" style={{ color: "#5d7a67" }}>Obras</Link>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 24 }}>
         <div>
-          <p style={{ fontSize: 11, color: "#8b949e" }}>MERCADO</p>
+          <p style={{ fontSize: 11, color: "#5d7a67" }}>MERCADO</p>
           <p>{labelMercadoPrefixo(negocio.prefixo_mercado)}</p>
         </div>
         <div>
-          <p style={{ fontSize: 11, color: "#8b949e" }}>VALOR ESTIMADO</p>
+          <p style={{ fontSize: 11, color: "#5d7a67" }}>VALOR ESTIMADO</p>
           <p style={{ color: "#c9a24a", fontWeight: 700 }}>{formatCurrency(negocio.valor_estimado)}</p>
         </div>
         <div>
-          <p style={{ fontSize: 11, color: "#8b949e" }}>ETAPA</p>
+          <p style={{ fontSize: 11, color: "#5d7a67" }}>ETAPA</p>
           <p style={{ textTransform: "capitalize" }}>{negocio.etapa}</p>
         </div>
         <div>
-          <p style={{ fontSize: 11, color: "#8b949e" }}>STATUS</p>
+          <p style={{ fontSize: 11, color: "#5d7a67" }}>STATUS</p>
           <p>{negocio.status}</p>
         </div>
       </div>
@@ -211,9 +211,9 @@ export default function NegocioDetalhePage() {
             style={{
               padding: "8px 14px",
               borderRadius: 8,
-              border: "1px solid #30363d",
-              background: negocio.etapa === e ? "#003b26" : "#161b22",
-              color: negocio.etapa === e ? "#c9a24a" : "#e6edf3",
+              border: "1px solid #dcebd8",
+              background: negocio.etapa === e ? "#003b26" : "#ffffff",
+              color: negocio.etapa === e ? "#c9a24a" : "#0b2210",
               cursor: "pointer",
               fontSize: 12,
             }}
@@ -226,18 +226,18 @@ export default function NegocioDetalhePage() {
       <h2 style={{ marginTop: 32, fontSize: 16 }}>Timeline</h2>
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {timeline.length === 0 ? (
-          <li style={{ color: "#8b949e", fontSize: 13 }}>Sem atividades.</li>
+          <li style={{ color: "#5d7a67", fontSize: 13 }}>Sem atividades.</li>
         ) : (
           timeline.map((a) => (
             <li
               key={a.id}
               style={{
                 padding: "10px 0",
-                borderBottom: "1px solid #21262d",
+                borderBottom: "1px solid #eef7eb",
                 fontSize: 13,
               }}
             >
-              <span style={{ color: "#8b949e", marginRight: 8 }}>
+              <span style={{ color: "#5d7a67", marginRight: 8 }}>
                 {new Date(a.criado_em).toLocaleString("pt-BR")}
               </span>
               {a.descricao}

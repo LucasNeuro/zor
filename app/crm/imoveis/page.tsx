@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -53,18 +53,18 @@ const STATUS_COR: Record<string, { bg: string; color: string }> = {
 const TH: React.CSSProperties = {
   textAlign: "left",
   padding: "10px 12px",
-  color: "#8b949e",
+  color: "#5d7a67",
   fontSize: 11,
   fontWeight: 600,
   textTransform: "uppercase",
   whiteSpace: "nowrap",
-  borderBottom: "1px solid #30363d",
+  borderBottom: "1px solid #dcebd8",
 };
 
 const TD: React.CSSProperties = {
   padding: "10px 12px",
   fontSize: 13,
-  color: "#e6edf3",
+  color: "#0b2210",
   whiteSpace: "nowrap",
 };
 
@@ -161,7 +161,7 @@ export default function ImoveisPage() {
   }
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", background: "#0d1117", padding: "24px" }}>
+    <div style={{ height: "100%", overflowY: "auto", background: "#f8fcf6", padding: "24px" }}>
       <ImovelFormDrawer
         open={drawerAberto}
         onClose={() => { setDrawerAberto(false); setEditImovel(null); }}
@@ -198,7 +198,7 @@ export default function ImoveisPage() {
       </div>
 
       {/* Ativos / Arquivados tab */}
-      <div style={{ display: "flex", borderBottom: "1px solid #30363d", marginBottom: 12 }}>
+      <div style={{ display: "flex", borderBottom: "1px solid #dcebd8", marginBottom: 12 }}>
         {[
           { id: true, label: "Ativos" },
           { id: false, label: "Arquivados" },
@@ -214,7 +214,7 @@ export default function ImoveisPage() {
               background: "none",
               border: "none",
               borderBottom: ativo === tab.id ? "2px solid #c9a24a" : "2px solid transparent",
-              color: ativo === tab.id ? "#c9a24a" : "#8b949e",
+              color: ativo === tab.id ? "#c9a24a" : "#5d7a67",
               marginBottom: -1,
             }}
           >
@@ -230,7 +230,7 @@ export default function ImoveisPage() {
 
       {/* Content */}
       {carregando ? (
-        <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando...</p>
+        <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando...</p>
       ) : imoveis.length === 0 ? (
         <EmptyState message="Nenhum imóvel encontrado." />
       ) : (
@@ -252,20 +252,20 @@ export default function ImoveisPage() {
               </thead>
               <tbody>
                 {imoveis.map((im) => {
-                  const statusStyle = STATUS_COR[im.status || ""] ?? { bg: "#8b949e22", color: "#8b949e" };
+                  const statusStyle = STATUS_COR[im.status || ""] ?? { bg: "#5d7a6722", color: "#5d7a67" };
                   return (
                     <tr
                       key={im.id}
                       onClick={() => { setEditImovel(im); setDrawerAberto(true); }}
-                      style={{ borderBottom: "1px solid #21262d", cursor: "pointer" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#161b22"; }}
+                      style={{ borderBottom: "1px solid #eef7eb", cursor: "pointer" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#ffffff"; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
                     >
-                      <td style={{ ...TD, color: "#8b949e", fontSize: 12 }}>{im.codigo || "—"}</td>
+                      <td style={{ ...TD, color: "#5d7a67", fontSize: 12 }}>{im.codigo || "—"}</td>
                       <td style={{ ...TD, fontWeight: 600, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>
                         {im.titulo || "Sem título"}
                       </td>
-                      <td style={{ ...TD, color: "#8b949e", fontSize: 12, textTransform: "capitalize" }}>{im.tipo || "—"}</td>
+                      <td style={{ ...TD, color: "#5d7a67", fontSize: 12, textTransform: "capitalize" }}>{im.tipo || "—"}</td>
                       <td style={TD}>
                         {im.finalidade ? (
                           <span style={{
@@ -292,13 +292,13 @@ export default function ImoveisPage() {
                         ) : "—"}
                       </td>
                       <td style={{ ...TD, color: "#c9a24a", fontSize: 12, fontWeight: 700 }}>{formatCurrency(im.valor)}</td>
-                      <td style={{ ...TD, color: "#8b949e", fontSize: 12 }}>
+                      <td style={{ ...TD, color: "#5d7a67", fontSize: 12 }}>
                         {im.cidade ? `${im.cidade}${im.estado ? `/${im.estado}` : ""}` : "—"}
                       </td>
-                      <td style={{ ...TD, color: "#8b949e", fontSize: 12 }}>
+                      <td style={{ ...TD, color: "#5d7a67", fontSize: 12 }}>
                         {im.dormitorios !== null ? `${im.dormitorios}q` : "—"}
                       </td>
-                      <td style={{ ...TD, color: "#8b949e", fontSize: 12 }}>{formatData(im.criado_em)}</td>
+                      <td style={{ ...TD, color: "#5d7a67", fontSize: 12 }}>{formatData(im.criado_em)}</td>
                     </tr>
                   );
                 })}
@@ -311,7 +311,7 @@ export default function ImoveisPage() {
               <button
                 onClick={carregarMais}
                 disabled={carregandoMais}
-                style={{ padding: "10px 24px", borderRadius: 8, background: "#161b22", border: "1px solid #30363d", color: "#8b949e", fontSize: 13, cursor: "pointer", fontWeight: 600 }}
+                style={{ padding: "10px 24px", borderRadius: 8, background: "#ffffff", border: "1px solid #dcebd8", color: "#5d7a67", fontSize: 13, cursor: "pointer", fontWeight: 600 }}
               >
                 {carregandoMais ? "Carregando..." : `Carregar mais (${total - imoveis.length} restantes)`}
               </button>

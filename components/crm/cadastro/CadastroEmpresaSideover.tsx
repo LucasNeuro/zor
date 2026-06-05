@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { Building2, Pencil, Trash2 } from "lucide-react";
@@ -50,15 +50,15 @@ const INPUT: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
   borderRadius: 8,
-  border: "1px solid #30363d",
-  background: "#161b22",
-  color: "#e6edf3",
+  border: "1px solid #dcebd8",
+  background: "#ffffff",
+  color: "#0b2210",
   fontSize: 13,
   boxSizing: "border-box",
 };
 
 const LABEL: React.CSSProperties = {
-  color: "#8b949e",
+  color: "#5d7a67",
   fontSize: 11,
   fontWeight: 600,
   display: "block",
@@ -231,9 +231,9 @@ export function CadastroEmpresaSideover({
             gap: 6,
             padding: "10px 16px",
             borderRadius: 8,
-            border: "1px solid #30363d",
-            background: "#21262d",
-            color: "#e6edf3",
+            border: "1px solid #dcebd8",
+            background: "#eef7eb",
+            color: "#0b2210",
             cursor: "pointer",
             fontWeight: 600,
             fontSize: 13,
@@ -269,9 +269,9 @@ export function CadastroEmpresaSideover({
               style={{
                 padding: "10px 16px",
                 borderRadius: 8,
-                border: "1px solid #30363d",
+                border: "1px solid #dcebd8",
                 background: "transparent",
-                color: "#8b949e",
+                color: "#5d7a67",
                 cursor: "pointer",
               }}
             >
@@ -304,9 +304,9 @@ export function CadastroEmpresaSideover({
           style={{
             padding: "10px 16px",
             borderRadius: 8,
-            border: "1px solid #30363d",
+            border: "1px solid #dcebd8",
             background: "transparent",
-            color: "#8b949e",
+            color: "#5d7a67",
             cursor: "pointer",
           }}
         >
@@ -354,7 +354,7 @@ export function CadastroEmpresaSideover({
       }
       footer={footer}
     >
-      {loading && <p style={{ color: "#8b949e", fontSize: 13 }}>Carregando dados da empresa…</p>}
+      {loading && <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando dados da empresa…</p>}
       {erro && (
         <div
           style={{
@@ -412,7 +412,7 @@ export function CadastroEmpresaSideover({
               />
             }
           >
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#e6edf3", lineHeight: 1.35 }}>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0b2210", lineHeight: 1.35 }}>
               {empresa.razao_social}
             </p>
             <p style={{ margin: "6px 0 0", fontSize: 11, color: "#94a3b8", lineHeight: 1.45 }}>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -143,16 +143,16 @@ export default function FerramentasHubPage() {
     setSlot({
       path: pathname,
       actions: (
-        <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "#8b949e" }}>
+        <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "#5d7a67" }}>
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
             className="rounded px-2 py-1 font-semibold"
-            style={{ background: "#21262d", color: "#c9a24a", border: "1px solid #30363d", cursor: "pointer" }}
+            style={{ background: "#eef7eb", color: "#c9a24a", border: "1px solid #dcebd8", cursor: "pointer" }}
           >
             Gerir custom + IA
           </button>
-          <span className="rounded px-2 py-1" style={{ background: "#21262d", border: "1px solid #30363d" }}>
+          <span className="rounded px-2 py-1" style={{ background: "#eef7eb", border: "1px solid #dcebd8" }}>
             {HUB_AGENTE_FERRAMENTAS_CATALOGO.length} builtins
           </span>
           <span className="rounded px-2 py-1" style={{ background: "#003b2630", color: "#c9a24a" }}>
@@ -178,7 +178,7 @@ export default function FerramentasHubPage() {
   const customComChave = useMemo(() => customRows.filter((c) => c.ferramenta_key), [customRows]);
 
   return (
-    <div style={{ background: "#0d1117", minHeight: "100vh" }}>
+    <div style={{ background: "#f8fcf6", minHeight: "100vh" }}>
       <CrmFerramentasCustomDrawer
         open={drawerOpen}
         onClose={() => {
@@ -189,10 +189,10 @@ export default function FerramentasHubPage() {
       />
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-6" style={{ paddingBottom: 48 }}>
         <header className="mb-6">
-          <h1 className="m-0 text-xl font-bold md:text-2xl" style={{ color: "#e6edf3" }}>
+          <h1 className="m-0 text-xl font-bold md:text-2xl" style={{ color: "#0b2210" }}>
             Ferramentas IA (Hub)
           </h1>
-          <p className="mt-2 text-sm leading-relaxed m-0" style={{ color: "#8b949e" }}>
+          <p className="mt-2 text-sm leading-relaxed m-0" style={{ color: "#5d7a67" }}>
             Catálogo <strong style={{ color: "#aebccf" }}>built-in</strong> mais ferramentas{" "}
             <strong style={{ color: "#c9a24a" }}>custom</strong> do tenant (nome e descrição próprios, mesma execução
             segura; opcional smart Mistral/Gemini). Activar por agente em{" "}
@@ -213,7 +213,7 @@ export default function FerramentasHubPage() {
         )}
 
         {loading && (
-          <p className="text-sm" style={{ color: "#8b949e" }}>
+          <p className="text-sm" style={{ color: "#5d7a67" }}>
             A carregar…
           </p>
         )}
@@ -225,7 +225,7 @@ export default function FerramentasHubPage() {
             const SecIcon = ICONE_SECAO[sec];
             return (
               <section key={sec} className="mb-10">
-                <h2 className="mb-4 flex items-center gap-2 text-base font-bold m-0" style={{ color: "#e6edf3" }}>
+                <h2 className="mb-4 flex items-center gap-2 text-base font-bold m-0" style={{ color: "#0b2210" }}>
                   <SecIcon size={20} strokeWidth={1.5} style={{ color: "#c9a24a" }} />
                   {HUB_FERRAMENTA_SECAO_LABEL[sec]}
                 </h2>
@@ -239,21 +239,21 @@ export default function FerramentasHubPage() {
                         key={f.id}
                         className="rounded-2xl p-4"
                         style={{
-                          background: "#161b22",
-                          border: "1px solid #30363d",
+                          background: "#ffffff",
+                          border: "1px solid #dcebd8",
                           boxShadow: "0 4px 24px rgba(0,0,0,0.25)",
                         }}
                       >
                         <div className="flex items-start gap-3">
                           <div
                             className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl"
-                            style={{ background: "#21262d", color: "#c9a24a" }}
+                            style={{ background: "#eef7eb", color: "#c9a24a" }}
                           >
                             <IconF size={22} strokeWidth={1.5} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="m-0 text-sm font-bold" style={{ color: "#e6edf3" }}>
+                              <h3 className="m-0 text-sm font-bold" style={{ color: "#0b2210" }}>
                                 {f.titulo}
                               </h3>
                               <span
@@ -269,7 +269,7 @@ export default function FerramentasHubPage() {
                               {f.recomendadoWhatsApp && (
                                 <span
                                   className="rounded px-2 py-0.5 text-[10px] font-semibold"
-                                  style={{ background: "#30363d", color: "#8b949e" }}
+                                  style={{ background: "#dcebd8", color: "#5d7a67" }}
                                 >
                                   Sugerido WhatsApp
                                 </span>
@@ -282,12 +282,12 @@ export default function FerramentasHubPage() {
                             >
                               {f.mistralFunction.name}
                             </code>
-                            <p className="mt-2 mb-0 text-[13px] leading-relaxed" style={{ color: "#8b949e" }}>
+                            <p className="mt-2 mb-0 text-[13px] leading-relaxed" style={{ color: "#5d7a67" }}>
                               {f.descricao}
                             </p>
                           </div>
                         </div>
-                        <div className="mt-4 border-t pt-3" style={{ borderColor: "#30363d" }}>
+                        <div className="mt-4 border-t pt-3" style={{ borderColor: "#dcebd8" }}>
                           <p
                             className="mb-2 text-[11px] font-bold uppercase tracking-wide m-0"
                             style={{ color: "#6e7681" }}
@@ -306,9 +306,9 @@ export default function FerramentasHubPage() {
                                     href={`/crm/agentes/${encodeURIComponent(a.agente_slug)}`}
                                     className="inline-block rounded-lg px-2.5 py-1 text-xs font-medium transition-colors hover:brightness-110"
                                     style={{
-                                      background: "#21262d",
+                                      background: "#eef7eb",
                                       color: "#c9a24a",
-                                      border: "1px solid #30363d",
+                                      border: "1px solid #dcebd8",
                                       textDecoration: "none",
                                     }}
                                   >
@@ -329,7 +329,7 @@ export default function FerramentasHubPage() {
 
         {!loading && customComChave.length > 0 ? (
           <section className="mb-10">
-            <h2 className="mb-4 flex items-center gap-2 text-base font-bold m-0" style={{ color: "#e6edf3" }}>
+            <h2 className="mb-4 flex items-center gap-2 text-base font-bold m-0" style={{ color: "#0b2210" }}>
               <Wrench size={20} strokeWidth={1.5} style={{ color: "#c9a24a" }} />
               Ferramentas custom do tenant
             </h2>
@@ -350,8 +350,8 @@ export default function FerramentasHubPage() {
                     key={c.ferramenta_key}
                     className="rounded-2xl p-4"
                     style={{
-                      background: "#161b22",
-                      border: "1px solid #30363d",
+                      background: "#ffffff",
+                      border: "1px solid #dcebd8",
                       boxShadow: "0 4px 24px rgba(0,0,0,0.25)",
                       opacity: c.ativo ? 1 : 0.88,
                     }}
@@ -359,13 +359,13 @@ export default function FerramentasHubPage() {
                     <div className="flex items-start gap-3">
                       <div
                         className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl"
-                        style={{ background: "#21262d", color: "#c9a24a" }}
+                        style={{ background: "#eef7eb", color: "#c9a24a" }}
                       >
                         <IconBase size={22} strokeWidth={1.5} aria-hidden />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="m-0 text-sm font-bold" style={{ color: "#e6edf3" }}>
+                          <h3 className="m-0 text-sm font-bold" style={{ color: "#0b2210" }}>
                             {c.titulo}
                           </h3>
                           <span
@@ -380,14 +380,14 @@ export default function FerramentasHubPage() {
                           </span>
                           <span
                             className="rounded px-2 py-0.5 text-[10px] font-semibold"
-                            style={{ background: "#30363d", color: "#c9a24a" }}
+                            style={{ background: "#dcebd8", color: "#c9a24a" }}
                           >
                             Custom
                           </span>
                           {!c.ativo ? (
                             <span
                               className="rounded px-2 py-0.5 text-[10px] font-bold"
-                              style={{ background: "#484f5822", color: "#8b949e" }}
+                              style={{ background: "#484f5822", color: "#5d7a67" }}
                             >
                               Inactiva no catálogo
                             </span>
@@ -395,7 +395,7 @@ export default function FerramentasHubPage() {
                           {c.smart_provider !== "none" ? (
                             <span
                               className="rounded px-2 py-0.5 text-[10px] font-semibold"
-                              style={{ background: "#30363d", color: "#8b949e" }}
+                              style={{ background: "#dcebd8", color: "#5d7a67" }}
                             >
                               Smart {c.smart_provider}
                             </span>
@@ -403,7 +403,7 @@ export default function FerramentasHubPage() {
                           {baseCat?.recomendadoWhatsApp ? (
                             <span
                               className="rounded px-2 py-0.5 text-[10px] font-semibold"
-                              style={{ background: "#30363d", color: "#8b949e" }}
+                              style={{ background: "#dcebd8", color: "#5d7a67" }}
                             >
                               Sugerido WhatsApp
                             </span>
@@ -422,12 +422,12 @@ export default function FerramentasHubPage() {
                             {c.builtin_impl}
                           </code>
                         </p>
-                        <p className="mt-2 mb-0 text-[13px] leading-relaxed" style={{ color: "#8b949e" }}>
+                        <p className="mt-2 mb-0 text-[13px] leading-relaxed" style={{ color: "#5d7a67" }}>
                           {descricaoCard}
                         </p>
                       </div>
                     </div>
-                    <div className="mt-4 border-t pt-3" style={{ borderColor: "#30363d" }}>
+                    <div className="mt-4 border-t pt-3" style={{ borderColor: "#dcebd8" }}>
                       <p
                         className="mb-2 text-[11px] font-bold uppercase tracking-wide m-0"
                         style={{ color: "#6e7681" }}
@@ -446,9 +446,9 @@ export default function FerramentasHubPage() {
                                 href={`/crm/agentes/${encodeURIComponent(a.agente_slug)}`}
                                 className="inline-block rounded-lg px-2.5 py-1 text-xs font-medium transition-colors hover:brightness-110"
                                 style={{
-                                  background: "#21262d",
+                                  background: "#eef7eb",
                                   color: "#c9a24a",
-                                  border: "1px solid #30363d",
+                                  border: "1px solid #dcebd8",
                                   textDecoration: "none",
                                 }}
                               >

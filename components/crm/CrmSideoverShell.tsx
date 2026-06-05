@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
@@ -55,8 +55,8 @@ export function CrmSideoverShell({
           maxHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
-          background: "#0d1117",
-          borderLeft: "1px solid #30363d",
+          background: "#f8fcf6",
+          borderLeft: "1px solid #dcebd8",
           boxShadow: "-8px 0 32px rgba(0,0,0,0.45)",
         }}
       >
@@ -66,16 +66,16 @@ export function CrmSideoverShell({
             justifyContent: "space-between",
             alignItems: "flex-start",
             padding: "18px 20px 12px",
-            borderBottom: "1px solid #21262d",
+            borderBottom: "1px solid #eef7eb",
             flexShrink: 0,
           }}
         >
           <div style={{ minWidth: 0, paddingRight: 12 }}>
-            <h2 id="crm-sideover-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#e6edf3" }}>
+            <h2 id="crm-sideover-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0b2210" }}>
               {title}
             </h2>
             {subtitle && (
-              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#8b949e" }}>{subtitle}</p>
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#5d7a67" }}>{subtitle}</p>
             )}
           </div>
           <button
@@ -85,7 +85,7 @@ export function CrmSideoverShell({
             style={{
               background: "transparent",
               border: "none",
-              color: "#8b949e",
+              color: "#5d7a67",
               cursor: "pointer",
               padding: 4,
             }}
@@ -101,7 +101,7 @@ export function CrmSideoverShell({
             style={{
               flexShrink: 0,
               padding: "14px 20px",
-              borderTop: "1px solid #21262d",
+              borderTop: "1px solid #eef7eb",
               display: "flex",
               gap: 10,
               justifyContent: "flex-end",

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -26,15 +26,15 @@ const INPUT: React.CSSProperties = {
   width: "100%",
   padding: "12px 14px",
   borderRadius: 10,
-  border: "1px solid #30363d",
-  background: "#161b22",
-  color: "#e6edf3",
+  border: "1px solid #dcebd8",
+  background: "#ffffff",
+  color: "#0b2210",
   fontSize: 14,
   boxSizing: "border-box",
 };
 
 const LABEL: React.CSSProperties = {
-  color: "#8b949e",
+  color: "#5d7a67",
   fontSize: 12,
   fontWeight: 600,
   display: "block",
@@ -43,7 +43,7 @@ const LABEL: React.CSSProperties = {
 
 const HINT: React.CSSProperties = {
   margin: 0,
-  color: "#8b949e",
+  color: "#5d7a67",
   fontSize: 11,
   lineHeight: 1.5,
 };
@@ -148,7 +148,7 @@ function metricCard(label: string, value: string, color: string) {
       style={{
         borderRadius: 10,
         border: "1px solid #2c384b",
-        background: "#161b22",
+        background: "#ffffff",
         padding: 10,
       }}
     >
@@ -472,9 +472,9 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
               minWidth: 120,
               padding: "12px 16px",
               borderRadius: 10,
-              border: "1px solid #30363d",
+              border: "1px solid #dcebd8",
               background: "transparent",
-              color: "#8b949e",
+              color: "#5d7a67",
               fontSize: 13,
               fontWeight: 700,
               cursor: loading ? "not-allowed" : "pointer",
@@ -491,8 +491,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                 minWidth: 120,
                 padding: "12px 16px",
                 borderRadius: 10,
-                border: "1px solid #30363d",
-                background: "#161b22",
+                border: "1px solid #dcebd8",
+                background: "#ffffff",
                 color: "#c8d1dc",
                 fontSize: 13,
                 fontWeight: 700,
@@ -561,8 +561,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
               padding: "12px 16px",
               borderRadius: 10,
               border: "none",
-              background: loading ? "#30363d" : "#003b26",
-              color: loading ? "#8b949e" : "#c9a24a",
+              background: loading ? "#dcebd8" : "#003b26",
+              color: loading ? "#5d7a67" : "#c9a24a",
               fontSize: 13,
               fontWeight: 800,
               cursor: loading || !podeSalvar ? "not-allowed" : "pointer",
@@ -614,7 +614,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                     margin: "4px 0 0",
                     fontSize: 12,
                     fontWeight: 800,
-                    color: active ? "#f3ddb0" : "#e6edf3",
+                    color: active ? "#f3ddb0" : "#0b2210",
                   }}
                 >
                   {item.label}
@@ -625,7 +625,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       margin: "4px 0 0",
                       fontSize: 10,
                       fontWeight: 700,
-                      color: active ? "#86efac" : "#8b949e",
+                      color: active ? "#86efac" : "#5d7a67",
                     }}
                   >
                     opcional
@@ -638,8 +638,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
 
         <CadastroSideoverPanel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
-            {metricCard("Mercado", resumoMercado, "#e6edf3")}
-            {metricCard("Etapa", ETAPA_LABEL[form.etapa] || form.etapa, "#e6edf3")}
+            {metricCard("Mercado", resumoMercado, "#0b2210")}
+            {metricCard("Etapa", ETAPA_LABEL[form.etapa] || form.etapa, "#0b2210")}
             {metricCard("Valor", form.valor_estimado.trim() || "não definido", "#22c55e")}
             {metricCard("Vínculos", String(totalVinculos), "#c9a24a")}
           </div>
@@ -767,8 +767,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                     style={{
                       padding: "0 14px",
                       borderRadius: 10,
-                      border: "1px solid #30363d",
-                      background: picker.lead_id ? "#003b26" : "#161b22",
+                      border: "1px solid #dcebd8",
+                      background: picker.lead_id ? "#003b26" : "#ffffff",
                       color: picker.lead_id ? "#c9a24a" : "#6e7681",
                       fontWeight: 700,
                       cursor: picker.lead_id ? "pointer" : "not-allowed",
@@ -833,8 +833,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                     style={{
                       padding: "0 14px",
                       borderRadius: 10,
-                      border: "1px solid #30363d",
-                      background: picker.pessoa_id ? "#003b26" : "#161b22",
+                      border: "1px solid #dcebd8",
+                      background: picker.pessoa_id ? "#003b26" : "#ffffff",
                       color: picker.pessoa_id ? "#c9a24a" : "#6e7681",
                       fontWeight: 700,
                       cursor: picker.pessoa_id ? "pointer" : "not-allowed",
@@ -899,8 +899,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                     style={{
                       padding: "0 14px",
                       borderRadius: 10,
-                      border: "1px solid #30363d",
-                      background: picker.empresa_id ? "#003b26" : "#161b22",
+                      border: "1px solid #dcebd8",
+                      background: picker.empresa_id ? "#003b26" : "#ffffff",
                       color: picker.empresa_id ? "#c9a24a" : "#6e7681",
                       fontWeight: 700,
                       cursor: picker.empresa_id ? "pointer" : "not-allowed",
@@ -965,8 +965,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                     style={{
                       padding: "0 14px",
                       borderRadius: 10,
-                      border: "1px solid #30363d",
-                      background: picker.parceiro_id ? "#003b26" : "#161b22",
+                      border: "1px solid #dcebd8",
+                      background: picker.parceiro_id ? "#003b26" : "#ffffff",
                       color: picker.parceiro_id ? "#c9a24a" : "#6e7681",
                       fontWeight: 700,
                       cursor: picker.parceiro_id ? "pointer" : "not-allowed",
@@ -1038,7 +1038,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
 
             <CadastroSideoverPanel>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <p style={{ margin: 0, color: "#e6edf3", fontSize: 13, fontWeight: 800 }}>
+                <p style={{ margin: 0, color: "#0b2210", fontSize: 13, fontWeight: 800 }}>
                   Checklist operacional
                 </p>
                 {pendencias.length > 0 ? (
@@ -1095,7 +1095,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                   <Sparkles size={18} color="#86efac" />
                 </div>
                 <div>
-                  <p style={{ margin: 0, color: "#e6edf3", fontSize: 13, fontWeight: 800 }}>
+                  <p style={{ margin: 0, color: "#0b2210", fontSize: 13, fontWeight: 800 }}>
                     Copiloto opcional de criação
                   </p>
                   <p style={{ ...HINT, marginTop: 6 }}>
@@ -1128,7 +1128,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       style={{
                         borderRadius: 999,
                         border: "1px solid #2d394b",
-                        background: "#161b22",
+                        background: "#ffffff",
                         color: "#c8d1dc",
                         padding: "8px 12px",
                         fontSize: 11,
@@ -1145,7 +1145,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                   style={{
                     borderRadius: 12,
                     border: "1px solid #2c384b",
-                    background: "#0d1117",
+                    background: "#f8fcf6",
                     minHeight: 260,
                     maxHeight: 360,
                     overflowY: "auto",
@@ -1172,7 +1172,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                             padding: "10px 12px",
                             background: isUser ? "#2f81f720" : "#141d29",
                             border: `1px solid ${isUser ? "#2f81f755" : "#2c384b"}`,
-                            color: isUser ? "#cfe7ff" : "#e6edf3",
+                            color: isUser ? "#cfe7ff" : "#0b2210",
                             fontSize: 12,
                             lineHeight: 1.55,
                             whiteSpace: "pre-wrap",
@@ -1198,7 +1198,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                     );
                   })}
                   {chatLoading ? (
-                    <p style={{ margin: 0, color: "#8b949e", fontSize: 12 }}>Copiloto a pensar…</p>
+                    <p style={{ margin: 0, color: "#5d7a67", fontSize: 12 }}>Copiloto a pensar…</p>
                   ) : null}
                   <div ref={chatEndRef} />
                 </div>
@@ -1219,7 +1219,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       width: 48,
                       borderRadius: 12,
                       border: "1px solid #22c55e44",
-                      background: chatLoading || !chatInput.trim() ? "#161b22" : "#003b26",
+                      background: chatLoading || !chatInput.trim() ? "#ffffff" : "#003b26",
                       color: chatLoading || !chatInput.trim() ? "#6e7681" : "#86efac",
                       cursor: chatLoading || !chatInput.trim() ? "not-allowed" : "pointer",
                     }}

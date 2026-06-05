@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { TiviaBrand } from "@/components/brand/TiviaBrand";
+import { WajeBrand } from "@/components/brand/WajeBrand";
 import { formatCep, formatCnpj, formatCpf, isValidCnpj, isValidCpf, onlyDigits } from "@/lib/brasil-docs";
 import { supabase } from "@/lib/supabase/client";
 import { getSafeReturnPath } from "@/lib/auth/safe-return-path";
@@ -307,7 +307,7 @@ export default function CadastroPage() {
         <aside className="h-[100dvh] w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[560px] md:min-w-[500px]">
           <div className="mx-auto w-full max-w-[540px] p-6 md:p-8">
             <div className="mb-6 flex items-center justify-between">
-              <TiviaBrand layout="horizontal" className="items-start text-left" />
+              <WajeBrand layout="horizontal" tone="brand" className="items-start text-left" />
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-[#3f5b44] hover:text-[#1f3a24]">
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
@@ -316,7 +316,7 @@ export default function CadastroPage() {
 
             <h1 className="mb-2 text-3xl font-bold text-[#132a17]">Criar conta</h1>
             <p className="mb-8 text-sm text-[#58745d]">
-              Cadastre sua operação, defina a senha e acesse o TIVIA.
+              Cadastre sua operação, defina a senha e acesse o Waje.
             </p>
 
             <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -568,7 +568,7 @@ export default function CadastroPage() {
                   className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-[#92ff00]/35 bg-[#92ff00] px-5 text-sm font-bold text-[#0a1206] transition hover:brightness-95 disabled:opacity-60"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                  {submitting ? "Criando conta..." : "Criar conta TIVIA"}
+                  {submitting ? "Criando conta..." : "Criar conta Waje"}
                 </button>
               </div>
             </form>

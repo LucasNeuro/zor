@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { UserCog, UserPlus, X } from "lucide-react";
-import { CrmStickyPageHeader } from "@/components/crm/CrmStickyPageHeader";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { isCrmAdminRole } from "@/lib/crm-nav-groups";
 import { supabase } from "@/lib/supabase/client";
@@ -103,19 +102,22 @@ export default function UsuariosPage() {
 
   if (!myRole && loading) {
     return (
-      <div className="flex min-h-full items-center justify-center bg-[#0d1117] text-sm text-[#8b949e]">
-        Carregando…
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#92ff00] border-t-transparent" />
       </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-8">
-        <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 text-center">
-          <UserCog className="mx-auto mb-4 h-8 w-8 text-[#c9a24a]" />
-          <h1 className="text-lg font-bold text-[#e6edf3]">Usuários & Permissões</h1>
-          <p className="mt-2 text-sm text-[#8b949e]">
+      <div className="flex h-full items-center justify-center p-8">
+        <div
+          className="w-full max-w-sm rounded-2xl p-8 text-center"
+          style={{ background: "#fff", border: "1px solid #dcebd8", boxShadow: "0 4px 16px rgba(11,31,16,0.06)" }}
+        >
+          <UserCog className="mx-auto mb-4 h-10 w-10" style={{ color: "#3f9848" }} />
+          <h1 className="text-base font-bold" style={{ color: "#0b2210" }}>Acesso restrito</h1>
+          <p className="mt-2 text-sm" style={{ color: "#6b8a76" }}>
             Apenas administradores (owner/admin) podem gerir a equipa.
           </p>
         </div>
@@ -124,63 +126,88 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col bg-[#0d1117]">
-      <CrmStickyPageHeader
-        title="Usuários & Permissões"
-        description="Convites e papéis da equipa Obra10+"
-        actions={
+    <div className="flex min-h-full flex-col" style={{ background: "#f8fcf6" }}>
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+
+        {/* Toolbar */}
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>
+            {usuarios.length} {usuarios.length === 1 ? "membro" : "membros"}
+          </p>
           <button
             type="button"
             onClick={() => setModal(true)}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-[#c9a24a] px-3 text-xs font-bold text-[#003b26]"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-bold transition-colors"
+            style={{ background: "#0b1f10", color: "#92ff00" }}
           >
-            <UserPlus className="h-4 w-4" />
-            Convidar
+            <UserPlus className="h-3.5 w-3.5" />
+            Convidar membro
           </button>
-        }
-      />
+        </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6">
         {erro && (
-          <p className="mb-4 rounded-lg border border-[#f8514966] bg-[#1a0a0a] px-3 py-2 text-sm text-[#ff7b72]">
+          <p className="mb-4 rounded-xl px-3 py-2 text-sm" style={{ background: "#fff2f1", color: "#c0392b", border: "1px solid #f0c0bd" }}>
             {erro}
           </p>
         )}
 
         {loading ? (
-          <p className="text-sm text-[#8b949e]">Carregando equipa…</p>
+          <div className="flex h-32 items-center justify-center">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#92ff00] border-t-transparent" />
+          </div>
         ) : usuarios.length === 0 ? (
-          <p className="text-sm text-[#8b949e]">Nenhum utilizador em `public.users`. Convide o primeiro membro.</p>
+          <div
+            className="rounded-2xl p-8 text-center"
+            style={{ background: "#fff", border: "1px solid #dcebd8" }}
+          >
+            <p className="text-sm" style={{ color: "#6b8a76" }}>Nenhum membro cadastrado. Convide o primeiro.</p>
+          </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-[#30363d]">
+          <div
+            className="overflow-hidden rounded-2xl"
+            style={{ background: "#fff", border: "1px solid #dcebd8", boxShadow: "0 2px 8px rgba(11,31,16,0.04)" }}
+          >
             <table className="w-full text-left text-sm">
-              <thead className="bg-[#161b22] text-[10px] font-bold uppercase tracking-wide text-[#8b949e]">
+              <thead style={{ background: "#f5fbf4", borderBottom: "1px solid #dcebd8" }}>
                 <tr>
-                  <th className="px-3 py-2">Nome</th>
-                  <th className="px-3 py-2">E-mail</th>
-                  <th className="px-3 py-2">Papel</th>
-                  <th className="px-3 py-2">Status</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>Nome</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>E-mail</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>Papel</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#21262d]">
-                {usuarios.map((u) => (
-                  <tr key={u.id} className="bg-[#0d1117] text-[#e6edf3]">
-                    <td className="px-3 py-2.5 font-medium">{u.name || "—"}</td>
-                    <td className="px-3 py-2.5 text-[#8b949e]">{u.email}</td>
-                    <td className="px-3 py-2.5">
+              <tbody>
+                {usuarios.map((u, i) => (
+                  <tr
+                    key={u.id}
+                    style={{ borderTop: i > 0 ? "1px solid #eef5ec" : "none" }}
+                  >
+                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "#0b2210" }}>{u.name || "—"}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: "#5a7a62" }}>{u.email}</td>
+                    <td className="px-4 py-3">
                       <select
                         value={String(u.role).toLowerCase()}
                         onChange={(e) => void atualizarRole(u.id, e.target.value)}
-                        className="rounded-lg border border-[#30363d] bg-[#21262d] px-2 py-1 text-xs"
+                        className="rounded-lg px-2 py-1 text-xs font-medium"
+                        style={{ background: "#f0f9ee", border: "1px solid #d4ecd0", color: "#1e4a24" }}
                       >
                         {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
+                          <option key={r} value={r}>{r}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-[#8b949e]">{u.status}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                        style={{
+                          background: u.status === "ativo" ? "rgba(146,255,0,0.12)" : "rgba(0,0,0,0.05)",
+                          color: u.status === "ativo" ? "#1e4a24" : "#6b8a76",
+                          border: u.status === "ativo" ? "1px solid rgba(146,255,0,0.3)" : "1px solid #ddd",
+                        }}
+                      >
+                        {u.status}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -189,13 +216,28 @@ export default function UsuariosPage() {
         )}
       </div>
 
+      {/* Invite modal */}
       {modal && (
         <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center md:p-4">
-          <button type="button" className="absolute inset-0 bg-black/60" aria-label="Fechar" onClick={() => setModal(false)} />
-          <div className="relative w-full max-w-md rounded-t-2xl border border-[#30363d] bg-[#161b22] p-4 sm:rounded-2xl">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-[#e6edf3]">Convidar utilizador</h2>
-              <button type="button" onClick={() => setModal(false)} className="rounded-lg bg-[#21262d] p-2">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            style={{ background: "rgba(11,31,16,0.3)" }}
+            aria-label="Fechar"
+            onClick={() => setModal(false)}
+          />
+          <div
+            className="relative w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl"
+            style={{ background: "#fff", border: "1px solid #dcebd8", boxShadow: "0 20px 60px rgba(11,31,16,0.18)" }}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-bold" style={{ color: "#0b2210" }}>Convidar membro</h2>
+              <button
+                type="button"
+                onClick={() => setModal(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-[#f0f9ee]"
+                style={{ color: "#6b8a76", border: "none", background: "transparent", cursor: "pointer" }}
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -205,33 +247,33 @@ export default function UsuariosPage() {
                 placeholder="E-mail *"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-sm text-[#e6edf3]"
+                className="w-full min-h-11 rounded-xl border px-3 text-sm outline-none transition focus:ring-2 focus:ring-[#92ff00]/30"
+                style={{ border: "1px solid #d4ecd0", color: "#0b2210" }}
               />
               <input
                 placeholder="Nome"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-sm text-[#e6edf3]"
+                className="w-full min-h-11 rounded-xl border px-3 text-sm outline-none transition focus:ring-2 focus:ring-[#92ff00]/30"
+                style={{ border: "1px solid #d4ecd0", color: "#0b2210" }}
               />
               <select
                 value={form.role}
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-                className="w-full min-h-11 rounded-lg border border-[#30363d] bg-[#21262d] px-3 text-sm text-[#e6edf3]"
+                className="w-full min-h-11 rounded-xl border px-3 text-sm"
+                style={{ border: "1px solid #d4ecd0", color: "#0b2210" }}
               >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
+                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <button
               type="button"
               disabled={salvando || !form.email.trim()}
               onClick={() => void convidar()}
-              className="mt-4 w-full min-h-11 rounded-lg bg-[#c9a24a] text-sm font-bold text-[#003b26] disabled:opacity-50"
+              className="mt-4 w-full min-h-11 rounded-xl text-sm font-bold disabled:opacity-50"
+              style={{ background: "#0b1f10", color: "#92ff00" }}
             >
-              {salvando ? "Enviando convite…" : "Enviar convite por e-mail"}
+              {salvando ? "Enviando…" : "Enviar convite"}
             </button>
           </div>
         </div>

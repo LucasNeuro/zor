@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -131,14 +131,14 @@ export function CrmPipelineResumo() {
 
   return (
     <section
-      className="rounded-2xl border border-[#2b3544] bg-gradient-to-b from-[#161b22] to-[#121926] shadow-[0_12px_36px_rgba(0,0,0,0.28)]"
+      className="rounded-2xl border border-[#dcebd8] bg-gradient-to-b from-[#ffffff] to-[#ffffff] shadow-[0_12px_36px_rgba(0,0,0,0.28)]"
       aria-label="Funil comercial"
     >
       {/* Cabeçalho */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2b3544] px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#dcebd8] px-4 py-3 sm:px-5">
         <div>
-          <h2 className="m-0 text-sm font-bold text-[#e6edf3]">Funil comercial</h2>
-          <p className="mt-0.5 text-xs text-[#8b949e]">
+          <h2 className="m-0 text-sm font-bold text-[#0b2210]">Funil comercial</h2>
+          <p className="mt-0.5 text-xs text-[#5d7a67]">
             Clique numa etapa para abrir o kanban já filtrado
           </p>
         </div>
@@ -146,17 +146,17 @@ export function CrmPipelineResumo() {
           <button
             type="button"
             onClick={() => void carregar()}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#30363d] text-[#8b949e] transition-colors hover:border-[#c9a24a40] hover:text-[#c9a24a]"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#dcebd8] text-[#5d7a67] transition-colors hover:border-[#c9a24a40] hover:text-[#c9a24a]"
             title="Atualizar"
           >
             <RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} />
           </button>
-          <div className="inline-flex rounded-lg bg-[#0d1117] p-0.5">
+          <div className="inline-flex rounded-lg bg-[#f8fcf6] p-0.5">
             <button
               type="button"
               onClick={() => setTab("leads")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
-                tab === "leads" ? "bg-[#003b26] text-[#c9a24a]" : "text-[#8b949e] hover:text-[#e6edf3]"
+                tab === "leads" ? "bg-[#003b26] text-[#c9a24a]" : "text-[#5d7a67] hover:text-[#0b2210]"
               }`}
             >
               <Users className="h-3.5 w-3.5" />
@@ -166,7 +166,7 @@ export function CrmPipelineResumo() {
               type="button"
               onClick={() => setTab("negocios")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
-                tab === "negocios" ? "bg-[#003b26] text-[#c9a24a]" : "text-[#8b949e] hover:text-[#e6edf3]"
+                tab === "negocios" ? "bg-[#003b26] text-[#c9a24a]" : "text-[#5d7a67] hover:text-[#0b2210]"
               }`}
             >
               <Briefcase className="h-3.5 w-3.5" />
@@ -177,7 +177,7 @@ export function CrmPipelineResumo() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-px border-b border-[#2b3544] bg-[#2b3544] sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-px border-b border-[#dcebd8] bg-[#dcebd8] sm:grid-cols-4">
         {tab === "leads" ? (
           <>
             <KpiCell label="Leads no funil" value={String(totalAtivosLeads)} hint="excl. ganho/perdido" />
@@ -214,20 +214,20 @@ export function CrmPipelineResumo() {
         {carregando ? (
           <div className="flex justify-center py-12">
             <div
-              className="h-8 w-8 animate-spin rounded-full border-2 border-[#30363d] border-t-[#c9a24a]"
+              className="h-8 w-8 animate-spin rounded-full border-2 border-[#dcebd8] border-t-[#c9a24a]"
               aria-label="Carregando funil"
             />
           </div>
         ) : tab === "leads" && leadsRows.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#30363d] bg-[#0d1117] px-6 py-10 text-center">
-            <p className="mb-1 text-sm font-bold text-[#e6edf3]">Nenhum lead no funil ainda</p>
-            <p className="mb-4 text-xs text-[#8b949e]">
+          <div className="rounded-xl border border-dashed border-[#dcebd8] bg-[#f8fcf6] px-6 py-10 text-center">
+            <p className="mb-1 text-sm font-bold text-[#0b2210]">Nenhum lead no funil ainda</p>
+            <p className="mb-4 text-xs text-[#5d7a67]">
               Quando chegarem leads (WhatsApp ou cadastro manual), as etapas aparecem aqui.
             </p>
             <button
               type="button"
               onClick={() => router.push("/crm/leads?view=kanban")}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#c9a24a] px-4 py-2 text-xs font-bold text-[#0d1117]"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#c9a24a] px-4 py-2 text-xs font-bold text-[#f8fcf6]"
             >
               Abrir kanban de leads
               <ArrowRight className="h-4 w-4" />
@@ -274,7 +274,7 @@ export function CrmPipelineResumo() {
                           >
                             {n}
                           </span>
-                          <span className="text-center text-[10px] font-semibold leading-tight text-[#e6edf3]">
+                          <span className="text-center text-[10px] font-semibold leading-tight text-[#0b2210]">
                             {est.short}
                           </span>
                           {v > 0 && (
@@ -298,7 +298,7 @@ export function CrmPipelineResumo() {
             </div>
 
             {/* Legenda + outcomes */}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#21262d] pt-3">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#eef7eb] pt-3">
               <p className="m-0 text-[10px] text-[#6e7681]">
                 Setas = % que passou da etapa anterior
               </p>
@@ -327,9 +327,9 @@ export function CrmPipelineResumo() {
             </button>
           </>
         ) : negRows.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#30363d] bg-[#0d1117] px-6 py-10 text-center">
-            <p className="mb-1 text-sm font-bold text-[#e6edf3]">Nenhum negócio aberto</p>
-            <p className="mb-4 text-xs text-[#8b949e]">
+          <div className="rounded-xl border border-dashed border-[#dcebd8] bg-[#f8fcf6] px-6 py-10 text-center">
+            <p className="mb-1 text-sm font-bold text-[#0b2210]">Nenhum negócio aberto</p>
+            <p className="mb-4 text-xs text-[#5d7a67]">
               Converta um lead em negócio para acompanhar briefing, match e sit-down.
             </p>
             <button
@@ -381,7 +381,7 @@ export function CrmPipelineResumo() {
                           >
                             {n}
                           </span>
-                          <span className="text-center text-[10px] font-semibold leading-tight text-[#e6edf3]">
+                          <span className="text-center text-[10px] font-semibold leading-tight text-[#0b2210]">
                             {et.label.includes(" ") ? et.label.split(" ")[0] : et.label}
                           </span>
                           {v > 0 && (
@@ -423,7 +423,7 @@ function KpiCell({
   label,
   value,
   hint,
-  cor = "#e6edf3",
+  cor = "#0b2210",
 }: {
   label: string;
   value: string;
@@ -431,7 +431,7 @@ function KpiCell({
   cor?: string;
 }) {
   return (
-    <div className="bg-[#121926] px-3 py-2.5 sm:px-4">
+    <div className="bg-[#ffffff] px-3 py-2.5 sm:px-4">
       <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">{label}</p>
       <p className="text-base font-black tabular-nums sm:text-lg" style={{ color: cor }}>
         {value}

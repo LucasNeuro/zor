@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Building2, UserPlus } from "lucide-react";
@@ -25,9 +25,9 @@ const ORIGEM_LABEL: Record<string, string> = {
 };
 
 const inputCls =
-  "w-full min-h-10 rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a]";
+  "w-full min-h-10 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a]";
 
-const labelCls = "mb-1 block text-xs font-semibold text-[#8b949e]";
+const labelCls = "mb-1 block text-xs font-semibold text-[#5d7a67]";
 
 const secaoCls = "text-[11px] font-extrabold uppercase tracking-wide text-[#aebccf]";
 
@@ -164,7 +164,7 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
             type="button"
             onClick={onClose}
             disabled={salvando}
-            className="min-h-10 rounded-lg border border-[#30363d] px-4 py-2 text-sm font-semibold text-[#8b949e] hover:text-white disabled:opacity-50"
+            className="min-h-10 rounded-lg border border-[#dcebd8] px-4 py-2 text-sm font-semibold text-[#5d7a67] hover:text-white disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -172,7 +172,7 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
             type="button"
             onClick={() => void salvar()}
             disabled={salvando}
-            className="min-h-10 rounded-lg px-5 py-2 text-sm font-bold text-[#0d1117] disabled:opacity-50"
+            className="min-h-10 rounded-lg px-5 py-2 text-sm font-bold text-[#f8fcf6] disabled:opacity-50"
             style={{ background: salvando ? "#6e7681" : "#c9a24a" }}
           >
             {salvando ? "Salvando…" : "Criar lead"}
@@ -181,9 +181,9 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
       }
     >
       <div className="flex flex-col gap-5">
-        <p className="text-xs leading-relaxed text-[#8b949e]">
+        <p className="text-xs leading-relaxed text-[#5d7a67]">
           Mesma matriz do cadastro: mercado(s), contacto e origem. O lead entra em{" "}
-          <strong className="text-[#e6edf3]">Novos</strong> e gera vínculo PES pelo telefone.
+          <strong className="text-[#0b2210]">Novos</strong> e gera vínculo PES pelo telefone.
         </p>
 
         <section>

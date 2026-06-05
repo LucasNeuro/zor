@@ -32,14 +32,14 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"),
   title: {
-    default: "TIVIA | IA para atendimento e CRM",
-    template: "%s | TIVIA",
+    default: "Waje | IA para atendimento e CRM",
+    template: "%s | Waje",
   },
   description:
-    "Plataforma TIVIA: atendimento WhatsApp, CRM e agentes de IA com operação human-in-the-loop para PMEs.",
+    "Plataforma Waje da Onze Tecnologia: atendimento WhatsApp, CRM e agentes de IA com operação human-in-the-loop para PMEs.",
   manifest: "/manifest.json",
   keywords: [
-    "tivia",
+    "waje",
     "crm com ia",
     "atendimento whatsapp",
     "agente de ia",
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "TIVIA",
+    title: "Waje",
   },
   icons: {
     icon: [
@@ -74,13 +74,13 @@ export const metadata: Metadata = {
     "mobile-web-app-capable": "yes",
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
-    "apple-mobile-web-app-title": "TIVIA",
-    "msapplication-TileColor": "#003b26",
+    "apple-mobile-web-app-title": "Waje",
+    "msapplication-TileColor": "#0b1f10",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#003b26",
+  themeColor: "#0b1f10",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useState, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -22,7 +22,7 @@ function Toggle({ ativo, onChange }: { ativo: boolean; onChange: () => void }) {
     <button onClick={onChange}
       style={{
         width: 38, height: 22, borderRadius: 11, border: "none", cursor: "pointer",
-        background: ativo ? "#34d399" : "#30363d", position: "relative", transition: "background 200ms",
+        background: ativo ? "#34d399" : "#dcebd8", position: "relative", transition: "background 200ms",
         padding: 0, flexShrink: 0,
       }}>
       <span style={{
@@ -102,8 +102,8 @@ export default function ContatosPage() {
 
   const INPUT = {
     width: "100%", padding: "11px 13px", borderRadius: 10,
-    border: "1px solid #30363d", background: "#0d1117",
-    color: "#e6edf3", fontSize: 14, boxSizing: "border-box" as const,
+    border: "1px solid #dcebd8", background: "#f8fcf6",
+    color: "#0b2210", fontSize: 14, boxSizing: "border-box" as const,
   };
 
   useEffect(() => {
@@ -122,7 +122,7 @@ export default function ContatosPage() {
             border: "none",
             cursor: "pointer",
             background: "#c9a24a",
-            color: "#0d1117",
+            color: "#f8fcf6",
             fontWeight: 800,
             fontSize: 13,
           }}
@@ -135,35 +135,35 @@ export default function ContatosPage() {
   }, [pathname, setSlot, mostraNovo]);
 
   return (
-    <div style={{ background: "#0d1117", minHeight: "100vh", padding: "1.5rem" }}>
+    <div style={{ background: "#f8fcf6", minHeight: "100vh", padding: "1.5rem" }}>
       {mostraNovo && (
-        <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 14, padding: 18, marginBottom: 20 }}>
-          <h2 style={{ color: "#e6edf3", fontSize: 15, fontWeight: 700, margin: "0 0 14px" }}>
+        <div style={{ background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 14, padding: 18, marginBottom: 20 }}>
+          <h2 style={{ color: "#0b2210", fontSize: 15, fontWeight: 700, margin: "0 0 14px" }}>
             {editando ? "Editar contato" : "Novo contato"}
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
-                <label style={{ color: "#8b949e", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>Nome *</label>
+                <label style={{ color: "#5d7a67", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>Nome *</label>
                 <input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Nome" style={INPUT} />
               </div>
               <div>
-                <label style={{ color: "#8b949e", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>Telefone *</label>
+                <label style={{ color: "#5d7a67", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>Telefone *</label>
                 <input value={form.telefone} onChange={e => setForm(f => ({ ...f, telefone: e.target.value }))} placeholder="(11) 99999-9999" style={INPUT} />
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
-                <label style={{ color: "#8b949e", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>E-mail</label>
+                <label style={{ color: "#5d7a67", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>E-mail</label>
                 <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@ex.com" type="email" style={INPUT} />
               </div>
               <div>
-                <label style={{ color: "#8b949e", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>Cargo</label>
+                <label style={{ color: "#5d7a67", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>Cargo</label>
                 <input value={form.cargo} onChange={e => setForm(f => ({ ...f, cargo: e.target.value }))} placeholder="Ex: Gestor" style={INPUT} />
               </div>
             </div>
             <div>
-              <label style={{ color: "#8b949e", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>Canal de notificação</label>
+              <label style={{ color: "#5d7a67", fontSize: 11, fontWeight: 600, display: "block", marginBottom: 5 }}>Canal de notificação</label>
               <select value={form.canal} onChange={e => setForm(f => ({ ...f, canal: e.target.value }))} style={INPUT}>
                 <option value="whatsapp">WhatsApp</option>
                 <option value="email">E-mail</option>
@@ -171,25 +171,25 @@ export default function ContatosPage() {
               </select>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 600, margin: 0 }}>Recebe notificações de:</p>
+              <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 600, margin: 0 }}>Recebe notificações de:</p>
               {([
                 ["receber_novo_lead", "Novo lead"],
                 ["receber_aprovacao", "Aprovação pendente"],
                 ["receber_encaminhamento", "Encaminhamento"],
               ] as const).map(([key, label]) => (
                 <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#e6edf3", fontSize: 13 }}>{label}</span>
+                  <span style={{ color: "#0b2210", fontSize: 13 }}>{label}</span>
                   <Toggle ativo={form[key]} onChange={() => setForm(f => ({ ...f, [key]: !f[key] }))} />
                 </div>
               ))}
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
               <button onClick={() => { resetForm(); setMostraNovo(false); }}
-                style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "1px solid #30363d", cursor: "pointer", background: "transparent", color: "#8b949e", fontSize: 13 }}>
+                style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "1px solid #dcebd8", cursor: "pointer", background: "transparent", color: "#5d7a67", fontSize: 13 }}>
                 Cancelar
               </button>
               <button onClick={salvar} disabled={salvando || !form.nome || !form.telefone}
-                style={{ flex: 2, padding: "11px 0", borderRadius: 10, border: "none", cursor: "pointer", background: "#c9a24a", color: "#0d1117", fontWeight: 700, fontSize: 13, opacity: (!form.nome || !form.telefone) ? 0.5 : 1 }}>
+                style={{ flex: 2, padding: "11px 0", borderRadius: 10, border: "none", cursor: "pointer", background: "#c9a24a", color: "#f8fcf6", fontWeight: 700, fontSize: 13, opacity: (!form.nome || !form.telefone) ? 0.5 : 1 }}>
                 {salvando ? "Salvando..." : editando ? "Salvar alterações" : "Adicionar contato"}
               </button>
             </div>
@@ -198,10 +198,10 @@ export default function ContatosPage() {
       )}
 
       {loading ? (
-        <div style={{ textAlign: "center", color: "#8b949e", padding: 40 }}>Carregando...</div>
+        <div style={{ textAlign: "center", color: "#5d7a67", padding: 40 }}>Carregando...</div>
       ) : contatos.length === 0 ? (
         <div style={{ textAlign: "center", padding: 60 }}>
-          <p style={{ color: "#8b949e" }}>Nenhum contato configurado.</p>
+          <p style={{ color: "#5d7a67" }}>Nenhum contato configurado.</p>
           <p style={{ color: "#484f58", fontSize: 12 }}>Adicione quem deve receber alertas de leads e aprovações.</p>
         </div>
       ) : (
@@ -209,18 +209,18 @@ export default function ContatosPage() {
           {contatos.map(c => (
             <div key={c.id}
               style={{
-                background: "#161b22", border: "1px solid #30363d", borderRadius: 14, padding: 16,
+                background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 14, padding: 16,
                 opacity: c.ativo ? 1 : 0.5,
               }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                 <div>
-                  <p style={{ color: "#e6edf3", fontWeight: 700, fontSize: 14, margin: 0 }}>{c.nome}</p>
-                  <p style={{ color: "#8b949e", fontSize: 12, margin: "2px 0 0" }}>
+                  <p style={{ color: "#0b2210", fontWeight: 700, fontSize: 14, margin: 0 }}>{c.nome}</p>
+                  <p style={{ color: "#5d7a67", fontSize: 12, margin: "2px 0 0" }}>
                     {c.cargo ? `${c.cargo} · ` : ""}{c.telefone}
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 20, background: "#30363d40", color: "#8b949e" }}>
+                  <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 20, background: "#dcebd840", color: "#5d7a67" }}>
                     {CANAL_LABEL[c.canal] || c.canal}
                   </span>
                   <Toggle ativo={c.ativo} onChange={() => toggleAtivo(c)} />
@@ -233,7 +233,7 @@ export default function ContatosPage() {
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => iniciarEdicao(c)}
-                  style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1px solid #30363d", cursor: "pointer", background: "transparent", color: "#8b949e", fontSize: 12 }}>
+                  style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1px solid #dcebd8", cursor: "pointer", background: "transparent", color: "#5d7a67", fontSize: 12 }}>
                   Editar
                 </button>
                 <button onClick={() => remover(c.id)}

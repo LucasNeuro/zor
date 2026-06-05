@@ -14,7 +14,7 @@ DECLARE
   -- ↓ Personaliza antes de correr (não commites senhas no git)
   v_email text := 'lucasoffgod@hotmail.com';
   v_password text := '@sacola47';
-  v_name text := 'Administrador';
+  v_name text := 'Lucas';
   v_app_role text := 'owner';
   v_status text := 'Ativo';
 

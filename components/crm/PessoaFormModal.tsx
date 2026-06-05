@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 
 
@@ -42,11 +42,11 @@ const INPUT: React.CSSProperties = {
 
   borderRadius: 10,
 
-  border: "1px solid #30363d",
+  border: "1px solid #dcebd8",
 
-  background: "#161b22",
+  background: "#ffffff",
 
-  color: "#e6edf3",
+  color: "#0b2210",
 
   fontSize: 14,
 
@@ -58,7 +58,7 @@ const INPUT: React.CSSProperties = {
 
 const LABEL: React.CSSProperties = {
 
-  color: "#8b949e",
+  color: "#5d7a67",
 
   fontSize: 12,
 
@@ -78,7 +78,7 @@ const SECTION: React.CSSProperties = {
 
   paddingTop: 14,
 
-  borderTop: "1px solid #21262d",
+  borderTop: "1px solid #eef7eb",
 
 };
 
@@ -510,8 +510,8 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
           maxHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
-          background: "#0d1117",
-          borderLeft: "1px solid #30363d",
+          background: "#f8fcf6",
+          borderLeft: "1px solid #dcebd8",
           boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
         }}
       >
@@ -521,20 +521,20 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
             justifyContent: "space-between",
             alignItems: "flex-start",
             padding: "18px 20px 12px",
-            borderBottom: "1px solid #21262d",
+            borderBottom: "1px solid #eef7eb",
             flexShrink: 0,
           }}
         >
 
           <div>
 
-            <h2 id="pessoa-form-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#e6edf3" }}>
+            <h2 id="pessoa-form-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0b2210" }}>
 
               Novo cliente
 
             </h2>
 
-            <p style={{ margin: "6px 0 0", fontSize: 12, color: "#8b949e" }}>
+            <p style={{ margin: "6px 0 0", fontSize: 12, color: "#5d7a67" }}>
 
               Cadastro em hub_pessoas — PF ou PJ na mesma lista.
 
@@ -556,7 +556,7 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
               border: "none",
 
-              color: "#8b949e",
+              color: "#5d7a67",
 
               fontSize: 22,
 
@@ -613,11 +613,11 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
                   borderRadius: 10,
 
-                  border: active ? "1px solid #c9a24a66" : "1px solid #30363d",
+                  border: active ? "1px solid #c9a24a66" : "1px solid #dcebd8",
 
-                  background: active ? "#c9a24a18" : "#161b22",
+                  background: active ? "#c9a24a18" : "#ffffff",
 
-                  color: active ? "#c9a24a" : "#8b949e",
+                  color: active ? "#c9a24a" : "#5d7a67",
 
                   fontWeight: 700,
 
@@ -705,7 +705,7 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
               style={{
                 ...INPUT,
-                borderColor: docErro ? "#ef444466" : docOk ? "#22c55e66" : "#30363d",
+                borderColor: docErro ? "#ef444466" : docOk ? "#22c55e66" : "#dcebd8",
               }}
 
               inputMode="numeric"
@@ -717,7 +717,7 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
             />
 
             {verificandoDoc && (
-              <p style={{ color: "#8b949e", fontSize: 11, margin: "6px 0 0" }}>
+              <p style={{ color: "#5d7a67", fontSize: 11, margin: "6px 0 0" }}>
                 Validando {tipo === "PF" ? "CPF" : "CNPJ"}…
               </p>
             )}
@@ -1006,7 +1006,7 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
           style={{
             flexShrink: 0,
             padding: "12px 20px 18px",
-            borderTop: "1px solid #21262d",
+            borderTop: "1px solid #eef7eb",
             display: "flex",
             flexDirection: "column",
             gap: 10,
@@ -1032,11 +1032,11 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
                 borderRadius: 10,
 
-                border: "1px solid #30363d",
+                border: "1px solid #dcebd8",
 
                 background: "transparent",
 
-                color: "#8b949e",
+                color: "#5d7a67",
 
                 fontSize: 13,
 
@@ -1070,9 +1070,9 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
                 border: "none",
 
-                background: loading ? "#30363d" : "#003b26",
+                background: loading ? "#dcebd8" : "#003b26",
 
-                color: loading ? "#8b949e" : "#c9a24a",
+                color: loading ? "#5d7a67" : "#c9a24a",
 
                 fontSize: 13,
 

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -38,9 +38,9 @@ export function FinanceiroContasList({ tipo, contas, onAtualizado, linkDashboard
 
   if (contas.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-[#30363d] bg-[#161b22] px-6 py-12 text-center">
-        <p className="text-sm font-bold text-[#e6edf3]">Nenhum lançamento neste filtro</p>
-        <p className="mt-1 text-xs text-[#8b949e]">
+      <div className="rounded-xl border border-dashed border-[#dcebd8] bg-[#ffffff] px-6 py-12 text-center">
+        <p className="text-sm font-bold text-[#0b2210]">Nenhum lançamento neste filtro</p>
+        <p className="mt-1 text-xs text-[#5d7a67]">
           Ajuste os filtros ou cadastre um novo lançamento no painel financeiro.
         </p>
         {linkDashboard && (
@@ -64,16 +64,16 @@ export function FinanceiroContasList({ tipo, contas, onAtualizado, linkDashboard
         return (
           <li
             key={c.id}
-            className="rounded-xl border border-[#30363d] bg-[#161b22] p-3"
+            className="rounded-xl border border-[#dcebd8] bg-[#ffffff] p-3"
             style={{ borderLeftWidth: 3, borderLeftColor: corBorda }}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-[#e6edf3]">{c.descricao}</p>
-                <p className="mt-1 text-lg font-black tabular-nums text-[#e6edf3]">
+                <p className="truncate text-sm font-bold text-[#0b2210]">{c.descricao}</p>
+                <p className="mt-1 text-lg font-black tabular-nums text-[#0b2210]">
                   {moedaFinanceiro(c.valor)}
                 </p>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[#8b949e]">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[#5d7a67]">
                   <span
                     className="rounded-full px-2 py-0.5 font-bold uppercase"
                     style={{
@@ -107,7 +107,7 @@ export function FinanceiroContasList({ tipo, contas, onAtualizado, linkDashboard
                   <button
                     type="button"
                     onClick={() => router.push("/crm/negocios")}
-                    className="min-h-11 rounded-lg border border-[#30363d] px-3 text-xs font-semibold text-[#8b949e]"
+                    className="min-h-11 rounded-lg border border-[#dcebd8] px-3 text-xs font-semibold text-[#5d7a67]"
                   >
                     Negócios
                   </button>

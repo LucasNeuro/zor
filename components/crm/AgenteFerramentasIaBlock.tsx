@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -69,7 +69,7 @@ function ToggleSwitch({
         borderRadius: 999,
         border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
-        background: checked ? "linear-gradient(180deg, #3fb950 0%, #2ea043 100%)" : "#21262d",
+        background: checked ? "linear-gradient(180deg, #3fb950 0%, #2ea043 100%)" : "#eef7eb",
         boxShadow: checked ? "inset 0 1px 0 rgba(255,255,255,0.12)" : "inset 0 1px 0 rgba(0,0,0,0.2)",
         position: "relative",
         flexShrink: 0,
@@ -153,8 +153,8 @@ export function AgenteFerramentasIaBlock({
     gap: 12,
     padding: "12px 14px",
     borderRadius: 12,
-    border: "1px solid #30363d",
-    background: "#161b22",
+    border: "1px solid #dcebd8",
+    background: "#ffffff",
   };
 
   return (
@@ -163,12 +163,12 @@ export function AgenteFerramentasIaBlock({
         marginTop: modoCompacto ? 0 : 12,
         padding: modoCompacto ? 0 : 14,
         borderRadius: 12,
-        border: modoCompacto ? undefined : "1px solid #30363d",
-        background: modoCompacto ? undefined : "#0d1117",
+        border: modoCompacto ? undefined : "1px solid #dcebd8",
+        background: modoCompacto ? undefined : "#f8fcf6",
       }}
     >
       {!modoCompacto ? (
-        <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 4px", letterSpacing: 0.06 }}>
+        <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 4px", letterSpacing: 0.06 }}>
           FUNÇÕES DO MODELO NO HUB (MISTRAL)
         </p>
       ) : null}
@@ -241,29 +241,29 @@ export function AgenteFerramentasIaBlock({
         </div>
       ) : null}
 
-      <div style={{ ...rowBase, marginBottom: 10, borderColor: motorHabilitado ? "#388bfd55" : "#30363d" }}>
+      <div style={{ ...rowBase, marginBottom: 10, borderColor: motorHabilitado ? "#388bfd55" : "#dcebd8" }}>
         <div
           style={{
             width: 40,
             height: 40,
             borderRadius: 10,
-            background: motorHabilitado ? "rgba(56,139,253,0.15)" : "#21262d",
+            background: motorHabilitado ? "rgba(56,139,253,0.15)" : "#eef7eb",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            color: motorHabilitado ? "#79c0ff" : "#8b949e",
+            color: motorHabilitado ? "#79c0ff" : "#5d7a67",
           }}
         >
           <Cpu size={20} strokeWidth={2} aria-hidden />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <span id="label-motor-hub" style={{ color: "#e6edf3", fontSize: 13, fontWeight: 700 }}>
+          <span id="label-motor-hub" style={{ color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
             Funções no Hub durante a conversa
           </span>
-          <span style={{ display: "block", color: "#8b949e", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
+          <span style={{ display: "block", color: "#5d7a67", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
             Modelo Mistral com lead na sessão ·{" "}
-            <strong style={{ color: motorSemTools ? "#f85149" : "#8b949e" }}>{nAtivas}</strong> de{" "}
+            <strong style={{ color: motorSemTools ? "#f85149" : "#5d7a67" }}>{nAtivas}</strong> de{" "}
             {nSlots} funções activas
           </span>
         </div>
@@ -279,27 +279,27 @@ export function AgenteFerramentasIaBlock({
         </div>
       </div>
 
-      <div style={{ ...rowBase, marginBottom: 16, borderColor: mistralSyncHabilitado ? "#a371f755" : "#30363d" }}>
+      <div style={{ ...rowBase, marginBottom: 16, borderColor: mistralSyncHabilitado ? "#a371f755" : "#dcebd8" }}>
         <div
           style={{
             width: 40,
             height: 40,
             borderRadius: 10,
-            background: mistralSyncHabilitado ? "rgba(163,113,247,0.12)" : "#21262d",
+            background: mistralSyncHabilitado ? "rgba(163,113,247,0.12)" : "#eef7eb",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            color: mistralSyncHabilitado ? "#d2a8ff" : "#8b949e",
+            color: mistralSyncHabilitado ? "#d2a8ff" : "#5d7a67",
           }}
         >
           <Cloud size={20} strokeWidth={2} aria-hidden />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <span id="label-mistral-sync" style={{ color: "#e6edf3", fontSize: 13, fontWeight: 700 }}>
+          <span id="label-mistral-sync" style={{ color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
             Sincronizar com a nuvem Mistral ao guardar
           </span>
-          <span style={{ display: "block", color: "#8b949e", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
+          <span style={{ display: "block", color: "#5d7a67", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
             Cria ou actualiza um Agent na Mistral (console) com o prompt unificado de produção (identidade,
             conhecimento, regras) e {nAtivas} função(ões) activa(s). Requer{" "}
             <code style={{ fontSize: 11 }}>MISTRAL_API_KEY</code> no servidor.
@@ -317,7 +317,7 @@ export function AgenteFerramentasIaBlock({
         </div>
       </div>
 
-      <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 10px", letterSpacing: 0.04 }}>
+      <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 10px", letterSpacing: 0.04 }}>
         FUNÇÕES DISPONÍVEIS
       </p>
 
@@ -337,7 +337,7 @@ export function AgenteFerramentasIaBlock({
                       marginBottom: 10,
                     }}
                   >
-                    <SecIcon size={14} strokeWidth={2.25} style={{ color: "#8b949e" }} aria-hidden />
+                    <SecIcon size={14} strokeWidth={2.25} style={{ color: "#5d7a67" }} aria-hidden />
                     <p
                       style={{
                         color: "#aebccf",
@@ -361,8 +361,8 @@ export function AgenteFerramentasIaBlock({
                           key={tool.id}
                           style={{
                             ...rowBase,
-                            borderColor: ligado ? "#388bfd44" : "#30363d",
-                            background: ligado ? "rgba(56,139,253,0.06)" : "#161b22",
+                            borderColor: ligado ? "#388bfd44" : "#dcebd8",
+                            background: ligado ? "rgba(56,139,253,0.06)" : "#ffffff",
                             alignItems: "flex-start",
                           }}
                         >
@@ -371,12 +371,12 @@ export function AgenteFerramentasIaBlock({
                               width: 42,
                               height: 42,
                               borderRadius: 10,
-                              background: ligado ? "rgba(56,139,253,0.18)" : "#21262d",
+                              background: ligado ? "rgba(56,139,253,0.18)" : "#eef7eb",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               flexShrink: 0,
-                              color: ligado ? "#79c0ff" : "#8b949e",
+                              color: ligado ? "#79c0ff" : "#5d7a67",
                               marginTop: 2,
                             }}
                           >
@@ -384,7 +384,7 @@ export function AgenteFerramentasIaBlock({
                           </div>
                           <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
                             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                              <span id={labelId} style={{ color: "#e6edf3", fontSize: 13, fontWeight: 700 }}>
+                              <span id={labelId} style={{ color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
                                 {tool.titulo}
                               </span>
                               {tool.recomendadoWhatsApp && destacarWhatsApp ? (
@@ -406,7 +406,7 @@ export function AgenteFerramentasIaBlock({
                             <span
                               style={{
                                 display: "block",
-                                color: "#8b949e",
+                                color: "#5d7a67",
                                 fontSize: 12,
                                 lineHeight: 1.45,
                                 marginTop: 4,
@@ -447,7 +447,7 @@ export function AgenteFerramentasIaBlock({
             <>
               <p
                 style={{
-                  color: "#8b949e",
+                  color: "#5d7a67",
                   fontSize: 11,
                   fontWeight: 700,
                   margin: "18px 0 10px",
@@ -471,8 +471,8 @@ export function AgenteFerramentasIaBlock({
                         padding: "12px 14px",
                         borderRadius: 12,
                         border: "1px solid",
-                        borderColor: ligado ? "rgba(201,162,74,0.35)" : "#30363d",
-                        background: ligado ? "rgba(201,162,74,0.07)" : "#161b22",
+                        borderColor: ligado ? "rgba(201,162,74,0.35)" : "#dcebd8",
+                        background: ligado ? "rgba(201,162,74,0.07)" : "#ffffff",
                       }}
                     >
                       <div
@@ -480,12 +480,12 @@ export function AgenteFerramentasIaBlock({
                           width: 42,
                           height: 42,
                           borderRadius: 10,
-                          background: ligado ? "rgba(201,162,74,0.2)" : "#21262d",
+                          background: ligado ? "rgba(201,162,74,0.2)" : "#eef7eb",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           flexShrink: 0,
-                          color: ligado ? "#c9a24a" : "#8b949e",
+                          color: ligado ? "#c9a24a" : "#5d7a67",
                           marginTop: 2,
                         }}
                       >
@@ -493,7 +493,7 @@ export function AgenteFerramentasIaBlock({
                       </div>
                       <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                          <span id={labelId} style={{ color: "#e6edf3", fontSize: 13, fontWeight: 700 }}>
+                          <span id={labelId} style={{ color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
                             {tool.titulo}
                           </span>
                           <span
@@ -536,7 +536,7 @@ export function AgenteFerramentasIaBlock({
                           {tool.ferramenta_key}
                         </code>
                         <span
-                          style={{ display: "block", color: "#8b949e", fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
+                          style={{ display: "block", color: "#5d7a67", fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
                         >
                           {curta ? (
                             curta
@@ -586,20 +586,20 @@ export function AgenteFerramentasIaBlock({
             marginTop: 14,
             padding: "10px 12px",
             borderRadius: 10,
-            border: "1px solid #30363d",
-            background: "#161b22",
+            border: "1px solid #dcebd8",
+            background: "#ffffff",
           }}
         >
-          <p style={{ color: "#8b949e", fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>
+          <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>
             Estado Mistral (Hub)
           </p>
           {mistralAgentId ? (
-            <p style={{ color: "#8b949e", fontSize: 11, margin: 0 }}>
+            <p style={{ color: "#5d7a67", fontSize: 11, margin: 0 }}>
               Agent ID: <code style={{ color: "#aebccf", fontSize: 11 }}>{mistralAgentId}</code>
             </p>
           ) : null}
           {mistralSyncEm ? (
-            <p style={{ color: "#8b949e", fontSize: 11, margin: "4px 0 0" }}>
+            <p style={{ color: "#5d7a67", fontSize: 11, margin: "4px 0 0" }}>
               Última sync: {new Date(mistralSyncEm).toLocaleString()}
             </p>
           ) : null}

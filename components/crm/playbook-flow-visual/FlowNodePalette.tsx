@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
 import { CheckCircle, ClipboardList, MessageSquare, Pencil } from "lucide-react";
@@ -75,15 +75,15 @@ const panelStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
-  border: "1px solid #2b3544",
+  border: "1px solid #dcebd8",
   borderRadius: 12,
-  background: "linear-gradient(180deg, #121926 0%, #0d1117 55%)",
+  background: "linear-gradient(180deg, #ffffff 0%, #f8fcf6 55%)",
   padding: "12px 14px",
 };
 
 const titleStyle: CSSProperties = {
   margin: "0 0 2px",
-  color: "#e6edf3",
+  color: "#0b2210",
   fontSize: 12.5,
   fontWeight: 700,
 };
@@ -103,7 +103,7 @@ function btnStyle(color: string): CSSProperties {
     border: `1px solid ${color}44`,
     borderRadius: 10,
     background: `${color}14`,
-    color: "#e6edf3",
+    color: "#0b2210",
     textAlign: "left",
     cursor: "pointer",
     padding: "10px 10px 9px",
@@ -119,6 +119,6 @@ const btnLabel: CSSProperties = {
 
 const btnDesc: CSSProperties = {
   fontSize: 10.5,
-  color: "#8b949e",
+  color: "#5d7a67",
   lineHeight: 1.3,
 };

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useState } from "react";
 import { Check, Copy } from "lucide-react";
@@ -65,7 +65,7 @@ export function CrmTelefoneCell({ telefone, compact = false, className = "" }: P
         </span>
       )}
       <span
-        className={`min-w-0 truncate tabular-nums ${compact ? "text-xs text-[#8b949e]" : "text-sm text-[#e6edf3]"}`}
+        className={`min-w-0 truncate tabular-nums ${compact ? "text-xs text-[#5d7a67]" : "text-sm text-[#0b2210]"}`}
         title={fmt}
       >
         {fmt || raw}
@@ -73,7 +73,7 @@ export function CrmTelefoneCell({ telefone, compact = false, className = "" }: P
       <button
         type="button"
         onClick={copiar}
-        className="shrink-0 rounded p-1 text-[#6e7781] opacity-70 transition-opacity hover:bg-[#21262d] hover:text-[#c9a24a] group-hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c9a24a]/50"
+        className="shrink-0 rounded p-1 text-[#6e7781] opacity-70 transition-opacity hover:bg-[#eef7eb] hover:text-[#c9a24a] group-hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c9a24a]/50"
         title={copiado ? "Copiado!" : "Copiar número (com 55 para WhatsApp)"}
         aria-label={copiado ? "Número copiado" : "Copiar número"}
       >

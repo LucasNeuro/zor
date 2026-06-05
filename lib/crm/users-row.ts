@@ -20,9 +20,19 @@ export function userUpdateTimestamp(): Record<string, string> {
   return { atualizado_em: now, updated_at: now };
 }
 
+type SupabaseLike = {
+  from: (table: string) => {
+    update: (payload: Record<string, unknown>) => {
+      eq: (col: string, val: string) => {
+        select: (cols: string) => { maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }> };
+      };
+    };
+  };
+};
+
 /** Aplica update com fallback se a base só tiver created_at/updated_at. */
 export async function updateUserByAuthId(
-  db: ReturnType<typeof import("@/lib/crm/supabase-server").crmDb>,
+  db: SupabaseLike,
   authId: string,
   fields: Record<string, unknown>,
 ): Promise<{ data: UserRow | null; error: { message: string } | null }> {

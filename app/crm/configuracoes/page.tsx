@@ -23,6 +23,7 @@ import { ContaSectionTabs } from "@/components/crm/ContaSectionTabs";
 import { PermissionToggleRow } from "@/components/crm/PermissionToggleRow";
 import { isCrmAdminRole } from "@/lib/crm-nav-groups";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
+import { normalizeUserRow } from "@/lib/crm/users-row";
 import { supabase } from "@/lib/supabase/client";
 
 type MeProfile = {
@@ -296,14 +297,10 @@ export default function ContaPage() {
       const { data: authData } = await supabase.auth.getUser();
       const authUser = authData.user;
       if (authUser?.id) {
-        const meLocal = await supabase
-          .from("users")
-          .select("id, auth_id, email, name, role, status, tenant_id, access_role_id, criado_em, atualizado_em")
-          .eq("auth_id", authUser.id)
-          .maybeSingle();
+        const meLocal = await supabase.from("users").select("*").eq("auth_id", authUser.id).maybeSingle();
 
         if (meLocal.data) {
-          const localRow = meLocal.data as MeProfile;
+          const localRow = normalizeUserRow(meLocal.data as Record<string, unknown>) as MeProfile;
           setMe(localRow);
           setNameDraft(localRow.name ?? "");
           foundProfile = true;

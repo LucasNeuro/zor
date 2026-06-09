@@ -15,6 +15,7 @@ import {
   CrmRetrofitSideoverShell,
 } from "@/components/crm/CrmRetrofitSideoverShell";
 import { LeadEncaminharPanel } from "@/components/crm/leads/LeadEncaminharPanel";
+import { LeadChatTab } from "@/components/crm/leads/LeadChatTab";
 import { LEAD_ORIGENS } from "@/lib/crm/lead-cadastro";
 import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
 import { patchLeadCrm } from "@/lib/crm/patch-lead-client";

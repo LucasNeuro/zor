@@ -72,7 +72,7 @@ export async function listCargosCatalog(
     const { data, error } = await q;
     if (!error) {
       return {
-        data: (data || []).map((r) => normalizeCargoCatalogRow(r as Record<string, unknown>)),
+        data: (data || []).map((r) => normalizeCargoCatalogRow(r as unknown as Record<string, unknown>)),
         error: null,
       };
     }
@@ -106,7 +106,7 @@ export async function selectCargosContextoSugerir(
       .limit(48);
     if (!error) {
       return {
-        data: (data || []).map((r) => normalizeCargoCatalogRow(r as Record<string, unknown>)),
+        data: (data || []).map((r) => normalizeCargoCatalogRow(r as unknown as Record<string, unknown>)),
         error: null,
       };
     }
@@ -126,7 +126,7 @@ async function insertCargoPayload(
   for (const cols of selectAttempts) {
     const { data, error } = await supabase.from("hub_cargos_catalogo").insert(payload).select(cols).single();
     if (!error && data) {
-      return { data: normalizeCargoCatalogRow(data as Record<string, unknown>), error: null };
+      return { data: normalizeCargoCatalogRow(data as unknown as Record<string, unknown>), error: null };
     }
     if (!error) return { data: null, error: { message: "Insert sem retorno." } };
     lastError = error;
@@ -197,7 +197,7 @@ export async function updateCargoCatalogRow(
       .maybeSingle();
 
     if (!error && data) {
-      return { data: normalizeCargoCatalogRow(data as Record<string, unknown>), error: null };
+      return { data: normalizeCargoCatalogRow(data as unknown as Record<string, unknown>), error: null };
     }
     if (!error) return { data: null, error: { message: "Cargo não encontrado após atualização." } };
     if (!isMissingColumnError(error.message ?? "")) {
@@ -269,7 +269,7 @@ export async function deleteCargoCatalogo(
   if (loadErr) return { ok: false, error: loadErr.message, status: 500 };
   if (!cargo) return { ok: false, error: "Cargo não encontrado.", status: 404 };
 
-  const titulo = cargoTituloFromRow(cargo as Record<string, unknown>);
+  const titulo = cargoTituloFromRow(cargo as unknown as Record<string, unknown>);
   if (titulo) {
     const { count, error: countErr } = await supabase
       .from("hub_agente_identidade")

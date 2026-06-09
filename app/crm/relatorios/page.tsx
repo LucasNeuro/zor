@@ -14,6 +14,7 @@ import {
   CrmResizableDataTable,
   type CrmResizableColumn,
 } from "@/components/crm/CrmResizableDataTable";
+import { CrmStickyPageHeader } from "@/components/crm/CrmStickyPageHeader";
 import { supabase } from "@/lib/supabase/client";
 
 type LinhaResumo = {

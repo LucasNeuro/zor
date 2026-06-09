@@ -40,16 +40,6 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [devHostHint, setDevHostHint] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (process.env.NODE_ENV !== "development") return;
-    const host = window.location.hostname;
-    if (host !== "localhost" && host !== "127.0.0.1") {
-      setDevHostHint(host);
-    }
-  }, []);
 
   useEffect(() => {
     const err = searchParams.get("error");
@@ -171,19 +161,6 @@ function LoginForm() {
             <p className="mb-8 text-sm text-[#58745d]">
               Faça login com e-mail e senha para abrir seu CRM.
             </p>
-
-            {devHostHint ? (
-              <div
-                role="status"
-                className="mb-5 rounded-xl border border-[#e6d9a8] bg-[#fffbeb] px-4 py-3 text-xs leading-snug text-[#7a5c00]"
-              >
-                Está a aceder por <strong>{devHostHint}</strong>. Em desenvolvimento, use{" "}
-                <a href="http://localhost:3001/login" className="font-semibold underline">
-                  localhost:3001
-                </a>{" "}
-                neste PC se o botão Entrar não responder.
-              </div>
-            ) : null}
 
             <form onSubmit={onSubmit} className="flex flex-col gap-5">
               <div className="space-y-1.5">

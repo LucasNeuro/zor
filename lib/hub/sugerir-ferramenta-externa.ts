@@ -136,12 +136,12 @@ Regras:
       descricao_modelo,
       tipo_auth,
       api_key_header: tipo_auth === "api_key" ? api_key_header : "X-API-Key",
-      metodo_http: metodoRaw,
+      metodo_http: metodoRaw as HubFerramentaExternaMetodo,
       url_template,
       headers_template,
       body_template,
       parametros_schema,
-      politica: politicaRaw,
+      politica: politicaRaw as HubFerramentaExternaPolitica,
     },
   };
 }

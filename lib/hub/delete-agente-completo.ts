@@ -40,8 +40,11 @@ async function carregarIdentidadeAgente(
       if (ignorable(error.message)) continue;
       return { row: null, error: error.message };
     }
-    if (data && typeof (data as IdentRow).id === "string") {
-      return { row: data as IdentRow, error: null };
+    if (data) {
+      const row = data as unknown as IdentRow;
+      if (typeof row.id === "string") {
+        return { row, error: null };
+      }
     }
   }
 

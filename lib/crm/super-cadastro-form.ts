@@ -59,11 +59,11 @@ export function emptySuperCadastroForm(tipo: TipoPessoaCadastro = "PF"): SuperCa
     bairro: "",
     cidade: "",
     estado: "",
-    prefixo_mercado: tipo === "PJ" ? "IMB" : undefined,
+    prefixo_mercado: tipo === "PJ" ? "GRL" : undefined,
     comercial: {
-      mercados: ["IMB"],
-      criar_lead: true,
-      lead_origem: "meta_ads",
+      mercados: [],
+      criar_lead: false,
+      lead_origem: "outro",
       segmento: "cliente",
     },
   };

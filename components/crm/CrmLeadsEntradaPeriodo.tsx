@@ -51,7 +51,7 @@ export function CrmLeadsEntradaPeriodo({ pontos, periodo }: Props) {
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-wider text-[#5d7a67]">Entrada de leads</p>
           <p className="mt-0.5 text-[10px] leading-snug text-[#6e7681]">
-            Novos cadastros {porSemana ? "por semana" : "por dia"} · {periodoLabel(periodo)}
+            Novos leads {porSemana ? "por semana" : "por dia"} · {periodoLabel(periodo)}
           </p>
         </div>
         <TrendingUp className="h-4 w-4 shrink-0 text-[#c9a24a]" aria-hidden />

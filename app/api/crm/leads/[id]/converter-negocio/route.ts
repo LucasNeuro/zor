@@ -5,8 +5,8 @@ import {
   criarVinculosNegocioFromLead,
   prefixoMercadoFromLead,
 } from "@/lib/crm/negocio-vinculos";
-import { MERCADOS_NEGOCIO } from "@/lib/crm/pipelines";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
+import { listTenantPipelines } from "@/lib/crm/tenant-pipelines";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
 type Params = { params: Promise<{ id: string }> };
@@ -36,40 +36,27 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const prefixo_mercado =
-    String(body.prefixo_mercado || prefixoMercadoFromLead(lead.metadata) || "IMB").trim() ||
-    "IMB";
+    String(body.prefixo_mercado || prefixoMercadoFromLead(lead.metadata) || "GRL").trim() || "GRL";
   const titulo = String(body.titulo || `Negócio — ${lead.nome}`).trim();
   const codigo = await gerarCodigoNegocio(supabase);
 
-  const mercadoSlug =
-    MERCADOS_NEGOCIO.find((m) => m.prefixo === prefixo_mercado)?.slug ?? "imobiliario";
-  const pipelineSiglaMap: Record<string, string> = {
-    IMB: "imb",
-    ARQ: "arq",
-    OBR: "rfm",
-    RFM: "rfm",
-    ENG: "eng",
-    MRC: "mrc",
-    SRV: "srv",
-    PRO: "pro",
-    FOR: "for",
-  };
-  const pipelineSlug = `negocios-${pipelineSiglaMap[prefixo_mercado] ?? prefixo_mercado.toLowerCase()}`;
-
   let pipelineNegId: string | null = null;
-  const { data: pipeMercado } = await supabase
-    .from("hub_pipelines")
-    .select("id")
-    .eq("slug", pipelineSlug)
-    .maybeSingle();
-  if (pipeMercado?.id) {
-    pipelineNegId = String(pipeMercado.id);
-  } else {
+  try {
+    const pipelines = await listTenantPipelines(supabase, tenantId, "negocio");
+    pipelineNegId = pipelines[0]?.id ?? null;
+  } catch {
+    /* fallback abaixo */
+  }
+
+  if (!pipelineNegId) {
     const { data: pipeNeg } = await supabase
       .from("hub_pipelines")
       .select("id")
-      .eq("slug", "negocios-global")
-      .is("mercado_sigla", null)
+      .eq("tenant_id", tenantId)
+      .eq("tipo", "negocio")
+      .eq("ativo", true)
+      .order("ordem", { ascending: true })
+      .limit(1)
       .maybeSingle();
     if (pipeNeg?.id) pipelineNegId = String(pipeNeg.id);
   }
@@ -102,13 +89,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     codigo,
     titulo,
     prefixo_mercado,
-    mercado_slug: mercadoSlug,
     lead_id,
     pessoa_id: lead.pessoa_id,
     empresa_id: empresaId,
     valor_estimado: lead.valor_estimado ?? 0,
     status: "aberto",
-    etapa: "novo_negocio",
+    etapa: "novo",
     pipeline_id: pipelineNegId,
     tenant_id: tenantId,
   };
@@ -150,7 +136,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   await supabase
     .from("hub_leads_crm")
     .update({
-      ...buildLeadEstagioPatch("convertido_negocio"),
+      ...buildLeadEstagioPatch("ganho"),
       negocio_id: negocio.id,
       atualizado_em: new Date().toISOString(),
     })

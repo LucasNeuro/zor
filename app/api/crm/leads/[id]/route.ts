@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { registrarLogCrm } from "@/lib/crm/audit-log";
 import { buildLeadEstagioPatch } from "@/lib/crm/estagio-map";
 import { validarMudancaEstagioLead } from "@/lib/crm/lead-rules";
+import { mergeLeadTimelineEvents, parseConversaTurnos } from "@/lib/crm/lead-timeline";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { tenantIdFromRequest } from "@/lib/tenant-default";
 
@@ -23,12 +24,47 @@ export async function GET(_request: NextRequest, { params }: Params) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!lead) return NextResponse.json({ error: "Lead não encontrado" }, { status: 404 });
 
-  const [{ data: atividades }, { data: notas }, { data: propostas }, { data: memorias }] = await Promise.all([
-    supabase.from("hub_atividades").select("*").eq("lead_id", id).order("criado_em", { ascending: false }).limit(50),
+  const [
+    { data: atividades },
+    { data: notas },
+    { data: propostas },
+    { data: memorias },
+    { data: mensagens },
+    { data: logs },
+    { data: encaminhamentos },
+  ] = await Promise.all([
+    supabase.from("hub_atividades").select("*").eq("lead_id", id).order("criado_em", { ascending: false }).limit(80),
     supabase.from("hub_notas").select("*").eq("lead_id", id).order("criado_em", { ascending: false }).limit(30),
     supabase.from("hub_propostas").select("*").eq("lead_id", id).order("criado_em", { ascending: false }),
     supabase.from("hub_memorias_lead").select("*").eq("lead_id", id).order("criado_em", { ascending: false }),
+    supabase
+      .from("hub_fila_mensagens")
+      .select("id, direcao, conteudo, agente_responsavel, agente_id, remetente_numero, criado_em, enviada_em")
+      .eq("lead_id", id)
+      .order("criado_em", { ascending: false })
+      .limit(40),
+    supabase
+      .from("hub_logs")
+      .select("*")
+      .eq("entidade", "lead")
+      .eq("entidade_id", id)
+      .order("criado_em", { ascending: false })
+      .limit(30),
+    supabase
+      .from("hub_encaminhamentos")
+      .select("*")
+      .eq("lead_id", id)
+      .order("criado_em", { ascending: false })
+      .limit(20),
   ]);
+
+  const timeline_events = mergeLeadTimelineEvents({
+    atividades: atividades ?? [],
+    mensagens: mensagens ?? [],
+    logs: logs ?? [],
+    encaminhamentos: encaminhamentos ?? [],
+    conversaTurnos: parseConversaTurnos(lead.metadata),
+  });
 
   let pessoa = null;
   if (lead.pessoa_id) {
@@ -46,6 +82,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     pessoa,
     negocios: negocios ?? [],
     timeline: atividades ?? [],
+    timeline_events,
     notas: notas ?? [],
     propostas: propostas ?? [],
     memorias: memorias ?? [],

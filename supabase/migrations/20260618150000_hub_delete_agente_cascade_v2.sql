@@ -1,5 +1,6 @@
 -- Exclusão completa do agente: RAG, conversas, embeddings, playbook layer, etc.
 -- Substitui hub_delete_agente_cascade com limpeza real (DELETE, não só NULL em logs).
+-- Tabelas opcionais são ignoradas quando não existem no tenant (schema parcial).
 
 CREATE OR REPLACE FUNCTION public.hub_delete_agente_cascade(p_agente_slug text)
 RETURNS jsonb
@@ -34,11 +35,14 @@ BEGIN
   END IF;
 
   -- Ciclos
-  DELETE FROM hub_ciclos_log
-  WHERE agente_slug = p_agente_slug
-     OR ciclo_id IN (SELECT id FROM hub_ciclos_ia WHERE agente_slug = p_agente_slug);
-
-  DELETE FROM hub_ciclos_ia WHERE agente_slug = p_agente_slug;
+  IF to_regclass('public.hub_ciclos_log') IS NOT NULL THEN
+    DELETE FROM hub_ciclos_log
+    WHERE agente_slug = p_agente_slug
+       OR ciclo_id IN (SELECT id FROM hub_ciclos_ia WHERE agente_slug = p_agente_slug);
+  END IF;
+  IF to_regclass('public.hub_ciclos_ia') IS NOT NULL THEN
+    DELETE FROM hub_ciclos_ia WHERE agente_slug = p_agente_slug;
+  END IF;
 
   -- Conversas / mensagens / fila / prompts (apagar, não anonimizar)
   IF to_regclass('public.hub_mensagens') IS NOT NULL AND to_regclass('public.hub_prompt_logs') IS NOT NULL THEN
@@ -79,24 +83,55 @@ BEGIN
     END IF;
   END IF;
 
-  UPDATE hub_leads_crm SET agente_responsavel = NULL WHERE agente_responsavel = p_agente_slug;
+  IF to_regclass('public.hub_leads_crm') IS NOT NULL THEN
+    UPDATE hub_leads_crm SET agente_responsavel = NULL WHERE agente_responsavel = p_agente_slug;
+  END IF;
 
-  DELETE FROM hub_ml_historico WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_ml_sugestoes
-  WHERE agente_slug = p_agente_slug OR supervisor_slug = p_agente_slug;
-  DELETE FROM hub_ml_observacoes WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_responsabilidades
-  WHERE supervisor_slug = p_agente_slug OR subordinado_slug = p_agente_slug;
+  IF to_regclass('public.hub_ml_historico') IS NOT NULL THEN
+    DELETE FROM hub_ml_historico WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_ml_sugestoes') IS NOT NULL THEN
+    DELETE FROM hub_ml_sugestoes
+    WHERE agente_slug = p_agente_slug OR supervisor_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_ml_observacoes') IS NOT NULL THEN
+    DELETE FROM hub_ml_observacoes WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_responsabilidades') IS NOT NULL THEN
+    DELETE FROM hub_responsabilidades
+    WHERE supervisor_slug = p_agente_slug OR subordinado_slug = p_agente_slug;
+  END IF;
 
-  DELETE FROM hub_kpis_resultados WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_kpis_metas WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_acoes_ia WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_qualidade_agente WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_aprovacoes WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_alertas WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_regras_ia WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_agente_conhecimento WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_personalidade WHERE agente_slug = p_agente_slug;
+  IF to_regclass('public.hub_kpis_resultados') IS NOT NULL THEN
+    DELETE FROM hub_kpis_resultados WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_kpis_metas') IS NOT NULL THEN
+    DELETE FROM hub_kpis_metas WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_acoes_ia') IS NOT NULL THEN
+    DELETE FROM hub_acoes_ia WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_qualidade_agente') IS NOT NULL THEN
+    DELETE FROM hub_qualidade_agente WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_aprovacoes') IS NOT NULL THEN
+    DELETE FROM hub_aprovacoes WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_alertas') IS NOT NULL THEN
+    DELETE FROM hub_alertas WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_regras_ia') IS NOT NULL THEN
+    DELETE FROM hub_regras_ia WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_agente_conhecimento') IS NOT NULL THEN
+    DELETE FROM hub_agente_conhecimento WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_personalidade') IS NOT NULL THEN
+    DELETE FROM hub_personalidade WHERE agente_slug = p_agente_slug;
+  END IF;
+  IF to_regclass('public.hub_memorias_agente') IS NOT NULL THEN
+    DELETE FROM hub_memorias_agente WHERE agente_slug = p_agente_slug;
+  END IF;
 
   IF to_regclass('public.hub_arquivos') IS NOT NULL THEN
     DELETE FROM hub_arquivos WHERE agente_slug = p_agente_slug;
@@ -106,11 +141,59 @@ BEGIN
     DELETE FROM hub_crm_agente_briefing_sessao WHERE agente_slug = p_agente_slug;
   END IF;
 
-  DELETE FROM hub_autonomia_matriz WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_agente_configuracao WHERE agente_slug = p_agente_slug;
-  DELETE FROM hub_scripts WHERE agente_id = v_id;
-  DELETE FROM hub_regras_negocio WHERE agente_id = v_id;
-  DELETE FROM hub_ml_padroes WHERE agente_id = v_id;
+  IF to_regclass('public.hub_autonomia_matriz') IS NOT NULL THEN
+    DELETE FROM hub_autonomia_matriz WHERE agente_slug = p_agente_slug;
+  END IF;
+
+  IF to_regclass('public.hub_hierarquia') IS NOT NULL THEN
+    UPDATE hub_hierarquia SET agente_slug = NULL WHERE agente_slug = p_agente_slug;
+    UPDATE hub_hierarquia SET supervisor_slug = NULL WHERE supervisor_slug = p_agente_slug;
+  END IF;
+
+  IF to_regclass('public.hub_fluxos') IS NOT NULL THEN
+    UPDATE hub_fluxos SET agente_slug = NULL WHERE agente_slug = p_agente_slug;
+  END IF;
+
+  IF to_regclass('public.hub_briefings') IS NOT NULL THEN
+    UPDATE hub_briefings SET agente_solicitante = NULL WHERE agente_solicitante = p_agente_slug;
+    UPDATE hub_briefings SET agente_responsavel = NULL WHERE agente_responsavel = p_agente_slug;
+  END IF;
+
+  IF to_regclass('public.hub_agente_configuracao') IS NOT NULL THEN
+    DELETE FROM hub_agente_configuracao WHERE agente_slug = p_agente_slug;
+  END IF;
+
+  IF to_regclass('public.hub_scripts') IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'hub_scripts' AND column_name = 'agente_slug'
+    ) THEN
+      DELETE FROM hub_scripts WHERE agente_slug = p_agente_slug;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'hub_scripts' AND column_name = 'agente_id'
+    ) THEN
+      DELETE FROM hub_scripts WHERE agente_id = v_id;
+    END IF;
+  END IF;
+
+  IF to_regclass('public.hub_regras_negocio') IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'hub_regras_negocio' AND column_name = 'agente_id'
+    ) THEN
+      DELETE FROM hub_regras_negocio WHERE agente_id = v_id;
+    END IF;
+  END IF;
+
+  IF to_regclass('public.hub_ml_padroes') IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'hub_ml_padroes' AND column_name = 'agente_id'
+    ) THEN
+      DELETE FROM hub_ml_padroes WHERE agente_id = v_id;
+    END IF;
+  END IF;
 
   DELETE FROM hub_agente_identidade WHERE id = v_id;
 

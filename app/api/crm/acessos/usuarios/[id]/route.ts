@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crmDb } from "@/lib/crm/supabase-server";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
-import { requireCrmOwner } from "@/lib/crm/crm-api-auth";
+import { requireCrmAdmin, requireCrmOwner } from "@/lib/crm/crm-api-auth";
 import { getAuditoriaActor, logAuditoriaSistema } from "@/lib/crm/auditoria-sistema";
+import { updateUserById } from "@/lib/crm/users-row";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const USER_SELECT = "*";
 
 async function resolveTenantIdFromCaller(request: NextRequest): Promise<string> {
   const fallbackTenant = tenantIdFromRequest(request.headers) || defaultTenantId();
@@ -25,20 +25,29 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ownerErr = await requireCrmOwner(request);
-  if (ownerErr) return ownerErr;
+  const adminErr = await requireCrmAdmin(request);
+  if (adminErr) return adminErr;
 
   const tenantId = await resolveTenantIdFromCaller(request);
   const actor = await getAuditoriaActor(request);
   const { id } = await params;
   if (!UUID_RE.test(id)) return NextResponse.json({ error: "ID inválido." }, { status: 400 });
 
-  const { data: before } = await crmDb()
+  const db = crmDb();
+  const { data: target } = await db
     .from("users")
-    .select("name, email, role, status, access_role_id")
+    .select("id, tenant_id, name, email, role, status, access_role_id")
     .eq("id", id)
-    .eq("tenant_id", tenantId)
     .maybeSingle();
+
+  if (!target) return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 });
+
+  const isOrphan = !target.tenant_id;
+  if (target.tenant_id && target.tenant_id !== tenantId) {
+    return NextResponse.json({ error: "Usuário pertence a outra empresa." }, { status: 403 });
+  }
+
+  const before = target;
 
   const body = (await request.json().catch(() => ({}))) as {
     role?: string;
@@ -47,18 +56,19 @@ export async function PATCH(
     name?: string;
   };
 
-  const updates: Record<string, unknown> = { atualizado_em: new Date().toISOString() };
+  const fields: Record<string, unknown> = {};
+  if (isOrphan) fields.tenant_id = tenantId;
   if (body.name != null) {
     const name = String(body.name).trim();
     if (!name) return NextResponse.json({ error: "Nome inválido." }, { status: 400 });
-    updates.name = name;
+    fields.name = name;
   }
-  if (body.role != null) updates.role = String(body.role).trim().toLowerCase();
-  if (body.status != null) updates.status = String(body.status).trim();
+  if (body.role != null) fields.role = String(body.role).trim().toLowerCase();
+  if (body.status != null) fields.status = String(body.status).trim();
 
   if (body.access_role_id !== undefined) {
     if (body.access_role_id === null || body.access_role_id === "") {
-      updates.access_role_id = null;
+      fields.access_role_id = null;
     } else if (!UUID_RE.test(body.access_role_id)) {
       return NextResponse.json({ error: "Cargo de acesso inválido." }, { status: 400 });
     } else {
@@ -70,17 +80,16 @@ export async function PATCH(
         .maybeSingle();
       if (roleErr) return NextResponse.json({ error: roleErr.message }, { status: 500 });
       if (!roleRow) return NextResponse.json({ error: "Cargo não encontrado para esta empresa." }, { status: 404 });
-      updates.access_role_id = body.access_role_id;
+      fields.access_role_id = body.access_role_id;
     }
   }
 
-  const { data, error } = await crmDb()
-    .from("users")
-    .update(updates)
-    .eq("id", id)
-    .eq("tenant_id", tenantId)
-    .select(USER_SELECT)
-    .maybeSingle();
+  const { data, error } = await updateUserById(
+    db,
+    id,
+    fields,
+    isOrphan ? { onlyOrphan: true } : { tenantId },
+  );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 });
@@ -92,7 +101,7 @@ export async function PATCH(
     entidade: "users",
     entidadeId: id,
     resumo: `Usuário "${data.name ?? data.email ?? id}" atualizado`,
-    metadata: { antes: before ?? null, depois: updates },
+    metadata: { antes: before ?? null, depois: fields },
   });
 
   return NextResponse.json({ data });

@@ -1,9 +1,24 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Building2, User, X } from "lucide-react";
+import { Building2, User, UserPlus } from "lucide-react";
+import { CadastroConhecimentoBanner } from "@/components/crm/cadastro/CadastroConhecimentoBanner";
+import {
+  CrmRetrofitSideoverShell,
+  crmRetrofitSideoverFooterBtnCancel,
+  crmRetrofitSideoverFooterBtnPrimary,
+} from "@/components/crm/CrmRetrofitSideoverShell";
+import {
+  RF_ACCENT,
+  RF_BORDER,
+  RF_BORDER_STRONG,
+  RF_INPUT_STYLE,
+  RF_LABEL_STYLE,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+  RF_TEXT_SECONDARY,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
-import { MERCADOS_PREFIXO_OPTIONS } from "@/lib/crm/negocio-cadastro";
 import {
   documentoCompleto,
   documentoValido,
@@ -30,32 +45,18 @@ import {
   verificarDocumentoDisponivel,
 } from "@/lib/crm/verificar-documento-disponivel";
 
-const OB = {
-  borda: "var(--obra-borda, #dcebd8)",
-  texto: "var(--obra-texto, #0b2210)",
-  texto2: "var(--obra-texto-2, #5d7a67)",
-  dourado: "var(--obra-dourado, #c9a24a)",
-  panel: "#0f1620",
-  surface: "#141d29",
-};
-
 const INPUT: React.CSSProperties = {
-  width: "100%",
-  padding: "11px 13px",
+  ...RF_INPUT_STYLE,
+  padding: "10px 12px",
   borderRadius: 10,
-  border: `1px solid ${OB.borda}`,
-  background: "#ffffff",
-  color: OB.texto,
-  fontSize: 14,
-  boxSizing: "border-box",
+  fontSize: 13,
 };
 
 const LABEL: React.CSSProperties = {
-  color: OB.texto2,
-  fontSize: 11,
+  ...RF_LABEL_STYLE,
   fontWeight: 600,
-  display: "block",
   marginBottom: 6,
+  display: "block",
 };
 
 type Props = {
@@ -85,22 +86,24 @@ function WizardSection({
   return (
     <section
       style={{
-        border: `1px solid ${OB.borda}`,
+        border: `1px solid ${RF_BORDER_STRONG}`,
         borderRadius: 12,
         overflow: "hidden",
-        background: OB.surface,
+        background: "rgba(6, 13, 8, 0.45)",
       }}
     >
       <div
         style={{
           padding: "12px 14px",
-          borderBottom: `1px solid ${OB.borda}`,
-          background: "rgba(6, 10, 16, 0.45)",
+          borderBottom: `1px solid ${RF_BORDER}`,
+          background: "rgba(11, 31, 16, 0.35)",
         }}
       >
-        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: OB.texto }}>{title}</h4>
+        <h4 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: RF_ACCENT, letterSpacing: 0.04 }}>
+          {title.toUpperCase()}
+        </h4>
         {description ? (
-          <p style={{ margin: "6px 0 0", fontSize: 11, color: OB.texto2, lineHeight: 1.45 }}>
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
             {description}
           </p>
         ) : null}
@@ -440,102 +443,47 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
     }
   }
 
-  if (!open) return null;
-
   return (
-    <>
-      <button
-        type="button"
-        aria-label="Fechar novo cadastro"
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 220,
-          background: "rgba(0,0,0,0.55)",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
-        }}
-      />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "min(960px, 100vw)",
-          zIndex: 221,
-          background: OB.panel,
-          borderLeft: `1px solid ${OB.borda}`,
-          boxShadow: "-12px 0 32px rgba(0,0,0,0.45)",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-        }}
-      >
+    <CrmRetrofitSideoverShell
+      open={open}
+      onClose={onClose}
+      title="Novo cadastro"
+      subtitle="Cliente ou empresa — dados alinhados ao contexto da sua operação (base de conhecimento)."
+      icon={UserPlus}
+      footer={
+        <>
+          {crmRetrofitSideoverFooterBtnCancel(onClose, salvando)}
+          {crmRetrofitSideoverFooterBtnPrimary(
+            salvando ? "Salvando…" : "Salvar cadastro",
+            () => void salvar(),
+            salvando || buscandoCnpj
+          )}
+        </>
+      }
+    >
+      <CadastroConhecimentoBanner />
+
+      {erro ? (
         <div
           style={{
-            borderBottom: `1px solid ${OB.borda}`,
-            padding: 16,
-            background: "linear-gradient(180deg,#121a26 0%, #101722 100%)",
-            flexShrink: 0,
+            color: "#f87171",
+            background: "rgba(248, 81, 73, 0.12)",
+            border: "1px solid rgba(248, 81, 73, 0.35)",
+            borderRadius: 8,
+            padding: 10,
+            fontSize: 13,
+            marginBottom: 14,
           }}
+          role="alert"
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: OB.texto }}>Cadastros</h3>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fechar"
-              style={{
-                border: `1px solid ${OB.borda}`,
-                background: "#1d2633",
-                color: OB.texto2,
-                borderRadius: 8,
-                width: 34,
-                height: 34,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <X size={16} strokeWidth={2} />
-            </button>
-          </div>
-          <p style={{ margin: "10px 0 0", color: OB.texto2, fontSize: 12, lineHeight: 1.45 }}>
-            PF ou PJ — identidade, contato, endereço e comercial em um único formulário.
-          </p>
+          {erro}
         </div>
+      ) : null}
 
-        <div style={{ flex: 1, overflowY: "auto", padding: 16, minHeight: 0 }}>
-          {erro ? (
-            <div
-              style={{
-                color: "#f87171",
-                background: "#3a1518",
-                border: "1px solid #7f1d1d",
-                borderRadius: 8,
-                padding: 10,
-                fontSize: 13,
-                marginBottom: 14,
-              }}
-              role="alert"
-            >
-              {erro}
-            </div>
-          ) : null}
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <WizardSection
-              title="Pessoa física ou empresa"
-              description="Campos abaixo adaptam-se ao tipo seleccionado."
+              title="Tipo de cadastro"
+              description="Pessoa física (cliente) ou empresa (PJ)."
             >
               <div style={{ display: "flex", gap: 10, maxWidth: 480 }}>
                 {(["PF", "PJ"] as const).map((t) => {
@@ -554,15 +502,15 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                         gap: 8,
                         padding: "14px 16px",
                         borderRadius: 10,
-                        border: `2px solid ${ativo ? OB.dourado : OB.borda}`,
-                        background: ativo ? "rgba(201, 162, 74, 0.12)" : "#ffffff",
-                        color: OB.texto,
+                        border: `2px solid ${ativo ? RF_ACCENT : RF_BORDER_STRONG}`,
+                        background: ativo ? "rgba(146, 255, 0, 0.1)" : "rgba(6, 13, 8, 0.6)",
+                        color: RF_TEXT_PRIMARY,
                         fontWeight: 700,
                         fontSize: 13,
                         cursor: "pointer",
                       }}
                     >
-                      <Icon size={18} strokeWidth={2} style={{ color: ativo ? OB.dourado : OB.texto2 }} />
+                      <Icon size={18} strokeWidth={2} style={{ color: ativo ? RF_ACCENT : RF_TEXT_MUTED }} />
                       {t === "PF" ? "Pessoa física" : "Empresa"}
                     </button>
                   );
@@ -574,8 +522,8 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
               title="Identidade"
               description={
                 tipo === "PF"
-                  ? "Opcional na campanha — informe o que o contacto passar (mín.: nome, telefone ou e-mail)."
-                  : "Informe o CNPJ primeiro — os dados da empresa são buscados na Receita (OpenCNPJ) e preenchidos automaticamente."
+                  ? "Informe nome, telefone ou e-mail — o mínimo para identificar o cliente."
+                  : "Informe o CNPJ — os dados da empresa são buscados na Receita (OpenCNPJ)."
               }
             >
               {tipo === "PJ" ? (
@@ -643,9 +591,9 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                         style={{
                           padding: "0 16px",
                           borderRadius: 10,
-                          border: `1px solid ${OB.dourado}`,
-                          background: "rgba(201, 162, 74, 0.15)",
-                          color: OB.dourado,
+                          border: `1px solid ${RF_BORDER_STRONG}`,
+                          background: "rgba(146, 255, 0, 0.08)",
+                          color: RF_ACCENT,
                           cursor: buscandoCnpj ? "wait" : "pointer",
                           fontSize: 12,
                           fontWeight: 700,
@@ -656,12 +604,12 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                       </button>
                     </div>
                     {buscandoCnpj && (
-                      <p style={{ fontSize: 11, color: OB.dourado, marginTop: 6 }}>
+                      <p style={{ fontSize: 11, color: RF_ACCENT, marginTop: 6 }}>
                         Consultando Receita Federal (OpenCNPJ)…
                       </p>
                     )}
                     {docVerificando && (
-                      <p style={{ fontSize: 11, color: OB.texto2, marginTop: 6 }}>
+                      <p style={{ fontSize: 11, color: RF_TEXT_MUTED, marginTop: 6 }}>
                         Verificando se o CNPJ já está cadastrado…
                       </p>
                     )}
@@ -677,7 +625,7 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                       </p>
                     ) : null}
                     {situacaoCnpj && (
-                      <p style={{ fontSize: 11, color: OB.texto2, marginTop: 6 }}>
+                      <p style={{ fontSize: 11, color: RF_TEXT_MUTED, marginTop: 6 }}>
                         Situação cadastral: {situacaoCnpj}
                       </p>
                     )}
@@ -705,24 +653,6 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                         value={form.nome_fantasia || ""}
                         onChange={(e) => patch({ nome_fantasia: e.target.value })}
                       />
-                    </div>
-                    <div>
-                      <label style={LABEL}>Mercado principal (opcional)</label>
-                      <select
-                        style={INPUT}
-                        value={form.prefixo_mercado || "IMB"}
-                        onChange={(e) =>
-                          patch({
-                            prefixo_mercado: e.target.value as SuperCadastroInput["prefixo_mercado"],
-                          })
-                        }
-                      >
-                        {MERCADOS_PREFIXO_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
                     </div>
                   </div>
                 </div>
@@ -776,7 +706,7 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                       }}
                     />
                     {docVerificando && (
-                      <p style={{ fontSize: 11, color: OB.texto2, marginTop: 6 }}>
+                      <p style={{ fontSize: 11, color: RF_TEXT_MUTED, marginTop: 6 }}>
                         Verificando disponibilidade…
                       </p>
                     )}
@@ -826,7 +756,7 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
 
             <WizardSection
               title="Localização"
-              description="Opcional — preencha quando o contacto informar (campanhas costumam trazer só nome ou telefone)."
+              description="Telefone e e-mail para contacto e atendimentos."
             >
               <div
                 style={{
@@ -853,9 +783,9 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
                       style={{
                         padding: "0 14px",
                         borderRadius: 10,
-                        border: `1px solid ${OB.borda}`,
-                        background: "#eef7eb",
-                        color: OB.texto,
+                        border: `1px solid ${RF_BORDER_STRONG}`,
+                        background: "rgba(6, 13, 8, 0.6)",
+                        color: RF_TEXT_PRIMARY,
                         cursor: "pointer",
                         fontSize: 12,
                         fontWeight: 600,
@@ -931,8 +861,8 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
             </WizardSection>
 
             <WizardSection
-              title="Comercial"
-              description="Lead no funil activo por defeito (código LED). Ideal para campanhas Meta, Google, etc."
+              title="Vínculo CRM"
+              description="Opcional: crie um lead no funil de vendas quando fizer sentido para a operação."
             >
               <CadastroComercialSecao
                 tipo={tipo}
@@ -944,53 +874,6 @@ export function CadastroWizard({ open, onClose, tipoInicial = "PF", onSaved }: P
               />
             </WizardSection>
           </div>
-        </div>
-
-        <div
-          style={{
-            padding: "14px 20px",
-            borderTop: `1px solid ${OB.borda}`,
-            display: "flex",
-            gap: 10,
-            justifyContent: "flex-end",
-            flexShrink: 0,
-            background: "#f8fcf6",
-          }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={salvando}
-            style={{
-              padding: "10px 18px",
-              borderRadius: 8,
-              border: `1px solid ${OB.borda}`,
-              background: "transparent",
-              color: OB.texto2,
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => void salvar()}
-            disabled={salvando || buscandoCnpj}
-            style={{
-              padding: "10px 22px",
-              borderRadius: 8,
-              border: "none",
-              background: "#238636",
-              color: "#fff",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            {salvando ? "Salvando…" : "Salvar cadastro"}
-          </button>
-        </div>
-      </aside>
-    </>
+    </CrmRetrofitSideoverShell>
   );
 }

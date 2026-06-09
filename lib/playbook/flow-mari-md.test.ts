@@ -21,7 +21,10 @@ describe("playbook-mari-unificado-obra10-plus.md flow", () => {
     expect(validated.ok).toBe(true);
     if (!validated.ok) return;
 
-    expect(validated.definition.obra10_playbook_flow_schema).toBe(1);
+    expect(
+      validated.definition.waje_playbook_flow_schema ??
+        validated.definition.obra10_playbook_flow_schema
+    ).toBe(1);
     expect(validated.definition.entry_step_id).toBe("inicio_saudacao");
     expect(validated.definition.steps.length).toBeGreaterThan(0);
   });

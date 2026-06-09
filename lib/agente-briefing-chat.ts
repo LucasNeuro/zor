@@ -6,7 +6,7 @@ const MAX_SNAPSHOT_ACOES = 35;
 const MAX_SNAPSHOT_CICLO_LOG = 60;
 const MAX_SNAPSHOT_PROMPTS = 20;
 
-export const BRIEFING_SYSTEM_PREAMBLE = `Você está no MODO BRIEFING INTERNO do CRM Obra10 (equipe), em conversa com um colega humano.
+export const BRIEFING_SYSTEM_PREAMBLE = `Você está no MODO BRIEFING INTERNO do CRM Waje (equipe), em conversa com um colega humano.
 Regras absolutas:
 - Use apenas os dados fornecidos no bloco "DADOS_OPERACIONAIS (somente leitura)" para falar sobre execuções, leads e ciclos. Se algo não aparecer lá, diga que não há registro — não invente.
 - Esse bloco são **extractos internos de apoio** (ficheiros de registo no sistema), **não** são "ferramentas" do modelo nem botões que o colega possa clicar. Não os apresente como lista de ferramentas com nomes técnicos de tabela; diga apenas que tem acesso a dados de revisão interna.
@@ -17,7 +17,7 @@ Regras absolutas:
 `;
 
 /** Pré-texto para o modo que espelha o system prompt de produção (prompt-builder), sem snapshot operacional. */
-export const SIMULACAO_CANAL_PREAMBLE = `### MODO SIMULAÇÃO DE CANAL (teste no CRM Obra10)
+export const SIMULACAO_CANAL_PREAMBLE = `### MODO SIMULAÇÃO DE CANAL (teste no CRM Waje)
 Responda como faria ao **cliente ou lead** no canal ao vivo, seguindo **estritamente** as camadas de identidade, conhecimento e regras que vêm abaixo (equivalente ao que a engine usa).
 - Não diga que está em briefing interno, revisão operacional ou "somente leitura de logs".
 - **Neste painel não há sessão de lead nem chamadas reais a ferramentas Hub** (Mistral function calls). É só texto: não afirme ter gravado no CRM, enviado WhatsApp ou executado ferramentas. Para ver ferramentas a actuar, use uma **conversa real** com lead em sessão (canal configurado).

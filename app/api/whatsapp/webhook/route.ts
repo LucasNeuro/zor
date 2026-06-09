@@ -24,6 +24,10 @@ import { dispararProcessamentoJobsWhatsapp } from "@/lib/whatsapp/trigger-job-pr
 import { runWhatsappWorkerTick } from "@/lib/workers/whatsapp-job-worker";
 import { supersedeJobsAntigosMesmoTelefone } from "@/lib/whatsapp/supersede-jobs-antigos";
 import { ativarAtendimentoHumanoPorMensagemDoCelular } from "@/lib/whatsapp/human-handoff-from-device";
+import {
+  findLeadByGroupJid,
+  isLeadGroupTransferActive,
+} from "@/lib/whatsapp/lead-group-routing";
 
 let warnedMissingWebhookSecret = false;
 const WEBHOOK_DEDUPE_TTL_MS = 2 * 60 * 1000;
@@ -414,6 +418,103 @@ export async function POST(request: NextRequest) {
     const inbound = parseWhatsappWebhookBody(body);
     if (inbound.kind === "outgoing_human") {
       const outbound = inbound.value;
+
+      if (outbound.isGroup && outbound.groupJid) {
+        const leadGrupo = await findLeadByGroupJid(supabase, outbound.groupJid);
+        if (!leadGrupo || !isLeadGroupTransferActive(leadGrupo)) {
+          log.info("wa.webhook.group_outgoing_ignored", {
+            group_jid: outbound.groupJid,
+            reason: leadGrupo ? "transfer_inactive" : "lead_not_found",
+          });
+          return trace.json({ status: "ignored", reason: "group_ignored" }, 200, "group_ignored");
+        }
+
+        const telefoneLead = telefoneConversaId(leadGrupo.telefone ?? "");
+        if (telefoneLead.length < 10) {
+          return trace.json({ status: "ignored", reason: "invalid_phone" }, 200, "invalid_phone");
+        }
+
+        const messageIdParaFila = (outbound.messageId || "").trim();
+        if (!messageIdParaFila) {
+          return trace.json({ status: "ignored", reason: "missing_message_id" }, 200, "missing_message_id");
+        }
+
+        if (marcarWebhookDedupe(messageIdParaFila, telefoneLead)) {
+          return trace.json({ status: "ignored", reason: "duplicate_message_id_memory" }, 200, "duplicate_ignored");
+        }
+        if (await mensagemWebhookJaProcessada(supabase, { messageId: messageIdParaFila, telefone: telefoneLead })) {
+          return trace.json({ status: "ignored", reason: "duplicate_message_id" }, 200, "duplicate_ignored");
+        }
+
+        const refs = extractWebhookInstanceRefs(body);
+        const instanceKey = outbound.instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);
+        const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey, {
+          instanceToken: refs.instanceToken,
+          instanceName: refs.instanceName,
+        });
+        const waSendOpts =
+          linhaWa.kind === "agent_instance" ? { instanceToken: linhaWa.instanceToken as string } : {};
+        const agenteSlugHint =
+          linhaWa.kind === "agent_instance"
+            ? linhaWa.agenteSlug
+            : typeof leadGrupo.agente_responsavel === "string" && leadGrupo.agente_responsavel.trim()
+              ? leadGrupo.agente_responsavel.trim()
+              : "sdr";
+
+        const enqueuePayload = {
+          telefone: telefoneLead,
+          senderTelefone: outbound.telefone || null,
+          pushName: outbound.pushName,
+          mercado: identificarMercado(outbound.mensagemFinal),
+          instance: instanceKey ?? null,
+          instanceToken: waSendOpts.instanceToken ?? null,
+          tipoMidia: outbound.tipoMidia,
+          mensagemFinal: outbound.mensagemFinal,
+          menuChoiceId: outbound.menuChoiceId ?? null,
+          leadId: leadGrupo.id,
+          pessoaId: leadGrupo.pessoa_id ?? null,
+          isNovo: false,
+          timestamp: outbound.timestamp,
+          messageId: messageIdParaFila,
+          agenteSlugHint,
+          linhaKind: linhaWa.kind,
+          hasInstanceToken: Boolean(waSendOpts.instanceToken),
+          isGroupTransfer: true,
+          groupJid: outbound.groupJid,
+          fromMe: true,
+          humano_responsavel: leadGrupo.humano_responsavel ?? null,
+        };
+
+        const enqueueStatus = await enqueueWhatsappJob(supabase, {
+          tenantId: defaultTenantId(),
+          telefone: telefoneLead,
+          leadId: leadGrupo.id,
+          agenteSlug: agenteSlugHint,
+          messageId: messageIdParaFila,
+          payload: enqueuePayload,
+        });
+
+        if (enqueueStatus === "accepted") {
+          if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
+            dispararProcessamentoJobsWhatsapp(log);
+          } else {
+            void runWhatsappWorkerTick().catch(() => dispararProcessamentoJobsWhatsapp(log));
+          }
+        }
+
+        return trace.json(
+          {
+            status: enqueueStatus,
+            lead_id: leadGrupo.id,
+            queue: "hub_msg_jobs",
+            group_transfer: true,
+            message_id: messageIdParaFila,
+          },
+          200,
+          enqueueStatus === "duplicate" ? "duplicate_accepted" : "group_outgoing_accepted"
+        );
+      }
+
       const telefoneLead = telefoneConversaId(outbound.telefone);
       if (telefoneLead.length < 10) {
         return trace.json({ status: "ignored", reason: "invalid_phone" }, 200, "invalid_phone");
@@ -468,6 +569,147 @@ export async function POST(request: NextRequest) {
     }
 
     const inboundRaw = inbound.value;
+
+    if (inboundRaw.isGroup && inboundRaw.groupJid) {
+      const leadGrupo = await findLeadByGroupJid(supabase, inboundRaw.groupJid);
+      if (!leadGrupo || !isLeadGroupTransferActive(leadGrupo)) {
+        log.info("wa.webhook.group_inbound_ignored", {
+          group_jid: inboundRaw.groupJid,
+          reason: leadGrupo ? "transfer_inactive" : "lead_not_found",
+        });
+        return trace.json({ status: "ignored", reason: "group_ignored" }, 200, "group_ignored");
+      }
+
+      const telefoneLead = telefoneConversaId(leadGrupo.telefone ?? "");
+      if (telefoneLead.length < 10) {
+        return trace.json({ status: "ignored", reason: "invalid_phone" }, 200, "invalid_phone");
+      }
+
+      const {
+        pushName,
+        messageId,
+        timestamp,
+        tipoMidia,
+        mensagemFinal,
+        menuChoiceId,
+        instance,
+      } = inboundRaw;
+
+      const refs = extractWebhookInstanceRefs(body);
+      const instanceKey = instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);
+      const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey, {
+        instanceToken: refs.instanceToken,
+        instanceName: refs.instanceName,
+      });
+      if (linhaWa.kind === "ignored") {
+        log.warn("wa.webhook.group_resolver_ignored", {
+          reason: linhaWa.reason,
+          group_jid: inboundRaw.groupJid,
+        });
+        return trace.json({ status: "ignored", reason: linhaWa.reason }, 200, "resolver_ignored");
+      }
+
+      const waSendOpts =
+        linhaWa.kind === "agent_instance" ? { instanceToken: linhaWa.instanceToken as string } : {};
+
+      log.info("wa.webhook.group_message_inbound", {
+        lead_id: leadGrupo.id,
+        group_jid: inboundRaw.groupJid,
+        sender: trace.maskTelefone(inboundRaw.telefone),
+        message_id: messageId || null,
+        preview: mensagemFinal.slice(0, 80),
+      });
+
+      const messageIdParaFila = (messageId || "").trim();
+      if (!messageIdParaFila) {
+        return trace.json({ status: "ignored", reason: "missing_message_id" }, 200, "missing_message_id");
+      }
+
+      if (marcarWebhookDedupe(messageIdParaFila, telefoneLead)) {
+        return trace.json({ status: "ignored", reason: "duplicate_message_id_memory" }, 200, "duplicate_ignored");
+      }
+      if (await mensagemWebhookJaProcessada(supabase, { messageId: messageIdParaFila, telefone: telefoneLead })) {
+        return trace.json({ status: "ignored", reason: "duplicate_message_id" }, 200, "duplicate_ignored");
+      }
+
+      const mercado = identificarMercado(mensagemFinal);
+      const agenteSlugHint =
+        linhaWa.kind === "agent_instance"
+          ? linhaWa.agenteSlug
+          : typeof leadGrupo.agente_responsavel === "string" && leadGrupo.agente_responsavel.trim()
+            ? leadGrupo.agente_responsavel.trim()
+            : "sdr";
+
+      const enqueuePayload = {
+        telefone: telefoneLead,
+        senderTelefone: inboundRaw.telefone || null,
+        pushName,
+        mercado,
+        instance: instanceKey ?? null,
+        instanceToken: waSendOpts.instanceToken ?? null,
+        tipoMidia,
+        mensagemFinal,
+        menuChoiceId: menuChoiceId ?? null,
+        leadId: leadGrupo.id,
+        pessoaId: leadGrupo.pessoa_id ?? null,
+        isNovo: false,
+        timestamp,
+        messageId: messageIdParaFila,
+        agenteSlugHint,
+        linhaKind: linhaWa.kind,
+        hasInstanceToken: Boolean(waSendOpts.instanceToken),
+        isGroupTransfer: true,
+        groupJid: inboundRaw.groupJid,
+        fromMe: false,
+        humano_responsavel: leadGrupo.humano_responsavel ?? null,
+      };
+
+      const enqueueStatus = await enqueueWhatsappJob(supabase, {
+        tenantId: defaultTenantId(),
+        telefone: telefoneLead,
+        leadId: leadGrupo.id,
+        agenteSlug: agenteSlugHint,
+        messageId: messageIdParaFila,
+        payload: enqueuePayload,
+      });
+
+      log.info("wa.webhook.group_job_enqueued", {
+        enqueue_status: enqueueStatus,
+        lead_id: leadGrupo.id,
+        group_jid: inboundRaw.groupJid,
+        message_id: messageIdParaFila,
+      });
+
+      if (enqueueStatus === "accepted") {
+        if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
+          dispararProcessamentoJobsWhatsapp(log);
+        } else {
+          void runWhatsappWorkerTick()
+            .then((result) => {
+              log.info("wa.webhook.group_job_processor_inline", {
+                claimed: result.claimed,
+                ok: !result.error,
+              });
+            })
+            .catch(() => dispararProcessamentoJobsWhatsapp(log));
+        }
+      }
+
+      return trace.json(
+        {
+          status: enqueueStatus,
+          lead_id: leadGrupo.id,
+          mercado,
+          agente_slug_hint: agenteSlugHint,
+          queue: "hub_msg_jobs",
+          group_transfer: true,
+          message_id: messageIdParaFila,
+        },
+        200,
+        enqueueStatus === "duplicate" ? "duplicate_accepted" : "group_inbound_accepted"
+      );
+    }
+
     const telefone = telefoneConversaId(inboundRaw.telefone);
     const {
       pushName,

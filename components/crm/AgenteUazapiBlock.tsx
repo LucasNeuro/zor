@@ -15,6 +15,17 @@ import {
   X,
 } from "lucide-react";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
+import { CRM_ACCENT, crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
+import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
+import {
+  RF_ACCENT,
+  RF_BORDER,
+  RF_BORDER_STRONG,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+  RF_TEXT_SECONDARY,
+  rfCloseButtonStyle,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { normalizarSrcImagemQrUazapi } from "@/lib/whatsapp/qr-uazapi";
 
@@ -54,6 +65,11 @@ export type AgenteUazapiBlockProps = {
   agenteNome?: string;
   /** Enquanto o wizard grava modo_operacao no servidor (evita 409 na criação). */
   bloqueado?: boolean;
+  /**
+   * `painel` — fluxo UAZAPI completo inline (wizard passo Canal).
+   * `card` — resumo + sideover deslizante (ficha do agente).
+   */
+  layout?: "card" | "painel";
 };
 
 function AgenteUazapiSideoverShell({
@@ -63,6 +79,7 @@ function AgenteUazapiSideoverShell({
   subtitle,
   children,
   footer,
+  embedded = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -70,8 +87,51 @@ function AgenteUazapiSideoverShell({
   subtitle?: string;
   children: ReactNode;
   footer: ReactNode;
+  /** Painel fixo no wizard (sem overlay escuro). */
+  embedded?: boolean;
 }) {
-  if (!open) return null;
+  if (!open && !embedded) return null;
+
+  if (embedded) {
+    return (
+      <section
+        style={{
+          borderRadius: 14,
+          border: "1px solid #dcebd8",
+          background: "#ffffff",
+          overflow: "hidden",
+          boxShadow: "0 4px 16px rgba(11, 31, 16, 0.06)",
+        }}
+      >
+        <header
+          style={{
+            borderBottom: "1px solid #dcebd8",
+            padding: "14px 16px",
+            background: "linear-gradient(180deg, #f8fcf6 0%, #ffffff 100%)",
+          }}
+        >
+          <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
+            WhatsApp
+          </p>
+          <h2 style={{ margin: "4px 0 0", color: BRAND_TEXT_DARK, fontSize: 17, fontWeight: 800 }}>{title}</h2>
+          {subtitle ? (
+            <p style={{ margin: "6px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.45 }}>{subtitle}</p>
+          ) : null}
+        </header>
+        <div style={{ padding: 16 }}>{children}</div>
+        <div
+          style={{
+            borderTop: "1px solid #dcebd8",
+            padding: "14px 18px 18px",
+            background: "#f8fcf6",
+          }}
+        >
+          {footer}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <>
       <button
@@ -82,7 +142,7 @@ function AgenteUazapiSideoverShell({
           position: "fixed",
           inset: 0,
           zIndex: 90,
-          background: "rgba(0,0,0,0.55)",
+          background: "rgba(11, 31, 16, 0.32)",
           border: "none",
           padding: 0,
           cursor: "pointer",
@@ -96,9 +156,9 @@ function AgenteUazapiSideoverShell({
           bottom: 0,
           width: "min(600px, 100vw)",
           zIndex: 100,
-          background: "#0f1620",
-          borderLeft: "1px solid #2d394b",
-          boxShadow: "-12px 0 32px rgba(0,0,0,0.45)",
+          background: "#060d08",
+          borderLeft: "1px solid rgba(63, 152, 72, 0.42)",
+          boxShadow: "-12px 0 32px rgba(0,0,0,0.55)",
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
@@ -106,53 +166,41 @@ function AgenteUazapiSideoverShell({
       >
         <header
           style={{
-            borderBottom: "1px solid #2d394b",
+            borderBottom: "1px solid rgba(146, 255, 0, 0.16)",
             padding: 16,
-            background: "linear-gradient(180deg,#121a26 0%, #101722 100%)",
+            background: "#0b1f10",
             flexShrink: 0,
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, color: "#8ea1ba", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
-                WHATSAPP · UAZAPI
+              <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
+                WhatsApp
               </p>
-              <h2 style={{ margin: "4px 0 0", color: "#0b2210", fontSize: 17, fontWeight: 800 }}>{title}</h2>
+              <h2 style={{ margin: "4px 0 0", color: RF_TEXT_PRIMARY, fontSize: 17, fontWeight: 800 }}>{title}</h2>
               {subtitle ? (
-                <p style={{ margin: "6px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.45 }}>{subtitle}</p>
+                <p style={{ margin: "6px 0 0", color: RF_TEXT_MUTED, fontSize: 12, lineHeight: 1.45 }}>{subtitle}</p>
               ) : null}
             </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Fechar"
-              style={{
-                flexShrink: 0,
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                border: "1px solid #dcebd8",
-                background: "#eef7eb",
-                color: "#5d7a67",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+              style={rfCloseButtonStyle()}
             >
               <X size={18} />
             </button>
           </div>
         </header>
-        <div className="panel-scroll" style={{ flex: 1, overflowY: "auto", padding: 16, minHeight: 0 }}>
+        <div className="panel-scroll" style={{ flex: 1, overflowY: "auto", padding: 16, minHeight: 0, background: "#060d08" }}>
           {children}
         </div>
         <div
           style={{
             flexShrink: 0,
-            borderTop: "1px solid #2d394b",
+            borderTop: "1px solid rgba(146, 255, 0, 0.16)",
             padding: "14px 18px 18px",
-            background: "rgba(6, 10, 16, 0.92)",
+            background: "#0b1f10",
           }}
         >
           {footer}
@@ -209,7 +257,7 @@ function montarErroDoCorpo(data: Record<string, unknown>, status: number): ErroC
 
   if (status === 404) {
     detalhes.push(
-      "404 costuma indicar URL base errada na UAZAPI ou rota do Hub inacessível. Confirme UAZAPI_BASE_URL (ex.: https://subdominio.uazapi.com, sem /api no fim) e reinicie o servidor Next.js."
+      "Não foi possível contactar o serviço de ligação WhatsApp. Verifique a configuração do servidor e tente de novo."
     );
   }
   return { titulo, detalhes };
@@ -292,7 +340,9 @@ export function AgenteUazapiBlock({
   onRefresh,
   agenteNome,
   bloqueado = false,
+  layout = "card",
 }: AgenteUazapiBlockProps) {
+  const darkSideover = layout === "card";
   const [sideoverOpen, setSideoverOpen] = useState(false);
   const [proxyCity, setProxyCity] = useState("");
   const [proxyState, setProxyState] = useState("");
@@ -384,12 +434,12 @@ export function AgenteUazapiBlock({
       parsed.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
       setCidadesProxy(parsed);
       if (parsed.length === 0) {
-        setCidadesProxyErro("A UAZAPI não devolveu cidades para o Brasil. Tente de novo ou confira o painel.");
+        setCidadesProxyErro("Não foi possível carregar as cidades. Tente de novo.");
       } else {
         setCidadesProxyErro(null);
       }
     } catch {
-      setCidadesProxyErro("Falha de rede ao carregar cidades UAZAPI.");
+      setCidadesProxyErro("Falha de rede ao carregar cidades.");
       setCidadesProxy([]);
     }
   }, [agenteSlug]);
@@ -481,7 +531,7 @@ export function AgenteUazapiBlock({
               detalhes: [
                 typeof data.connect_hint === "string" && data.connect_hint.trim()
                   ? data.connect_hint.trim()
-                  : "A UAZAPI não devolveu uma imagem QR válida. Desligue a sessão, guarde a região e gere outro código.",
+                  : "Não foi possível gerar o QR. Desligue a sessão, guarde a região e tente outra vez.",
               ],
             });
           }
@@ -572,7 +622,7 @@ export function AgenteUazapiBlock({
           (data.webhook_sync as { instance?: boolean }).instance === true
         ) {
           setWebhookAviso(
-            "Webhook UAZAPI sincronizado (URL com segredo, filtros wasSentByApi + isGroupYes). Envie uma mensagem de teste."
+            "Webhook WhatsApp configurado. Envie uma mensagem de teste."
           );
         }
         if (!opts?.silent) {
@@ -628,16 +678,39 @@ export function AgenteUazapiBlock({
     };
   }, [temInstancia, snapshot.uazapi_instance_id, snapshot.uazapi_connection_status]);
 
-  const fieldStyle: CSSProperties = {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 9,
-    border: "1px solid #dcebd8",
-    background: "#f8fcf6",
-    color: "#0b2210",
-    fontSize: 13,
-    boxSizing: "border-box",
-  };
+  const fieldStyle: CSSProperties = darkSideover
+    ? {
+        width: "100%",
+        padding: "10px 12px",
+        borderRadius: 9,
+        border: `1px solid ${RF_BORDER_STRONG}`,
+        background: "rgba(6, 13, 8, 0.85)",
+        color: RF_TEXT_PRIMARY,
+        fontSize: 13,
+        boxSizing: "border-box",
+      }
+    : {
+        width: "100%",
+        padding: "10px 12px",
+        borderRadius: 9,
+        border: "1px solid #dcebd8",
+        background: "#f8fcf6",
+        color: "#0b2210",
+        fontSize: 13,
+        boxSizing: "border-box",
+      };
+
+  const cardSurface: CSSProperties = darkSideover
+    ? {
+        borderRadius: 12,
+        background: "rgba(11, 31, 16, 0.92)",
+        border: `1px solid ${RF_BORDER_STRONG}`,
+      }
+    : {
+        borderRadius: 12,
+        background: "#ffffff",
+        border: "1px solid #dcebd8",
+      };
 
   const btnBase = (disabled: boolean, variant: "default" | "primary" | "danger" = "default"): CSSProperties => {
     const base: CSSProperties = {
@@ -656,33 +729,40 @@ export function AgenteUazapiBlock({
     if (variant === "primary") {
       return {
         ...base,
-        border: "1px solid #58a6ff",
-        background: disabled ? "#ffffff" : "#1f6feb22",
-        color: disabled ? "#484f58" : "#58a6ff",
+        border: "none",
+        background: disabled ? "#4a6356" : BRAND_TEXT_DARK,
+        color: disabled ? "#c8dcc8" : BRAND_GREEN_BRIGHT,
+        boxShadow: disabled ? "none" : "0 2px 8px rgba(11, 31, 16, 0.12)",
       };
     }
     if (variant === "danger") {
       return {
         ...base,
         border: "1px solid #f8514966",
-        background: disabled ? "#ffffff" : "#f8514910",
-        color: disabled ? "#484f58" : "#f85149",
+        background: disabled ? (darkSideover ? "rgba(6, 13, 8, 0.5)" : "#ffffff") : "#f8514910",
+        color: disabled ? RF_TEXT_MUTED : "#f85149",
       };
     }
     return {
       ...base,
-      border: "1px solid #dcebd8",
-      background: disabled ? "#ffffff" : "#eef7eb",
-      color: disabled ? "#484f58" : "#0b2210",
+      border: darkSideover ? `1px solid ${RF_BORDER_STRONG}` : "1px solid #dcebd8",
+      background: disabled
+        ? darkSideover
+          ? "rgba(6, 13, 8, 0.5)"
+          : "#ffffff"
+        : darkSideover
+          ? "rgba(6, 13, 8, 0.72)"
+          : "#eef7eb",
+      color: disabled ? RF_TEXT_MUTED : darkSideover ? RF_TEXT_PRIMARY : "#0b2210",
     };
   };
 
   const btnGroupShell: CSSProperties = {
     display: "grid",
     borderRadius: 10,
-    border: "1px solid #dcebd8",
+    border: darkSideover ? `1px solid ${RF_BORDER_STRONG}` : "1px solid #dcebd8",
     overflow: "hidden",
-    background: "#ffffff",
+    background: darkSideover ? "rgba(6, 13, 8, 0.72)" : "#ffffff",
   };
 
   const btnInGroup = (
@@ -760,12 +840,12 @@ export function AgenteUazapiBlock({
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {!temInstancia ? (
         <>
-          <p style={{ margin: 0, color: "#c9a24a", fontSize: 10, fontWeight: 800, letterSpacing: 0.08 }}>
+          <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: 0.08 }}>
             PASSO 1 — CADASTRAR INSTÂNCIA
           </p>
           <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, lineHeight: 1.45 }}>
-            Crie a instância na UAZAPI com o botão abaixo. Em seguida escolha a cidade e use «Guardar região». O QR
-            para ligar o telefone fica no passo 2.
+            Crie a ligação WhatsApp com o botão abaixo. Depois escolha a cidade e use «Guardar região». O QR para ligar
+            o telefone fica no passo 2.
           </p>
           <button
             type="button"
@@ -778,7 +858,7 @@ export function AgenteUazapiBlock({
             onClick={() => postAction("create")}
           >
             {loading === "create" ? <Loader2 size={15} className="animate-spin" /> : <Smartphone size={15} />}
-            Criar instância UAZAPI
+            Criar ligação WhatsApp
           </button>
           {!regiaoGuardada && temInstancia ? (
             <p style={{ margin: 0, color: "#e6c06a", fontSize: 11 }}>
@@ -788,7 +868,7 @@ export function AgenteUazapiBlock({
         </>
       ) : (
         <>
-          <p style={{ margin: 0, color: "#c9a24a", fontSize: 10, fontWeight: 800, letterSpacing: 0.08 }}>
+          <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: 0.08 }}>
             PASSO 2 — LIGAR WHATSAPP
           </p>
           <div style={{ ...btnGroupShell, gridTemplateColumns: conectado ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))" }}>
@@ -823,24 +903,32 @@ export function AgenteUazapiBlock({
             </button>
           </div>
           {!conectado ? (
-            <div style={{ ...btnGroupShell, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+            <div
+              style={{
+                ...btnGroupShell,
+                gridTemplateColumns:
+                  layout === "card" ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
+              }}
+            >
               <button
                 type="button"
                 disabled={acoesOff}
-                style={btnInGroup(acoesOff, "default", true)}
+                style={btnInGroup(acoesOff, "default", layout === "card")}
                 onClick={() => postAction("sync_webhook")}
               >
                 {loading === "sync_webhook" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
                 Sincronizar webhook
               </button>
-              <button
-                type="button"
-                disabled={acoesOff}
-                style={btnInGroup(acoesOff, "default", false)}
-                onClick={() => setSideoverOpen(false)}
-              >
-                Fechar
-              </button>
+              {layout === "card" ? (
+                <button
+                  type="button"
+                  disabled={acoesOff}
+                  style={btnInGroup(acoesOff, "default", false)}
+                  onClick={() => setSideoverOpen(false)}
+                >
+                  Fechar
+                </button>
+              ) : null}
             </div>
           ) : null}
           {precisaReconectar && !conectado ? (
@@ -861,22 +949,27 @@ export function AgenteUazapiBlock({
             onClick={() => setDialogExcluirUazapi(true)}
           >
             {loading === "delete_remote" ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-            Eliminar instância na UAZAPI
+            Eliminar ligação WhatsApp
           </button>
         </>
       )}
     </div>
   );
 
+  const painelSubtitle = temInstancia
+    ? "Passo 2: ligue o WhatsApp com QR ou código (instância já cadastrada)."
+    : "Passo 1: criar ligação WhatsApp. Depois escolha a cidade; QR no passo 2.";
+
   return (
     <>
+      {layout === "card" ? (
       <div
         style={{
           marginBottom: 18,
           borderRadius: 14,
           border: "1px solid #dcebd8",
-          background: "linear-gradient(180deg, #151a22 0%, #f8fcf6 48px, #f8fcf6 100%)",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+          background: "#ffffff",
+          boxShadow: "0 4px 16px rgba(11, 31, 16, 0.06)",
           overflow: "hidden",
         }}
       >
@@ -928,17 +1021,11 @@ export function AgenteUazapiBlock({
                     {rotuloEstado}
                   </span>
                 </p>
-                <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
-                  {regiaoLabel ? (
-                    <>
-                      Região: <strong style={{ color: "#aebccf" }}>{regiaoLabel}</strong>
-                    </>
-                  ) : temInstancia ? (
-                    <span style={{ color: "#e6c06a" }}>Escolha a cidade e guarde a região antes do QR</span>
-                  ) : (
-                    <span style={{ color: "#e6c06a" }}>Crie a instância UAZAPI (rodapé) — depois escolha a cidade</span>
-                  )}
-                </p>
+                {regiaoLabel ? (
+                  <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
+                    Região: <strong style={{ color: "#2d4a38" }}>{regiaoLabel}</strong>
+                  </p>
+                ) : null}
               </div>
             </div>
             <button
@@ -946,17 +1033,12 @@ export function AgenteUazapiBlock({
               disabled={bloqueado}
               onClick={() => setSideoverOpen(true)}
               style={{
+                ...crmBtnPrimaryLg(bloqueado),
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 8,
+                flex: "none",
                 padding: "9px 14px",
-                borderRadius: 8,
-                border: "1px solid #58a6ff",
-                background: bloqueado ? "#ffffff" : "#1f6feb22",
-                color: bloqueado ? "#484f58" : "#58a6ff",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: bloqueado ? "not-allowed" : "pointer",
               }}
             >
               Configurar ligação
@@ -965,16 +1047,14 @@ export function AgenteUazapiBlock({
           </div>
         </div>
       </div>
+      ) : null}
 
       <AgenteUazapiSideoverShell
-        open={sideoverOpen}
+        embedded={layout === "painel"}
+        open={layout === "painel" ? true : sideoverOpen}
         onClose={() => setSideoverOpen(false)}
         title={agenteNome?.trim() || agenteSlug}
-        subtitle={
-          temInstancia
-            ? "Passo 2: ligue o WhatsApp com QR ou código (instância já cadastrada)."
-            : "Passo 1: criar instância na UAZAPI (sem QR). Depois cidade/região; QR no passo 2."
-        }
+        subtitle={painelSubtitle}
         footer={botoesFooter}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -990,12 +1070,12 @@ export function AgenteUazapiBlock({
               style={{
                 padding: "8px 10px",
                 borderRadius: 8,
-                border: `1px solid ${!temInstancia ? "#c9a24a66" : "#dcebd8"}`,
-                background: !temInstancia ? "#c9a24a14" : "#f8fcf6",
+                border: `1px solid ${!temInstancia ? `${CRM_ACCENT}66` : darkSideover ? RF_BORDER : "#dcebd8"}`,
+                background: !temInstancia ? "#3f984818" : darkSideover ? "rgba(6, 13, 8, 0.72)" : "#f8fcf6",
                 textAlign: "center",
               }}
             >
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: !temInstancia ? "#c9a24a" : "#6e7681" }}>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: !temInstancia ? CRM_ACCENT : "#6e7681" }}>
                 1. Cadastro
               </p>
             </div>
@@ -1003,13 +1083,13 @@ export function AgenteUazapiBlock({
               style={{
                 padding: "8px 10px",
                 borderRadius: 8,
-                border: `1px solid ${temInstancia ? "#c9a24a66" : "#dcebd8"}`,
-                background: temInstancia ? "#c9a24a14" : "#f8fcf6",
+                border: `1px solid ${temInstancia ? `${CRM_ACCENT}66` : darkSideover ? RF_BORDER : "#dcebd8"}`,
+                background: temInstancia ? "#3f984818" : darkSideover ? "rgba(6, 13, 8, 0.72)" : "#f8fcf6",
                 textAlign: "center",
-                opacity: temInstancia ? 1 : 0.45,
+                opacity: temInstancia ? 1 : 0.72,
               }}
             >
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: temInstancia ? "#c9a24a" : "#484f58" }}>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: temInstancia ? CRM_ACCENT : "#5d7a67" }}>
                 2. Ligar WhatsApp
               </p>
             </div>
@@ -1019,9 +1099,7 @@ export function AgenteUazapiBlock({
             style={{
               position: "relative",
               padding: "14px 16px",
-              borderRadius: 12,
-              background: "#ffffff",
-              border: "1px solid #dcebd8",
+              ...cardSurface,
             }}
           >
             <div
@@ -1056,26 +1134,15 @@ export function AgenteUazapiBlock({
                 </span>
               ) : null}
             </div>
-            {temInstancia ? (
-              <p style={{ margin: "10px 0 0", paddingLeft: 12, fontSize: 11, color: "#5d7a67" }}>
-                Instância: <code style={{ color: "#0b2210" }}>{snapshot.uazapi_instance_id}</code>
-              </p>
-            ) : (
+            {!temInstancia ? (
               <p style={{ margin: "10px 0 0", paddingLeft: 12, fontSize: 12, color: "#5d7a67" }}>
-                Sem instância — conclua o <strong style={{ color: "#c9d1d9" }}>passo 1</strong> abaixo.
+                Conclua o <strong style={{ color: BRAND_TEXT_DARK }}>passo 1</strong> abaixo para ligar o WhatsApp.
               </p>
-            )}
+            ) : null}
           </div>
 
-          <div
-            style={{
-              padding: "14px 16px",
-              borderRadius: 12,
-              border: "1px solid #dcebd8",
-              background: "#ffffff",
-            }}
-          >
-            <p style={{ margin: "0 0 12px", color: "#c9a24a", fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
+          <div style={{ padding: "14px 16px", ...cardSurface }}>
+            <p style={{ margin: "0 0 12px", color: CRM_ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
               PASSO 1 — REGIÃO E INSTÂNCIA
             </p>
             <div
@@ -1088,7 +1155,7 @@ export function AgenteUazapiBlock({
               }}
             >
               <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, fontWeight: 700, letterSpacing: 0.06 }}>
-                REGIÃO DO NÚMERO (PROXY)
+                REGIÃO DO NÚMERO
               </p>
               <button
                 type="button"
@@ -1096,7 +1163,7 @@ export function AgenteUazapiBlock({
                 style={{
                   border: "none",
                   background: "transparent",
-                  color: "#58a6ff",
+                  color: CRM_ACCENT,
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: "pointer",
@@ -1160,12 +1227,12 @@ export function AgenteUazapiBlock({
             {cidadesProxyErro ? (
               <p style={{ margin: "8px 0 0", color: "#f85149", fontSize: 11 }}>
                 {!temInstancia && /invalid token/i.test(cidadesProxyErro)
-                  ? "A lista de cidades só fica disponível depois de criar a instância (botão no rodapé). O admin token da UAZAPI não serve para este catálogo."
-                  : cidadesProxyErro}
+                  ? "A lista de cidades fica disponível depois de criar a ligação WhatsApp."
+                  : cidadesProxyErro.replace(/UAZAPI/gi, "WhatsApp")}
               </p>
             ) : !temInstancia && cidadesProxy.length === 0 && !cidadesProxyErro ? (
               <p style={{ margin: "8px 0 0", color: "#5d7a67", fontSize: 11 }}>
-                Cidades aparecem após «Criar instância UAZAPI» (rodapé).
+                Cidades aparecem após criar a ligação WhatsApp.
               </p>
             ) : null}
             {proxyState ? (
@@ -1180,8 +1247,8 @@ export function AgenteUazapiBlock({
               style={{
                 padding: "14px 16px",
                 borderRadius: 12,
-                border: "1px dashed #484f58",
-                background: "#f8fcf6",
+                border: darkSideover ? `1px dashed ${RF_BORDER_STRONG}` : "1px dashed #d4ecd0",
+                background: darkSideover ? "rgba(6, 13, 8, 0.55)" : "#f8fcf6",
               }}
             >
               <p style={{ margin: 0, color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
@@ -1207,14 +1274,7 @@ export function AgenteUazapiBlock({
               </p>
             </div>
           ) : (
-          <div
-            style={{
-              padding: "14px 16px",
-              borderRadius: 12,
-              background: "#ffffff",
-              border: "1px solid #dcebd8",
-            }}
-          >
+          <div style={{ padding: "14px 16px", ...cardSurface }}>
             <p style={{ margin: "0 0 10px", color: "#c9a24a", fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
               PASSO 2 — LIGAR O TELEFONE
             </p>
@@ -1264,7 +1324,7 @@ export function AgenteUazapiBlock({
                   style={fieldStyle}
                 />
                 <p style={{ margin: "8px 0 0", color: "#5d7a67", fontSize: 11 }}>
-                  A UAZAPI gera um código de pareamento quando `phone` é enviado no `connect`.
+                  Use o código de pareamento para ligar o telefone sem QR.
                 </p>
                 {pairingPhone.trim() && !podeConectarPorCodigo ? (
                   <p style={{ margin: "6px 0 0", color: "#f85149", fontSize: 11 }}>
@@ -1280,10 +1340,8 @@ export function AgenteUazapiBlock({
             <div
               style={{
                 padding: 16,
-                borderRadius: 12,
-                border: "1px solid #dcebd8",
-                background: "#ffffff",
                 textAlign: "center",
+                ...cardSurface,
               }}
             >
               <div
@@ -1394,7 +1452,7 @@ export function AgenteUazapiBlock({
 
           {uazapiDiag?.lastDisconnectReason ? (
             <p style={{ margin: 0, color: "#f85149", fontSize: 11, lineHeight: 1.5 }}>
-              Última desconexão UAZAPI: <strong>{uazapiDiag.lastDisconnectReason}</strong>
+              Última desconexão WhatsApp: <strong>{uazapiDiag.lastDisconnectReason}</strong>
             </p>
           ) : null}
           {uazapiDiag?.connectHint ? (
@@ -1489,7 +1547,7 @@ export function AgenteUazapiBlock({
 
       <CrmConfirmDialog
         open={dialogExcluirUazapi}
-        title="Eliminar instância na UAZAPI?"
+        title="Eliminar ligação WhatsApp?"
         danger
         confirmLabel="Eliminar definitivamente"
         cancelLabel="Cancelar"
@@ -1501,10 +1559,10 @@ export function AgenteUazapiBlock({
         }}
       >
         <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
-          A instância WhatsApp será removida no painel UAZAPI e a ligação deste agente no Hub será limpa.
+          A ligação WhatsApp deste agente será removida.
         </p>
         <p style={{ margin: "10px 0 0", color: "#b3261e", fontWeight: 600, fontSize: 12 }}>
-          Esta operação não pode ser desfeita na UAZAPI.
+          Esta operação não pode ser desfeita.
         </p>
       </CrmConfirmDialog>
     </>

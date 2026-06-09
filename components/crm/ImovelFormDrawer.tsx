@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import {
+  RF_ACCENT,
+  RF_BG_PANEL,
+  RF_INPUT_STYLE,
+  RF_TEXT_PRIMARY,
+  rfAsideStyle,
+  rfInputStyle,
+  rfLabelStyle,
+  rfOverlayStyle,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 
 export type ImovelEditInitial = {
   id: string;
@@ -99,51 +109,34 @@ export function ImovelFormDrawer({ open, onClose, onSaved, initial }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        background: "rgba(0,0,0,0.55)",
-        display: "flex",
-        justifyContent: "flex-end",
-      }}
-      onClick={onClose}
-    >
+    <div>
+      <button type="button" aria-label="Fechar" onClick={onClose} style={rfOverlayStyle(50)} />
       <div
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          height: "100%",
-          background: "#ffffff",
-          borderLeft: "1px solid #dcebd8",
-          padding: 24,
-          color: "#0b2210",
-        }}
+        style={{ ...rfAsideStyle(420, 51), padding: 24, color: RF_TEXT_PRIMARY }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Novo imóvel</h2>
-        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", marginBottom: 4 }}>Título *</label>
+        <h2 style={{ margin: "0 0 20px", fontSize: 18, color: RF_TEXT_PRIMARY }}>Novo imóvel</h2>
+        <label style={{ ...rfLabelStyle(), marginBottom: 4 }}>Título *</label>
         <input
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
           style={inputStyle}
         />
-        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", margin: "12px 0 4px" }}>Cidade / UF</label>
+        <label style={{ ...rfLabelStyle(), margin: "12px 0 4px" }}>Cidade / UF</label>
         <div style={{ display: "flex", gap: 8 }}>
           <input value={cidade} onChange={(e) => setCidade(e.target.value)} style={{ ...inputStyle, flex: 2 }} placeholder="Cidade" />
           <input value={estado} onChange={(e) => setEstado(e.target.value)} style={{ ...inputStyle, flex: 1 }} placeholder="UF" maxLength={2} />
         </div>
-        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", margin: "12px 0 4px" }}>Valor (R$)</label>
+        <label style={{ ...rfLabelStyle(), margin: "12px 0 4px" }}>Valor (R$)</label>
         <input value={valor} onChange={(e) => setValor(e.target.value)} type="number" style={inputStyle} />
-        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", margin: "12px 0 4px" }}>Tipo</label>
+        <label style={{ ...rfLabelStyle(), margin: "12px 0 4px" }}>Tipo</label>
         <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={inputStyle}>
           <option value="apartamento">Apartamento</option>
           <option value="casa">Casa</option>
           <option value="terreno">Terreno</option>
           <option value="comercial">Comercial</option>
         </select>
-        <label style={{ display: "block", fontSize: 12, color: "#5d7a67", margin: "12px 0 4px" }}>Finalidade</label>
+        <label style={{ ...rfLabelStyle(), margin: "12px 0 4px" }}>Finalidade</label>
         <select value={finalidade} onChange={(e) => setFinalidade(e.target.value)} style={inputStyle}>
           <option value="venda">Venda</option>
           <option value="locacao">Locação</option>
@@ -162,23 +155,14 @@ export function ImovelFormDrawer({ open, onClose, onSaved, initial }: Props) {
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: 8,
-  border: "1px solid #dcebd8",
-  background: "#f8fcf6",
-  color: "#0b2210",
-  fontSize: 14,
-  boxSizing: "border-box",
-};
+const inputStyle: React.CSSProperties = { ...RF_INPUT_STYLE, padding: "10px 12px", fontSize: 14 };
 
 const btnPrimary: React.CSSProperties = {
   padding: "10px 20px",
   borderRadius: 8,
   border: "none",
-  background: "#003b26",
-  color: "#c9a24a",
+  background: RF_BG_PANEL,
+  color: RF_ACCENT,
   fontWeight: 700,
   cursor: "pointer",
 };
@@ -186,8 +170,8 @@ const btnPrimary: React.CSSProperties = {
 const btnSecondary: React.CSSProperties = {
   padding: "10px 20px",
   borderRadius: 8,
-  border: "1px solid #dcebd8",
+  border: `1px solid rgba(63, 152, 72, 0.42)`,
   background: "transparent",
-  color: "#5d7a67",
+  color: RF_ACCENT,
   cursor: "pointer",
 };

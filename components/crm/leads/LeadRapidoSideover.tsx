@@ -1,16 +1,11 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useState } from "react";
-import { Building2, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { UserPlus } from "lucide-react";
+import { CadastroConhecimentoBanner } from "@/components/crm/cadastro/CadastroConhecimentoBanner";
 import { CadastroPremiumSideover } from "@/components/crm/cadastro/CadastroPremiumSideover";
-import { MercadoLeadPicker } from "@/components/crm/leads/MercadoLeadPicker";
 import { LEAD_ORIGENS } from "@/lib/crm/lead-cadastro";
-import {
-  CAMPOS_POR_TIPO,
-  prefixoMercadoFromTipoInteresse,
-  TIPOS_INTERESSE_LEAD,
-  type TipoInteresseLeadId,
-} from "@/lib/crm/lead-campos-por-tipo";
+import { labelPipelineTab } from "@/lib/crm/tenant-pipelines";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 
 const ORIGEM_LABEL: Record<string, string> = {
@@ -25,11 +20,11 @@ const ORIGEM_LABEL: Record<string, string> = {
 };
 
 const inputCls =
-  "w-full min-h-10 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a]";
+  "w-full min-h-10 rounded-lg border border-[rgba(63,152,72,0.42)] bg-[rgba(6,13,8,0.85)] px-3 py-2 text-sm text-[#e8f5e9] outline-none placeholder:text-[#7a9a7e] focus:border-[#92ff00]";
 
-const labelCls = "mb-1 block text-xs font-semibold text-[#5d7a67]";
+const labelCls = "mb-1 block text-xs font-semibold text-[#92ff00]";
 
-const secaoCls = "text-[11px] font-extrabold uppercase tracking-wide text-[#aebccf]";
+const secaoCls = "text-[11px] font-extrabold uppercase tracking-wide text-[#92ff00]";
 
 type LeadCriado = {
   id: string;
@@ -37,26 +32,47 @@ type LeadCriado = {
   nome: string;
 };
 
+type PipelineEstagio = {
+  slug: string;
+  label: string;
+  ordem: number;
+};
+
+type PipelineOption = {
+  id: string;
+  nome: string;
+  estagios: PipelineEstagio[];
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
   onSaved?: (lead: LeadCriado) => void;
+  /** Pipeline ativo na página de leads — pré-selecionado no formulário. */
+  activePipelineId?: string | null;
 };
 
 const formInicial = {
+  pipeline_id: "" as string,
   nome: "",
   telefone: "",
   email: "",
   origem: "whatsapp",
   valor_estimado: "",
+  notas: "",
   indicado_por: "",
-  mercados: ["IMB"] as string[],
-  tipo_interesse: "comprar_imovel" as TipoInteresseLeadId,
-  extras: {} as Record<string, string>,
 };
 
-export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
+function primeiroEstagio(pipe: PipelineOption | null): string {
+  if (!pipe?.estagios?.length) return "novo";
+  const sorted = [...pipe.estagios].sort((a, b) => a.ordem - b.ordem);
+  return sorted[0]?.slug || "novo";
+}
+
+export function LeadRapidoSideover({ open, onClose, onSaved, activePipelineId }: Props) {
   const [form, setForm] = useState(formInicial);
+  const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
+  const [carregandoPipelines, setCarregandoPipelines] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -67,16 +83,44 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
     setSalvando(false);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setCarregandoPipelines(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/crm/pipelines?tipo=lead", {
+          headers: internalApiHeaders(),
+        });
+        const json = (await res.json().catch(() => ({}))) as { data?: PipelineOption[] };
+        if (cancelled) return;
+        const list = json.data || [];
+        setPipelines(list);
+        const preferred =
+          (activePipelineId && list.some((p) => p.id === activePipelineId)
+            ? activePipelineId
+            : list[0]?.id) || "";
+        setForm((prev) => ({ ...prev, pipeline_id: preferred }));
+      } catch {
+        if (!cancelled) setPipelines([]);
+      } finally {
+        if (!cancelled) setCarregandoPipelines(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activePipelineId]);
+
+  const pipelineSelecionado = useMemo(
+    () => pipelines.find((p) => p.id === form.pipeline_id) ?? null,
+    [pipelines, form.pipeline_id]
+  );
+
+  const estagioInicial = useMemo(() => primeiroEstagio(pipelineSelecionado), [pipelineSelecionado]);
+
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function toggleMercado(sigla: string, ativo: boolean) {
-    setForm((prev) => {
-      const atual = prev.mercados ?? [];
-      const next = ativo ? [...new Set([...atual, sigla])] : atual.filter((m) => m !== sigla);
-      return { ...prev, mercados: next };
-    });
   }
 
   async function salvar() {
@@ -98,22 +142,23 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
       return;
     }
 
+    if (!form.pipeline_id) {
+      setErro("Selecione um pipeline.");
+      return;
+    }
+
     setSalvando(true);
     try {
-      const prefixo = prefixoMercadoFromTipoInteresse(form.tipo_interesse);
+      const notas = form.notas.trim();
       const body: Record<string, unknown> = {
         nome,
         telefone: form.telefone.trim(),
         email: form.email.trim() || null,
         origem: form.origem,
-        estagio: "novo",
-        estagio_funil: "novo",
-        tipo_interesse: form.tipo_interesse,
+        estagio: estagioInicial,
         valor_estimado: form.valor_estimado.trim() || 0,
-        mercados: [prefixo, ...form.mercados.filter((m) => m !== prefixo)],
-        cidade: form.extras.cidade?.trim() || null,
-        bairro: form.extras.bairro?.trim() || null,
-        metadata: { ...form.extras, tipo_interesse: form.tipo_interesse },
+        pipeline_id: form.pipeline_id,
+        metadata: notas ? { notas, observacoes: notas } : {},
       };
       if (form.origem === "indicacao" && form.indicado_por.trim()) {
         body.indicado_por = form.indicado_por.trim();
@@ -164,15 +209,15 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
             type="button"
             onClick={onClose}
             disabled={salvando}
-            className="min-h-10 rounded-lg border border-[#dcebd8] px-4 py-2 text-sm font-semibold text-[#5d7a67] hover:text-white disabled:opacity-50"
+            className="min-h-10 rounded-lg border border-[rgba(63,152,72,0.42)] px-4 py-2 text-sm font-semibold text-[#7a9a7e] hover:text-[#92ff00] disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             type="button"
             onClick={() => void salvar()}
-            disabled={salvando}
-            className="min-h-10 rounded-lg px-5 py-2 text-sm font-bold text-[#f8fcf6] disabled:opacity-50"
+            disabled={salvando || carregandoPipelines}
+            className="min-h-10 rounded-lg px-5 py-2 text-sm font-bold text-[#92ff00] disabled:opacity-50"
             style={{ background: salvando ? "#6e7681" : "#c9a24a" }}
           >
             {salvando ? "Salvando…" : "Criar lead"}
@@ -181,73 +226,48 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
       }
     >
       <div className="flex flex-col gap-5">
+        <CadastroConhecimentoBanner />
         <p className="text-xs leading-relaxed text-[#5d7a67]">
-          Mesma matriz do cadastro: mercado(s), contacto e origem. O lead entra em{" "}
-          <strong className="text-[#0b2210]">Novos</strong> e gera vínculo PES pelo telefone.
+          Preencha os dados de contacto. O lead entra na primeira etapa do pipeline selecionado e
+          gera vínculo com a pessoa pelo telefone.
         </p>
 
         <section>
-          <p className={`${secaoCls} mb-3`}>Tipo de interesse</p>
-          <select
-            value={form.tipo_interesse}
-            onChange={(e) => {
-              set("tipo_interesse", e.target.value as TipoInteresseLeadId);
-              set("extras", {});
-              set("mercados", [prefixoMercadoFromTipoInteresse(e.target.value as TipoInteresseLeadId)]);
-            }}
-            className={inputCls}
-          >
-            {TIPOS_INTERESSE_LEAD.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+          <p className={`${secaoCls} mb-3`}>Pipeline</p>
+          {carregandoPipelines ? (
+            <p className="text-xs text-[#7a9a7e]">Carregando pipelines…</p>
+          ) : pipelines.length === 0 ? (
+            <p className="text-xs text-[#fca5a5]">Nenhum pipeline disponível.</p>
+          ) : pipelines.length === 1 ? (
+            <p className="rounded-lg border border-[rgba(63,152,72,0.42)] bg-[rgba(6,13,8,0.85)] px-3 py-2 text-sm text-[#e8f5e9]">
+              {labelPipelineTab(pipelineSelecionado || pipelines[0])}
+            </p>
+          ) : (
+            <select
+              value={form.pipeline_id}
+              onChange={(e) => set("pipeline_id", e.target.value)}
+              className={inputCls}
+            >
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {labelPipelineTab(p)}
+                </option>
+              ))}
+            </select>
+          )}
+          {pipelineSelecionado && (
+            <p className="mt-2 text-[11px] text-[#7a9a7e]">
+              Etapa inicial:{" "}
+              <span className="text-[#92ff00]">
+                {pipelineSelecionado.estagios.find((e) => e.slug === estagioInicial)?.label ||
+                  "Novos"}
+              </span>
+            </p>
+          )}
         </section>
 
         <section>
-          <p className={`${secaoCls} mb-3`}>Dados do interesse</p>
-          <div className="flex flex-col gap-3">
-            {(CAMPOS_POR_TIPO[form.tipo_interesse] ?? []).map((campo) => (
-              <div key={campo.key}>
-                <label className={labelCls}>
-                  {campo.label}
-                  {campo.obrigatorio ? " *" : ""}
-                </label>
-                {campo.type === "select" && campo.options ? (
-                  <select
-                    className={inputCls}
-                    value={form.extras[campo.key] ?? ""}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, extras: { ...p.extras, [campo.key]: e.target.value } }))
-                    }
-                  >
-                    <option value="">Selecione…</option>
-                    {campo.options.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    className={inputCls}
-                    value={form.extras[campo.key] ?? ""}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, extras: { ...p.extras, [campo.key]: e.target.value } }))
-                    }
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section>
-          <p className={`${secaoCls} mb-3 flex items-center gap-2`}>
-            <Building2 size={14} aria-hidden />
-            Contacto
-          </p>
+          <p className={`${secaoCls} mb-3`}>Contacto</p>
           <div className="flex flex-col gap-3">
             <div>
               <label className={labelCls} htmlFor="lead-rapido-nome">
@@ -291,15 +311,6 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
               </div>
             </div>
           </div>
-        </section>
-
-        <section>
-          <p className={`${secaoCls} mb-3`}>Mercado do lead *</p>
-          <MercadoLeadPicker
-            mercados={form.mercados}
-            onToggle={toggleMercado}
-            disabled={salvando}
-          />
         </section>
 
         <section>
@@ -352,6 +363,17 @@ export function LeadRapidoSideover({ open, onClose, onSaved }: Props) {
               </div>
             )}
           </div>
+        </section>
+
+        <section>
+          <p className={`${secaoCls} mb-3`}>Observações</p>
+          <textarea
+            value={form.notas}
+            onChange={(e) => set("notas", e.target.value)}
+            className={`${inputCls} min-h-[88px] resize-y`}
+            placeholder="Contexto, necessidade, próximos passos…"
+            rows={3}
+          />
         </section>
 
         {erro && (

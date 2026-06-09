@@ -7,8 +7,14 @@ import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
 import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
 import { FUNIL_LEAD_ETAPAS } from "@/lib/crm/pipelines";
+import { useCrmToast } from "@/lib/crm/crm-feedback";
 import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
 import { LeadPropostasPanel } from "@/components/crm/LeadPropostasPanel";
+import { LeadTimelineTab } from "@/components/crm/leads/LeadTimelineTab";
+import { LeadObservacoesTab, type CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
+import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
+import { CRM_ACCENT, crmBtnPrimary, crmBtnSecondary } from "@/lib/crm/crm-button-styles";
+import { CRM_SURFACE_MAIN } from "@/lib/crm-shell-theme";
 import {
   codigoParticipante,
   emailExibicao,
@@ -21,13 +27,11 @@ import {
   Brain,
   Briefcase,
   Check,
-  ChevronLeft,
   ClipboardList,
   FileText,
   IdCard,
   MessageSquare,
-  Sparkles,
-  User,
+  StickyNote,
   X,
 } from "lucide-react";
 
@@ -35,19 +39,12 @@ const ESTAGIO_COR: Record<string, string> = Object.fromEntries(
   FUNIL_LEAD_ETAPAS.map((e) => [e.slug, e.cor])
 );
 
-/** Fundo mais escuro (timelapse / OLED-ish), alinhado ao pedido */
-const BG_DEEP = "#05080e";
-const BG_PANEL = "#0a1018";
-const BORDER_SUBTLE = "rgba(48, 54, 61, 0.38)";
-const TIMELINE_TRACK = "rgba(201, 162, 74, 0.35)";
-
-function tempoRelativo(data: string) {
-  const diff = (Date.now() - new Date(data).getTime()) / 1000;
-  if (diff < 60) return "agora";
-  if (diff < 3600) return `${Math.round(diff / 60)}min`;
-  if (diff < 86400) return `${Math.round(diff / 3600)}h`;
-  return new Date(data).toLocaleDateString("pt-BR");
-}
+const CARD_SHELL = {
+  background: "#ffffff",
+  border: "1px solid rgba(18, 56, 43, 0.12)",
+  borderRadius: 16,
+  boxShadow: "0 8px 24px rgba(15, 56, 39, 0.05)",
+} as const;
 
 function formatarDataHora(iso?: string | null) {
   if (!iso) return "—";
@@ -201,27 +198,23 @@ export default function LeadFichaPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
+  const { error: toastError } = useCrmToast();
 
   const [lead, setLead] = useState<Record<string, unknown> | null>(null);
   const [pessoaHub, setPessoaHub] = useState<PessoaMini | null>(null);
   const [ultimaFila, setUltimaFila] = useState<UltimaFilaMini | null>(null);
-  const [atividades, setAtividades] = useState<Record<string, unknown>[]>([]);
   const [memorias, setMemorias] = useState<Record<string, unknown>[]>([]);
-  const [aba, setAba] = useState<"atividades" | "memorias" | "propostas" | "dados">("atividades");
+  const [notas, setNotas] = useState<CrmNota[]>([]);
+  const [novaNota, setNovaNota] = useState("");
+  const [aba, setAba] = useState<"timeline" | "observacoes" | "memorias" | "propostas" | "dados">("timeline");
   const [memoriasErro, setMemoriasErro] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     if (!id) return;
     setMemoriasErro(null);
 
-    const [vwRes, a, memRes] = await Promise.all([
+    const [vwRes, memRes] = await Promise.all([
       supabase.from("vw_hub_leads_crm_enriquecido").select("*").eq("id", id).maybeSingle(),
-      supabase
-        .from("hub_atividades")
-        .select("*")
-        .eq("lead_id", id)
-        .order("criado_em", { ascending: false })
-        .limit(80),
       supabase.from("hub_memorias_lead").select("*").eq("lead_id", id),
     ]);
 
@@ -334,8 +327,6 @@ export default function LeadFichaPage() {
       }
     }
 
-    if (a.data) setAtividades(a.data);
-
     let rows = memRes.data ?? [];
     let memErr = memRes.error;
 
@@ -369,6 +360,14 @@ export default function LeadFichaPage() {
       });
       setMemorias(rows);
     }
+
+    const { data: notasRows } = await supabase
+      .from("hub_notas")
+      .select("id, conteudo, criado_por, criado_em")
+      .eq("lead_id", id)
+      .order("criado_em", { ascending: false })
+      .limit(30);
+    setNotas((notasRows ?? []) as CrmNota[]);
   }, [id]);
 
   useEffect(() => {
@@ -376,6 +375,26 @@ export default function LeadFichaPage() {
   }, [carregar]);
 
   const chipsMemoria = useMemo(() => memorias.flatMap(chipsFromMemoriaRow), [memorias]);
+
+  async function adicionarNota() {
+    if (!id || !novaNota.trim()) return;
+    const { data } = await supabase
+      .from("hub_notas")
+      .insert({ lead_id: id, conteudo: novaNota.trim(), criado_por: "humano" })
+      .select("id, conteudo, criado_por, criado_em")
+      .single();
+    if (data) {
+      setNotas((prev) => [data as CrmNota, ...prev]);
+      await supabase.from("hub_atividades").insert({
+        lead_id: id,
+        tipo: "nota",
+        descricao: novaNota.trim().slice(0, 80),
+        feito_por: "humano",
+        feito_por_tipo: "humano",
+      });
+      setNovaNota("");
+    }
+  }
 
   async function criarNegocio() {
     const res = await fetch(`/api/crm/leads/${id}/converter-negocio`, {
@@ -386,7 +405,7 @@ export default function LeadFichaPage() {
     });
     const json = (await res.json()) as { data?: { id: string }; error?: string };
     if (!res.ok) {
-      alert(json.error || "Não foi possível criar o negócio.");
+      toastError(json.error || "Não foi possível criar o negócio.");
       return;
     }
     if (json.data?.id) router.push(`/crm/negocios/${json.data.id}`);
@@ -399,7 +418,7 @@ export default function LeadFichaPage() {
       ...extra,
     });
     if (!res.ok) {
-      alert(res.error);
+      toastError(res.error);
       return;
     }
     carregar();
@@ -408,8 +427,8 @@ export default function LeadFichaPage() {
   if (!lead) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center text-sm"
-        style={{ backgroundColor: BG_DEEP, color: "#5d7a67" }}
+        className="flex min-h-screen items-center justify-center text-sm"
+        style={{ backgroundColor: CRM_SURFACE_MAIN, color: "#5d7a67" }}
       >
         Carregando ficha…
       </div>
@@ -473,250 +492,213 @@ export default function LeadFichaPage() {
     },
   ];
 
-  const CARD_INNER = "rgba(8, 12, 20, 0.65)";
+  const metricTiles = [
+    { label: "Score", value: `${lead.score ?? 0}/100`, color: BRAND_GREEN_BRIGHT },
+    {
+      label: "Valor estimado",
+      value:
+        (lead.valor_estimado as number) > 0
+          ? `R$ ${((lead.valor_estimado as number) / 1000).toFixed(0)}k`
+          : "—",
+      color: CRM_ACCENT,
+    },
+    { label: "Memórias IA", value: String(chipsMemoria.length), color: "#3b82f6" },
+    {
+      label: "Último contato",
+      value: lead.ultimo_contato
+        ? formatarDataHora(lead.ultimo_contato as string).split(" ")[0]
+        : ultimaFila?.criado_em
+          ? formatarDataHora(ultimaFila.criado_em).split(" ")[0]
+          : "—",
+      color: "#6b8a76",
+    },
+  ];
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: BG_DEEP }}>
+    <div className="flex h-screen flex-col overflow-hidden" style={{ background: CRM_SURFACE_MAIN }}>
       <header
-        className="flex flex-shrink-0 items-center justify-between gap-3 border-b px-4 py-3 md:px-5"
-        style={{ borderColor: BORDER_SUBTLE, backgroundColor: BG_PANEL }}
+        className="flex-shrink-0 border-b bg-white px-4 py-3 md:px-6"
+        style={{ borderColor: "rgba(18, 56, 43, 0.14)", boxShadow: "0 4px 24px rgba(15, 56, 39, 0.08)" }}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-white"
-            style={{ borderColor: BORDER_SUBTLE }}
-            aria-label="Voltar"
-          >
-            <ChevronLeft className="h-4 w-4" strokeWidth={2} />
-          </button>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-base font-bold tracking-tight text-white md:text-lg">
-                {lead.nome as string}
-              </h1>
-              <span
-                className="rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
-                style={{
-                  backgroundColor: `${corEstagio}18`,
-                  color: corEstagio,
-                  border: `1px solid ${corEstagio}44`,
-                }}
-              >
-                {estagio}
-              </span>
-            </div>
-            {(lead.codigo as string | undefined) && (
-              <p className="mt-0.5 font-mono text-xs font-semibold text-[#c9a24a]">
-                {String(lead.codigo)}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              aria-label="Voltar"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] border"
+              style={{ borderColor: "#dcebd8", background: "#eef7eb", color: BRAND_TEXT_DARK }}
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-lg font-extrabold tracking-tight md:text-xl" style={{ color: BRAND_TEXT_DARK }}>
+                  {lead.nome as string}
+                </h1>
+                <span
+                  className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide"
+                  style={{
+                    backgroundColor: `${corEstagio}18`,
+                    color: corEstagio,
+                    border: `1px solid ${corEstagio}44`,
+                  }}
+                >
+                  {estagio}
+                </span>
+              </div>
+              {(lead.codigo as string | undefined) && (
+                <p className="mt-0.5 font-mono text-xs font-semibold" style={{ color: CRM_ACCENT }}>
+                  {String(lead.codigo)}
+                </p>
+              )}
+              <p className="mt-0.5 truncate text-xs font-semibold text-[#3d5c48]">
+                {lead.telefone as string} · {lead.origem as string}
+                {(lead.agente_responsavel as string) ? ` · ${lead.agente_responsavel as string}` : ""}
               </p>
-            )}
-            <p className="mt-0.5 truncate text-xs" style={{ color: "#7d8a99" }}>
-              {lead.telefone as string} · {lead.origem as string}
-              {(lead.valor_estimado as number) > 0 &&
-                ` · R$ ${((lead.valor_estimado as number) / 1000).toFixed(0)}k`}
-            </p>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={() => void criarNegocio()}
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold transition-colors md:text-sm"
-            style={{ borderColor: BORDER_SUBTLE, color: "#c9a24a", background: "#003b2622" }}
-          >
-            <Briefcase className="h-4 w-4" strokeWidth={2} />
-            Criar negócio
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push(`/crm/atendimento?lead=${id}`)}
-            className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors md:text-sm"
-            style={{
-              background: "linear-gradient(180deg, #c45c26 0%, #9a471d 100%)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-            }}
-          >
-            <MessageSquare className="h-4 w-4 opacity-90" strokeWidth={2} />
-            Central de atendimento
-          </button>
+          <div className="flex flex-shrink-0 flex-wrap gap-2">
+            <button type="button" onClick={() => void criarNegocio()} style={crmBtnSecondary()}>
+              <span className="inline-flex items-center gap-2">
+                <Briefcase size={15} />
+                Criar negócio
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(`/crm/atendimento?lead=${id}`)}
+              style={crmBtnPrimary()}
+            >
+              <span className="inline-flex items-center gap-2">
+                <MessageSquare size={15} />
+                Central de atendimento
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 
       <div
-        className="flex flex-shrink-0 gap-1 overflow-x-auto border-b px-3 py-2 md:px-4"
-        style={{ borderColor: BORDER_SUBTLE, backgroundColor: "rgba(5, 8, 14, 0.92)" }}
+        className="flex flex-shrink-0 gap-1 overflow-x-auto border-b bg-white px-4 py-2 md:px-6"
+        style={{ borderColor: "rgba(18, 56, 43, 0.12)" }}
       >
-        {FUNIL_LEAD_ETAPAS.map((e) => (
-          <button
-            key={e.slug}
-            type="button"
-            onClick={() => void moverEstagio(e.slug)}
-            className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors md:text-xs ${
-              estagio === e.slug ? "font-semibold" : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-300"
-            }`}
-            style={
-              estagio === e.slug
-                ? {
-                    backgroundColor: `${e.cor}22`,
-                    color: e.cor,
-                    border: `1px solid ${e.cor}55`,
-                  }
-                : { border: `1px solid transparent` }
-            }
-          >
-            {e.label}
-          </button>
-        ))}
+        <div className="mx-auto flex w-full max-w-6xl gap-1">
+          {FUNIL_LEAD_ETAPAS.map((e) => (
+            <button
+              key={e.slug}
+              type="button"
+              onClick={() => void moverEstagio(e.slug)}
+              className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors md:text-xs"
+              style={
+                estagio === e.slug
+                  ? {
+                      backgroundColor: e.cor,
+                      color: "#fff",
+                      border: `1px solid ${e.cor}`,
+                    }
+                  : {
+                      backgroundColor: `${e.cor}18`,
+                      color: e.cor,
+                      border: `1px solid ${e.cor}55`,
+                    }
+              }
+            >
+              {e.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <CrmStickyTabs
-          activeId={aba}
-          onChange={(tabId) => setAba(tabId as typeof aba)}
-          equalColumns
-          tabs={[
-            { id: "atividades", label: `Atividades (${atividades.length})`, icon: ClipboardList },
-            { id: "memorias", label: `Memórias IA (${chipsMemoria.length})`, icon: Brain },
-            { id: "propostas", label: "Propostas", icon: FileText },
-            { id: "dados", label: "Dados", icon: IdCard },
-          ]}
-          style={{
-            background: BG_PANEL,
-            borderBottom: `1px solid ${BORDER_SUBTLE}`,
-            boxShadow: "none",
-          }}
-        />
-
-          {aba === "atividades" && (
+      <div
+        className="flex flex-shrink-0 border-b bg-white px-4 py-3 md:px-6"
+        style={{ borderColor: "rgba(18, 56, 43, 0.12)" }}
+      >
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-3 md:grid-cols-4">
+          {metricTiles.map((tile) => (
             <div
-              className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6"
-              style={{ backgroundColor: BG_DEEP }}
+              key={tile.label}
+              style={{
+                ...CARD_SHELL,
+                padding: "12px 14px",
+              }}
             >
-              {atividades.length === 0 ? (
-                <p className="pt-12 text-center text-xs" style={{ color: "#5c6570" }}>
-                  Nenhuma atividade registada
-                </p>
-              ) : (
-                <div className="relative mx-auto max-w-2xl">
-                  <div
-                    className="absolute bottom-0 left-[15px] top-2 w-px md:left-[17px]"
-                    style={{ background: `linear-gradient(180deg, ${TIMELINE_TRACK}, transparent)` }}
-                    aria-hidden
-                  />
-                  <ul className="relative flex flex-col gap-0">
-                    {atividades.map((at, idx) => {
-                      const isIa = (at.feito_por_tipo as string) === "ia";
-                      const dataAbs = formatarDataHora(at.criado_em as string);
-                      return (
-                        <li key={at.id as string} className="relative flex gap-4 pb-8 pl-10 md:gap-5 md:pl-11">
-                          <div
-                            className="absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full border md:left-0.5 md:h-9 md:w-9"
-                            style={{
-                              borderColor: isIa ? "rgba(201,162,74,0.45)" : BORDER_SUBTLE,
-                              backgroundColor: isIa ? "rgba(201,162,74,0.12)" : "rgba(15,22,32,0.95)",
-                              boxShadow: "0 0 0 4px rgba(5,8,14,0.9)",
-                            }}
-                          >
-                            {isIa ? (
-                              <Sparkles className="h-4 w-4 text-[#d6b976]" strokeWidth={2} />
-                            ) : (
-                              <User className="h-4 w-4 text-gray-400" strokeWidth={2} />
-                            )}
-                          </div>
-                          <div
-                            className="min-w-0 flex-1 rounded-lg border px-3 py-2.5 md:px-4"
-                            style={{
-                              borderColor: BORDER_SUBTLE,
-                              backgroundColor: idx === 0 ? "rgba(16,24,36,0.85)" : "rgba(10,14,22,0.72)",
-                            }}
-                          >
-                            <div className="flex flex-wrap items-baseline justify-between gap-2">
-                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5d7a67]">
-                                {String(at.tipo || "evento").replace(/_/g, " ")}
-                              </span>
-                              <time
-                                className="text-[10px] tabular-nums text-[#5c6570]"
-                                dateTime={at.criado_em as string}
-                              >
-                                {dataAbs}
-                              </time>
-                            </div>
-                            <p className="mt-1.5 text-sm leading-relaxed text-gray-200">
-                              {at.descricao as string}
-                            </p>
-                            <p className="mt-2 text-[11px]" style={{ color: "#5c6570" }}>
-                              <span className="text-[#7d8a99]">{(at.feito_por as string) || "—"}</span>
-                              {" · "}
-                              {tempoRelativo(at.criado_em as string)}
-                            </p>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
+              <p className="text-[9px] font-extrabold uppercase tracking-wide text-[#6b8a76]">{tile.label}</p>
+              <p className="mt-1 text-xl font-extrabold leading-none" style={{ color: tile.color }}>
+                {tile.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <CrmStickyTabs
+            variant="light"
+            activeId={aba}
+            onChange={(tabId) => setAba(tabId as typeof aba)}
+            equalColumns
+            tabs={[
+              { id: "timeline", label: "Timeline", icon: ClipboardList },
+              { id: "observacoes", label: `Observações (${notas.length})`, icon: StickyNote },
+              { id: "memorias", label: `Memórias IA (${chipsMemoria.length})`, icon: Brain },
+              { id: "propostas", label: "Propostas", icon: FileText },
+              { id: "dados", label: "Dados", icon: IdCard },
+            ]}
+            style={{ position: "relative", top: 0, zIndex: 10 }}
+          />
+
+          {aba === "timeline" && (
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+              <div className="mx-auto max-w-3xl">
+                <LeadTimelineTab
+                  leadId={id}
+                  leadNome={lead.nome as string}
+                  metadata={lead.metadata}
+                  theme="light"
+                />
+              </div>
+            </div>
+          )}
+
+          {aba === "observacoes" && (
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+              <div className="mx-auto max-w-2xl">
+                <LeadObservacoesTab
+                  variant="waje"
+                  notas={notas}
+                  novaNota={novaNota}
+                  onNovaNotaChange={setNovaNota}
+                  onAdicionar={adicionarNota}
+                />
+              </div>
             </div>
           )}
 
           {aba === "memorias" && (
-            <div
-              className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6"
-              style={{ backgroundColor: BG_DEEP }}
-            >
-              <div
-                className="mb-4 max-w-2xl rounded-lg border px-3 py-2.5 text-xs leading-relaxed"
-                style={{
-                  borderColor: BORDER_SUBTLE,
-                  backgroundColor: "rgba(10, 16, 24, 0.9)",
-                  color: "#5d7a67",
-                }}
-              >
-                <p className="font-medium text-gray-300">Memórias e schema</p>
-                <p className="mt-1.5">
-                  O CRM lê <code className="rounded bg-black/40 px-1 py-0.5 text-[10px]">hub_memorias_lead</code> com{" "}
-                  <code className="rounded bg-black/40 px-1 py-0.5 text-[10px]">lead_id</code> igual ao deste lead em{" "}
-                  <code className="rounded bg-black/40 px-1 py-0.5 text-[10px]">hub_leads_crm</code>, ou ao{" "}
-                  <code className="rounded bg-black/40 px-1 py-0.5 text-[10px]">hub_leads</code> mais recente da mesma{" "}
-                  <code className="rounded bg-black/40 px-1 py-0.5 text-[10px]">pessoa_id</code> quando a primeira
-                  consulta vem vazia. Se a tabela no Supabase tiver FK só para um dos modelos ou colunas só em JSON
-                  (sem <code className="text-[10px]">chave</code>/<code className="text-[10px]">valor</code>), os
-                  inserts antigos podem falhar ou esta lista fica vazia até alinhar migração e RLS.
-                </p>
-              </div>
-
-              {memoriasErro && (
-                <div
-                  className="mb-4 max-w-2xl rounded-lg border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-100"
-                >
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+              {memoriasErro ? (
+                <div className="mx-auto mb-4 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   Erro ao ler memórias: {memoriasErro}
                 </div>
-              )}
+              ) : null}
 
               {chipsMemoria.length === 0 && !memoriasErro ? (
-                <p className="pt-4 text-center text-xs" style={{ color: "#5c6570" }}>
-                  Nenhum conteúdo de memória para exibir (0 linhas ou formato não mapeado).
+                <p className="pt-4 text-center text-xs text-[#6b8a76]">
+                  Nenhum conteúdo de memória para exibir.
                 </p>
               ) : (
                 <div className="mx-auto flex max-w-2xl flex-col gap-2">
                   {chipsMemoria.map((c) => (
-                    <div
-                      key={c.key}
-                      className="rounded-lg border px-3 py-2.5"
-                      style={{
-                        borderColor: BORDER_SUBTLE,
-                        backgroundColor: "rgba(10, 16, 24, 0.88)",
-                      }}
-                    >
+                    <div key={c.key} className="rounded-xl border px-3 py-2.5" style={{ ...CARD_SHELL, padding: "12px 14px" }}>
                       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#c9a24a]">
+                        <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: CRM_ACCENT }}>
                           {c.titulo}
                         </span>
-                        <span className="text-[10px] text-[#5c6570]">{c.rodape}</span>
+                        <span className="text-[10px] text-[#6b8a76]">{c.rodape}</span>
                       </div>
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{c.corpo}</p>
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#0b2210]">{c.corpo}</p>
                     </div>
                   ))}
                 </div>
@@ -725,7 +707,7 @@ export default function LeadFichaPage() {
           )}
 
           {aba === "propostas" && (
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6" style={{ backgroundColor: BG_DEEP }}>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
               <div className="mx-auto max-w-lg">
                 <LeadPropostasPanel leadId={id} />
               </div>
@@ -733,166 +715,108 @@ export default function LeadFichaPage() {
           )}
 
           {aba === "dados" && (
-            <div
-              className="flex min-h-0 flex-1 flex-col overflow-hidden"
-              style={{ backgroundColor: BG_DEEP }}
-            >
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
-                <article
-                  className="mx-auto max-w-5xl rounded-2xl border p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] md:p-6"
-                  style={{
-                    borderColor: BORDER_SUBTLE,
-                    background:
-                      "linear-gradient(165deg, rgba(18, 26, 38, 0.95) 0%, rgba(8, 12, 18, 0.98) 100%)",
-                  }}
-                >
-                  <div
-                    className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-dashed pb-4"
-                    style={{ borderColor: BORDER_SUBTLE }}
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
+              <article className="mx-auto max-w-4xl rounded-2xl border p-4 md:p-6" style={CARD_SHELL}>
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-dashed border-[#dcebd8] pb-4">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-sm font-bold text-[#0b2210]" title={`ID técnico: ${id}`}>
+                      Registo CRM
+                    </h2>
+                    <p className="mt-1 text-[11px] leading-relaxed text-[#5d7a67]">
+                      {pessoaHub?.codigo ? (
+                        <>
+                          Participante <span className="font-mono font-bold text-[#1a5c32]">{pessoaHub.codigo}</span>
+                          {pessoaHub.nome ? ` · ${pessoaHub.nome}` : ""}
+                        </>
+                      ) : (
+                        "Sem código PES neste lead"
+                      )}
+                    </p>
+                  </div>
+                  <span
+                    className="shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide"
+                    style={{
+                      backgroundColor: `${corEstagio}20`,
+                      color: corEstagio,
+                      border: `1px solid ${corEstagio}44`,
+                    }}
                   >
-                    <div className="min-w-0 flex-1">
-                      <h2 className="text-sm font-semibold text-white" title={`ID técnico (copiar): ${id}`}>
-                        Registo CRM
-                      </h2>
-                      <p className="mt-1 text-[11px] leading-relaxed text-[#5d7a67]">
-                        {pessoaHub ? (
-                          <>
-                            <span className="text-[#6b7280]">Participante</span>{" "}
-                            {pessoaHub.codigo ? (
-                              <span className="font-mono font-semibold text-[#c9a24a]">{pessoaHub.codigo}</span>
-                            ) : (
-                              <span className="text-[#5d7a67]">(sem código PES)</span>
-                            )}
-                            {pessoaHub.nome ? (
-                              <>
-                                {" · "}
-                                <span className="text-gray-300">{pessoaHub.nome}</span>
-                              </>
-                            ) : null}
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-[#6b7280]">Sem código PES neste lead</span>
-                            {" · "}
-                            <span>entrada manual ou associe em hub_pessoas</span>
-                          </>
-                        )}
-                      </p>
-                      <p className="mt-2 text-xs leading-relaxed text-[#5d7a67]">
-                        <span className="text-gray-300">{(lead.telefone as string) || "—"}</span>
-                        {" · "}
-                        <span>{(lead.origem as string) || "—"}</span>
-                        {" · "}
-                        <span>
-                          score{" "}
-                          {`${Number(lead.score ?? 0)}/100`}
-                        </span>
-                        {" · "}
-                        <span>
-                          {(lead.agente_responsavel as string) || "—"} /{" "}
-                          {(lead.humano_responsavel as string) || "IA"}
-                        </span>
-                      </p>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
-                      style={{
-                        backgroundColor: `${corEstagio}20`,
-                        color: corEstagio,
-                        border: `1px solid ${corEstagio}44`,
-                      }}
-                    >
-                      {estagio}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-x-4 lg:gap-y-3">
-                    {camposDados.map((f) => (
-                      <div
-                        key={f.label}
-                        className="rounded-lg border px-3 py-2.5 transition-colors hover:bg-white/[0.02]"
-                        style={{
-                          borderColor: BORDER_SUBTLE,
-                          backgroundColor: CARD_INNER,
-                        }}
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6b7280]">
-                          {f.label}
-                        </p>
-                        <p className="mt-1 break-words text-sm font-medium leading-snug text-gray-100">
-                          {f.value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              </div>
-
-              <footer
-                className="flex-shrink-0 border-t px-4 py-3 md:px-6"
-                style={{ borderColor: BORDER_SUBTLE, backgroundColor: BG_PANEL }}
-              >
-                <div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7280] sm:mr-auto sm:self-center">
-                    Ações
-                  </p>
-                  <div
-                    className="flex w-full overflow-hidden rounded-lg border sm:w-auto sm:min-w-0"
-                    style={{ borderColor: BORDER_SUBTLE }}
-                    role="group"
-                    aria-label="Ações do lead"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/crm/atendimento?lead=${id}`)}
-                      className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 border-r px-3 text-xs font-semibold text-white transition-opacity hover:opacity-95 sm:flex-initial sm:px-4"
-                      style={{
-                        borderColor: BORDER_SUBTLE,
-                        background: "linear-gradient(180deg, #c45c26 0%, #9a471d 100%)",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1)",
-                      }}
-                    >
-                      <MessageSquare className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                      <span className="truncate">Central de atendimento</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void criarNegocio()}
-                      className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 border-r px-2 text-xs font-medium text-gray-200 transition-colors hover:bg-white/[0.06] sm:flex-initial sm:px-3"
-                      style={{
-                        borderColor: BORDER_SUBTLE,
-                        backgroundColor: "rgba(5, 8, 14, 0.65)",
-                      }}
-                    >
-                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" strokeWidth={2} />
-                      Negócio
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moverEstagio("perdido")}
-                      className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 border-r px-2 text-xs font-medium text-gray-200 transition-colors hover:bg-white/[0.06] sm:flex-initial sm:px-3"
-                      style={{
-                        borderColor: BORDER_SUBTLE,
-                        backgroundColor: "rgba(5, 8, 14, 0.65)",
-                      }}
-                    >
-                      <X className="h-3.5 w-3.5 shrink-0 text-red-400" strokeWidth={2} />
-                      Perdido
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => router.back()}
-                      className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 px-2 text-xs font-medium text-gray-400 transition-colors hover:bg-white/[0.05] hover:text-gray-200 sm:flex-initial sm:px-3"
-                      style={{ backgroundColor: "rgba(5, 8, 14, 0.65)" }}
-                    >
-                      <ArrowLeft className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                      Voltar
-                    </button>
-                  </div>
+                    {estagio}
+                  </span>
                 </div>
-              </footer>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {camposDados.map((f) => (
+                    <div
+                      key={f.label}
+                      className="rounded-lg border border-[#e8f0e6] bg-[#f8fcf6] px-3 py-2.5"
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-[#6b8a76]">{f.label}</p>
+                      <p className="mt-1 break-words text-sm font-semibold leading-snug text-[#0b2210]">{f.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </article>
             </div>
           )}
+        </div>
+
+        <aside
+          className="hidden w-[260px] flex-shrink-0 flex-col border-l bg-white lg:flex"
+          style={{ borderColor: "rgba(18, 56, 43, 0.12)" }}
+        >
+          <div className="border-b px-4 py-4" style={{ borderColor: "rgba(18, 56, 43, 0.12)" }}>
+            <p className="text-[10px] font-extrabold uppercase tracking-wide text-[#6b8a76]">Ações rápidas</p>
+          </div>
+          <div className="flex flex-col gap-2 p-4">
+            <button
+              type="button"
+              onClick={() => router.push(`/crm/atendimento?lead=${id}`)}
+              style={{ ...crmBtnPrimary(), width: "100%" }}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <MessageSquare size={14} />
+                Atendimento
+              </span>
+            </button>
+            <button type="button" onClick={() => void criarNegocio()} style={{ ...crmBtnSecondary(), width: "100%" }}>
+              <span className="inline-flex items-center justify-center gap-2">
+                <Briefcase size={14} />
+                Criar negócio
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void moverEstagio("perdido")}
+              className="w-full rounded-[10px] border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-bold text-red-700"
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <X size={14} />
+                Marcar perdido
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAba("dados")}
+              className="w-full rounded-[10px] border border-[#d4ecd0] bg-white px-3 py-2.5 text-xs font-bold text-[#1e4a24]"
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <Check size={14} />
+                Ver dados completos
+              </span>
+            </button>
+          </div>
+          <div className="mt-auto border-t p-4 text-[11px] leading-relaxed text-[#5d7a67]" style={{ borderColor: "rgba(18, 56, 43, 0.12)" }}>
+            <p>
+              <strong className="text-[#0b2210]">Responsável:</strong>{" "}
+              {(lead.humano_responsavel as string) || "IA"}
+            </p>
+            <p className="mt-2">
+              <strong className="text-[#0b2210]">Agente:</strong>{" "}
+              {(lead.agente_responsavel as string) || "—"}
+            </p>
+          </div>
+        </aside>
       </div>
     </div>
   );

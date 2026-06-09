@@ -11,16 +11,7 @@ import {
 
 import { CRM_LIST_LIMIT } from "@/lib/crm/crm-list-config";
 
-/** Listas CRM: cache longo — evita refetch ao navegar e ao filtrar com dados em cache. */
-const LIST_STALE_MS = 10 * 60 * 1000;
-const LIST_GC_MS = 45 * 60 * 1000;
-
-const listQueryDefaults = {
-  staleTime: LIST_STALE_MS,
-  gcTime: LIST_GC_MS,
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: false,
-} as const;
+import { listQueryDefaults } from "@/lib/crm/query-config";
 
 async function fetchJsonList<T>(url: string): Promise<T[]> {
   const res = await fetch(url, { headers: internalApiHeaders() });

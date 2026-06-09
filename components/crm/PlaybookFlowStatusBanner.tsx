@@ -8,13 +8,20 @@ type Props = {
   status: PlaybookFlowUiStatus;
   published?: boolean;
   compact?: boolean;
+  theme?: "light" | "dark";
 };
 
-export function PlaybookFlowStatusBanner({ status, published = false, compact = false }: Props) {
+export function PlaybookFlowStatusBanner({
+  status,
+  published = false,
+  compact = false,
+  theme = "light",
+}: Props) {
   if (status.kind === "empty") {
     return (
       <Banner
         compact={compact}
+        theme={theme}
         tone="neutral"
         icon={<FileText size={14} />}
         title="Sem playbook carregado"
@@ -27,6 +34,7 @@ export function PlaybookFlowStatusBanner({ status, published = false, compact = 
     return (
       <Banner
         compact={compact}
+        theme={theme}
         tone="success"
         icon={<CheckCircle2 size={14} />}
         title={published ? "Pronto para motor dinâmico (publicado)" : "Fluxo dinâmico válido no rascunho"}
@@ -43,6 +51,7 @@ export function PlaybookFlowStatusBanner({ status, published = false, compact = 
     return (
       <Banner
         compact={compact}
+        theme={theme}
         tone="warning"
         icon={<Info size={14} />}
         title="Só prompt narrativo (sem fluxo WA dinâmico)"
@@ -54,6 +63,7 @@ export function PlaybookFlowStatusBanner({ status, published = false, compact = 
   return (
     <Banner
       compact={compact}
+      theme={theme}
       tone="danger"
       icon={<AlertTriangle size={14} />}
       title="Bloco de fluxo encontrado, mas inválido"
@@ -75,25 +85,36 @@ export function PlaybookFlowStatusBanner({ status, published = false, compact = 
   );
 }
 
+const PALETTE_LIGHT = {
+  success: { bg: "#2386361a", border: "#23863655", fg: "#7ee787", title: "#aff5b4" },
+  warning: { bg: "#c9a24a14", border: "#c9a24a44", fg: "#d6b976", title: "#e3c77a" },
+  danger: { bg: "#f8514914", border: "#f8514944", fg: "#ffaba8", title: "#ffb4b0" },
+  neutral: { bg: "#eef7eb", border: "#dcebd8", fg: "#5d7a67", title: "#6b8a76" },
+} as const;
+
+const PALETTE_DARK = {
+  success: { bg: "rgba(63, 185, 80, 0.12)", border: "rgba(63, 185, 80, 0.38)", fg: "#7ee787", title: "#92ff00" },
+  warning: { bg: "rgba(251, 191, 36, 0.1)", border: "rgba(251, 191, 36, 0.35)", fg: "#e3c77a", title: "#fbbf24" },
+  danger: { bg: "rgba(248, 81, 73, 0.12)", border: "rgba(248, 81, 73, 0.4)", fg: "#ffaba8", title: "#ffb4b0" },
+  neutral: { bg: "rgba(6, 13, 8, 0.72)", border: "rgba(63, 152, 72, 0.35)", fg: "#7a9a7e", title: "#e8f5e9" },
+} as const;
+
 function Banner({
   tone,
   icon,
   title,
   body,
   compact,
+  theme = "light",
 }: {
   tone: "success" | "warning" | "danger" | "neutral";
   icon: ReactNode;
   title: string;
   body: ReactNode;
   compact?: boolean;
+  theme?: "light" | "dark";
 }) {
-  const palette = {
-    success: { bg: "#2386361a", border: "#23863655", fg: "#7ee787", title: "#aff5b4" },
-    warning: { bg: "#c9a24a14", border: "#c9a24a44", fg: "#d6b976", title: "#e3c77a" },
-    danger: { bg: "#f8514914", border: "#f8514944", fg: "#ffaba8", title: "#ffb4b0" },
-    neutral: { bg: "#eef7eb", border: "#dcebd8", fg: "#5d7a67", title: "#c9d1d9" },
-  }[tone];
+  const palette = (theme === "dark" ? PALETTE_DARK : PALETTE_LIGHT)[tone];
 
   return (
     <div

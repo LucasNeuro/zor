@@ -2,9 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { AREAS_ATUACAO } from "@/lib/crm/areas-atuacao";
 import { gerarCodigoSequencial, HUB_PREFIXO_CODIGO } from "@/lib/crm/codigos-rastreio";
 
-export const MERCADOS_PREFIXO = ["IMB", "ARQ", "RFM", "MRC", "ENG", "SRV", "PRO", "FOR"] as const;
+/** GRL = geral / multi-setor (default Waje). Demais siglas = verticais legadas Obra10. */
+export const MERCADOS_PREFIXO = ["GRL", "IMB", "ARQ", "RFM", "MRC", "ENG", "SRV", "PRO", "FOR"] as const;
 
 export type PrefixoMercado = (typeof MERCADOS_PREFIXO)[number];
+
+export const MERCADO_PREFIXO_PADRAO: PrefixoMercado = "GRL";
 
 const LABEL_POR_SIGLA = new Map(
   AREAS_ATUACAO.filter((a) => a.mercadoSigla).map((a) => [a.mercadoSigla!, a.label])
@@ -15,6 +18,15 @@ export const MERCADOS_PREFIXO_OPTIONS = MERCADOS_PREFIXO.map((sigla) => ({
   value: sigla,
   label: LABEL_POR_SIGLA.get(sigla) ?? sigla,
 }));
+
+/** Verticais legadas Obra10 (obra / arquitetura) — válidas no banco; ocultas na UI Waje de agentes. */
+const MERCADOS_LEGADO_OBRA10 = new Set<PrefixoMercado>(["ARQ", "RFM", "MRC", "ENG"]);
+
+/**
+ * @deprecated Waje não expõe verticais Obra10 na UI de agentes — plataforma multi-setor (GRL).
+ * Mantido vazio para evitar reintrodução acidental de chips IMB/SRV/PRO/FOR.
+ */
+export const MERCADOS_PREFIXO_OPTIONS_AGENTE: { value: PrefixoMercado; label: string }[] = [];
 
 export function labelMercadoPrefixo(sigla: string | null | undefined): string {
   if (!sigla) return "—";

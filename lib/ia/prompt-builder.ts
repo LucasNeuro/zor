@@ -5,6 +5,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import { buscarTrechosRag } from "@/lib/hub/rag";
+import {
+  buscarTrechosConhecimentoTenant,
+  formatarAnaliseNegocioParaPrompt,
+  formatarTrechosConhecimentoParaPrompt,
+  lerAnaliseNegocioTenant,
+} from "@/lib/hub/tenant-conhecimento-rag";
+import { defaultTenantId } from "@/lib/tenant-default";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
 import { blocoRegrasFluxoSequencialPlaybook } from "@/lib/ia/playbook-mari-runtime";
@@ -162,18 +169,32 @@ ${playbookPublicado.prompt}`);
 
     secoes.push(blocoRegrasFluxoSequencialPlaybook(playbookPublicado.flowHints));
 
+    const tomWizard = String(agente.personalidade ?? "").trim();
+    if (tomWizard) {
+      secoes.push(`═══ TOM E ESTILO (complementar ao playbook) ═══\n${tomWizard}`);
+    }
+
     // Fluxo determinístico no inbound pode enviar menus antes da IA; ver inbound-message-processor + menu-triagem-uazapi.
   } else {
-    const humorLabel = personalidade?.humor_label || "Profissional";
-    const personalidadeLabel = personalidade?.personalidade_label || "Direto";
-    const tomComunicacao = personalidade?.tom_comunicacao || "profissional";
+    const tomWizard = String(agente.personalidade ?? "").trim();
+    if (tomWizard) {
+      secoes.push(`═══ IDENTIDADE ═══
+${agente.system_prompt_base}
 
-    secoes.push(`═══ IDENTIDADE ═══
+═══ TOM E ESTILO ═══
+${tomWizard}`);
+    } else {
+      const humorLabel = personalidade?.humor_label || "Profissional";
+      const personalidadeLabel = personalidade?.personalidade_label || "Direto";
+      const tomComunicacao = personalidade?.tom_comunicacao || "profissional";
+
+      secoes.push(`═══ IDENTIDADE ═══
 ${agente.system_prompt_base}
 
 COMPORTAMENTO: Humor ${humorLabel} + Personalidade ${personalidadeLabel}.
 Tom de comunicação: ${tomComunicacao}.
 ${personalidade?.descricao_comportamento || ""}`);
+    }
   }
 
   const turnosAnteriores = params.sessaoReiniciada
@@ -265,15 +286,52 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
     secoes.push(`═══ EXECUÇÃO DESTE TURNO ═══\n${linhas.join("\n")}`);
   }
 
-  // CAMADA 2.5 — RAG do agente (documentos anexados no wizard)
-  if (params.mensagemAtual?.trim()) {
-    let trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, params.mensagemAtual, {
+  const tenantId =
+    (typeof agente.tenant_id === "string" && agente.tenant_id.trim()) || defaultTenantId();
+
+  // CAMADA 2.4 — Base de conhecimento da empresa (todos os agentes do tenant)
+  const analiseEmpresa = await lerAnaliseNegocioTenant(supabase, tenantId);
+  if (analiseEmpresa?.analise) {
+    const perfilEmpresa = formatarAnaliseNegocioParaPrompt(analiseEmpresa.analise);
+    if (perfilEmpresa) {
+      secoes.push(`═══ PERFIL DA EMPRESA (CONHECIMENTO) ═══
+Contexto consolidado da base de conhecimento do negócio (CRM → Conhecimento). Use para nicho, serviços, público e tom — não invente além disto.
+
+${perfilEmpresa}`);
+    }
+  }
+
+  const mensagemConsulta = params.mensagemAtual?.trim() ?? "";
+  if (mensagemConsulta) {
+    let trechosEmpresa = await buscarTrechosConhecimentoTenant(supabase, tenantId, mensagemConsulta, {
+      limit: 5,
+      threshold: 0.65,
+    });
+    if (trechosEmpresa.length === 0) {
+      trechosEmpresa = await buscarTrechosConhecimentoTenant(supabase, tenantId, mensagemConsulta, {
+        limit: 4,
+        threshold: 0.55,
+      });
+    }
+    if (trechosEmpresa.length > 0) {
+      secoes.push(`═══ DOCUMENTOS DA EMPRESA (CONHECIMENTO) ═══
+Fonte principal para fatos do negócio (produtos, preços, políticas, garantias, horários, POPs gerais).
+Se estes trechos conflitarem com playbook genérico ou documentos só deste agente, **priorize a empresa**.
+Se não houver evidência suficiente, diga que vai verificar — nunca invente.
+
+${formatarTrechosConhecimentoParaPrompt(trechosEmpresa)}`);
+    }
+  }
+
+  // CAMADA 2.5 — RAG específico do agente (documentos anexados no wizard)
+  if (mensagemConsulta) {
+    let trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, mensagemConsulta, {
       limit: 4,
       threshold: 0.68,
     });
     // Fallback: em perguntas curtas/ambíguas, reduz threshold para não perder contexto útil.
     if (trechosRag.length === 0) {
-      trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, params.mensagemAtual, {
+      trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, mensagemConsulta, {
         limit: 3,
         threshold: 0.56,
       });
@@ -285,8 +343,9 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
           return `[Trecho ${i + 1} — ${t.nomeArquivo} — relevância ${t.similarity.toFixed(2)}]\n${conteudo}`;
         })
         .join("\n\n");
-      secoes.push(`═══ DOCUMENTOS DO AGENTE (RAG) ═══
-Use estes trechos quando forem relevantes para a pergunta atual. Se um trecho de documento conflitar com texto genérico de molde, priorize o documento; se não houver evidência suficiente, diga que vai verificar.
+      secoes.push(`═══ DOCUMENTOS DESTE AGENTE (RAG ESPECÍFICO) ═══
+Material específico desta função (scripts, checklists, manuais exclusivos). Para fatos gerais do negócio, priorize «DOCUMENTOS DA EMPRESA» acima.
+Use estes trechos para procedimentos da função; se conflitar com a empresa em preço/política/serviço, priorize a empresa.
 
 ${ragTexto}`);
     }
@@ -349,6 +408,7 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
     "Nunca mencione que é IA a menos que seja perguntado diretamente",
     "Se não souber, diga que vai verificar — nunca invente",
     "Nunca encerre sem indicar o próximo passo",
+    "Para fatos do negócio (preço, garantia, horário, serviço), priorize DOCUMENTOS DA EMPRESA; use RAG deste agente só para procedimentos da função",
   ];
   if (usarPlaybookPublicado) {
     regrasUniversais.unshift("Considere o playbook publicado acima como a fonte principal das regras estáticas.");

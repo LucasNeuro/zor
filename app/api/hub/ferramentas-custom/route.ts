@@ -107,6 +107,15 @@ export async function POST(request: NextRequest) {
         { status: 503 }
       );
     }
+    if (msg.includes("builtin_impl") && msg.includes("schema cache")) {
+      return NextResponse.json(
+        {
+          error:
+            "Coluna builtin_impl em falta. Execute no Supabase: supabase/scripts/ensure_hub_ferramentas_custom.sql",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

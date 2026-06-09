@@ -84,21 +84,60 @@ export function extrairTextoOdt(buffer: Buffer): string {
   return xmlOfficeParaTexto(xml);
 }
 
-export function extrairTextoXlsx(buffer: Buffer): string {
+function parseSharedStringsXlsx(buffer: Buffer): string[] {
   const entries = lerEntradasZip(
     buffer,
     (p) => p === "xl/sharedStrings.xml" || p.endsWith("/xl/sharedStrings.xml")
   );
-  const parts: string[] = [];
+  const shared: string[] = [];
   for (const entry of entries) {
     const xml = entry.data.toString("utf8");
-    const tNodes = xml.match(/<t[^>]*>[\s\S]*?<\/t>/gi) ?? [];
-    for (const node of tNodes) {
-      const inner = node.replace(/<t[^>]*>/i, "").replace(/<\/t>/i, "");
-      parts.push(xmlOfficeParaTexto(inner));
+    const siNodes = xml.match(/<si[\s\S]*?<\/si>/gi) ?? [];
+    for (const si of siNodes) {
+      const tNodes = si.match(/<t[^>]*>[\s\S]*?<\/t>/gi) ?? [];
+      const text = tNodes
+        .map((node) => xmlOfficeParaTexto(node.replace(/<\/?t[^>]*>/gi, "")))
+        .join("");
+      shared.push(text);
     }
   }
-  return parts.filter(Boolean).join("\n");
+  return shared;
+}
+
+export function extrairTextoXlsx(buffer: Buffer): string {
+  const sharedStrings = parseSharedStringsXlsx(buffer);
+  const parts: string[] = [...sharedStrings.filter(Boolean)];
+
+  const sheetEntries = lerEntradasZip(
+    buffer,
+    (p) =>
+      /xl\/worksheets\/sheet\d+\.xml$/i.test(p) || /\/xl\/worksheets\/sheet\d+\.xml$/i.test(p)
+  );
+  sheetEntries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+  for (const entry of sheetEntries) {
+    const xml = entry.data.toString("utf8");
+
+    for (const node of xml.match(/<is>[\s\S]*?<\/is>/gi) ?? []) {
+      const t = node.match(/<t[^>]*>([\s\S]*?)<\/t>/i);
+      if (t?.[1]) parts.push(xmlOfficeParaTexto(t[1]));
+    }
+
+    for (const node of xml.match(/<c[^>]*\bt="s"[^>]*>[\s\S]*?<\/c>/gi) ?? []) {
+      const idxMatch = node.match(/<v>(\d+)<\/v>/);
+      if (!idxMatch) continue;
+      const text = sharedStrings[Number(idxMatch[1])];
+      if (text) parts.push(text);
+    }
+
+    for (const node of xml.match(/<c[^>]*>[\s\S]*?<\/c>/gi) ?? []) {
+      if (/\bt="s"/i.test(node) || /<is>/i.test(node)) continue;
+      const v = node.match(/<v>([^<]+)<\/v>/);
+      if (v?.[1]) parts.push(v[1].trim());
+    }
+  }
+
+  return [...new Set(parts.filter((p) => p.length > 0))].join("\n");
 }
 
 export function extrairTextoPptx(buffer: Buffer): string {

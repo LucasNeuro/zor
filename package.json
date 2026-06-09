@@ -14,6 +14,7 @@
     "checklist:hub": "node scripts/verify-hub-checklist.cjs",
     "smoke:webhook": "node scripts/smoke-whatsapp-webhook.cjs",
     "diagnose:webhook": "node scripts/diagnose-uazapi-webhook.cjs",
+    "sync:uazapi-webhook": "node scripts/sync-uazapi-global-webhook.cjs",
     "audit:ferramentas": "node scripts/auditoria-ferramentas-agentes.cjs",
     "sync:mistral-all": "node scripts/sync-mistral-all-agentes.cjs",
     "check:jobs": "node scripts/check-msg-jobs.cjs",
@@ -22,7 +23,9 @@
     "validar:whatsapp:fix": "node scripts/validar-agentes-whatsapp.cjs --fix",
     "provision:user": "node scripts/provision-app-user.mjs",
     "verify:regression": "node scripts/verify-regression-plan.mjs",
-    "open:dev": "node scripts/open-dev-url.cjs"
+    "open:dev": "node scripts/open-dev-url.cjs",
+    "verify:mistral": "node scripts/verify-mistral-key.cjs",
+    "ensure:buckets": "node scripts/ensure-agent-storage-buckets.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

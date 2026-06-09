@@ -6,6 +6,7 @@ import {
   prepararRowHubLeadInsert,
   validarLeadCadastro,
 } from "@/lib/crm/lead-cadastro";
+import { ensureTenantPipelines, listTenantPipelines } from "@/lib/crm/tenant-pipelines";
 import { defaultTenantId, isMissingPgColumn, tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
@@ -106,7 +107,8 @@ async function insertHubLead(
     if (
       !isMissingPgColumn(error, "tenant_id") &&
       !isMissingPgColumn(error, "pessoa_id") &&
-      !isMissingPgColumn(error, "codigo")
+      !isMissingPgColumn(error, "codigo") &&
+      !isMissingPgColumn(error, "pipeline_id")
     ) {
       return { data: null, error };
     }
@@ -198,6 +200,33 @@ export async function POST(request: NextRequest) {
       ? body.indicado_por.trim()
       : null;
 
+  const pipelineIdRaw =
+    typeof body.pipeline_id === "string" && body.pipeline_id.trim()
+      ? body.pipeline_id.trim()
+      : null;
+
+  let pipeline_id: string | null = null;
+  if (pipelineIdRaw) {
+    await ensureTenantPipelines(supabase, tenantId);
+    const pipelines = await listTenantPipelines(supabase, tenantId, "lead");
+    const pipe = pipelines.find((p) => p.id === pipelineIdRaw);
+    if (!pipe) {
+      return NextResponse.json({ error: "Pipeline inválido para este tenant." }, { status: 400 });
+    }
+    pipeline_id = pipe.id;
+    const estagios = [...pipe.estagios].sort((a, b) => a.ordem - b.ordem);
+    const primeiro = estagios[0]?.slug;
+    const estagioBody = typeof body.estagio === "string" ? body.estagio.trim() : "";
+    if (primeiro && (!estagioBody || estagioBody === "novo")) {
+      d.estagio = primeiro as typeof d.estagio;
+    }
+  }
+
+  const metadataExtras =
+    body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+      ? (body.metadata as Record<string, unknown>)
+      : {};
+
   let pessoa_id: string | null = null;
   if (d.telefone) {
     pessoa_id = await vincularPessoaPorTelefone(
@@ -231,11 +260,15 @@ export async function POST(request: NextRequest) {
     pessoa_id,
     criado_em: now,
     atualizado_em: now,
-    metadata: montarMetadataLeadMercados({
-      mercados: d.mercados,
-      origem_cadastro: "crm_manual",
-      indicado_por: indicadoPor,
-    }),
+    metadata: {
+      ...montarMetadataLeadMercados({
+        mercados: d.mercados,
+        origem_cadastro: "crm_manual",
+        indicado_por: indicadoPor,
+      }),
+      ...metadataExtras,
+    },
+    ...(pipeline_id ? { pipeline_id } : {}),
   };
 
   const row = await prepararRowHubLeadInsert(supabase, rowBase, { pessoa_codigo });

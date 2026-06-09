@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
+  humanoResponsavelFromActor,
+  resolveActorFromRequest,
+} from "@/lib/crm/resolve-crm-actor";
+import {
   modeloAltoValorForHubInsert,
   modeloCriticoForHubInsert,
   modeloPadraoForHubInsert,
@@ -60,6 +64,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const supabase = db();
+  const actor = await resolveActorFromRequest(supabase, request.headers);
+  const definidoPor = humanoResponsavelFromActor(actor);
   const body = await request.json() as Record<string, unknown>;
 
   // Validar cargo contra catálogo e forçar nivel/modelo do servidor
@@ -195,7 +201,7 @@ export async function POST(request: NextRequest) {
   if (kpisPadrao.length > 0) {
     try {
       await supabase.from("hub_kpis_metas").insert(
-        kpisPadrao.map(k => ({ ...k, agente_slug, frequencia: "tempo_real", definido_por: "wendel", ativo: true }))
+        kpisPadrao.map(k => ({ ...k, agente_slug, frequencia: "tempo_real", definido_por: definidoPor, ativo: true }))
       );
     } catch { /* non-critical */ }
   }

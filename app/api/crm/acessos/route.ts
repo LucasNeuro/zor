@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crmDb } from "@/lib/crm/supabase-server";
-import { crmApiConfigError, requireInternalApiKey, requireCrmOwner } from "@/lib/crm/crm-api-auth";
+import { crmApiConfigError, requireCrmAdmin, requireInternalApiKey } from "@/lib/crm/crm-api-auth";
 import { getAuditoriaActor, logAuditoriaSistema } from "@/lib/crm/auditoria-sistema";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+import { isCrmAdminRole } from "@/lib/crm-nav-groups";
 
 const ROLE_SELECT = "id, tenant_id, slug, nome, descricao, permissoes, ativo, criado_em, atualizado_em";
 const USER_SELECT = "*";
@@ -31,29 +32,46 @@ export async function GET(request: NextRequest) {
   const authId = request.headers.get("x-caller-auth-id")?.trim() ?? "";
 
   const db = crmDb();
-  const [rolesRes, usersRes, meRes] = await Promise.all([
+  const [rolesRes, usersRes, orphansRes, meRes] = await Promise.all([
     db.from("hub_acesso_cargos").select(ROLE_SELECT).eq("tenant_id", tenantId).order("nome", { ascending: true }),
     db.from("users").select(USER_SELECT).eq("tenant_id", tenantId).order("name", { ascending: true }),
+    db.from("users").select(USER_SELECT).is("tenant_id", null).order("name", { ascending: true }),
     db.from("users").select(USER_SELECT).eq("auth_id", authId).maybeSingle(),
   ]);
 
   if (rolesRes.error) return NextResponse.json({ error: rolesRes.error.message }, { status: 500 });
   if (usersRes.error) return NextResponse.json({ error: usersRes.error.message }, { status: 500 });
+  if (orphansRes.error) return NextResponse.json({ error: orphansRes.error.message }, { status: 500 });
   if (meRes.error) return NextResponse.json({ error: meRes.error.message }, { status: 500 });
+
+  const callerIsAdmin = meRes.data ? isCrmAdminRole(String(meRes.data.role ?? "")) : false;
+  const seen = new Set<string>();
+  const users = [...(usersRes.data ?? [])];
+  for (const row of users) seen.add(row.id);
+
+  if (callerIsAdmin) {
+    for (const orphan of orphansRes.data ?? []) {
+      if (seen.has(orphan.id)) continue;
+      seen.add(orphan.id);
+      users.push(orphan);
+    }
+  }
+
+  users.sort((a, b) => String(a.name ?? a.email ?? "").localeCompare(String(b.name ?? b.email ?? "")));
 
   return NextResponse.json({
     data: {
       tenantId,
       roles: rolesRes.data ?? [],
-      users: usersRes.data ?? [],
+      users,
       me: meRes.data ?? null,
     },
   });
 }
 
 export async function POST(request: NextRequest) {
-  const ownerErr = await requireCrmOwner(request);
-  if (ownerErr) return ownerErr;
+  const adminErr = await requireCrmAdmin(request);
+  if (adminErr) return adminErr;
 
   const tenantId = await resolveTenantIdFromCaller(request);
   const body = (await request.json().catch(() => ({}))) as {

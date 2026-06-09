@@ -1,9 +1,11 @@
 ﻿"use client";
 
-import { memo, type ReactNode } from "react";
+import { memo, useMemo, type CSSProperties, type ReactNode } from "react";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 import { CrmCheckbox } from "@/components/crm/CrmCheckbox";
+import { CrmResizableTh } from "@/components/crm/CrmResizableTh";
 import type { CadastroListaColumn } from "@/lib/crm/cadastro-list-columns";
+import { useResizableTableColumns } from "@/lib/crm/use-resizable-table-columns";
 
 const CHECK_COL_PX = 48;
 const DEFAULT_NAME_COL_PX = 220;
@@ -28,6 +30,8 @@ type Props<T extends { id: string }> = {
   emptyMessage?: string;
   stickyPrimary?: boolean;
   nameColWidth?: number;
+  /** Chave para persistir larguras das colunas no browser. */
+  tableId: string;
 };
 
 type RowProps<T extends { id: string }> = {
@@ -37,6 +41,8 @@ type RowProps<T extends { id: string }> = {
   primaryColumn: Props<T>["primaryColumn"];
   stickyPrimary: boolean;
   nameW: number;
+  colStyle: (id: string) => CSSProperties;
+  cellTruncateClass: string;
   hasActions: boolean;
   onRowClick?: (row: T) => void;
   onView?: (row: T) => void;
@@ -52,6 +58,8 @@ function CadastroListaTableRowInner<T extends { id: string }>({
   primaryColumn,
   stickyPrimary,
   nameW,
+  colStyle,
+  cellTruncateClass,
   hasActions,
   onRowClick,
   onView,
@@ -97,7 +105,11 @@ function CadastroListaTableRowInner<T extends { id: string }>({
         {primaryColumn.meta?.(row)}
       </td>
       {columns.map((c) => (
-        <td key={c.id} className="whitespace-nowrap px-4 py-3 align-middle text-sm">
+        <td
+          key={c.id}
+          className={`px-4 py-3 align-middle text-sm ${cellTruncateClass}`}
+          style={colStyle(c.id)}
+        >
           {c.render(row)}
         </td>
       ))}
@@ -166,8 +178,22 @@ function CadastroListaTableInner<T extends { id: string }>({
   emptyMessage,
   stickyPrimary = false,
   nameColWidth = DEFAULT_NAME_COL_PX,
+  tableId,
 }: Props<T>) {
-  const nameW = nameColWidth;
+  const columnDefs = useMemo(
+    () => [
+      { id: "nome", defaultWidth: nameColWidth, minWidth: 140 },
+      ...columns.map((c) => ({
+        id: c.id,
+        defaultWidth: c.minWidth ?? 120,
+        minWidth: Math.min(c.minWidth ?? 80, 80),
+      })),
+    ],
+    [columns, nameColWidth]
+  );
+
+  const { colStyle, cellTruncateClass, startResize } = useResizableTableColumns(tableId, columnDefs);
+  const nameW = Number(colStyle("nome").width) || nameColWidth;
   const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
   const someSelected = rows.some((r) => selectedIds.has(r.id));
   const hasActions = Boolean(onView || onEdit || onDelete);
@@ -181,15 +207,12 @@ function CadastroListaTableInner<T extends { id: string }>({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dcebd8] bg-[#f8fcf6]">
       <div className="min-h-0 flex-1 overflow-auto">
-        <table
-          className="w-full border-separate border-spacing-0 text-sm"
-          style={{ minWidth: "max-content" }}
-        >
+        <table className="w-full table-fixed border-separate border-spacing-0 text-sm">
           <colgroup>
             <col style={{ width: CHECK_COL_PX }} />
-            <col style={{ width: nameW }} />
+            <col style={colStyle("nome")} />
             {columns.map((c) => (
-              <col key={c.id} style={{ minWidth: c.minWidth ?? 100 }} />
+              <col key={c.id} style={colStyle(c.id)} />
             ))}
             {hasActions && <col style={{ width: ACTIONS_COL_PX }} />}
           </colgroup>
@@ -210,29 +233,31 @@ function CadastroListaTableInner<T extends { id: string }>({
                   aria-label="Selecionar todos"
                 />
               </th>
-              <th
-                className={`border-b border-[#dcebd8] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#5d7a67] ${
+              <CrmResizableTh
+                columnId="nome"
+                widthStyle={{
+                  ...colStyle("nome"),
+                  left: stickyPrimary ? CHECK_COL_PX : undefined,
+                }}
+                onResizeStart={startResize}
+                className={`border-b border-[#dcebd8] bg-[#ffffff] text-xs font-bold uppercase tracking-wide text-[#5d7a67] ${
                   stickyPrimary
-                    ? "sticky z-[30] bg-[#ffffff] shadow-[4px_0_10px_rgba(0,0,0,0.3)]"
+                    ? "sticky z-[30] shadow-[4px_0_10px_rgba(0,0,0,0.3)]"
                     : ""
                 }`}
-                style={{
-                  left: stickyPrimary ? CHECK_COL_PX : undefined,
-                  width: nameW,
-                  minWidth: nameW,
-                  maxWidth: nameW,
-                }}
               >
                 Nome
-              </th>
+              </CrmResizableTh>
               {columns.map((c) => (
-                <th
+                <CrmResizableTh
                   key={c.id}
-                  className="whitespace-nowrap border-b border-[#dcebd8] bg-[#ffffff] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#5d7a67]"
-                  style={{ minWidth: c.minWidth ?? 100 }}
+                  columnId={c.id}
+                  widthStyle={colStyle(c.id)}
+                  onResizeStart={startResize}
+                  className="border-b border-[#dcebd8] bg-[#ffffff] text-xs font-bold uppercase tracking-wide text-[#5d7a67]"
                 >
                   {c.label}
-                </th>
+                </CrmResizableTh>
               ))}
               {hasActions && (
                 <th
@@ -258,6 +283,8 @@ function CadastroListaTableInner<T extends { id: string }>({
                 primaryColumn={primaryColumn}
                 stickyPrimary={stickyPrimary}
                 nameW={nameW}
+                colStyle={colStyle}
+                cellTruncateClass={cellTruncateClass}
                 hasActions={hasActions}
                 onRowClick={onRowClick}
                 onView={onView}

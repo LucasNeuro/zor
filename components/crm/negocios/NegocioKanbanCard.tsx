@@ -1,20 +1,28 @@
 ﻿"use client";
 
-import type { CSSProperties, MouseEvent } from "react";
-import { Pencil } from "lucide-react";
-import {
-  AgenteSideoverEntityCard,
-  AgenteSideoverInfoGrid,
-} from "@/components/crm/AgenteSideoverCards";
-import { mercadoAccent, mercadoIcon } from "@/lib/crm/mercado-visual";
-import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
+import type { MouseEvent } from "react";
+import { Banknote, Calendar, Pencil } from "lucide-react";
+import { CrmKanbanEntityCard } from "@/components/crm/CrmKanbanEntityCard";
+import { CrmIconButtonGroup } from "@/components/crm/CrmIconButtonGroup";
+import { LeadNotesCollapsible } from "@/components/crm/leads/LeadNotesCollapsible";
+import type { NotaPreview } from "@/components/crm/CrmKanbanNotesSection";
+import { CRM_KANBAN } from "@/lib/crm/crm-kanban-card-styles";
+import { estagioIcon } from "@/lib/crm/pipeline-card-icons";
 
 const STATUS_COLOR: Record<string, string> = {
   aberto: "#3b82f6",
   em_negociacao: "#f59e0b",
   fechado_ganho: "#22c55e",
   fechado_perdido: "#ef4444",
-  cancelado: "#5d7a67",
+  cancelado: "#6b8a76",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  aberto: "Aberto",
+  em_negociacao: "Em negociação",
+  fechado_ganho: "Ganho",
+  fechado_perdido: "Perdido",
+  cancelado: "Cancelado",
 };
 
 export type NegocioKanbanCardData = {
@@ -24,6 +32,7 @@ export type NegocioKanbanCardData = {
   prefixo_mercado: string;
   status: string;
   etapa: string;
+  etapa_label?: string | null;
   valor_estimado: number | null;
   valor_fechado: number | null;
   data_previsao_fechamento: string | null;
@@ -52,6 +61,8 @@ function tempo(iso: string | null) {
 
 type Props = {
   negocio: NegocioKanbanCardData;
+  notas?: NotaPreview[];
+  stageColor?: string;
   dragging?: boolean;
   draggable?: boolean;
   onOpen: () => void;
@@ -60,26 +71,10 @@ type Props = {
   onDragEnd?: () => void;
 };
 
-const wrapStyle: CSSProperties = {
-  cursor: "pointer",
-  transition: "opacity 0.15s",
-  borderRadius: 14,
-};
-
-const actionBtn: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 32,
-  height: 32,
-  borderRadius: 8,
-  border: "1px solid rgba(56, 74, 102, 0.55)",
-  background: "rgba(15, 20, 28, 0.85)",
-  cursor: "pointer",
-};
-
 export function NegocioKanbanCard({
   negocio,
+  notas = [],
+  stageColor = "#6b7280",
   dragging,
   draggable,
   onOpen,
@@ -87,119 +82,65 @@ export function NegocioKanbanCard({
   onDragStart,
   onDragEnd,
 }: Props) {
-  const accent = mercadoAccent(negocio.prefixo_mercado);
-  const Icon = mercadoIcon(negocio.prefixo_mercado);
-  const statusColor = STATUS_COLOR[negocio.status] || "#5d7a67";
+  const statusColor = STATUS_COLOR[negocio.status] || CRM_KANBAN.muted;
+  const statusLabel = STATUS_LABEL[negocio.status] || negocio.status.replace(/_/g, " ");
+  const valor = negocio.valor_fechado ?? negocio.valor_estimado;
+  const etapaNome = negocio.etapa_label || negocio.etapa;
+  const StageIcon = estagioIcon(negocio.etapa);
+  const previsao = negocio.data_previsao_fechamento
+    ? new Date(negocio.data_previsao_fechamento).toLocaleDateString("pt-BR")
+    : "—";
 
   function stop(e: MouseEvent) {
     e.stopPropagation();
   }
 
   return (
-    <div
+    <CrmKanbanEntityCard
+      seed={negocio.id}
+      nome={negocio.titulo}
+      codigo={negocio.codigo}
+      subtitle={statusLabel}
+      statusLabel={statusLabel.toUpperCase()}
+      statusActive={negocio.status !== "fechado_perdido" && negocio.status !== "cancelado"}
+      metrics={[
+        { label: "VALOR", value: moeda(valor), color: "#22c55e", icon: Banknote },
+        { label: "PREVISÃO", value: previsao, icon: Calendar },
+      ]}
+      stageLabel={etapaNome}
+      stageColor={stageColor}
+      stageIcon={StageIcon}
+      dragging={dragging}
       draggable={draggable}
+      onClick={onOpen}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onClick={onOpen}
-      style={{
-        ...wrapStyle,
-        opacity: dragging ? 0.5 : 1,
-        borderLeft: `3px solid ${accent}`,
-      }}
-    >
-      <AgenteSideoverEntityCard
-        accent={accent}
-        Icon={Icon}
-        fallbackProgress={0.42}
-        avatarCaption={negocio.prefixo_mercado}
-        footer={
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-            }}
-          >
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: "4px 8px",
-                  borderRadius: 6,
-                  background: `${statusColor}18`,
-                  color: statusColor,
-                  border: `1px solid ${statusColor}44`,
-                }}
-              >
-                {negocio.status.replace(/_/g, " ")}
-              </span>
-              <span style={{ color: "#64748b", fontSize: 10, fontWeight: 600 }}>
-                {tempo(negocio.criado_em)}
-              </span>
-            </div>
-            {onEdit ? (
-              <button
-                type="button"
-                title="Editar"
-                onClick={(e) => {
-                  stop(e);
-                  onEdit();
-                }}
-                style={actionBtn}
-              >
-                <Pencil size={14} strokeWidth={2.2} color="#c9a24a" />
-              </button>
-            ) : null}
-          </div>
-        }
-      >
-        <div style={{ marginBottom: 6 }}>
-          <strong
-            style={{
-              color: "#0b2210",
-              fontSize: 13,
-              letterSpacing: "-0.02em",
-              display: "block",
-              lineHeight: 1.25,
-            }}
-          >
-            {negocio.titulo}
-          </strong>
-          <span style={{ color: "#5d7a67", fontSize: 11, fontWeight: 600 }}>
-            {labelMercadoPrefixo(negocio.prefixo_mercado)}
+      extra={notas.length > 0 ? <LeadNotesCollapsible notas={notas} /> : undefined}
+      footer={
+        <>
+          <span style={{ color: CRM_KANBAN.muted, fontSize: 10, fontWeight: 600, marginRight: 4 }}>
+            {tempo(negocio.criado_em)}
           </span>
-        </div>
-
-        <p
-          style={{
-            margin: "0 0 8px",
-            fontSize: 10,
-            fontFamily: "ui-monospace, monospace",
-            color: "rgba(201, 162, 74, 0.92)",
-          }}
-        >
-          {negocio.codigo}
-        </p>
-
-        <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800, color: "#22c55e" }}>
-          {moeda(negocio.valor_fechado ?? negocio.valor_estimado)}
-        </p>
-
-        <AgenteSideoverInfoGrid
-          rows={[
-            { label: "Etapa", value: negocio.etapa },
-            { label: "Mercado", value: negocio.prefixo_mercado },
-            {
-              label: "Previsão",
-              value: negocio.data_previsao_fechamento
-                ? new Date(negocio.data_previsao_fechamento).toLocaleDateString("pt-BR")
-                : "—",
-            },
-          ]}
-        />
-      </AgenteSideoverEntityCard>
-    </div>
+          {onEdit ? (
+            <CrmIconButtonGroup
+              aria-label="Ações do negócio"
+              items={[
+                {
+                  key: "edit",
+                  variant: "outline",
+                  icon: <Pencil size={15} strokeWidth={2.2} />,
+                  onClick: (e) => {
+                    stop(e);
+                    onEdit();
+                  },
+                  title: "Editar",
+                  "aria-label": "Editar negócio",
+                },
+              ]}
+            />
+          ) : null}
+        </>
+      }
+    />
   );
 }

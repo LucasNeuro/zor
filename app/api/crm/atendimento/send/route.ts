@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  humanoResponsavelFromActor,
+  resolveActorFromRequest,
+  slugFromActor,
+} from "@/lib/crm/resolve-crm-actor";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { whatsappConfigured, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
@@ -35,6 +40,10 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = db();
+    const actor = await resolveActorFromRequest(supabase, request.headers);
+    const operadorSlug = slugFromActor(actor);
+    const feitoPor = humanoResponsavelFromActor(actor);
+
     const { data: lead, error: leadErr } = await supabase
       .from("hub_leads_crm")
       .select("id, telefone, humano_responsavel")
@@ -103,7 +112,7 @@ export async function POST(request: NextRequest) {
 
     const { error: filaErr } = await supabase.from("hub_fila_mensagens").insert({
       lead_id: leadId,
-      agente_id: "wendel",
+      agente_id: humano || operadorSlug,
       canal: "whatsapp",
       direcao: "saida",
       conteudo: texto,
@@ -111,7 +120,11 @@ export async function POST(request: NextRequest) {
       tenant_id: tenantId,
       resposta_enviada: !sendSkipped,
       enviada_em: sendSkipped ? null : agora,
-      metadata: filaMetadata,
+      metadata: {
+        ...filaMetadata,
+        feito_por_tipo: "humano",
+        feito_por: feitoPor,
+      },
     });
 
     if (filaErr) {
@@ -129,9 +142,9 @@ export async function POST(request: NextRequest) {
       lead_id: leadId,
       tipo: "mensagem",
       descricao: texto.slice(0, 500),
-      feito_por: "wendel",
+      feito_por: feitoPor,
       feito_por_tipo: "humano",
-      metadata: { origem: "crm_atendimento" },
+      metadata: { origem: "crm_atendimento", actor_id: actor.id ?? null },
     });
 
     await supabase

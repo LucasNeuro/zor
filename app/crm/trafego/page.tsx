@@ -1,5 +1,9 @@
 ﻿"use client";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import {
+  CrmResizableDataTable,
+  type CrmResizableColumn,
+} from "@/components/crm/CrmResizableDataTable";
 import { usePathname } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
@@ -37,6 +41,68 @@ export default function TrafegoPage() {
   const { setSlot } = useCrmHeaderSlot();
   const narrow = useNarrowViewport();
   const isMobile = narrow !== false;
+  const colunasTrafego = useMemo((): CrmResizableColumn<Campanha>[] => {
+    return [
+      {
+        id: "campanha",
+        label: "Campanha",
+        defaultWidth: 240,
+        minWidth: 140,
+        render: (c) => (
+          <p className="text-xs font-bold" style={{ color: "#0b2210" }}>
+            {c.campaign_name}
+          </p>
+        ),
+      },
+      {
+        id: "gasto",
+        label: "Gasto",
+        defaultWidth: 100,
+        minWidth: 80,
+        render: (c) => (
+          <span className="text-xs font-bold" style={{ color: "#EF4444" }}>
+            {moeda(c.spend)}
+          </span>
+        ),
+      },
+      {
+        id: "cliques",
+        label: "Cliques",
+        defaultWidth: 90,
+        minWidth: 70,
+        render: (c) => <span className="text-xs" style={{ color: "#3B82F6" }}>{num(c.clicks)}</span>,
+      },
+      {
+        id: "impressoes",
+        label: "Impressões",
+        defaultWidth: 110,
+        minWidth: 80,
+        render: (c) => <span className="text-xs" style={{ color: "#5d7a67" }}>{num(c.impressions)}</span>,
+      },
+      {
+        id: "ctr",
+        label: "CTR",
+        defaultWidth: 80,
+        minWidth: 64,
+        render: (c) => <span className="text-xs" style={{ color: "#F97316" }}>{(c.ctr * 100).toFixed(2)}%</span>,
+      },
+      {
+        id: "cpc",
+        label: "CPC",
+        defaultWidth: 90,
+        minWidth: 70,
+        render: (c) => <span className="text-xs font-bold" style={{ color: "#c9a24a" }}>{moeda(c.cpc)}</span>,
+      },
+      {
+        id: "conversoes",
+        label: "Conversões",
+        defaultWidth: 100,
+        minWidth: 80,
+        render: (c) => <span className="text-xs font-bold" style={{ color: "#22C55E" }}>{c.conversions || 0}</span>,
+      },
+    ];
+  }, []);
+
   const [periodo, setPeriodo] = useState("7d");
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,31 +228,17 @@ export default function TrafegoPage() {
         )}
 
         {!loading && !erro && campanhas.length > 0 && !isMobile && (
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #dcebd8" }}>
-            <table className="w-full text-sm">
-              <thead style={{ background: "#ffffff" }}>
-                <tr>
-                  {["Campanha", "Gasto", "Cliques", "Impressões", "CTR", "CPC", "Conversões"].map(h => (
-                    <th key={h} className="text-left text-xs font-bold uppercase tracking-wide px-4 py-3" style={{ color: "#5d7a67" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {campanhas.map((c, i) => (
-                  <tr key={i} style={{ borderTop: "1px solid #eef7eb" }}>
-                    <td className="px-4 py-3">
-                      <p className="font-bold text-xs truncate max-w-xs" style={{ color: "#0b2210" }}>{c.campaign_name}</p>
-                    </td>
-                    <td className="px-4 py-3 font-bold text-xs" style={{ color: "#EF4444" }}>{moeda(c.spend)}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#3B82F6" }}>{num(c.clicks)}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#5d7a67" }}>{num(c.impressions)}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#F97316" }}>{(c.ctr * 100).toFixed(2)}%</td>
-                    <td className="px-4 py-3 text-xs font-bold" style={{ color: "#c9a24a" }}>{moeda(c.cpc)}</td>
-                    <td className="px-4 py-3 text-xs font-bold" style={{ color: "#22C55E" }}>{c.conversions || 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="overflow-hidden rounded-xl" style={{ border: "1px solid #dcebd8" }}>
+            <CrmResizableDataTable
+              tableId="crm-trafego-campanhas"
+              columns={colunasTrafego}
+              rows={campanhas}
+              rowKey={(c) => c.campaign_name}
+              maxHeight="none"
+              className="border-t-0 text-sm"
+              rowCellClassName="px-4 py-3 align-top"
+              getRowStyle={() => ({ borderTop: "1px solid #eef7eb" })}
+            />
           </div>
         )}
       </div>

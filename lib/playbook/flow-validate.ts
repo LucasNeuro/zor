@@ -1,10 +1,14 @@
 import {
-  OBRA10_PLAYBOOK_FLOW_SCHEMA_VERSION,
   type PlaybookFlowCompleteAction,
   type PlaybookFlowDefinition,
   type PlaybookFlowMenuOption,
   type PlaybookFlowStep,
 } from "./flow-definition-types";
+import {
+  PLAYBOOK_FLOW_SCHEMA_KEY,
+  PLAYBOOK_FLOW_SCHEMA_KEY_LEGACY,
+  PLAYBOOK_FLOW_SCHEMA_VERSION,
+} from "./flow-schema";
 
 export type ValidatePlaybookFlowResult =
   | { ok: true; definition: PlaybookFlowDefinition }
@@ -165,10 +169,11 @@ export function validatePlaybookFlowDefinition(
     return { ok: false, errors: ["Definição de fluxo inválida: payload não é objeto JSON."] };
   }
 
-  const schema = candidate.obra10_playbook_flow_schema;
-  if (schema !== OBRA10_PLAYBOOK_FLOW_SCHEMA_VERSION) {
+  const schema =
+    candidate[PLAYBOOK_FLOW_SCHEMA_KEY] ?? candidate[PLAYBOOK_FLOW_SCHEMA_KEY_LEGACY];
+  if (schema !== PLAYBOOK_FLOW_SCHEMA_VERSION) {
     errors.push(
-      `Schema inválido: esperado obra10_playbook_flow_schema=${OBRA10_PLAYBOOK_FLOW_SCHEMA_VERSION}.`
+      `Schema inválido: esperado ${PLAYBOOK_FLOW_SCHEMA_KEY}=${PLAYBOOK_FLOW_SCHEMA_VERSION}.`
     );
   }
 

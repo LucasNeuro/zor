@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { crmApiHeadersWithActor, getCrmSessionActor } from "@/lib/internal-api-headers-client";
 
 interface Lead {
   id: string;
@@ -54,7 +55,12 @@ function ConversaInline({ lead, onFechar }: { lead: Lead; onFechar: () => void }
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [assumido, setAssumido] = useState(!!lead.humano_responsavel);
+  const [sessionActor, setSessionActor] = useState<{ id?: string; email?: string; name?: string }>({});
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void getCrmSessionActor().then(setSessionActor);
+  }, []);
 
   useEffect(() => {
     carregarMsgs();
@@ -74,22 +80,35 @@ function ConversaInline({ lead, onFechar }: { lead: Lead; onFechar: () => void }
   }
 
   async function assumir() {
-    await supabase.from("hub_leads_crm").update({ humano_responsavel: "wendel", atualizado_em: new Date().toISOString() }).eq("id", lead.id);
-    await supabase.from("hub_atividades").insert({ lead_id: lead.id, tipo: "ia_acao", descricao: "Atendimento assumido por Wendel", feito_por: "wendel", feito_por_tipo: "humano" });
-    setAssumido(true);
+    const res = await fetch("/api/crm/atendimento/assumir", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(await crmApiHeadersWithActor(sessionActor)),
+      },
+      body: JSON.stringify({ leadId: lead.id }),
+    });
+    if (res.ok) setAssumido(true);
   }
 
   async function enviar() {
     if (!texto.trim() || !assumido) return;
     setEnviando(true);
-    await supabase.from("hub_fila_mensagens").insert({
-      lead_id: lead.id, agente_id: "wendel", canal: "whatsapp",
-      direcao: "saida", conteudo: texto, status: "enviado",
-      metadata: { feito_por: "humano" },
-    });
-    await supabase.from("hub_atividades").insert({ lead_id: lead.id, tipo: "mensagem", descricao: texto.slice(0, 80), feito_por: "wendel", feito_por_tipo: "humano" });
-    setTexto("");
-    setEnviando(false);
+    try {
+      await fetch("/api/crm/atendimento/send", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await crmApiHeadersWithActor(sessionActor)),
+        },
+        body: JSON.stringify({ leadId: lead.id, texto: texto.trim() }),
+      });
+      setTexto("");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   function tempo(d: string) {
@@ -160,6 +179,11 @@ export default function DecisionPanel() {
   const [conversaAberta, setConversaAberta] = useState<Lead | null>(null);
   const [processando, setProcessando] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionActor, setSessionActor] = useState<{ id?: string; email?: string; name?: string }>({});
+
+  useEffect(() => {
+    void getCrmSessionActor().then(setSessionActor);
+  }, []);
 
   const carregar = useCallback(async () => {
     const [l, a, al] = await Promise.all([
@@ -189,7 +213,8 @@ export default function DecisionPanel() {
 
   async function aprovar(id: string) {
     setProcessando(id);
-    await supabase.from("hub_aprovacoes").update({ status: "aprovado", aprovado_por: "wendel", aprovado_em: new Date().toISOString() }).eq("id", id);
+    const aprovadoPor = sessionActor.name ?? sessionActor.email?.split("@")[0] ?? "operador";
+    await supabase.from("hub_aprovacoes").update({ status: "aprovado", aprovado_por: aprovadoPor, aprovado_em: new Date().toISOString() }).eq("id", id);
     await carregar();
     setProcessando(null);
   }

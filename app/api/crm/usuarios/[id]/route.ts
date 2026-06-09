@@ -5,11 +5,10 @@ import {
   normalizeAppRole,
   requireCrmAdmin,
 } from "@/lib/crm/crm-api-auth";
+import { updateUserById } from "@/lib/crm/users-row";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const USER_SELECT = "id, auth_id, email, name, role, status, criado_em, atualizado_em";
 
 export async function PATCH(
   request: NextRequest,
@@ -33,10 +32,10 @@ export async function PATCH(
   const { data: current } = await supabase.from("users").select("id, role").eq("id", id).maybeSingle();
   if (!current) return NextResponse.json({ error: "Utilizador não encontrado" }, { status: 404 });
 
-  const updates: Record<string, unknown> = { atualizado_em: new Date().toISOString() };
+  const fields: Record<string, unknown> = {};
 
-  if (body.name != null) updates.name = String(body.name).trim();
-  if (body.status != null) updates.status = String(body.status).trim();
+  if (body.name != null) fields.name = String(body.name).trim();
+  if (body.status != null) fields.status = String(body.status).trim();
 
   if (body.role != null) {
     const role = normalizeAppRole(body.role);
@@ -59,20 +58,16 @@ export async function PATCH(
         );
       }
     }
-    updates.role = role;
+    fields.role = role;
   }
 
-  if (Object.keys(updates).length === 1) {
+  if (Object.keys(fields).length === 0) {
     return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("users")
-    .update(updates)
-    .eq("id", id)
-    .select(USER_SELECT)
-    .single();
+  const { data, error } = await updateUserById(supabase, id, fields);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "Utilizador não encontrado" }, { status: 404 });
   return NextResponse.json({ data });
 }

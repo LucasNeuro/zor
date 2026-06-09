@@ -7,15 +7,15 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#f8fcf6",
-  "theme_color": "#0b1f10",
+  "theme_color": "#ffffff",
   "orientation": "portrait-primary",
   "lang": "pt-BR",
   "dir": "ltr",
   "categories": ["business", "productivity"],
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/icon", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/favicons/favicon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/favicons/favicon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
     {
@@ -23,14 +23,14 @@
       "short_name": "Cadastro",
       "description": "Criar conta e iniciar onboarding",
       "url": "/cadastro",
-      "icons": [{ "src": "/icon", "sizes": "192x192" }]
+      "icons": [{ "src": "/favicons/favicon-192x192.png", "sizes": "192x192" }]
     },
     {
       "name": "Login",
       "short_name": "Login",
       "description": "Entrar na plataforma",
       "url": "/login",
-      "icons": [{ "src": "/icon", "sizes": "192x192" }]
+      "icons": [{ "src": "/favicons/favicon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

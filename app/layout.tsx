@@ -65,22 +65,26 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icon", sizes: "512x512", type: "image/png" },
-      { url: "/icon", sizes: "192x192", type: "image/png" },
+      { url: "/favicons/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicons/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicons/favicon-48x48.png", sizes: "48x48", type: "image/png" },
+      { url: "/favicons/favicon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/favicons/favicon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-icon", sizes: "180x180", type: "image/png" }],
+    shortcut: "/favicons/favicon-32x32.png",
+    apple: [{ url: "/favicons/favicon-180x180.png", sizes: "180x180", type: "image/png" }],
   },
   other: {
     "mobile-web-app-capable": "yes",
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
     "apple-mobile-web-app-title": "Waje",
-    "msapplication-TileColor": "#0b1f10",
+    "msapplication-TileColor": "#ffffff",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b1f10",
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

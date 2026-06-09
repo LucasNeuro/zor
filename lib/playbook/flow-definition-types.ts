@@ -1,18 +1,30 @@
-export const OBRA10_PLAYBOOK_FLOW_SCHEMA_VERSION = 1 as const;
+import { PLAYBOOK_FLOW_SCHEMA_VERSION } from "./flow-schema";
 
-export type Obra10PlaybookFlowSchemaVersion = typeof OBRA10_PLAYBOOK_FLOW_SCHEMA_VERSION;
+/** @deprecated use PLAYBOOK_FLOW_SCHEMA_VERSION */
+export const OBRA10_PLAYBOOK_FLOW_SCHEMA_VERSION = PLAYBOOK_FLOW_SCHEMA_VERSION;
 
-export type PlaybookFlowJourney = "triagem" | "arquitetura" | "imobiliario";
+export type Obra10PlaybookFlowSchemaVersion = typeof PLAYBOOK_FLOW_SCHEMA_VERSION;
+
+/** Jornadas genéricas (Waje) + legado construção (leitura). */
+export type PlaybookFlowJourney =
+  | "triagem"
+  | "vendas"
+  | "suporte"
+  | "onboarding"
+  | "arquitetura"
+  | "imobiliario";
 
 export type PlaybookFlowStepKind = "message" | "menu" | "input" | "complete";
 
 export type PlaybookFlowInputType = "text" | "email" | "phone" | "number";
 
 export type PlaybookFlowHandoffTarget =
-  | "arquitetura"
-  | "imobiliario"
+  | "time_humano"
+  | "vendas"
+  | "suporte"
   | "parcerias"
-  | "time_humano";
+  | "arquitetura"
+  | "imobiliario";
 
 export type PlaybookFlowPotential = "ALTO" | "MEDIO" | "BAIXO";
 
@@ -93,7 +105,10 @@ export type PlaybookFlowStep =
   | PlaybookFlowCompleteStep;
 
 export type PlaybookFlowDefinition = {
-  obra10_playbook_flow_schema: Obra10PlaybookFlowSchemaVersion;
+  /** Chave canónica Waje (escrita em playbooks novos). */
+  waje_playbook_flow_schema?: typeof PLAYBOOK_FLOW_SCHEMA_VERSION;
+  /** Chave legada Obra10 (leitura). */
+  obra10_playbook_flow_schema?: Obra10PlaybookFlowSchemaVersion;
   id?: string;
   version?: string;
   entry_step_id: string;

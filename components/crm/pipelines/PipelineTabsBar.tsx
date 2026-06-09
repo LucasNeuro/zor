@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
+import { labelPipelineTab } from "@/lib/crm/tenant-pipelines";
+import { crmListPillStyle } from "@/lib/crm/crm-list-pill-styles";
 
 export type PipelineTabItem = {
   id: string;
@@ -11,21 +12,14 @@ export type PipelineTabItem = {
   mercado_sigla?: string | null;
 };
 
-function labelAbreviadoPipeline(pipe: PipelineTabItem): string {
-  if (pipe.mercado_sigla) return labelMercadoPrefixo(pipe.mercado_sigla);
-  return pipe.nome
-    .replace(/^Leads\s+[—-]\s+/i, "")
-    .replace(/^Negócios\s+[—-]\s+/i, "")
-    .trim();
-}
-
 type Props = {
   pipelines: PipelineTabItem[];
   activePipelineId: string | null;
   onSelect: (pipelineId: string) => void;
+  pipelineCount?: (pipelineId: string) => number | undefined;
 };
 
-export function PipelineTabsBar({ pipelines, activePipelineId, onSelect }: Props) {
+export function PipelineTabsBar({ pipelines, activePipelineId, onSelect, pipelineCount }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -34,7 +28,7 @@ export function PipelineTabsBar({ pipelines, activePipelineId, onSelect }: Props
     () =>
       pipelines.map((pipe) => ({
         ...pipe,
-        shortLabel: labelAbreviadoPipeline(pipe) || "Pipeline",
+        shortLabel: labelPipelineTab(pipe) || "Pipeline",
       })),
     [pipelines]
   );
@@ -69,12 +63,12 @@ export function PipelineTabsBar({ pipelines, activePipelineId, onSelect }: Props
   if (tabs.length === 0) return null;
 
   return (
-    <div className="relative border-b border-[#dcebd8] bg-[#111827] px-3 py-2 sm:px-4">
+    <div className="relative border-b border-[#dcebd8] bg-[#f8fcf6] px-3 py-3 sm:px-4">
       {canScrollLeft ? (
         <button
           type="button"
           onClick={() => scroll("left")}
-          className="absolute left-3 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#dcebd8] bg-[#f8fcf6]/95 text-[#5d7a67] shadow-lg backdrop-blur sm:inline-flex"
+          className="absolute left-3 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#d4ecd0] bg-white text-[#5d7a67] shadow-lg sm:inline-flex"
           aria-label="Rolar pipelines para a esquerda"
         >
           <ChevronLeft size={16} />
@@ -84,7 +78,7 @@ export function PipelineTabsBar({ pipelines, activePipelineId, onSelect }: Props
         <button
           type="button"
           onClick={() => scroll("right")}
-          className="absolute right-3 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#dcebd8] bg-[#f8fcf6]/95 text-[#5d7a67] shadow-lg backdrop-blur sm:inline-flex"
+          className="absolute right-3 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#d4ecd0] bg-white text-[#5d7a67] shadow-lg sm:inline-flex"
           aria-label="Rolar pipelines para a direita"
         >
           <ChevronRight size={16} />
@@ -98,20 +92,17 @@ export function PipelineTabsBar({ pipelines, activePipelineId, onSelect }: Props
       >
         {tabs.map((pipe) => {
           const active = activePipelineId === pipe.id;
+          const count = pipelineCount?.(pipe.id);
           return (
             <button
               key={pipe.id}
               type="button"
               onClick={() => onSelect(pipe.id)}
-              className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors"
-              style={{
-                borderColor: active ? "#c9a24a" : "#dcebd8",
-                background: active ? "rgba(201,162,74,0.12)" : "#ffffff",
-                color: active ? "#0b2210" : "#5d7a67",
-              }}
+              style={crmListPillStyle(active)}
               title={pipe.nome}
             >
               {pipe.shortLabel}
+              {typeof count === "number" ? ` (${count})` : ""}
             </button>
           );
         })}

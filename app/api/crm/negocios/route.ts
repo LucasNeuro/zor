@@ -315,7 +315,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("hub_negocios")
     .select(
-      "id, codigo, titulo, prefixo_mercado, status, etapa, valor_estimado, valor_fechado, data_previsao_fechamento, pipeline_id, criado_em",
+      "id, codigo, titulo, prefixo_mercado, status, etapa, valor_estimado, valor_fechado, data_previsao_fechamento, pipeline_id, criado_em, atualizado_em",
       { count: "exact" }
     )
     .order("criado_em", { ascending: false })

@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { respostaIaJaEnviadaRecente } from "@/lib/whatsapp/anti-duplicata-resposta";
+import {
+  humanoSlugFromLead,
+  mapGroupMessageSender,
+  type LeadGroupRoutingRow,
+} from "@/lib/whatsapp/lead-group-routing";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
 type LoggerLike = {
@@ -98,6 +103,102 @@ async function enviarFallbackIA(params: {
   await enviarMensagemWhatsApp(params.telefone, mensagem, params.waSendOpts);
 }
 
+async function gravarMensagemInboundSemIa(params: {
+  supabase: SupabaseClient;
+  lead: LeadGroupRoutingRow & { id: string; telefone?: string | null };
+  mensagemFinal: string;
+  telefone: string;
+  messageId: string | null;
+  timestamp: string;
+  tipoMidia: string;
+  isGroupTransfer?: boolean;
+  groupJid?: string | null;
+  fromMe?: boolean;
+  senderTelefone?: string | null;
+  pushName?: string;
+}) {
+  const leadTel = String(params.lead.telefone ?? params.telefone ?? "");
+  const senderTel = params.senderTelefone?.trim() || params.telefone;
+  const humanoSlug = humanoSlugFromLead(params.lead);
+
+  let direcao: "entrada" | "saida" = "entrada";
+  let agenteId = "sistema";
+  let remetenteNumero: string | null = senderTel || null;
+  const metadata: Record<string, unknown> = {
+    skip_ia: true,
+    tipo_midia: params.tipoMidia,
+    message_id: params.messageId,
+  };
+
+  if (params.isGroupTransfer) {
+    metadata.grupo = true;
+    if (params.groupJid) metadata.group_jid = params.groupJid;
+
+    const role = mapGroupMessageSender({
+      fromMe: params.fromMe === true,
+      senderTelefone: senderTel,
+      leadTelefone: leadTel,
+    });
+
+    if (role === "cliente") {
+      direcao = "entrada";
+      agenteId = "cliente";
+      remetenteNumero = senderTel || null;
+      metadata.feito_por_tipo = "cliente";
+    } else {
+      direcao = "saida";
+      agenteId = humanoSlug;
+      remetenteNumero = senderTel || null;
+      metadata.feito_por = humanoSlug;
+      metadata.feito_por_tipo = "humano";
+      if (params.fromMe) metadata.from_me = true;
+    }
+  } else {
+    direcao = "entrada";
+    agenteId = humanoSlug;
+    metadata.feito_por_tipo = "cliente";
+    if (params.lead.humano_responsavel) {
+      metadata.humano_responsavel = params.lead.humano_responsavel;
+    }
+  }
+
+  const filaRow = {
+    lead_id: params.lead.id,
+    agente_id: agenteId,
+    canal: "whatsapp",
+    direcao,
+    conteudo: params.mensagemFinal,
+    status: "processado",
+    remetente_numero: remetenteNumero,
+    whatsapp_message_id: params.messageId,
+    tenant_id: defaultTenantId(),
+    enviada_em: params.timestamp,
+    metadata,
+  };
+
+  let filaIns = await params.supabase.from("hub_fila_mensagens").insert(filaRow);
+  if (filaIns.error && isMissingPgColumn(filaIns.error, "tenant_id")) {
+    const { tenant_id: _t, ...semTenant } = filaRow;
+    filaIns = await params.supabase.from("hub_fila_mensagens").insert(semTenant);
+  }
+  if (filaIns.error) {
+    console.error("[WHATSAPP][PROCESSOR] Erro ao gravar fila (sem IA):", filaIns.error.message);
+  }
+
+  try {
+    await params.supabase
+      .from("hub_leads_crm")
+      .update({
+        ultimo_contato: params.timestamp,
+        ultima_mensagem: params.mensagemFinal.slice(0, 500),
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq("id", params.lead.id);
+  } catch (e) {
+    console.error("[WHATSAPP][PROCESSOR] Erro ao atualizar lead (sem IA):", e);
+  }
+}
+
 export async function processarMensagemInboundWhatsapp(params: {
   supabase: SupabaseClient;
   trace: WhatsappTraceLike;
@@ -114,6 +215,10 @@ export async function processarMensagemInboundWhatsapp(params: {
   tipoMidia: string;
   menuChoiceId?: string | null;
   waSendOpts?: { instanceToken?: string | null };
+  isGroupTransfer?: boolean;
+  groupJid?: string | null;
+  fromMe?: boolean;
+  senderTelefone?: string | null;
 }) {
   const { supabase, trace } = params;
   const log = trace.log;
@@ -126,30 +231,59 @@ export async function processarMensagemInboundWhatsapp(params: {
   const agente = params.agente;
   const humanoResponsavelAtivo =
     typeof lead.humano_responsavel === "string" && lead.humano_responsavel.trim().length > 0;
+  const isGroupTransfer = params.isGroupTransfer === true;
+
+  if (humanoResponsavelAtivo || isGroupTransfer) {
+    const reason = isGroupTransfer ? "grupo_transfer_ativo" : "humano_responsavel_ativo";
+    log.info("wa.processor.ia_skipped", { reason });
+
+    await gravarMensagemInboundSemIa({
+      supabase,
+      lead: lead as LeadGroupRoutingRow & { id: string; telefone?: string | null },
+      mensagemFinal: params.mensagemFinal,
+      telefone: params.telefone,
+      messageId: params.messageId,
+      timestamp: params.timestamp,
+      tipoMidia: params.tipoMidia,
+      isGroupTransfer,
+      groupJid: params.groupJid,
+      fromMe: params.fromMe,
+      senderTelefone: params.senderTelefone,
+      pushName: params.pushName,
+    });
+
+    try {
+      const descricao = isGroupTransfer
+        ? `Mensagem no grupo de transferência — IA não acionada.`
+        : `Mensagem recebida — humano (${lead.humano_responsavel?.trim()}) a atender — IA não acionada.`;
+      await supabase.from("hub_atividades").insert({
+        lead_id: lead.id,
+        tipo: "mensagem",
+        descricao,
+        feito_por: "sistema",
+        feito_por_tipo: "ia",
+        metadata: {
+          telefone: params.telefone,
+          skip_ia: true,
+          ...(isGroupTransfer
+            ? { grupo: true, group_jid: params.groupJid ?? null, from_me: params.fromMe ?? false }
+            : { humano_responsavel: lead.humano_responsavel }),
+        },
+      });
+    } catch (e) {
+      console.error("[WHATSAPP][PROCESSOR] Erro ao registrar atividade (sem IA):", e);
+    }
+    return;
+  }
 
   let agenteResponsavelLead =
     typeof lead.agente_responsavel === "string" && lead.agente_responsavel.trim()
       ? lead.agente_responsavel.trim()
       : "sdr";
 
-  if (humanoResponsavelAtivo) {
-    log.info("wa.processor.ia_skipped", { reason: "humano_responsavel_ativo" });
-    try {
-      await supabase.from("hub_atividades").insert({
-        lead_id: lead.id,
-        tipo: "mensagem",
-        descricao: `Mensagem recebida - humano (${lead.humano_responsavel?.trim()}) a atender - IA não acionada.`,
-        feito_por: "sistema",
-        feito_por_tipo: "ia",
-        metadata: { telefone: params.telefone, humano_responsavel: lead.humano_responsavel, skip_ia: true },
-      });
-    } catch (e) {
-      console.error("[WHATSAPP][PROCESSOR] Erro ao registrar atividade (humano responsável):", e);
-    }
-    return;
-  }
-
-  if (!(IA_ATIVA && agente)) {
+  if (humanoResponsavelAtivo || isGroupTransfer) {
+    const reason = isGroupTransfer ? "grupo_transfer_ativo" : "humano_responsavel_ativo";
+    log.info("wa.processor.ia_skipped", { reason });
     const motivo = IA_ATIVA ? "agente_nao_encontrado" : "ia_api_key_ausente";
     log.warn("wa.processor.ia_skipped", { reason: motivo, ia_ativa: IA_ATIVA, tem_agente: Boolean(agente) });
     await enviarFallbackIA({
@@ -253,7 +387,9 @@ export async function processarMensagemInboundWhatsapp(params: {
     }
 
     const pedeMenuAntesIa = mensagemPedeMenuOuOpcoes(params.mensagemFinal);
-    if (pedeMenuAntesIa && !menuEnviadoDeterministico && !playbookRouting.temPlaybookPublicado) {
+    const playbookPriorizaFluxoPublicado =
+      playbookRouting.temPlaybookPublicado || playbookState.active || playbookState.complete;
+    if (pedeMenuAntesIa && !menuEnviadoDeterministico && !playbookPriorizaFluxoPublicado) {
       let tokenMenu = String(params.waSendOpts?.instanceToken || "").trim();
       if (!tokenMenu) {
         tokenMenu =
@@ -360,14 +496,12 @@ export async function processarMensagemInboundWhatsapp(params: {
     const pedeMenuOpcoes = mensagemPedeMenuOuOpcoes(params.mensagemFinal);
     const usaPlaybookMaria = agenteUsaPlaybookMaria(agenteSlug);
     const menuTriagemNuncaEnviado = !leadJaRecebeuMenuTriagem(leadMetaRow?.metadata);
+    // Playbook publicado ou fluxo ativo: não enviar menu hardcoded Mari/legado.
     const deveFallbackMenu =
-      !playbookRouting.temPlaybookPublicado &&
+      !playbookPriorizaFluxoPublicado &&
       (pedeMenuOpcoes ||
-        (!usaPlaybookMaria &&
-          (params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal))) ||
-        (usaPlaybookMaria &&
-          menuTriagemNuncaEnviado &&
-          (params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal))));
+        ((params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal)) &&
+          (!usaPlaybookMaria || menuTriagemNuncaEnviado)));
 
     if (!menuJaEnviado && deveFallbackMenu) {
       const { enviarMenuTriagemInicialUazapi, marcarMenuTriagemEnviado } = await import(

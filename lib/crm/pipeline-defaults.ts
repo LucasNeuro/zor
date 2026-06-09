@@ -1,16 +1,42 @@
-/** Estágios padrão Obra10 (leads e negócios). */
-export const ESTAGIOS_PADRAO = [
-  { slug: "novo", label: "Novos", cor: "#6B7280", ordem: 0, tipo_fecho: "aberto" as const },
-  { slug: "qualificando", label: "Qualificando", cor: "#3B82F6", ordem: 1, tipo_fecho: "aberto" as const },
-  { slug: "qualificado", label: "Qualificado", cor: "#06B6D4", ordem: 2, tipo_fecho: "aberto" as const },
-  { slug: "proposta", label: "Proposta", cor: "#EAB308", ordem: 3, tipo_fecho: "aberto" as const },
-  { slug: "negociando", label: "Negociando", cor: "#F97316", ordem: 4, tipo_fecho: "aberto" as const },
-  { slug: "fechamento", label: "Fechamento", cor: "#A855F7", ordem: 5, tipo_fecho: "aberto" as const },
-  { slug: "ganho", label: "✓ Ganhos", cor: "#22C55E", ordem: 6, tipo_fecho: "ganho" as const },
-  { slug: "perdido", label: "✗ Perdidos", cor: "#EF4444", ordem: 7, tipo_fecho: "perdido" as const },
-] as const;
+/** Estágios padrão Waje — funil genérico por tipo (leads e negócios). */
 
 export type PipelineTipo = "lead" | "negocio";
+
+export type EstagioPadrao = {
+  slug: string;
+  label: string;
+  cor: string;
+  ordem: number;
+  tipo_fecho: "aberto" | "ganho" | "perdido";
+};
+
+/** Mínimo 3 estágios abertos + ganho/perdido opcionais para leads. */
+export const ESTAGIOS_PADRAO_LEAD: EstagioPadrao[] = [
+  { slug: "novo", label: "Novo", cor: "#6B7280", ordem: 0, tipo_fecho: "aberto" },
+  { slug: "em_atendimento", label: "Em atendimento", cor: "#3B82F6", ordem: 1, tipo_fecho: "aberto" },
+  { slug: "qualificado", label: "Qualificado", cor: "#06B6D4", ordem: 2, tipo_fecho: "aberto" },
+  { slug: "ganho", label: "✓ Ganhos", cor: "#22C55E", ordem: 3, tipo_fecho: "ganho" },
+  { slug: "perdido", label: "✗ Perdidos", cor: "#EF4444", ordem: 4, tipo_fecho: "perdido" },
+];
+
+/** Funil comercial genérico para negócios. */
+export const ESTAGIOS_PADRAO_NEGOCIO: EstagioPadrao[] = [
+  { slug: "novo", label: "Novos", cor: "#6B7280", ordem: 0, tipo_fecho: "aberto" },
+  { slug: "qualificando", label: "Qualificando", cor: "#3B82F6", ordem: 1, tipo_fecho: "aberto" },
+  { slug: "qualificado", label: "Qualificado", cor: "#06B6D4", ordem: 2, tipo_fecho: "aberto" },
+  { slug: "proposta", label: "Proposta", cor: "#EAB308", ordem: 3, tipo_fecho: "aberto" },
+  { slug: "negociando", label: "Negociando", cor: "#F97316", ordem: 4, tipo_fecho: "aberto" },
+  { slug: "fechamento", label: "Fechamento", cor: "#A855F7", ordem: 5, tipo_fecho: "aberto" },
+  { slug: "ganho", label: "✓ Ganhos", cor: "#22C55E", ordem: 6, tipo_fecho: "ganho" },
+  { slug: "perdido", label: "✗ Perdidos", cor: "#EF4444", ordem: 7, tipo_fecho: "perdido" },
+];
+
+/** @deprecated Use `estagiosPadraoParaTipo`. Mantido para compatibilidade. */
+export const ESTAGIOS_PADRAO = ESTAGIOS_PADRAO_NEGOCIO;
+
+export function estagiosPadraoParaTipo(tipo: PipelineTipo): EstagioPadrao[] {
+  return tipo === "lead" ? ESTAGIOS_PADRAO_LEAD : ESTAGIOS_PADRAO_NEGOCIO;
+}
 
 export type PipelineEstagioRow = {
   id: string;
@@ -34,9 +60,18 @@ export type PipelineRow = {
   ordem: number;
 };
 
-/** Fallback quando tabelas hub_pipelines ainda não existem no ambiente. */
-export const ESTAGIOS_FALLBACK_UI = ESTAGIOS_PADRAO.map((e) => ({
+/** Fallback UI quando tabelas hub_pipelines ainda não existem no ambiente. */
+export const ESTAGIOS_FALLBACK_LEAD_UI = ESTAGIOS_PADRAO_LEAD.map((e) => ({
   id: e.slug,
   label: e.label,
   color: e.cor,
 }));
+
+export const ESTAGIOS_FALLBACK_NEGOCIO_UI = ESTAGIOS_PADRAO_NEGOCIO.map((e) => ({
+  id: e.slug,
+  label: e.label,
+  color: e.cor,
+}));
+
+/** @deprecated Use ESTAGIOS_FALLBACK_LEAD_UI ou ESTAGIOS_FALLBACK_NEGOCIO_UI. */
+export const ESTAGIOS_FALLBACK_UI = ESTAGIOS_FALLBACK_NEGOCIO_UI;

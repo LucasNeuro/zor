@@ -8,9 +8,10 @@
 #   NEXT_PUBLIC_APP_URL          — https://<seu-servico>.onrender.com (sem barra final)
 #   CRON_SECRET                   — Bearer token for /api/cron/dispatch-ciclos (see lib/cron-auth.ts)
 #   MISTRAL_API_KEY               — IA no webhook WhatsApp e briefing
-#   UAZAPI_BASE_URL               — ex. https://smartvenda.uazapi.com
+#   UAZAPI_BASE_URL               — ex. https://fitbot.uazapi.com (sem /api no fim)
 #   UAZAPI_ADMIN_TOKEN            — criar instância / sync webhook na ficha do agente
-#   WEBHOOK_SECRET                — mesmo valor no header da UAZAPI (x-webhook-secret ou Bearer)
+#   UAZAPI_INSTANCE_TOKEN         — fallback global se agente sem token próprio (grupos/envio)
+#   WEBHOOK_SECRET                — mesmo valor em ?wh= na URL do webhook UAZAPI
 #   DEFAULT_TENANT_ID             — 00000000-0000-4000-8000-000000000001
 # Supabase: aplicar migrações (incl. 20260605120000_ensure_hub_leads_crm_tenant.sql) antes do go-live.
 # WhatsApp: após deploy, abrir agente → QR/pareamento (sincroniza webhook para NEXT_PUBLIC_APP_URL/api/whatsapp/webhook).
@@ -49,6 +50,8 @@ services:
       - key: UAZAPI_BASE_URL
         sync: false
       - key: UAZAPI_ADMIN_TOKEN
+        sync: false
+      - key: UAZAPI_INSTANCE_TOKEN
         sync: false
       - key: WEBHOOK_SECRET
         sync: false

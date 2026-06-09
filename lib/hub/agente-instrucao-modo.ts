@@ -23,7 +23,7 @@ export function temReferenciaPlaybookPublicado(ident: AgenteInstrucaoIdent): boo
 }
 
 /** Valor gravado em hub_agente_identidade.cargo (NOT NULL no banco). */
-export const CARGO_LABEL_PLAYBOOK_ONLY = "Só playbook";
+export const CARGO_LABEL_PLAYBOOK_ONLY = "Playbook Waje";
 
 /** Playbook no bucket + sem cargo → só playbook (nada do catálogo no prompt/fluxo). */
 export function isPlaybookOnlyAgent(ident: AgenteInstrucaoIdent): boolean {
@@ -31,7 +31,7 @@ export function isPlaybookOnlyAgent(ident: AgenteInstrucaoIdent): boolean {
   if (modo === "playbook_only" || modo === "playbook-only") return true;
   if (String(ident.area ?? "").trim().toLowerCase() === "playbook") return true;
   const cargo = String(ident.cargo ?? "").trim();
-  if (cargo === CARGO_LABEL_PLAYBOOK_ONLY) return true;
+  if (cargo === CARGO_LABEL_PLAYBOOK_ONLY || cargo === "Só playbook") return true;
   return temReferenciaPlaybookPublicado(ident) && !cargoAgentePreenchido(ident.cargo);
 }
 
@@ -48,6 +48,6 @@ export function deveUsarCargoCatalogoNoPrompt(
   return true;
 }
 
-export const PROMPT_BASE_PLAYBOOK_ONLY = `Você é um agente de atendimento do HUB Obra 10+.
+export const PROMPT_BASE_PLAYBOOK_ONLY = `Você é um agente de atendimento da plataforma Waje.
 Suas instruções operacionais completas estão no playbook publicado em hub-agent-playbooks (Markdown no bucket).
 Siga esse playbook como fonte única de comportamento estático; o runtime acrescenta apenas contexto da sessão (lead, canal, memórias).`;

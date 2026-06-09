@@ -1,8 +1,11 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse, after } from "next/server";
 import { runPlaybookPipeline } from "@/lib/playbook/orchestrate";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
-import { validateAndNormalizeCicloConfiguracoes } from "@/lib/hub-ciclos-configuracoes";
+import {
+  provisionHubCicloPadrao,
+  type CicloExecucaoCliente,
+} from "@/lib/hub/provision-hub-ciclo-padrao";
 import {
   forceMistralModeloTripleForDb,
   isChkModeloValidoConstraintMessage,
@@ -22,13 +25,12 @@ import {
   type ModoOperacaoAgente,
 } from "@/lib/hub/agente-modo-operacao";
 import { serializarUsoFerramentasParaDb, syncHubAgenteParaMistral } from "@/lib/mistral/sync-hub-agent";
-import {
-  isHubAgenteFerramentasColumnsMissing,
-  omitHubAgenteFerramentasMigrationKeys,
-} from "@/lib/hub/hub-agente-ferramentas-columns";
+import { insertHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-compat";
 import { sanitizarAgenteHubParaCliente } from "@/lib/hub/sanitize-agente-hub-public";
 import { PROMPT_BASE_PLAYBOOK_ONLY, CARGO_LABEL_PLAYBOOK_ONLY } from "@/lib/hub/agente-instrucao-modo";
 import { slugifyCargoSlug } from "@/lib/hub/cargo-slug";
+import { MERCADO_PREFIXO_PADRAO } from "@/lib/crm/negocio-cadastro";
+import { gerarAvatarAgenteUrl } from "@/lib/crm/agente-avatar-gen";
 
 function parseBoolFerr(v: unknown, defaultVal: boolean): boolean {
   if (v === true || v === "true") return true;
@@ -37,83 +39,11 @@ function parseBoolFerr(v: unknown, defaultVal: boolean): boolean {
 }
 
 const CICLO_EXECUCAO_OPCOES = ["interacao", "tempo_real", "agenda"] as const;
-type CicloExecucaoCliente = (typeof CICLO_EXECUCAO_OPCOES)[number];
 
 function normCicloExecucao(v: unknown): CicloExecucaoCliente | null {
   const s = typeof v === "string" ? v.trim().toLowerCase() : "";
   if ((CICLO_EXECUCAO_OPCOES as readonly string[]).includes(s)) return s as CicloExecucaoCliente;
   return null;
-}
-
-async function provisionHubCicloPadrao(
-  supabase: SupabaseClient,
-  agenteSlug: string,
-  nomeAgente: string,
-  modo: CicloExecucaoCliente,
-  agendaIntervalMinutes: number
-): Promise<{ aviso?: string; erro?: string }> {
-  const rotulo = nomeAgente.trim().slice(0, 80) || agenteSlug;
-  let nomeLinha = "Operação do agente";
-  let tipo: string;
-  let intervalo: number | null = null;
-  let ativo = true;
-  const baseCfg: Record<string, unknown> = {};
-
-  if (modo === "interacao") {
-    nomeLinha = "Sob interação";
-    tipo = "gatilho";
-    ativo = true;
-    baseCfg.ciclo_origem_provisionamento = "wizard_agente_v1";
-  } else if (modo === "tempo_real") {
-    nomeLinha = "Automático contínuo";
-    tipo = "continuo";
-    ativo = true;
-    baseCfg.ciclo_origem_provisionamento = "wizard_agente_v1";
-  } else {
-    nomeLinha = "Cadência na agenda";
-    tipo = "programado";
-    intervalo = agendaIntervalMinutes;
-    ativo = false;
-    baseCfg.ciclo_origem_provisionamento = "wizard_agente_v1";
-    baseCfg.dispatch_pendente = true;
-    baseCfg.dica =
-      "Defina configuracoes.dispatch { api: diretor|gerente, ciclo: <chave do runner> } antes de ativar.";
-  }
-
-  const descricao =
-    modo === "interacao"
-      ? "Dispara com interação no canal (mensagem do utilizador / webhook)."
-      : modo === "tempo_real"
-        ? "Atrelado ao motor em tempo real (sem ciclo cron dedicado)."
-        : `Cadência definida ao criar o agente (≈ cada ${intervalo} min após dispatch e ativação).`;
-
-  const parsedCfg = validateAndNormalizeCicloConfiguracoes(baseCfg);
-  if (!parsedCfg.ok) {
-    return { erro: parsedCfg.error };
-  }
-
-  const row = {
-    agente_slug: agenteSlug,
-    nome: nomeLinha,
-    descricao: `${descricao} — Agente «${rotulo}»`,
-    tipo,
-    cron_expressao: null,
-    intervalo_minutos: intervalo,
-    ativo,
-    configuracoes: parsedCfg.value,
-  };
-
-  const { error } = await supabase.from("hub_ciclos_ia").insert(row as Record<string, unknown>);
-  if (error) return { erro: error.message };
-
-  const aviso =
-    modo === "agenda"
-      ? "Criámos uma linha em hub_ciclos_ia tipo programado em pausa: configure configuracoes.dispatch e ative antes de o dispatcher usar este ciclo para este agente."
-      : modo === "tempo_real"
-        ? "Ciclo contínuo registado só para operações no CRM; o cron /api/cron/dispatch-ciclos só trata tipo programado."
-        : undefined;
-
-  return { aviso };
 }
 
 function db() {
@@ -215,7 +145,7 @@ function montarPromptBaseDoCargo(params: {
 
   if (!promptTemplate && !descricao) {
     secoes.push(
-      "Siga as regras do Obra10+, responda com clareza, sem inventar informações, e escale decisões críticas para humano."
+      "Siga as regras da operação Waje, responda com clareza, sem inventar informações, e escale decisões críticas para humano."
     );
   }
 
@@ -421,7 +351,7 @@ export async function POST(request: NextRequest) {
       nao_pode_fazer: [],
       sempre_dizer: [],
       nunca_dizer: [],
-      prefixo_mercado: (prefixo_mercado && String(prefixo_mercado).trim()) || "GRL",
+      prefixo_mercado: (prefixo_mercado && String(prefixo_mercado).trim()) || MERCADO_PREFIXO_PADRAO,
       bio:
         (bio && String(bio).trim()) ||
         "Agente operado pelo playbook publicado em hub-agent-playbooks (sem catálogo de cargo).",
@@ -488,7 +418,7 @@ export async function POST(request: NextRequest) {
     nao_pode_fazer: naoPode,
     sempre_dizer: [],
     nunca_dizer: [],
-    prefixo_mercado: (prefixo_mercado && String(prefixo_mercado).trim()) || "GRL",
+    prefixo_mercado: (prefixo_mercado && String(prefixo_mercado).trim()) || MERCADO_PREFIXO_PADRAO,
     bio:
       (bio && String(bio).trim()) ||
       montarBioDoCargo({
@@ -540,81 +470,27 @@ export async function POST(request: NextRequest) {
   }
   if (avatarTrim.length > 0) {
     row.avatar_url = avatarTrim;
+  } else if (typeof row.nome === "string" && row.nome.trim() && typeof row.agente_slug === "string") {
+    row.avatar_url = gerarAvatarAgenteUrl(row.nome.trim(), row.agente_slug);
   }
 
   row.motor_ferramentas_habilitado = motorFerramentasHub;
   row.mistral_agent_sync_habilitado = mistralAgentSyncHabilitado;
   row.uso_ferramentas_ia = serializarUsoFerramentasParaDb(body.uso_ferramentas_ia);
 
-  let rowInsert: Record<string, unknown> = row;
-  let { data, error } = await supabase
-    .from("hub_agente_identidade")
-    .insert(rowInsert)
-    .select()
-    .single();
-
-  // Compatibilidade com bases antigas que ainda não têm tenant_id.
-  if (error && isTenantColumnMissing(error.message)) {
-    const { tenant_id, ...rowWithoutTenant } = rowInsert;
-    rowInsert = rowWithoutTenant;
-    ({ data, error } = await supabase
-      .from("hub_agente_identidade")
-      .insert(rowInsert)
-      .select()
-      .single());
-  }
-
-  if (error && isHubAgenteFerramentasColumnsMissing(error.message)) {
-    console.warn(
-      "[hub/agentes] hub_agente_identidade sem colunas ferramentas/Mistral; aplicar 20260516120000_hub_agente_ferramentas_mistral. Retrying insert."
-    );
-    rowInsert = omitHubAgenteFerramentasMigrationKeys(rowInsert);
-    ({ data, error } = await supabase
-      .from("hub_agente_identidade")
-      .insert(rowInsert)
-      .select()
-      .single());
-  }
-
-  if (error && isChkModeloValidoConstraintMessage(error.message)) {
-    console.warn(
-      "[hub/agentes] chk_modelo_valido no insert — a forçar mistral nos três campos e a repetir (catálogo com formato estranho ou CHECK desalinhado)."
-    );
-    rowInsert = { ...rowInsert, ...forceMistralModeloTripleForDb() };
-    ({ data, error } = await supabase
-      .from("hub_agente_identidade")
-      .insert(rowInsert)
-      .select()
-      .single());
-
-    if (error && isTenantColumnMissing(error.message)) {
-      const { tenant_id, ...rowWithoutTenant } = rowInsert;
-      rowInsert = rowWithoutTenant;
-      ({ data, error } = await supabase
-        .from("hub_agente_identidade")
-        .insert(rowInsert)
-        .select()
-        .single());
-    }
-    if (error && isHubAgenteFerramentasColumnsMissing(error.message)) {
-      rowInsert = omitHubAgenteFerramentasMigrationKeys(rowInsert);
-      ({ data, error } = await supabase
-        .from("hub_agente_identidade")
-        .insert(rowInsert)
-        .select()
-        .single());
-    }
-  }
-
-  if (error && isInstrucaoModoColumnMissing(error.message)) {
-    const { instrucao_modo, ...rowSemInstrucao } = rowInsert;
-    rowInsert = rowSemInstrucao;
-    ({ data, error } = await supabase
-      .from("hub_agente_identidade")
-      .insert(rowInsert)
-      .select()
-      .single());
-  }
+  let modeloForcado = false;
+  const { data, error } = await insertHubAgenteIdentidadeCompat(supabase, row, {
+    onBeforeRetry: (rowInsert, reason) => {
+      if (!modeloForcado && isChkModeloValidoConstraintMessage(reason)) {
+        modeloForcado = true;
+        console.warn(
+          "[hub/agentes] chk_modelo_valido no insert — a forçar mistral nos três campos e a repetir."
+        );
+        return { ...rowInsert, ...forceMistralModeloTripleForDb() };
+      }
+      return rowInsert;
+    },
+  });
 
   if (error && isCargoCatalogoValidationError(error.message) && playbookOnly) {
     return NextResponse.json(
@@ -630,7 +506,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const created = data as { agente_slug: string };
+  const created = data as { agente_slug: string; tenant_id?: string | null };
+  const tenantCiclo =
+    (typeof created.tenant_id === "string" && created.tenant_id.trim()) ||
+    tenantId ||
+    defaultTenantId();
 
   const rawConhecimento = body.conhecimento_secoes;
   if (rawConhecimento && typeof rawConhecimento === "object" && !Array.isArray(rawConhecimento)) {
@@ -688,13 +568,19 @@ export async function POST(request: NextRequest) {
           .filter((id) => id.length > 0)
       : [];
 
-  if (ciclo_modoCliente != null && body.omit_hub_ciclo_padrao !== true) {
+  const modoProvisionar: CicloExecucaoCliente | null =
+    ciclo_modoCliente ??
+    cicloExecPadrao ??
+    (modoOperacaoBody != null ? cicloExecucaoPadraoFromModoOperacao(modoOperacaoBody) : null);
+
+  if (modoProvisionar != null && body.omit_hub_ciclo_padrao !== true) {
     const out = await provisionHubCicloPadrao(
       supabase,
       created.agente_slug,
       String(body.nome || "").trim() || created.agente_slug,
-      ciclo_modoCliente,
-      agendaMinutes
+      modoProvisionar,
+      agendaMinutes,
+      tenantCiclo
     );
     ciclo_aviso = out.aviso;
     ciclo_erro = out.erro;

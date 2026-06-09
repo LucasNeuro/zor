@@ -8,7 +8,9 @@ import {
   Cloud,
   Cpu,
   FileCode2,
+  Globe,
   ListOrdered,
+  Plug,
   PieChart,
   StickyNote,
   Search,
@@ -24,6 +26,63 @@ import {
   HUB_FERRAMENTA_SECAO_LABEL,
   mergeUsoFerramentasComPadraoPreservandoCustom,
 } from "@/lib/hub/agente-ferramentas-registry";
+import {
+  RF_ACCENT,
+  RF_BORDER,
+  RF_BORDER_STRONG,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+  RF_TEXT_SECONDARY,
+} from "@/lib/crm/crm-retrofit-dark-theme";
+
+export type FerramentasIaTheme = "light" | "dark";
+
+function ferramentasThemeTokens(theme: FerramentasIaTheme) {
+  if (theme === "dark") {
+    return {
+      shellBg: "rgba(6, 13, 8, 0.72)",
+      shellBorder: RF_BORDER_STRONG,
+      panelBg: "rgba(11, 31, 16, 0.95)",
+      rowBg: "rgba(6, 13, 8, 0.85)",
+      rowBorder: RF_BORDER,
+      rowBorderActive: "rgba(63, 152, 72, 0.45)",
+      rowBgActive: "rgba(146, 255, 0, 0.08)",
+      iconBg: "rgba(11, 31, 16, 0.9)",
+      iconBgActive: "rgba(146, 255, 0, 0.14)",
+      title: RF_TEXT_PRIMARY,
+      body: RF_TEXT_SECONDARY,
+      muted: RF_TEXT_MUTED,
+      section: RF_TEXT_MUTED,
+      heading: RF_TEXT_MUTED,
+      toggleOff: "#2d4a38",
+      listItem: RF_TEXT_SECONDARY,
+      syncBoxBg: "rgba(6, 13, 8, 0.85)",
+      syncBoxBorder: RF_BORDER,
+      sectionTitle: "Funções do modelo na conversa",
+    };
+  }
+  return {
+    shellBg: "#f8fcf6",
+    shellBorder: "#dcebd8",
+    panelBg: undefined as string | undefined,
+    rowBg: "#ffffff",
+    rowBorder: "#dcebd8",
+    rowBorderActive: "#388bfd44",
+    rowBgActive: "rgba(56,139,253,0.06)",
+    iconBg: "#eef7eb",
+    iconBgActive: "rgba(56,139,253,0.18)",
+    title: "#0b2210",
+    body: "#5d7a67",
+    muted: "#6e7781",
+    section: "#aebccf",
+    heading: "#5d7a67",
+    toggleOff: "#eef7eb",
+    listItem: "#5d7a67",
+    syncBoxBg: "#ffffff",
+    syncBoxBorder: "#dcebd8",
+    sectionTitle: "FUNÇÕES DO MODELO NO HUB (MISTRAL)",
+  };
+}
 
 const ORDEM_SECOES: HubFerramentaCategoria[] = ["cliente", "analise", "registos"];
 
@@ -49,11 +108,13 @@ function ToggleSwitch({
   onCheckedChange,
   disabled,
   labelledBy,
+  offBg = "#eef7eb",
 }: {
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
   disabled?: boolean;
   labelledBy?: string;
+  offBg?: string;
 }) {
   return (
     <button
@@ -69,7 +130,7 @@ function ToggleSwitch({
         borderRadius: 999,
         border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
-        background: checked ? "linear-gradient(180deg, #3fb950 0%, #2ea043 100%)" : "#eef7eb",
+        background: checked ? "linear-gradient(180deg, #3fb950 0%, #2ea043 100%)" : offBg,
         boxShadow: checked ? "inset 0 1px 0 rgba(255,255,255,0.12)" : "inset 0 1px 0 rgba(0,0,0,0.2)",
         position: "relative",
         flexShrink: 0,
@@ -105,6 +166,23 @@ export type CatalogoFerramentaCustomLite = {
   descricao_curta?: string | null;
 };
 
+export type CatalogoFerramentaExternaLite = {
+  ferramenta_key: string;
+  titulo: string;
+  metodo_http: string;
+  politica: string;
+  ativo: boolean;
+  descricao_curta?: string | null;
+};
+
+export type CatalogoFerramentaIntegradorLite = {
+  ferramenta_key: string;
+  titulo: string;
+  integrador_nome: string;
+  politica: string;
+  descricao_curta?: string | null;
+};
+
 export type AgenteFerramentasIaBlockProps = {
   motorHabilitado: boolean;
   onMotorChange: (v: boolean) => void;
@@ -113,11 +191,14 @@ export type AgenteFerramentasIaBlockProps = {
   usoFerramentas: Record<string, boolean>;
   onUsoChange: (id: string, ativo: boolean) => void;
   customCatalog?: CatalogoFerramentaCustomLite[];
+  externaCatalog?: CatalogoFerramentaExternaLite[];
+  integradorCatalog?: CatalogoFerramentaIntegradorLite[];
   mistralAgentId?: string | null;
   mistralSyncEm?: string | null;
   mistralSyncErro?: string | null;
   destacarWhatsApp?: boolean;
   modoCompacto?: boolean;
+  theme?: FerramentasIaTheme;
 };
 
 export function AgenteFerramentasIaBlock({
@@ -133,11 +214,21 @@ export function AgenteFerramentasIaBlock({
   destacarWhatsApp,
   modoCompacto,
   customCatalog = [],
+  externaCatalog = [],
+  integradorCatalog = [],
+  theme = "light",
 }: AgenteFerramentasIaBlockProps) {
+  const t = ferramentasThemeTokens(theme);
   const uso = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentas);
   const nAtivas = Object.entries(uso).filter(([, on]) => on === true).length;
   const customActivos = customCatalog.filter((c) => c.ativo);
-  const nSlots = HUB_AGENTE_FERRAMENTAS_CATALOGO.length + customActivos.length;
+  const externaActivos = externaCatalog.filter((c) => c.ativo);
+  const integradorActivos = integradorCatalog;
+  const nSlots =
+    HUB_AGENTE_FERRAMENTAS_CATALOGO.length +
+    customActivos.length +
+    externaActivos.length +
+    integradorActivos.length;
   const motorSemTools = motorHabilitado && nAtivas === 0;
 
   function activarPacoteWhatsApp() {
@@ -153,8 +244,8 @@ export function AgenteFerramentasIaBlock({
     gap: 12,
     padding: "12px 14px",
     borderRadius: 12,
-    border: "1px solid #dcebd8",
-    background: "#ffffff",
+    border: `1px solid ${t.rowBorder}`,
+    background: t.rowBg,
   };
 
   return (
@@ -163,19 +254,19 @@ export function AgenteFerramentasIaBlock({
         marginTop: modoCompacto ? 0 : 12,
         padding: modoCompacto ? 0 : 14,
         borderRadius: 12,
-        border: modoCompacto ? undefined : "1px solid #dcebd8",
-        background: modoCompacto ? undefined : "#f8fcf6",
+        border: modoCompacto ? undefined : `1px solid ${t.shellBorder}`,
+        background: modoCompacto ? undefined : t.shellBg,
       }}
     >
       {!modoCompacto ? (
-        <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 4px", letterSpacing: 0.06 }}>
-          FUNÇÕES DO MODELO NO HUB (MISTRAL)
+        <p style={{ color: t.heading, fontSize: 11, fontWeight: 700, margin: "0 0 4px", letterSpacing: 0.06 }}>
+          {t.sectionTitle}
         </p>
       ) : null}
 
       <ol
         style={{
-          color: "#6e7781",
+          color: t.muted,
           fontSize: 12,
           margin: modoCompacto ? "0 0 12px" : "0 0 14px",
           lineHeight: 1.55,
@@ -183,13 +274,13 @@ export function AgenteFerramentasIaBlock({
         }}
       >
         <li style={{ marginBottom: 6 }}>
-          Use os <strong style={{ color: "#aebccf" }}>interruptores</strong> para o modelo pedir dados ao servidor com{" "}
-          <strong style={{ color: "#aebccf" }}>lead activo</strong>.
+          Use os <strong style={{ color: t.section }}>interruptores</strong> para o modelo pedir dados ao servidor com{" "}
+          <strong style={{ color: t.section }}>cliente na sessão</strong>.
         </li>
         <li style={{ marginBottom: 6 }}>
-          Só as funções <strong style={{ color: "#aebccf" }}>activas</strong> são enviadas ao modelo Mistral.
+          Só as funções <strong style={{ color: t.section }}>activas</strong> são usadas durante a conversa.
         </li>
-        <li>Opcional: sincronizar o mesmo agente na nuvem Mistral.</li>
+        <li>Opcional: sincronizar o agente na nuvem ao guardar.</li>
       </ol>
 
       {destacarWhatsApp ? (
@@ -241,83 +332,83 @@ export function AgenteFerramentasIaBlock({
         </div>
       ) : null}
 
-      <div style={{ ...rowBase, marginBottom: 10, borderColor: motorHabilitado ? "#388bfd55" : "#dcebd8" }}>
+      <div style={{ ...rowBase, marginBottom: 10, borderColor: motorHabilitado ? t.rowBorderActive : t.rowBorder }}>
         <div
           style={{
             width: 40,
             height: 40,
             borderRadius: 10,
-            background: motorHabilitado ? "rgba(56,139,253,0.15)" : "#eef7eb",
+            background: motorHabilitado ? t.iconBgActive : t.iconBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            color: motorHabilitado ? "#79c0ff" : "#5d7a67",
+            color: motorHabilitado ? "#86efac" : t.body,
           }}
         >
           <Cpu size={20} strokeWidth={2} aria-hidden />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <span id="label-motor-hub" style={{ color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
-            Funções no Hub durante a conversa
+          <span id="label-motor-hub" style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
+            Funções durante a conversa
           </span>
-          <span style={{ display: "block", color: "#5d7a67", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
-            Modelo Mistral com lead na sessão ·{" "}
-            <strong style={{ color: motorSemTools ? "#f85149" : "#5d7a67" }}>{nAtivas}</strong> de{" "}
+          <span style={{ display: "block", color: t.body, fontWeight: 400, fontSize: 12, marginTop: 2 }}>
+            Com cliente na sessão ·{" "}
+            <strong style={{ color: motorSemTools ? "#f85149" : t.body }}>{nAtivas}</strong> de{" "}
             {nSlots} funções activas
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: motorHabilitado ? "#3fb950" : "#6e7781" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: motorHabilitado ? "#3fb950" : t.muted }}>
             {motorHabilitado ? "ACTIVO" : "INACTIVO"}
           </span>
           <ToggleSwitch
             checked={motorHabilitado}
             onCheckedChange={onMotorChange}
             labelledBy="label-motor-hub"
+            offBg={t.toggleOff}
           />
         </div>
       </div>
 
-      <div style={{ ...rowBase, marginBottom: 16, borderColor: mistralSyncHabilitado ? "#a371f755" : "#dcebd8" }}>
+      <div style={{ ...rowBase, marginBottom: 16, borderColor: mistralSyncHabilitado ? "#a371f755" : t.rowBorder }}>
         <div
           style={{
             width: 40,
             height: 40,
             borderRadius: 10,
-            background: mistralSyncHabilitado ? "rgba(163,113,247,0.12)" : "#eef7eb",
+            background: mistralSyncHabilitado ? "rgba(163,113,247,0.12)" : t.iconBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            color: mistralSyncHabilitado ? "#d2a8ff" : "#5d7a67",
+            color: mistralSyncHabilitado ? "#d2a8ff" : t.body,
           }}
         >
           <Cloud size={20} strokeWidth={2} aria-hidden />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <span id="label-mistral-sync" style={{ color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
-            Sincronizar com a nuvem Mistral ao guardar
+          <span id="label-mistral-sync" style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
+            Sincronizar na nuvem ao guardar
           </span>
-          <span style={{ display: "block", color: "#5d7a67", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
-            Cria ou actualiza um Agent na Mistral (console) com o prompt unificado de produção (identidade,
-            conhecimento, regras) e {nAtivas} função(ões) activa(s). Requer{" "}
-            <code style={{ fontSize: 11 }}>MISTRAL_API_KEY</code> no servidor.
+          <span style={{ display: "block", color: t.body, fontWeight: 400, fontSize: 12, marginTop: 2 }}>
+            Actualiza o agente na nuvem com identidade, conhecimento e {nAtivas} função(ões) activa(s).
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: mistralSyncHabilitado ? "#a371f7" : "#6e7781" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: mistralSyncHabilitado ? "#a371f7" : t.muted }}>
             {mistralSyncHabilitado ? "ACTIVO" : "INACTIVO"}
           </span>
           <ToggleSwitch
             checked={mistralSyncHabilitado}
             onCheckedChange={onMistralSyncChange}
             labelledBy="label-mistral-sync"
+            offBg={t.toggleOff}
           />
         </div>
       </div>
 
-      <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 10px", letterSpacing: 0.04 }}>
+      <p style={{ color: t.heading, fontSize: 11, fontWeight: 700, margin: "0 0 10px", letterSpacing: 0.04 }}>
         FUNÇÕES DISPONÍVEIS
       </p>
 
@@ -337,10 +428,10 @@ export function AgenteFerramentasIaBlock({
                       marginBottom: 10,
                     }}
                   >
-                    <SecIcon size={14} strokeWidth={2.25} style={{ color: "#5d7a67" }} aria-hidden />
+                    <SecIcon size={14} strokeWidth={2.25} style={{ color: t.body }} aria-hidden />
                     <p
                       style={{
-                        color: "#aebccf",
+                        color: t.section,
                         fontSize: 11,
                         fontWeight: 800,
                         letterSpacing: 0.04,
@@ -361,8 +452,8 @@ export function AgenteFerramentasIaBlock({
                           key={tool.id}
                           style={{
                             ...rowBase,
-                            borderColor: ligado ? "#388bfd44" : "#dcebd8",
-                            background: ligado ? "rgba(56,139,253,0.06)" : "#ffffff",
+                            borderColor: ligado ? t.rowBorderActive : t.rowBorder,
+                            background: ligado ? t.rowBgActive : t.rowBg,
                             alignItems: "flex-start",
                           }}
                         >
@@ -371,12 +462,12 @@ export function AgenteFerramentasIaBlock({
                               width: 42,
                               height: 42,
                               borderRadius: 10,
-                              background: ligado ? "rgba(56,139,253,0.18)" : "#eef7eb",
+                              background: ligado ? t.iconBgActive : t.iconBg,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               flexShrink: 0,
-                              color: ligado ? "#79c0ff" : "#5d7a67",
+                              color: ligado ? "#86efac" : t.body,
                               marginTop: 2,
                             }}
                           >
@@ -384,7 +475,7 @@ export function AgenteFerramentasIaBlock({
                           </div>
                           <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
                             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                              <span id={labelId} style={{ color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
+                              <span id={labelId} style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
                                 {tool.titulo}
                               </span>
                               {tool.recomendadoWhatsApp && destacarWhatsApp ? (
@@ -406,7 +497,7 @@ export function AgenteFerramentasIaBlock({
                             <span
                               style={{
                                 display: "block",
-                                color: "#5d7a67",
+                                color: t.listItem,
                                 fontSize: 12,
                                 lineHeight: 1.45,
                                 marginTop: 4,
@@ -425,13 +516,14 @@ export function AgenteFerramentasIaBlock({
                               paddingTop: 4,
                             }}
                           >
-                            <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : "#6e7781" }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : t.muted }}>
                               {ligado ? "ACTIVO" : "INACTIVO"}
                             </span>
                             <ToggleSwitch
                               checked={ligado}
                               onCheckedChange={(v) => onUsoChange(tool.id, v)}
                               labelledBy={labelId}
+                              offBg={t.toggleOff}
                             />
                           </div>
                         </div>
@@ -447,7 +539,7 @@ export function AgenteFerramentasIaBlock({
             <>
               <p
                 style={{
-                  color: "#5d7a67",
+                  color: t.heading,
                   fontSize: 11,
                   fontWeight: 700,
                   margin: "18px 0 10px",
@@ -471,8 +563,8 @@ export function AgenteFerramentasIaBlock({
                         padding: "12px 14px",
                         borderRadius: 12,
                         border: "1px solid",
-                        borderColor: ligado ? "rgba(201,162,74,0.35)" : "#dcebd8",
-                        background: ligado ? "rgba(201,162,74,0.07)" : "#ffffff",
+                        borderColor: ligado ? "rgba(201,162,74,0.35)" : t.rowBorder,
+                        background: ligado ? "rgba(201,162,74,0.07)" : t.rowBg,
                       }}
                     >
                       <div
@@ -480,7 +572,7 @@ export function AgenteFerramentasIaBlock({
                           width: 42,
                           height: 42,
                           borderRadius: 10,
-                          background: ligado ? "rgba(201,162,74,0.2)" : "#eef7eb",
+                          background: ligado ? "rgba(201,162,74,0.2)" : t.iconBg,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -493,7 +585,7 @@ export function AgenteFerramentasIaBlock({
                       </div>
                       <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                          <span id={labelId} style={{ color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
+                          <span id={labelId} style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
                             {tool.titulo}
                           </span>
                           <span
@@ -536,7 +628,7 @@ export function AgenteFerramentasIaBlock({
                           {tool.ferramenta_key}
                         </code>
                         <span
-                          style={{ display: "block", color: "#5d7a67", fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
+                          style={{ display: "block", color: t.listItem, fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
                         >
                           {curta ? (
                             curta
@@ -563,13 +655,250 @@ export function AgenteFerramentasIaBlock({
                           paddingTop: 4,
                         }}
                       >
-                        <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : "#6e7781" }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : t.muted }}>
                           {ligado ? "ACTIVO" : "INACTIVO"}
                         </span>
                         <ToggleSwitch
                           checked={ligado}
                           onCheckedChange={(v) => onUsoChange(tool.ferramenta_key, v)}
                           labelledBy={labelId}
+                          offBg={t.toggleOff}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+
+          {externaActivos.length > 0 ? (
+            <>
+              <p
+                style={{
+                  color: t.heading,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  margin: "18px 0 10px",
+                  letterSpacing: 0.04,
+                }}
+              >
+                FUNÇÕES EXTERNAS (HTTP)
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {externaActivos.map((tool) => {
+                  const ligado = uso[tool.ferramenta_key] === true;
+                  const labelId = `tool-label-${tool.ferramenta_key}`;
+                  const curta = tool.descricao_curta != null ? String(tool.descricao_curta).trim() : "";
+                  const escrita = tool.politica === "escrita";
+                  return (
+                    <div
+                      key={tool.ferramenta_key}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 12,
+                        padding: "12px 14px",
+                        borderRadius: 12,
+                        border: "1px solid",
+                        borderColor: ligado ? "rgba(196,181,253,0.35)" : t.rowBorder,
+                        background: ligado ? "rgba(91,63,168,0.1)" : t.rowBg,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 10,
+                          background: ligado ? "rgba(91,63,168,0.22)" : t.iconBg,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          color: ligado ? "#c4b5fd" : "#5d7a67",
+                          marginTop: 2,
+                        }}
+                      >
+                        <Globe size={21} strokeWidth={2} aria-hidden />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                          <span id={labelId} style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
+                            {tool.titulo}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 800,
+                              letterSpacing: 0.06,
+                              color: "#c4b5fd",
+                              border: "1px solid rgba(196,181,253,0.35)",
+                              borderRadius: 4,
+                              padding: "2px 6px",
+                            }}
+                          >
+                            EXTERNA
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 700,
+                              color: escrita ? "#f85149" : "#3fb950",
+                              border: `1px solid ${escrita ? "rgba(248,81,73,0.35)" : "rgba(63,185,80,0.3)"}`,
+                              borderRadius: 4,
+                              padding: "2px 6px",
+                            }}
+                          >
+                            {tool.metodo_http}
+                          </span>
+                        </div>
+                        <code
+                          style={{
+                            display: "block",
+                            fontSize: 10,
+                            color: "#c4b5fd",
+                            marginTop: 4,
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {tool.ferramenta_key}
+                        </code>
+                        <span
+                          style={{ display: "block", color: t.listItem, fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
+                        >
+                          {curta || (escrita ? "Pode alterar dados via API externa." : "Consulta API externa (só leitura).")}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-end",
+                          gap: 4,
+                          flexShrink: 0,
+                          paddingTop: 4,
+                        }}
+                      >
+                        <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : t.muted }}>
+                          {ligado ? "ACTIVO" : "INACTIVO"}
+                        </span>
+                        <ToggleSwitch
+                          checked={ligado}
+                          onCheckedChange={(v) => onUsoChange(tool.ferramenta_key, v)}
+                          labelledBy={labelId}
+                          offBg={t.toggleOff}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+
+          {integradorActivos.length > 0 ? (
+            <>
+              <p
+                style={{
+                  color: t.heading,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  margin: "18px 0 10px",
+                  letterSpacing: 0.04,
+                }}
+              >
+                INTEGRAÇÕES LIGADAS
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {integradorActivos.map((tool) => {
+                  const ligado = uso[tool.ferramenta_key] === true;
+                  const labelId = `tool-label-${tool.ferramenta_key}`;
+                  const escrita = tool.politica === "escrita";
+                  return (
+                    <div
+                      key={tool.ferramenta_key}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 12,
+                        padding: "12px 14px",
+                        borderRadius: 12,
+                        border: "1px solid",
+                        borderColor: ligado ? "rgba(146,255,0,0.35)" : t.rowBorder,
+                        background: ligado ? "rgba(146,255,0,0.07)" : t.rowBg,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 10,
+                          background: ligado ? "rgba(146,255,0,0.16)" : t.iconBg,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          color: ligado ? RF_ACCENT : t.body,
+                          marginTop: 2,
+                        }}
+                      >
+                        <Plug size={21} strokeWidth={2} aria-hidden />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                          <span id={labelId} style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
+                            {tool.titulo}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 800,
+                              letterSpacing: 0.06,
+                              color: RF_ACCENT,
+                              border: "1px solid rgba(146,255,0,0.35)",
+                              borderRadius: 4,
+                              padding: "2px 6px",
+                            }}
+                          >
+                            {tool.integrador_nome}
+                          </span>
+                        </div>
+                        <code
+                          style={{
+                            display: "block",
+                            fontSize: 10,
+                            color: "#92ff00",
+                            marginTop: 4,
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {tool.ferramenta_key}
+                        </code>
+                        <span
+                          style={{ display: "block", color: t.listItem, fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
+                        >
+                          {tool.descricao_curta ||
+                            (escrita ? "Altera dados na aplicação externa." : "Consulta a aplicação externa.")}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-end",
+                          gap: 4,
+                          flexShrink: 0,
+                          paddingTop: 4,
+                        }}
+                      >
+                        <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : t.muted }}>
+                          {ligado ? "ACTIVO" : "INACTIVO"}
+                        </span>
+                        <ToggleSwitch
+                          checked={ligado}
+                          onCheckedChange={(v) => onUsoChange(tool.ferramenta_key, v)}
+                          labelledBy={labelId}
+                          offBg={t.toggleOff}
                         />
                       </div>
                     </div>
@@ -586,20 +915,20 @@ export function AgenteFerramentasIaBlock({
             marginTop: 14,
             padding: "10px 12px",
             borderRadius: 10,
-            border: "1px solid #dcebd8",
-            background: "#ffffff",
+            border: `1px solid ${t.syncBoxBorder}`,
+            background: t.syncBoxBg,
           }}
         >
-          <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>
-            Estado Mistral (Hub)
+          <p style={{ color: t.heading, fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>
+            Estado da sincronização
           </p>
           {mistralAgentId ? (
-            <p style={{ color: "#5d7a67", fontSize: 11, margin: 0 }}>
-              Agent ID: <code style={{ color: "#aebccf", fontSize: 11 }}>{mistralAgentId}</code>
+            <p style={{ color: t.body, fontSize: 11, margin: 0 }}>
+              Sincronizado na nuvem
             </p>
           ) : null}
           {mistralSyncEm ? (
-            <p style={{ color: "#5d7a67", fontSize: 11, margin: "4px 0 0" }}>
+            <p style={{ color: t.body, fontSize: 11, margin: "4px 0 0" }}>
               Última sync: {new Date(mistralSyncEm).toLocaleString()}
             </p>
           ) : null}

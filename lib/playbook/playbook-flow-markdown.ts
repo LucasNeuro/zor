@@ -1,9 +1,11 @@
 import type { PlaybookFlowDefinition } from "./flow-definition-types";
 import { parsePlaybookFlowFromMarkdown } from "./flow-parse";
+import { playbookFlowFenceInfo, normalizePlaybookFlowDefinition } from "./flow-schema";
 import { validatePlaybookFlowDefinition } from "./flow-validate";
 
 const FLOW_SECTION_RE = /\n---\n\n## Bloco de fluxo din[aá]mico[\s\S]*$/i;
-const FLOW_FENCE_RE = /```[^\n]*obra10_playbook_flow[^\n]*\n[\s\S]*?```/i;
+const FLOW_FENCE_RE =
+  /```[^\n]*(?:waje_playbook_flow|obra10_playbook_flow)[^\n]*\n[\s\S]*?```/i;
 const FRONTMATTER_RE = /^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/;
 const MARKDOWN_HEADING_RE = /(^|\n)#{1,6}\s+\S/;
 
@@ -24,7 +26,7 @@ function buildMarkdownFromPlainText(raw: string): string {
     .join("\n")
     .trim();
   return `---
-obra10_playbook_schema: 1
+waje_playbook_schema: 1
 ---
 
 # Playbook — Rascunho calibracao
@@ -59,7 +61,7 @@ export function adaptarMarkdownParaMotorWhatsapp(
       ok: false,
       error:
         flowTemplate.errors[0] ??
-        "O template não contém bloco `json obra10_playbook_flow` com schema v1.",
+        "O template não contém bloco `json waje_playbook_flow` com schema v1.",
     };
   }
 
@@ -89,16 +91,18 @@ export function adaptarMarkdownParaMotorWhatsapp(
     action: hadValidFlow ? "replaced_flow" : "appended_flow",
     message: hadValidFlow
       ? "Bloco de fluxo WhatsApp substituído pelo template atual. Revise, analise e publique."
-      : "Bloco de fluxo WhatsApp (obra10_playbook_flow) adicionado ao final. Revise, analise e publique.",
+      : "Bloco de fluxo WhatsApp (waje_playbook_flow) adicionado ao final. Revise, analise e publique.",
   };
 }
 
 export function renderPlaybookFlowBlockToMarkdown(definition: PlaybookFlowDefinition): string {
-  return `\n\n---\n\n## Bloco de fluxo dinamico (obrigatorio para WhatsApp)\n\n\`\`\`json obra10_playbook_flow\n${JSON.stringify(definition, null, 2)}\n\`\`\`\n`;
+  const normalized = normalizePlaybookFlowDefinition(definition as Record<string, unknown>);
+  return `\n\n---\n\n## Bloco de fluxo dinamico (obrigatorio para WhatsApp)\n\n\`\`\`${playbookFlowFenceInfo()}\n${JSON.stringify(normalized, null, 2)}\n\`\`\`\n`;
 }
 
 function renderPlaybookFlowFence(definition: PlaybookFlowDefinition): string {
-  return `\`\`\`json obra10_playbook_flow\n${JSON.stringify(definition, null, 2)}\n\`\`\``;
+  const normalized = normalizePlaybookFlowDefinition(definition as Record<string, unknown>);
+  return `\`\`\`${playbookFlowFenceInfo()}\n${JSON.stringify(normalized, null, 2)}\n\`\`\``;
 }
 
 /**

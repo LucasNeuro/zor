@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,33 +17,25 @@ import {
 } from "@/components/crm/cadastro/CadastroPremiumSideover";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
-  labelMercadoPrefixo,
-  MERCADOS_PREFIXO_OPTIONS,
   NEGOCIO_ETAPAS,
 } from "@/lib/crm/negocio-cadastro";
 
-const INPUT: React.CSSProperties = {
-  width: "100%",
-  padding: "12px 14px",
-  borderRadius: 10,
-  border: "1px solid #dcebd8",
-  background: "#ffffff",
-  color: "#0b2210",
-  fontSize: 14,
-  boxSizing: "border-box",
-};
+import {
+  RF_ACCENT,
+  RF_BG_PANEL,
+  RF_BORDER,
+  RF_BORDER_STRONG,
+  RF_INPUT_STYLE,
+  RF_LABEL_STYLE,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 
-const LABEL: React.CSSProperties = {
-  color: "#5d7a67",
-  fontSize: 12,
-  fontWeight: 600,
-  display: "block",
-  marginBottom: 6,
-};
-
+const INPUT: React.CSSProperties = { ...RF_INPUT_STYLE, padding: "12px 14px", borderRadius: 10, fontSize: 14 };
+const LABEL: React.CSSProperties = { ...RF_LABEL_STYLE, fontWeight: 600 };
 const HINT: React.CSSProperties = {
   margin: 0,
-  color: "#5d7a67",
+  color: RF_TEXT_MUTED,
   fontSize: 11,
   lineHeight: 1.5,
 };
@@ -92,8 +84,8 @@ type ChatMsg = {
 
 const emptyForm = (): FormState => ({
   titulo: "",
-  prefixo_mercado: "IMB",
-  etapa: "novo_negocio",
+  prefixo_mercado: "GRL",
+  etapa: "novo",
   valor_estimado: "",
   data_previsao_fechamento: "",
   lead_ids: [],
@@ -121,7 +113,7 @@ const ETAPA_LABEL: Record<string, string> = {
 };
 
 const WIZARD_STEPS: Array<{ id: WizardStepId; short: string; label: string; optional?: boolean }> = [
-  { id: "essenciais", short: "01", label: "Origem e mercado" },
+  { id: "essenciais", short: "01", label: "Essenciais" },
   { id: "envolvidos", short: "02", label: "Participantes" },
   { id: "comercial", short: "03", label: "Objeto e financeiro" },
   { id: "copiloto", short: "04", label: "Próxima ação (IA)", optional: true },
@@ -147,8 +139,8 @@ function metricCard(label: string, value: string, color: string) {
     <div
       style={{
         borderRadius: 10,
-        border: "1px solid #2c384b",
-        background: "#ffffff",
+        border: `1px solid ${RF_BORDER_STRONG}`,
+        background: "rgba(6, 13, 8, 0.72)",
         padding: 10,
       }}
     >
@@ -180,7 +172,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
     if (!open) return;
     setForm((prev) => ({
       ...emptyForm(),
-      prefixo_mercado: defaultMercado || prev.prefixo_mercado || "IMB",
+      prefixo_mercado: defaultMercado || prev.prefixo_mercado || "GRL",
     }));
     setPicker(emptyPicker());
     setStep("essenciais");
@@ -324,7 +316,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
     form.pessoa_ids.length +
     form.empresa_ids.length +
     form.parceiro_ids.length;
-  const resumoMercado = labelMercadoPrefixo(form.prefixo_mercado);
+  const resumoEtapa = ETAPA_LABEL[form.etapa] || form.etapa;
 
   const pendencias = useMemo(() => {
     const items: string[] = [];
@@ -492,8 +484,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                 padding: "12px 16px",
                 borderRadius: 10,
                 border: "1px solid #dcebd8",
-                background: "#ffffff",
-                color: "#c8d1dc",
+                background: "rgba(6, 13, 8, 0.6)",
+                color: RF_TEXT_MUTED,
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: loading || chatLoading ? "not-allowed" : "pointer",
@@ -561,8 +553,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
               padding: "12px 16px",
               borderRadius: 10,
               border: "none",
-              background: loading ? "#dcebd8" : "#003b26",
-              color: loading ? "#5d7a67" : "#c9a24a",
+              background: loading ? "rgba(6, 13, 8, 0.5)" : "#0b1f10",
+              color: loading ? RF_TEXT_MUTED : RF_ACCENT,
               fontSize: 13,
               fontWeight: 800,
               cursor: loading || !podeSalvar ? "not-allowed" : "pointer",
@@ -638,10 +630,10 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
 
         <CadastroSideoverPanel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
-            {metricCard("Mercado", resumoMercado, "#0b2210")}
-            {metricCard("Etapa", ETAPA_LABEL[form.etapa] || form.etapa, "#0b2210")}
+            {metricCard("Etapa inicial", resumoEtapa, "#0b2210")}
             {metricCard("Valor", form.valor_estimado.trim() || "não definido", "#22c55e")}
             {metricCard("Vínculos", String(totalVinculos), "#c9a24a")}
+            {metricCard("Pipeline", pipelineId ? "vinculado" : "padrão", "#3b82f6")}
           </div>
         </CadastroSideoverPanel>
 
@@ -662,36 +654,19 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                 </p>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={LABEL}>Mercado *</label>
-                  <select
-                    value={form.prefixo_mercado}
-                    onChange={(e) => campo("prefixo_mercado", e.target.value)}
-                    style={{ ...INPUT, cursor: "pointer" }}
-                  >
-                    {MERCADOS_PREFIXO_OPTIONS.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={LABEL}>Etapa inicial</label>
-                  <select
-                    value={form.etapa}
-                    onChange={(e) => campo("etapa", e.target.value)}
-                    style={{ ...INPUT, cursor: "pointer" }}
-                  >
-                    {NEGOCIO_ETAPAS.map((item) => (
-                      <option key={item} value={item}>
-                        {ETAPA_LABEL[item] || item}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label style={LABEL}>Etapa inicial</label>
+                <select
+                  value={form.etapa}
+                  onChange={(e) => campo("etapa", e.target.value)}
+                  style={{ ...INPUT, cursor: "pointer" }}
+                >
+                  {NEGOCIO_ETAPAS.map((item) => (
+                    <option key={item} value={item}>
+                      {ETAPA_LABEL[item] || item}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div
@@ -706,7 +681,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                   Enquadramento do negócio
                 </p>
                 <p style={{ ...HINT, marginTop: 6 }}>
-                  Defina bem mercado, etapa e naming antes de avançar. O copiloto usa isso para
+                  Defina título e etapa inicial antes de avançar. O copiloto usa isso para
                   sugerir próximos passos e composição de envolvidos.
                 </p>
               </div>
@@ -768,8 +743,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       padding: "0 14px",
                       borderRadius: 10,
                       border: "1px solid #dcebd8",
-                      background: picker.lead_id ? "#003b26" : "#ffffff",
-                      color: picker.lead_id ? "#c9a24a" : "#6e7681",
+                      background: picker.lead_id ? "#0b1f10" : "rgba(6, 13, 8, 0.72)",
+                      color: picker.lead_id ? RF_ACCENT : RF_TEXT_MUTED,
                       fontWeight: 700,
                       cursor: picker.lead_id ? "pointer" : "not-allowed",
                     }}
@@ -834,8 +809,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       padding: "0 14px",
                       borderRadius: 10,
                       border: "1px solid #dcebd8",
-                      background: picker.pessoa_id ? "#003b26" : "#ffffff",
-                      color: picker.pessoa_id ? "#c9a24a" : "#6e7681",
+                      background: picker.pessoa_id ? "#0b1f10" : "rgba(6, 13, 8, 0.72)",
+                      color: picker.pessoa_id ? RF_ACCENT : RF_TEXT_MUTED,
                       fontWeight: 700,
                       cursor: picker.pessoa_id ? "pointer" : "not-allowed",
                     }}
@@ -900,8 +875,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       padding: "0 14px",
                       borderRadius: 10,
                       border: "1px solid #dcebd8",
-                      background: picker.empresa_id ? "#003b26" : "#ffffff",
-                      color: picker.empresa_id ? "#c9a24a" : "#6e7681",
+                      background: picker.empresa_id ? "#0b1f10" : "rgba(6, 13, 8, 0.72)",
+                      color: picker.empresa_id ? RF_ACCENT : RF_TEXT_MUTED,
                       fontWeight: 700,
                       cursor: picker.empresa_id ? "pointer" : "not-allowed",
                     }}
@@ -966,8 +941,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       padding: "0 14px",
                       borderRadius: 10,
                       border: "1px solid #dcebd8",
-                      background: picker.parceiro_id ? "#003b26" : "#ffffff",
-                      color: picker.parceiro_id ? "#c9a24a" : "#6e7681",
+                      background: picker.parceiro_id ? "#0b1f10" : "rgba(6, 13, 8, 0.72)",
+                      color: picker.parceiro_id ? RF_ACCENT : RF_TEXT_MUTED,
                       fontWeight: 700,
                       cursor: picker.parceiro_id ? "pointer" : "not-allowed",
                     }}
@@ -1065,7 +1040,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                     Leitura do negócio
                   </p>
                   <p style={{ ...HINT, marginTop: 6 }}>
-                    Mercado {resumoMercado}, etapa {ETAPA_LABEL[form.etapa] || form.etapa}, valor{" "}
+                    Etapa {resumoEtapa}, valor{" "}
                     {form.valor_estimado.trim() || "não definido"} e {totalVinculos} vínculo(s)
                     carregado(s).
                   </p>
@@ -1085,7 +1060,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                     height: 40,
                     borderRadius: 12,
                     border: "1px solid #22c55e44",
-                    background: "#003b2622",
+                    background: "rgba(146, 255, 0, 0.1)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1095,7 +1070,7 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                   <Sparkles size={18} color="#86efac" />
                 </div>
                 <div>
-                  <p style={{ margin: 0, color: "#0b2210", fontSize: 13, fontWeight: 800 }}>
+                  <p style={{ margin: 0, color: RF_TEXT_PRIMARY, fontSize: 13, fontWeight: 800 }}>
                     Copiloto opcional de criação
                   </p>
                   <p style={{ ...HINT, marginTop: 6 }}>
@@ -1127,9 +1102,9 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       disabled={chatLoading}
                       style={{
                         borderRadius: 999,
-                        border: "1px solid #2d394b",
-                        background: "#ffffff",
-                        color: "#c8d1dc",
+                        border: `1px solid ${RF_BORDER}`,
+                        background: "rgba(6, 13, 8, 0.72)",
+                        color: RF_TEXT_MUTED,
                         padding: "8px 12px",
                         fontSize: 11,
                         fontWeight: 700,
@@ -1144,8 +1119,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                 <div
                   style={{
                     borderRadius: 12,
-                    border: "1px solid #2c384b",
-                    background: "#f8fcf6",
+                    border: `1px solid ${RF_BORDER_STRONG}`,
+                    background: "rgba(6, 13, 8, 0.55)",
                     minHeight: 260,
                     maxHeight: 360,
                     overflowY: "auto",
@@ -1170,9 +1145,9 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                             maxWidth: "88%",
                             borderRadius: 12,
                             padding: "10px 12px",
-                            background: isUser ? "#2f81f720" : "#141d29",
-                            border: `1px solid ${isUser ? "#2f81f755" : "#2c384b"}`,
-                            color: isUser ? "#cfe7ff" : "#0b2210",
+                            background: isUser ? "rgba(11, 31, 16, 0.92)" : "rgba(6, 13, 8, 0.85)",
+                            border: `1px solid ${isUser ? RF_BORDER_STRONG : RF_BORDER}`,
+                            color: isUser ? RF_ACCENT : RF_TEXT_PRIMARY,
                             fontSize: 12,
                             lineHeight: 1.55,
                             whiteSpace: "pre-wrap",
@@ -1219,8 +1194,8 @@ export function NegocioFormDrawer({ open, onClose, onSaved, pipelineId, defaultM
                       width: 48,
                       borderRadius: 12,
                       border: "1px solid #22c55e44",
-                      background: chatLoading || !chatInput.trim() ? "#ffffff" : "#003b26",
-                      color: chatLoading || !chatInput.trim() ? "#6e7681" : "#86efac",
+                      background: chatLoading || !chatInput.trim() ? "rgba(6, 13, 8, 0.5)" : "#0b1f10",
+                      color: chatLoading || !chatInput.trim() ? RF_TEXT_MUTED : RF_ACCENT,
                       cursor: chatLoading || !chatInput.trim() ? "not-allowed" : "pointer",
                     }}
                     aria-label="Enviar mensagem ao copiloto"

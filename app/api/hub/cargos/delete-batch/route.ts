@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { deleteCargoCatalogo } from "@/lib/hub/cargo-catalogo-db";
 
 function db() {
   return createClient(
@@ -8,9 +9,7 @@ function db() {
   );
 }
 
-type RpcRow = { ok?: boolean; error?: string; slug?: string };
-
-/** POST { slugs: string[] } — elimina cada slug via RPC (delete_authorized). */
+/** POST { slugs: string[] } — elimina cada slug (RPC ou fallback). */
 export async function POST(request: NextRequest) {
   const supabase = db();
 
@@ -35,17 +34,9 @@ export async function POST(request: NextRequest) {
   const blocked: { slug: string; error: string }[] = [];
 
   for (const slug of slugs) {
-    const { data, error } = await supabase.rpc("hub_delete_cargo_catalogo", { p_slug: slug });
-    if (error) {
-      blocked.push({ slug, error: error.message });
-      continue;
-    }
-    const row = data as RpcRow | null;
-    if (row?.ok) {
-      deleted.push(String(row.slug ?? slug));
-      continue;
-    }
-    blocked.push({ slug, error: typeof row?.error === "string" ? row.error : "Falha ao eliminar." });
+    const result = await deleteCargoCatalogo(supabase, slug);
+    if (result.ok) deleted.push(result.slug);
+    else blocked.push({ slug, error: result.error });
   }
 
   return NextResponse.json({

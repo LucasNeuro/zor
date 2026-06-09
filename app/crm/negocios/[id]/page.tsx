@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { supabase } from "@/lib/supabase/client";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
+import { LeadObservacoesTab, type CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
 import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
 
 type NegocioDetalhe = {
@@ -44,6 +47,10 @@ export default function NegocioDetalhePage() {
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ titulo: "", descricao: "", valor_estimado: "" });
   const [salvando, setSalvando] = useState(false);
+  const [dialogArquivar, setDialogArquivar] = useState(false);
+  const [arquivando, setArquivando] = useState(false);
+  const [notas, setNotas] = useState<CrmNota[]>([]);
+  const [novaNota, setNovaNota] = useState("");
 
   const carregar = useCallback(async () => {
     setErro("");
@@ -55,6 +62,7 @@ export default function NegocioDetalhePage() {
       const json = (await res.json()) as {
         data?: NegocioDetalhe;
         timeline?: TimelineItem[];
+        notas?: CrmNota[];
         lead?: { nome: string } | null;
         error?: string;
       };
@@ -72,6 +80,7 @@ export default function NegocioDetalhePage() {
         });
       }
       setTimeline(json.timeline ?? []);
+      setNotas((json.notas ?? []) as CrmNota[]);
       setLeadNome(json.lead?.nome ?? null);
     } catch {
       setErro("Erro de rede.");
@@ -102,14 +111,19 @@ export default function NegocioDetalhePage() {
     }
   }
 
-  async function arquivar() {
-    if (!confirm("Arquivar este negócio (status cancelado)?")) return;
-    await fetch(`/api/crm/negocios/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", ...internalApiHeaders() },
-      body: JSON.stringify({ status: "cancelado" }),
-    });
-    void carregar();
+  async function confirmarArquivamento() {
+    setArquivando(true);
+    try {
+      await fetch(`/api/crm/negocios/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+        body: JSON.stringify({ status: "cancelado" }),
+      });
+      setDialogArquivar(false);
+      void carregar();
+    } finally {
+      setArquivando(false);
+    }
   }
 
   async function mudarEtapa(novaEtapa: string) {
@@ -119,6 +133,26 @@ export default function NegocioDetalhePage() {
       body: JSON.stringify({ etapa: novaEtapa }),
     });
     if (res.ok) void carregar();
+  }
+
+  async function adicionarNota() {
+    if (!id || !novaNota.trim()) return;
+    const { data } = await supabase
+      .from("hub_notas")
+      .insert({ negocio_id: id, conteudo: novaNota.trim(), criado_por: "humano" })
+      .select("id, conteudo, criado_por, criado_em")
+      .single();
+    if (data) {
+      setNotas((prev) => [data as CrmNota, ...prev]);
+      await supabase.from("hub_atividades").insert({
+        negocio_id: id,
+        tipo: "nota",
+        descricao: novaNota.trim().slice(0, 80),
+        feito_por: "humano",
+        feito_por_tipo: "humano",
+      });
+      setNovaNota("");
+    }
   }
 
   if (carregando) {
@@ -151,7 +185,7 @@ export default function NegocioDetalhePage() {
         <button type="button" onClick={() => setEditando((e) => !e)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #dcebd8", background: "#eef7eb", color: "#c9a24a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
           {editando ? "Cancelar" : "Editar"}
         </button>
-        <button type="button" onClick={() => void arquivar()} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #f8514944", background: "transparent", color: "#f85149", fontSize: 12, cursor: "pointer" }}>
+        <button type="button" onClick={() => setDialogArquivar(true)} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #f8514944", background: "transparent", color: "#f85149", fontSize: 12, cursor: "pointer" }}>
           Arquivar
         </button>
       </div>
@@ -223,6 +257,17 @@ export default function NegocioDetalhePage() {
         ))}
       </div>
 
+      <h2 style={{ marginTop: 32, fontSize: 16 }}>Observações ({notas.length})</h2>
+      <div style={{ marginTop: 12 }}>
+        <LeadObservacoesTab
+          variant="waje"
+          notas={notas}
+          novaNota={novaNota}
+          onNovaNotaChange={setNovaNota}
+          onAdicionar={adicionarNota}
+        />
+      </div>
+
       <h2 style={{ marginTop: 32, fontSize: 16 }}>Timeline</h2>
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {timeline.length === 0 ? (
@@ -245,6 +290,21 @@ export default function NegocioDetalhePage() {
           ))
         )}
       </ul>
+
+      <CrmConfirmDialog
+        open={dialogArquivar}
+        title="Arquivar negócio?"
+        variant="destructive"
+        confirmLabel="Arquivar"
+        loading={arquivando}
+        loadingLabel="Arquivando…"
+        onCancel={() => !arquivando && setDialogArquivar(false)}
+        onConfirm={() => void confirmarArquivamento()}
+      >
+        <p style={{ margin: 0 }}>
+          O negócio será marcado como <strong>cancelado</strong>. Esta operação não pode ser desfeita.
+        </p>
+      </CrmConfirmDialog>
     </div>
   );
 }

@@ -9,7 +9,7 @@ let flowTemplateMarkdownCache: string | null = null;
 export async function loadPlaybookFlowTemplateMarkdown(): Promise<string> {
   if (flowTemplateMarkdownCache) return flowTemplateMarkdownCache;
   flowTemplateMarkdownCache = await readFile(
-    join(process.cwd(), "public/playbook-exemplos/playbook-template-v1.md"),
+    join(process.cwd(), "public/playbook-exemplos/playbook-template-waje-v1.md"),
     "utf8"
   );
   return flowTemplateMarkdownCache;

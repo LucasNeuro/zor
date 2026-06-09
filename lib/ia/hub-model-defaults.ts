@@ -133,14 +133,18 @@ export function modeloAltoValorForHubInsert(raw?: unknown): string {
   return normalizeModeloColumnForHubInsert(raw, LEGACY_ALTO_VALOR);
 }
 
-/** Texto fixo nos ecrãs do CRM: o modelo efectivo vem do Agno / `MISTRAL_MODEL`, não por agente. */
-export const INFERENCIA_IA_CRM_COPIA =
-  "Mistral (Agno). Modelo efectivo: MISTRAL_MODEL no servidor — não define aqui.";
+/**
+ * @deprecated Evitar em UI do produto — preferir `hubModeloExibicaoProduto`.
+ * Mantido só para compatibilidade pontual; devolve o ID do modelo em uso.
+ */
+export const INFERENCIA_IA_CRM_COPIA = mistralDefaultModelId();
 
-/** Rótulo curto para CRM/wizard (sem expor segredos). */
+/** Modelo efectivo para exibir no produto (sem jargão de servidor ou Agno). */
+export function hubModeloExibicaoProduto(stored?: string | null): string {
+  return resolveInferenceModelId(stored);
+}
+
+/** Rótulo curto para CRM/wizard — apenas o modelo em uso. */
 export function hubModeloUiLabel(stored?: string | null): string {
-  const t = (stored ?? "").trim();
-  if (!t) return "—";
-  if (t === HUB_MODELO_SENTINEL || t.toLowerCase() === "mistral") return "Mistral (MISTRAL_MODEL no servidor)";
-  return t;
+  return hubModeloExibicaoProduto(stored);
 }

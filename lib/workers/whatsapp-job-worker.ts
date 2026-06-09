@@ -116,8 +116,13 @@ type ReconstructedContext = {
   mercado: string;
   instanceKey: string | null;
   isNovo: boolean;
+  isGroupTransfer: boolean;
+  groupJid: string | null;
+  fromMe: boolean;
+  senderTelefone: string | null;
   lead: {
     id: string;
+    telefone?: string | null;
     pessoa_id?: string | null;
     humano_responsavel?: string | null;
     agente_responsavel?: string | null;
@@ -159,6 +164,10 @@ function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
     mercado,
     instanceKey: toNullableStr(payload.instance),
     isNovo: toBool(payload.isNovo),
+    isGroupTransfer: toBool(payload.isGroupTransfer),
+    groupJid: toNullableStr(payload.groupJid),
+    fromMe: toBool(payload.fromMe),
+    senderTelefone: toNullableStr(payload.senderTelefone),
     lead: {
       id: leadId,
       pessoa_id: toNullableStr(payload.pessoaId),
@@ -303,13 +312,18 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
     return;
   }
 
-  if (!contexto.lead.pessoa_id) {
-    const { data: leadRow } = await supabase
-      .from("hub_leads_crm")
-      .select("pessoa_id")
-      .eq("id", contexto.lead.id)
-      .maybeSingle();
-    if (leadRow?.pessoa_id) contexto.lead.pessoa_id = String(leadRow.pessoa_id);
+  const { data: leadRow } = await supabase
+    .from("hub_leads_crm")
+    .select("pessoa_id, telefone, humano_responsavel, agente_responsavel")
+    .eq("id", contexto.lead.id)
+    .maybeSingle();
+  if (leadRow?.pessoa_id) contexto.lead.pessoa_id = String(leadRow.pessoa_id);
+  if (leadRow?.telefone) contexto.lead.telefone = String(leadRow.telefone);
+  if (leadRow?.humano_responsavel && !contexto.lead.humano_responsavel) {
+    contexto.lead.humano_responsavel = String(leadRow.humano_responsavel);
+  }
+  if (leadRow?.agente_responsavel && !contexto.lead.agente_responsavel) {
+    contexto.lead.agente_responsavel = String(leadRow.agente_responsavel);
   }
 
   const { validarLeadTelefoneSessao } = await import("@/lib/crm/isolamento-conversa-lead");
@@ -349,6 +363,10 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
       isNovo: contexto.isNovo,
       tipoMidia: contexto.tipoMidia,
       waSendOpts: contexto.waSendOpts,
+      isGroupTransfer: contexto.isGroupTransfer,
+      groupJid: contexto.groupJid,
+      fromMe: contexto.fromMe,
+      senderTelefone: contexto.senderTelefone,
     });
 
     await updateJobStatus(supabase, job, {

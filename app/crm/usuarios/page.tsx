@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CrmResizableDataTable, type CrmResizableColumn } from "@/components/crm/CrmResizableDataTable";
 import { UserCog, UserPlus, X } from "lucide-react";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { isCrmAdminRole } from "@/lib/crm-nav-groups";
@@ -100,6 +101,65 @@ export default function UsuariosPage() {
     await carregar();
   }
 
+  const colunasUsuarios = useMemo((): CrmResizableColumn<Usuario>[] => {
+    return [
+      {
+        id: "nome",
+        label: "Nome",
+        defaultWidth: 200,
+        minWidth: 120,
+        render: (u) => <span className="text-sm font-semibold text-[#0b2210]">{u.name || "—"}</span>,
+      },
+      {
+        id: "email",
+        label: "E-mail",
+        defaultWidth: 240,
+        minWidth: 160,
+        render: (u) => <span className="text-sm text-[#5a7a62]">{u.email}</span>,
+      },
+      {
+        id: "papel",
+        label: "Papel",
+        defaultWidth: 140,
+        minWidth: 110,
+        truncate: false,
+        render: (u) => (
+          <select
+            value={String(u.role).toLowerCase()}
+            onChange={(e) => void atualizarRole(u.id, e.target.value)}
+            className="max-w-full rounded-lg px-2 py-1 text-xs font-medium"
+            style={{ background: "#f0f9ee", border: "1px solid #d4ecd0", color: "#1e4a24" }}
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        ),
+      },
+      {
+        id: "status",
+        label: "Status",
+        defaultWidth: 120,
+        minWidth: 90,
+        truncate: false,
+        render: (u) => (
+          <span
+            className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+            style={{
+              background: u.status === "ativo" ? "rgba(146,255,0,0.12)" : "rgba(0,0,0,0.05)",
+              color: u.status === "ativo" ? "#1e4a24" : "#6b8a76",
+              border: u.status === "ativo" ? "1px solid rgba(146,255,0,0.3)" : "1px solid #ddd",
+            }}
+          >
+            {u.status}
+          </span>
+        ),
+      },
+    ];
+  }, []);
+
   if (!myRole && loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -167,51 +227,15 @@ export default function UsuariosPage() {
             className="overflow-hidden rounded-2xl"
             style={{ background: "#fff", border: "1px solid #dcebd8", boxShadow: "0 2px 8px rgba(11,31,16,0.04)" }}
           >
-            <table className="w-full text-left text-sm">
-              <thead style={{ background: "#f5fbf4", borderBottom: "1px solid #dcebd8" }}>
-                <tr>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>Nome</th>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>E-mail</th>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>Papel</th>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#96a89e" }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usuarios.map((u, i) => (
-                  <tr
-                    key={u.id}
-                    style={{ borderTop: i > 0 ? "1px solid #eef5ec" : "none" }}
-                  >
-                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "#0b2210" }}>{u.name || "—"}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "#5a7a62" }}>{u.email}</td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={String(u.role).toLowerCase()}
-                        onChange={(e) => void atualizarRole(u.id, e.target.value)}
-                        className="rounded-lg px-2 py-1 text-xs font-medium"
-                        style={{ background: "#f0f9ee", border: "1px solid #d4ecd0", color: "#1e4a24" }}
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
-                        style={{
-                          background: u.status === "ativo" ? "rgba(146,255,0,0.12)" : "rgba(0,0,0,0.05)",
-                          color: u.status === "ativo" ? "#1e4a24" : "#6b8a76",
-                          border: u.status === "ativo" ? "1px solid rgba(146,255,0,0.3)" : "1px solid #ddd",
-                        }}
-                      >
-                        {u.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <CrmResizableDataTable
+              tableId="crm-usuarios"
+              columns={colunasUsuarios}
+              rows={usuarios}
+              rowKey={(u) => u.id}
+              maxHeight="none"
+              className="border-t-0"
+              getRowStyle={(_, i) => ({ borderTop: i > 0 ? "1px solid #eef5ec" : "none" })}
+            />
           </div>
         )}
       </div>

@@ -8,7 +8,13 @@ import {
   extrairTextoXlsx,
 } from "@/lib/hub/rag-zip";
 
-export { RAG_ACCEPT_ATTR, RAG_EXEMPLO_MD_URL, RAG_EXTENSOES_ACEITAS, RAG_FORMATOS_RESUMO } from "@/lib/hub/rag-formatos";
+export {
+  RAG_ACCEPT_ATTR,
+  RAG_ACCEPT_INPUT_ATTR,
+  RAG_EXEMPLO_MD_URL,
+  RAG_EXTENSOES_ACEITAS,
+  RAG_FORMATOS_RESUMO,
+} from "@/lib/hub/rag-formatos";
 export { ragErroPdfSemTexto, ragExtensaoAceita } from "@/lib/hub/rag-formatos";
 
 export const RAG_BUCKET = "hub-agent-rag-docs";
@@ -359,6 +365,13 @@ export function chunkTextRag(texto: string): string[] {
   }
 
   return chunks;
+}
+
+/** Embeddings Mistral para RAG (agente ou conhecimento tenant). */
+export async function gerarEmbeddingsRag(
+  inputs: string[]
+): Promise<{ ok: true; embeddings: number[][] } | { ok: false; error: string }> {
+  return mistralEmbedTexts(inputs);
 }
 
 async function mistralEmbedTexts(inputs: string[]): Promise<{ ok: true; embeddings: number[][] } | { ok: false; error: string }> {

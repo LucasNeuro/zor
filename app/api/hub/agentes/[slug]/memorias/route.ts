@@ -4,6 +4,7 @@ import {
   contarMemoriasAgente,
   limparMemoriasAgente,
 } from "@/lib/hub/limpar-memorias-agente";
+import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 
 function db() {
   return createClient(
@@ -85,6 +86,6 @@ export async function DELETE(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro ao limpar memórias.";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: mensagemErroBriefingChat(msg) }, { status: 500 });
   }
 }

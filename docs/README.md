@@ -9,6 +9,7 @@ Toda a documentação Markdown do produto está nesta pasta **`escritorio-virtua
 | [01_documento_mestre.md](./01_documento_mestre.md) | Documento mestre (export Word / visão e fases) |
 | [documento-mestre-obra10-v1.md](./documento-mestre-obra10-v1.md) | Documento mestre (versão Markdown estendida) |
 | [UAZAPI_SETUP.md](./UAZAPI_SETUP.md) | UAZAPI, webhook, variáveis WhatsApp |
+| [RENDER_DEPLOY.md](./RENDER_DEPLOY.md) | Deploy no Render + webhook global UAZAPI |
 | [MANIFEST.md](./MANIFEST.md) | Regras de proteção de módulos e base |
 | [RELATORIO.md](./RELATORIO.md) | Relatório histórico do canvas / office |
 | [STATUS.md](./STATUS.md) | Checklist de status (snapshot 2026-05-03) |

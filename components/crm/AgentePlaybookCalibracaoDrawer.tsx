@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import type { CSSProperties } from "react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, GitBranch, RefreshCw, Save, Send, User, X } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -11,15 +12,28 @@ import {
   PLAYBOOK_ACCEPT_ATTR,
 } from "@/components/crm/PlaybookUploadAnalisePanel";
 import { PlaybookFlowStatusBanner } from "@/components/crm/PlaybookFlowStatusBanner";
-import { PlaybookFlowVisualSideover } from "@/components/crm/PlaybookFlowVisualSideover";
+const PlaybookFlowVisualSideover = dynamic(
+  () =>
+    import("@/components/crm/PlaybookFlowVisualSideover").then((m) => ({
+      default: m.PlaybookFlowVisualSideover,
+    })),
+  { ssr: false, loading: () => null }
+);
 import { CrmHeaderActionsRow } from "@/components/crm/CrmHeaderActionsRow";
 import { crmFeatureFlags } from "@/lib/crm/feature-flags";
+import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
+import { CRM_ACCENT, crmBtnPrimary } from "@/lib/crm/crm-button-styles";
 import { normalizarAnalisePlaybook } from "@/lib/playbook/playbook-analise-ui";
 import { MAX_PLAYBOOK_UPLOAD_BYTES } from "@/lib/playbook/custom-playbook";
 import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
 import { adaptarMarkdownParaMotorWhatsapp } from "@/lib/playbook/playbook-flow-markdown";
 import { PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
 import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
+import {
+  useCrmConfirm,
+  useCrmToast,
+  type CrmConfirmDialogOptions,
+} from "@/lib/crm/crm-feedback";
 
 const PLAYBOOK_INPUT_CALIB = "playbook-calibracao-upload";
 
@@ -59,9 +73,10 @@ export function AgentePlaybookCalibracaoDrawer({
   agenteSlug,
   agenteNome,
 }: AgentePlaybookCalibracaoDrawerProps) {
+  const { confirmDialog, closeConfirmDialog, setConfirmLoading } = useCrmConfirm();
+  const { success: toastSuccess, info: toastInfo } = useCrmToast();
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
-  const [toast, setToast] = useState("");
 
   const [markdown, setMarkdown] = useState("");
   const [markdownPublicado, setMarkdownPublicado] = useState("");
@@ -121,7 +136,7 @@ export function AgentePlaybookCalibracaoDrawer({
         ? "#f8514912"
         : uploadStatus === "sucesso"
           ? "#23863618"
-          : "#f8fcf6";
+          : "rgba(6, 13, 8, 0.72)";
 
   const carregarConteudo = useCallback(async () => {
     if (!agenteSlug) return;
@@ -188,11 +203,20 @@ export function AgentePlaybookCalibracaoDrawer({
     chatFimRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMsgs, chatEnviando, open]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(""), 3500);
-    return () => window.clearTimeout(t);
-  }, [toast]);
+  async function confirmarEPublicar(
+    markdownAlvo: string,
+    opts: Omit<CrmConfirmDialogOptions, "theme">
+  ) {
+    const ok = await confirmDialog({ ...opts, theme: "dark" });
+    if (!ok) return;
+    setConfirmLoading(true);
+    try {
+      await publicarMarkdown(markdownAlvo);
+    } finally {
+      setConfirmLoading(false);
+      closeConfirmDialog();
+    }
+  }
 
   async function publicarMarkdown(markdownOverride?: string) {
     const markdownToPublish =
@@ -254,10 +278,10 @@ export function AgentePlaybookCalibracaoDrawer({
           typeof data.playbook_generated_at === "string" ? data.playbook_generated_at : m.generatedAt,
       }));
       const autoFlow = data.auto_appended_flow === true;
-      setToast(
+      toastSuccess(
         autoFlow
           ? "Publicado com bloco de fluxo WA acrescentado automaticamente."
-          : "Playbook publicado no bucket (com fluxo WhatsApp)."
+          : "Playbook publicado no bucket (com fluxo WhatsApp).",
       );
     } catch {
       setErro("Falha de rede ao publicar.");
@@ -281,7 +305,7 @@ export function AgentePlaybookCalibracaoDrawer({
         setErro(typeof data.error === "string" ? data.error : `Erro HTTP ${res.status}`);
         return;
       }
-      setToast("Playbook regenerado a partir do estado do agente.");
+      toastSuccess("Playbook regenerado a partir do estado do agente.");
       await carregarConteudo();
     } catch {
       setErro("Falha ao regenerar playbook.");
@@ -341,7 +365,7 @@ export function AgentePlaybookCalibracaoDrawer({
       setUploadStatus("sucesso");
       setUploadPct(100);
       setUploadMensagem("Upload concluído e publicado.");
-      setToast("Playbook substituído pelo upload.");
+      toastSuccess("Playbook substituído pelo upload.");
       await carregarConteudo();
     } catch {
       setUploadStatus("erro");
@@ -392,14 +416,13 @@ export function AgentePlaybookCalibracaoDrawer({
       return;
     }
     if (flowStatus.kind === "ready") {
-      setToast("O rascunho já tem fluxo WhatsApp válido. Pode publicar.");
+      toastInfo("O rascunho já tem fluxo WhatsApp válido. Pode publicar.");
       if (dirty) {
-        const confirmarPublicacao = window.confirm(
-          "Fluxo WA já está válido. Deseja publicar este rascunho agora?"
-        );
-        if (confirmarPublicacao) {
-          await publicarMarkdown(markdown);
-        }
+        await confirmarEPublicar(markdown, {
+          title: "Publicar rascunho agora?",
+          message: "Fluxo WA já está válido. Deseja publicar este rascunho agora?",
+          confirmLabel: "Publicar",
+        });
       }
       return;
     }
@@ -427,17 +450,17 @@ export function AgentePlaybookCalibracaoDrawer({
         setMarkdown(out.markdown);
         setAnaliseResultado(null);
         setAnaliseErro("");
-        setToast("Fluxo substituído com template WA atual. Rascunho pronto para publicar.");
+        toastSuccess("Fluxo substituído com template WA atual. Rascunho pronto para publicar.");
       } else {
-        setToast(out.message);
+        toastInfo(out.message);
       }
 
-      const confirmarPublicacao = window.confirm(
-        "Playbook adaptado para o motor WA. Deseja publicar agora (modo 1-clique)?"
-      );
-      if (confirmarPublicacao) {
-        await publicarMarkdown(out.markdown);
-      }
+      await confirmarEPublicar(out.markdown, {
+        title: "Publicar playbook adaptado?",
+        message: "Playbook adaptado para o motor WA. Deseja publicar agora (modo 1-clique)?",
+        confirmLabel: "Publicar agora",
+        variant: "success",
+      });
     } catch {
       setErro("Falha de rede ao adaptar ao motor WhatsApp.");
     } finally {
@@ -513,8 +536,8 @@ export function AgentePlaybookCalibracaoDrawer({
           position: "fixed",
           inset: 0,
           zIndex: 210,
-          background: "rgba(0,0,0,0.55)",
-          backdropFilter: "blur(4px)",
+          background: "rgba(11, 31, 16, 0.32)",
+          backdropFilter: "blur(3px)",
           opacity: open ? 1 : 0,
           pointerEvents: open ? "auto" : "none",
           transition: "opacity 0.25s ease",
@@ -530,8 +553,8 @@ export function AgentePlaybookCalibracaoDrawer({
           height: "100vh",
           width: "min(100vw, 1180px)",
           maxWidth: "100%",
-          background: "#f8fcf6",
-          borderLeft: "1px solid #dcebd8",
+          background: "#060d08",
+          borderLeft: "1px solid rgba(63, 152, 72, 0.42)",
           boxShadow: open ? "-12px 0 40px rgba(0,0,0,0.45)" : "none",
           transform: open ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
@@ -544,19 +567,19 @@ export function AgentePlaybookCalibracaoDrawer({
           style={{
             flexShrink: 0,
             padding: "14px 16px",
-            borderBottom: "1px solid #dcebd8",
+            borderBottom: "1px solid rgba(146, 255, 0, 0.16)",
             display: "flex",
             flexDirection: "column",
             gap: 10,
-            background: "linear-gradient(180deg, #ffffff 0%, #f8fcf6 100%)",
+            background: "#0b1f10",
           }}
         >
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <h2 style={{ color: "#0b2210", fontSize: 15, fontWeight: 700, margin: 0 }}>
+              <h2 style={{ color: "#e8f5e9", fontSize: 15, fontWeight: 700, margin: 0 }}>
                 Playbook — Calibração
               </h2>
-              <p style={{ color: "#5d7a67", fontSize: 12, fontWeight: 600, margin: "4px 0 0" }}>
+              <p style={{ color: "#7a9a7e", fontSize: 12, fontWeight: 600, margin: "4px 0 0" }}>
                 {agenteNome}
               </p>
               {meta.generatedAt ? (
@@ -565,9 +588,6 @@ export function AgentePlaybookCalibracaoDrawer({
                   {meta.hash ? ` · hash ${meta.hash.slice(0, 10)}…` : ""}
                   {temConteudo ? ` · ${formatBytes(new TextEncoder().encode(markdown).length)}` : ""}
                 </p>
-              ) : null}
-              {toast ? (
-                <p style={{ color: "#3fb950", fontSize: 11, fontWeight: 700, margin: "6px 0 0" }}>{toast}</p>
               ) : null}
               {erro ? (
                 <p style={{ color: "#f85149", fontSize: 11, margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{erro}</p>
@@ -582,9 +602,9 @@ export function AgentePlaybookCalibracaoDrawer({
                 width: 40,
                 height: 40,
                 borderRadius: 10,
-                border: "1px solid #dcebd8",
-                background: "#eef7eb",
-                color: "#c9d1d9",
+                border: "1px solid rgba(63, 152, 72, 0.42)",
+                background: "rgba(6, 13, 8, 0.6)",
+                color: "#92ff00",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -611,8 +631,8 @@ export function AgentePlaybookCalibracaoDrawer({
                   }}
                   style={{
                     ...btnToolbar,
-                    background: "#1f6feb26",
-                    color: "#9ecbff",
+                    background: "rgba(146, 255, 0, 0.12)",
+                    color: CRM_ACCENT,
                   }}
                   title="Abrir editor visual React Flow em sideover dedicado"
                 >
@@ -640,9 +660,8 @@ export function AgentePlaybookCalibracaoDrawer({
                 }
                 style={{
                   ...btnToolbar,
-                  background:
-                    flowStatus.kind === "ready" ? "#eef7eb" : "rgba(35, 134, 54, 0.18)",
-                  color: flowStatus.kind === "ready" ? "#5d7a67" : "#3fb950",
+                  background: flowStatus.kind === "ready" ? "rgba(6, 13, 8, 0.72)" : "rgba(146, 255, 0, 0.12)",
+                  color: flowStatus.kind === "ready" ? "#7a9a7e" : CRM_ACCENT,
                 }}
                 title="Mantém o texto actual e acrescenta o bloco json obra10_playbook_flow (template v1) para o WhatsApp"
               >
@@ -665,9 +684,9 @@ export function AgentePlaybookCalibracaoDrawer({
                 disabled={!dirty || !temConteudo || publicando || flowStatus.kind !== "ready"}
                 style={{
                   ...btnToolbarPublish,
-                  boxShadow: "inset 1px 0 0 rgba(201, 162, 74, 0.45)",
-                  opacity:
-                    !dirty || !temConteudo || publicando || flowStatus.kind !== "ready" ? 0.5 : 1,
+                  ...(!dirty || !temConteudo || publicando || flowStatus.kind !== "ready"
+                    ? { background: "#4a6356", color: "#c8dcc8", cursor: "not-allowed" }
+                    : {}),
                 }}
                 title={
                   flowStatus.kind !== "ready"
@@ -700,9 +719,13 @@ export function AgentePlaybookCalibracaoDrawer({
         </div>
 
         <div style={{ flexShrink: 0, margin: "10px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-          <PlaybookFlowStatusBanner status={flowStatus} published={!dirty && flowStatusPublicado.kind === "ready"} />
+          <PlaybookFlowStatusBanner
+            status={flowStatus}
+            published={!dirty && flowStatusPublicado.kind === "ready"}
+            theme="dark"
+          />
           {dirty && flowStatusPublicado.kind === "ready" ? (
-            <p style={{ margin: 0, color: "#5d7a67", fontSize: 10, lineHeight: 1.45 }}>
+            <p style={{ margin: 0, color: "#7a9a7e", fontSize: 10, lineHeight: 1.45 }}>
               Versão publicada ainda válida para motor dinâmico. Publique o rascunho para substituir no bucket (
               <code style={{ fontSize: 10 }}>tenant/slug/playbook.md</code>, arquivo único).
             </p>
@@ -726,7 +749,7 @@ export function AgentePlaybookCalibracaoDrawer({
               flexDirection: "column",
               minWidth: 0,
               minHeight: 0,
-              borderRight: "1px solid #dcebd8",
+              borderRight: "1px solid rgba(146, 255, 0, 0.16)",
               overflow: "hidden",
             }}
           >
@@ -750,8 +773,8 @@ export function AgentePlaybookCalibracaoDrawer({
                     minHeight: 220,
                     maxHeight: 420,
                     borderRadius: 10,
-                    border: "1px solid #dcebd8",
-                    background: "#f8fcf6",
+                    border: "1px solid rgba(63, 152, 72, 0.42)",
+                    background: "rgba(6, 13, 8, 0.72)",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
@@ -779,9 +802,9 @@ export function AgentePlaybookCalibracaoDrawer({
                     maxHeight: 420,
                     resize: "none",
                     borderRadius: 10,
-                    border: "1px solid #dcebd8",
-                    background: "#f8fcf6",
-                    color: "#0b2210",
+                    border: "1px solid rgba(63, 152, 72, 0.42)",
+                    background: "rgba(6, 13, 8, 0.85)",
+                    color: "#e8f5e9",
                     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                     fontSize: 12,
                     lineHeight: 1.5,
@@ -823,6 +846,7 @@ export function AgentePlaybookCalibracaoDrawer({
                 }}
                 onFileSelect={(file) => void enviarUpload(file)}
                 onAnalisar={() => void analisarComMistral()}
+                theme="dark"
               />
             </div>
           </div>
@@ -833,10 +857,10 @@ export function AgentePlaybookCalibracaoDrawer({
               style={{
                 flexShrink: 0,
                 padding: "10px 14px",
-                borderBottom: "1px solid #dcebd8",
+                borderBottom: "1px solid rgba(146, 255, 0, 0.16)",
               }}
             >
-              <p style={{ margin: 0, color: "#0b2210", fontSize: 13, fontWeight: 700 }}>
+              <p style={{ margin: 0, color: "#e8f5e9", fontSize: 13, fontWeight: 700 }}>
                 Chat de calibração
               </p>
               <p style={{ margin: "4px 0 0", color: "#6e7681", fontSize: 10, lineHeight: 1.45 }}>
@@ -878,12 +902,12 @@ export function AgentePlaybookCalibracaoDrawer({
                       <div
                         style={{
                           maxWidth: "92%",
-                          background: isUser ? "#1c2a3a" : "#ffffff",
-                          border: `1px solid ${isUser ? "#388bfd44" : "#dcebd8"}`,
+                          background: isUser ? "rgba(11, 31, 16, 0.95)" : "rgba(6, 13, 8, 0.85)",
+                          border: `1px solid ${isUser ? "rgba(63, 152, 72, 0.42)" : "rgba(146, 255, 0, 0.16)"}`,
                           borderRadius: 10,
                           padding: "10px 12px",
                           fontSize: 12,
-                          color: "#0b2210",
+                          color: "#e8f5e9",
                           lineHeight: 1.55,
                           whiteSpace: "pre-wrap",
                         }}
@@ -912,7 +936,7 @@ export function AgentePlaybookCalibracaoDrawer({
               style={{
                 flexShrink: 0,
                 padding: 12,
-                borderTop: "1px solid #dcebd8",
+                borderTop: "1px solid rgba(146, 255, 0, 0.16)",
                 display: "flex",
                 gap: 8,
               }}
@@ -937,9 +961,9 @@ export function AgentePlaybookCalibracaoDrawer({
                   flex: 1,
                   resize: "none",
                   borderRadius: 10,
-                  border: "1px solid #dcebd8",
-                  background: "#ffffff",
-                  color: "#0b2210",
+                  border: "1px solid rgba(63, 152, 72, 0.42)",
+                  background: "rgba(6, 13, 8, 0.85)",
+                  color: "#e8f5e9",
                   fontSize: 12,
                   padding: "10px 12px",
                 }}
@@ -959,7 +983,7 @@ export function AgentePlaybookCalibracaoDrawer({
             </div>
           </div>
         </div>
-        {visualBuilderEnabled ? (
+        {visualBuilderEnabled && visualSideoverOpen ? (
           <PlaybookFlowVisualSideover
             open={visualSideoverOpen}
             onClose={() => setVisualSideoverOpen(false)}
@@ -981,7 +1005,6 @@ export function AgentePlaybookCalibracaoDrawer({
                 },
               });
               setVisualSideoverOpen(false);
-              setToast("");
               setErro(
                 `Editor visual indisponivel no momento. Continue pelo modo texto sem impacto na publicacao.\nDetalhe: ${message}`
               );
@@ -1001,8 +1024,8 @@ const btnToolbar: CSSProperties = {
   padding: "8px 12px",
   borderRadius: 0,
   border: "none",
-  background: "#eef7eb",
-  color: "#c9d1d9",
+  background: "rgba(6, 13, 8, 0.72)",
+  color: "#e8f5e9",
   fontSize: 11,
   fontWeight: 700,
   cursor: "pointer",
@@ -1011,20 +1034,13 @@ const btnToolbar: CSSProperties = {
 
 const btnToolbarPublish: CSSProperties = {
   ...btnToolbar,
-  background: "#c9a24a28",
-  color: "#e8c97a",
+  background: BRAND_TEXT_DARK,
+  color: BRAND_GREEN_BRIGHT,
 };
 
 const btnPrimario: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
+  ...crmBtnPrimary(),
+  fontSize: 11,
   padding: "7px 12px",
   borderRadius: 8,
-  border: "1px solid #c9a24a66",
-  background: "#c9a24a22",
-  color: "#d6b976",
-  fontSize: 11,
-  fontWeight: 700,
-  cursor: "pointer",
 };

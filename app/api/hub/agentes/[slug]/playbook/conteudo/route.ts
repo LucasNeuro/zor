@@ -6,6 +6,42 @@ import {
 } from "@/lib/playbook/custom-playbook";
 import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
 import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
+import { selectHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-compat";
+import { PLAYBOOK_BUCKET, playbookObjectPath } from "@/lib/playbook/persist";
+
+const PLAYBOOK_META_COLS = [
+  "agente_slug",
+  "nome",
+  "cargo",
+  "area",
+  "instrucao_modo",
+  "tenant_id",
+  "playbook_object_path",
+  "playbook_public_url",
+  "playbook_generated_at",
+  "playbook_source_hash",
+] as const;
+
+function resolverPathsPlaybook(
+  supabase: ReturnType<typeof db>,
+  meta: Record<string, unknown>,
+  slug: string
+): { objectPath: string | null; publicUrl: string | null } {
+  let objectPath = String(meta.playbook_object_path ?? "").trim() || null;
+  let publicUrl = String(meta.playbook_public_url ?? "").trim() || null;
+
+  if (!objectPath && !publicUrl) {
+    const inferred = playbookObjectPath(
+      typeof meta.tenant_id === "string" ? meta.tenant_id : null,
+      slug
+    );
+    objectPath = inferred;
+    const { data: pub } = supabase.storage.from(PLAYBOOK_BUCKET).getPublicUrl(inferred);
+    publicUrl = pub?.publicUrl?.trim() || null;
+  }
+
+  return { objectPath, publicUrl };
+}
 
 function db() {
   return createClient(
@@ -30,21 +66,17 @@ export async function GET(
   const slug = decodeURIComponent(raw);
   const supabase = db();
 
-  const { data: meta, error: metaErr } = await supabase
-    .from("hub_agente_identidade")
-    .select(
-      "agente_slug, nome, cargo, area, instrucao_modo, playbook_object_path, playbook_public_url, playbook_generated_at, playbook_source_hash"
-    )
-    .eq("agente_slug", slug)
-    .maybeSingle();
+  const { data: meta, error: metaErr } = await selectHubAgenteIdentidadeCompat(
+    supabase,
+    slug,
+    [...PLAYBOOK_META_COLS]
+  );
 
   if (metaErr) return NextResponse.json({ error: metaErr.message }, { status: 500 });
   if (!meta) return NextResponse.json({ error: "Agente não encontrado." }, { status: 404 });
 
-  const loaded = await loadCurrentPlaybookMarkdown(supabase, slug, {
-    objectPath: meta.playbook_object_path as string | null,
-    publicUrl: meta.playbook_public_url as string | null,
-  });
+  const paths = resolverPathsPlaybook(supabase, meta, slug);
+  const loaded = await loadCurrentPlaybookMarkdown(supabase, slug, paths);
 
   const cacheHeaders = { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" };
 

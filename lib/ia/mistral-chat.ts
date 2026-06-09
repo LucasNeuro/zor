@@ -1,5 +1,7 @@
 /** Chamadas Chat Completions Mistral — alinhado a `lib/playbook/mistral-appendix.ts`. */
 
+import { mistralApiKey } from "@/lib/ia/mistral-health";
+
 const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
 const DEFAULT_MISTRAL_CHAT_TIMEOUT_MS = 30_000;
 const DEFAULT_MISTRAL_CHAT_RETRIES = 1;
@@ -34,7 +36,7 @@ export async function mistralChatCompletion(params: {
   | { ok: true; text: string; inputTokens: number; outputTokens: number; model: string }
   | { ok: false; error: string }
 > {
-  const key = process.env.MISTRAL_API_KEY?.trim();
+  const key = mistralApiKey();
   if (!key) return { ok: false, error: "MISTRAL_API_KEY não configurada" };
 
   const body = {

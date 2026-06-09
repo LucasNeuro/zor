@@ -9,6 +9,8 @@ export type NormalizedWhatsappInbound = {
   timestamp: string;
   fromMe: boolean;
   isGroup: boolean;
+  /** JID do grupo (@g.us) quando isGroup=true */
+  groupJid?: string;
   tipoMidia: string;
   texto: string;
   mensagemFinal: string;
@@ -470,10 +472,34 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
 
   const menuChoiceId = extrairMenuChoiceIdDeData(data);
   const texto = extrairTextoMensagem(data);
+  const groupJid = isGroup && chatid.includes("@g.us") ? chatid : undefined;
 
   if (fromMe) {
-    if (!telefone || telefone.length < 10 || isGroup) {
-      return { kind: "ignored", status: isGroup ? "group_ignored" : "invalid_phone" };
+    if (isGroup) {
+      if (!groupJid) {
+        return { kind: "ignored", status: "group_ignored" };
+      }
+      const mensagemFinalOutgoing = texto || menuChoiceId || `[${tipoMidia} enviado pelo celular]`;
+      return {
+        kind: "outgoing_human",
+        value: {
+          telefone,
+          pushName,
+          messageId,
+          timestamp,
+          fromMe: true,
+          isGroup: true,
+          groupJid,
+          tipoMidia,
+          texto,
+          mensagemFinal: mensagemFinalOutgoing,
+          ...(menuChoiceId ? { menuChoiceId } : {}),
+          instance: normalizeWebhookInstanceId(body),
+        },
+      };
+    }
+    if (!telefone || telefone.length < 10) {
+      return { kind: "ignored", status: "invalid_phone" };
     }
     const mensagemFinalOutgoing = texto || menuChoiceId || `[${tipoMidia} enviado pelo celular]`;
     return {
@@ -493,8 +519,34 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
       },
     };
   }
-  if (!telefone || telefone.length < 10 || isGroup) {
-    return { kind: "ignored", status: isGroup ? "group_ignored" : "invalid_phone" };
+  if (isGroup) {
+    if (!groupJid) {
+      return { kind: "ignored", status: "group_ignored" };
+    }
+    if (!texto && !menuChoiceId && tipoMidia === "texto") {
+      return { kind: "ignored", status: "empty_message" };
+    }
+    const mensagemFinalGrupo = texto || menuChoiceId || `[${tipoMidia} recebido]`;
+    return {
+      kind: "ok",
+      value: {
+        telefone,
+        pushName,
+        messageId,
+        timestamp,
+        fromMe,
+        isGroup: true,
+        groupJid,
+        tipoMidia,
+        texto,
+        mensagemFinal: mensagemFinalGrupo,
+        ...(menuChoiceId ? { menuChoiceId } : {}),
+        instance: normalizeWebhookInstanceId(body),
+      },
+    };
+  }
+  if (!telefone || telefone.length < 10) {
+    return { kind: "ignored", status: "invalid_phone" };
   }
   if (!texto && !menuChoiceId && tipoMidia === "texto") {
     return { kind: "ignored", status: "empty_message" };

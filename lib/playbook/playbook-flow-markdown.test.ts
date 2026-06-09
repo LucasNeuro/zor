@@ -23,17 +23,17 @@ No final, encaminhe para humano com resumo.`;
 
 describe("adaptarMarkdownParaMotorWhatsapp", () => {
   const template = readFileSync(
-    join(process.cwd(), "public/playbook-exemplos/playbook-template-v1.md"),
+    join(process.cwd(), "public/playbook-exemplos/playbook-template-waje-v1.md"),
     "utf8"
   );
 
-  it("acrescenta fluxo ao playbook só narrativo (obra10_playbook_schema)", () => {
+  it("acrescenta fluxo ao playbook só narrativo", () => {
     const out = adaptarMarkdownParaMotorWhatsapp(NARRATIVO_SO_SCHEMA, template);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.action).toBe("appended_flow");
-    expect(out.markdown).toContain("```json obra10_playbook_flow");
-    expect(out.markdown).toContain("obra10_playbook_flow_schema");
+    expect(out.markdown).toContain("```json waje_playbook_flow");
+    expect(out.markdown).toContain("waje_playbook_flow_schema");
     expect(assessPlaybookFlowInMarkdown(out.markdown).kind).toBe("ready");
   });
 
@@ -46,8 +46,8 @@ describe("adaptarMarkdownParaMotorWhatsapp", () => {
     expect(again.ok).toBe(true);
     if (!again.ok) return;
     expect(again.action).toBe("replaced_flow");
-    expect(again.markdown).toContain("```json obra10_playbook_flow");
-    expect(again.markdown).toContain("obra10_playbook_flow_schema");
+    expect(again.markdown).toContain("```json waje_playbook_flow");
+    expect(again.markdown).toContain("waje_playbook_flow_schema");
   });
 
   it("estrutura texto cru em markdown e acrescenta fluxo", () => {
@@ -55,17 +55,17 @@ describe("adaptarMarkdownParaMotorWhatsapp", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.action).toBe("appended_flow");
-    expect(out.markdown).toContain("obra10_playbook_schema: 1");
+    expect(out.markdown).toContain("waje_playbook_schema: 1");
     expect(out.markdown).toContain("# Playbook — Rascunho calibracao");
     expect(out.markdown).toContain("## Prompt unificado");
-    expect(out.markdown).toContain("```json obra10_playbook_flow");
+    expect(out.markdown).toContain("```json waje_playbook_flow");
     expect(assessPlaybookFlowInMarkdown(out.markdown).kind).toBe("ready");
   });
 });
 
 describe("upsertPlaybookFlowBlockInMarkdown", () => {
   const flowA = {
-    obra10_playbook_flow_schema: 1 as const,
+    waje_playbook_flow_schema: 1 as const,
     entry_step_id: "inicio",
     steps: [
       { id: "inicio", kind: "message" as const, message: "A", next: "fim" },
@@ -86,7 +86,7 @@ Texto inicial.
 ## Bloco de fluxo dinamico (obrigatorio para WhatsApp)
 
 \`\`\`json obra10_playbook_flow
-${JSON.stringify(flowA, null, 2)}
+${JSON.stringify({ obra10_playbook_flow_schema: 1, entry_step_id: "inicio", steps: flowA.steps }, null, 2)}
 \`\`\`
 
 ## Secao apos fluxo
@@ -103,26 +103,26 @@ Nao pode ser removida.
     const markdown = `# Documento\n\nSem fluxo ainda.\n`;
     const out = upsertPlaybookFlowBlockInMarkdown(markdown, flowA);
     expect(out).toContain("## Bloco de fluxo dinamico (obrigatorio para WhatsApp)");
-    expect(out).toContain("```json obra10_playbook_flow");
+    expect(out).toContain("```json waje_playbook_flow");
   });
 
   it("mantem um único fence após múltiplos upserts", () => {
     const markdown = `# Documento\n\nSem fluxo ainda.\n`;
     const first = upsertPlaybookFlowBlockInMarkdown(markdown, flowA);
     const second = upsertPlaybookFlowBlockInMarkdown(first, flowB);
-    const count = (second.match(/```json obra10_playbook_flow/g) ?? []).length;
+    const count = (second.match(/```json waje_playbook_flow/g) ?? []).length;
     expect(count).toBe(1);
   });
 
-  it("aceita fence com info string adicional", () => {
+  it("aceita fence legado obra10 e reescreve em waje", () => {
     const markdown = `# Documento
 
 \`\`\`jsonc obra10_playbook_flow extra
-${JSON.stringify(flowA, null, 2)}
+${JSON.stringify({ obra10_playbook_flow_schema: 1, entry_step_id: "inicio", steps: flowA.steps }, null, 2)}
 \`\`\`
 `;
     const out = upsertPlaybookFlowBlockInMarkdown(markdown, flowB);
-    expect(out).toContain("```json obra10_playbook_flow");
+    expect(out).toContain("```json waje_playbook_flow");
     expect(out).toContain('"entry_step_id": "fim"');
   });
 

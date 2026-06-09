@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
-const GROUP_BORDER = "1px solid rgba(48, 54, 61, 0.85)";
+const GROUP_BORDER = "1px solid #d4ecd0";
 
 function isNativeButton(node: ReactNode): node is ReactElement<{ style?: CSSProperties }> {
   return isValidElement(node) && node.type === "button";
@@ -80,7 +80,7 @@ export function CrmHeaderActionsRow({
           className="inline-flex items-stretch overflow-hidden rounded-xl"
           style={{
             border: GROUP_BORDER,
-            boxShadow: "0 6px 22px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
+            boxShadow: "0 2px 8px rgba(11, 31, 16, 0.08)",
           }}
         >
           {run.map((btn, j) => cloneButtonForGroup(btn, j, run.length, gid))}

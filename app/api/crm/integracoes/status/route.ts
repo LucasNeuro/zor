@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crmConfigError } from "@/lib/crm/supabase-server";
 import { requireInternalApiKey } from "@/lib/crm/crm-api-auth";
+import { mistralApiKey, mistralKeyFingerprint, pingMistralApi } from "@/lib/ia/mistral-health";
 
 export type IntegracaoStatus = {
   id: string;
@@ -20,7 +21,8 @@ export async function GET(request: NextRequest) {
   const uazapiUrl = process.env.UAZAPI_BASE_URL?.trim();
   const uazapiToken = process.env.UAZAPI_INSTANCE_TOKEN?.trim();
   const windsor = process.env.WINDSOR_API_KEY?.trim();
-  const anthropic = process.env.ANTHROPIC_API_KEY?.trim() || process.env.MISTRAL_API_KEY?.trim();
+  const mistralPresent = Boolean(mistralApiKey());
+  const mistralPing = mistralPresent ? await pingMistralApi() : null;
 
   const integracoes: IntegracaoStatus[] = [
     {
@@ -44,12 +46,16 @@ export async function GET(request: NextRequest) {
       detail: windsor ? "WINDSOR_API_KEY configurada" : "Adicione WINDSOR_API_KEY no ambiente",
     },
     {
-      id: "anthropic",
-      nome: "IA (Anthropic / Mistral)",
-      descricao: "Agentes e automações",
-      status: anthropic ? "conectado" : "nao_configurado",
+      id: "mistral",
+      nome: "Mistral AI (LLM principal)",
+      descricao: "Agentes, cargos, WhatsApp e automações",
+      status: !mistralPresent ? "nao_configurado" : mistralPing?.ok ? "conectado" : "erro",
       href: "/crm/agentes",
-      detail: anthropic ? "Chave de IA presente" : "ANTHROPIC_API_KEY ou MISTRAL_API_KEY",
+      detail: !mistralPresent
+        ? "Defina MISTRAL_API_KEY no .env"
+        : mistralPing?.ok
+          ? `Chave ${mistralKeyFingerprint()} aceite pela API`
+          : mistralPing?.detail?.slice(0, 200) ?? "Falha ao contactar Mistral",
     },
     {
       id: "meta",

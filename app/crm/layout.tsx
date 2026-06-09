@@ -1,22 +1,26 @@
 "use client";
 import Link from "next/link";
+import { CrmPrefetchLink } from "@/components/crm/CrmPrefetchLink";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Plus, X, ChevronRight, ChevronDown, Menu } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import { CrmAccessGuard } from "@/components/crm/CrmAccessGuard";
+import { filterCrmNavGroupsForAccess } from "@/lib/crm/access-permissions";
 import {
   CRM_NAV_GROUPS,
-  filterCrmNavGroupsForRole,
   findCrmNavGroupIdForPath,
   isCrmNavPathActive,
   type CrmNavItem,
   type CrmNavGroup,
 } from "@/lib/crm-nav-groups";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { WajeLogoMark } from "@/components/brand/WajeLogoMark";
 import { WajeWordmark } from "@/components/brand/WajeWordmark";
 import { CrmQueryProvider } from "@/components/crm/CrmQueryProvider";
+import { CrmFeedbackProvider } from "@/components/crm/CrmFeedbackProvider";
+import { CrmListPrefetcher } from "@/components/crm/CrmListPrefetcher";
 import { CrmSessionFooter } from "@/components/crm/CrmSessionFooter";
 import { CrmHeaderProvider } from "@/components/crm/CrmHeaderContext";
 import { CrmUniversalHeader } from "@/components/crm/CrmUniversalHeader";
@@ -64,7 +68,7 @@ function NavItemRow({
   const Icon = item.icon;
   return (
     <div className="relative">
-      <Link
+      <CrmPrefetchLink
         href={item.href}
         onClick={onClick}
         className="group flex min-h-[38px] w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150"
@@ -82,17 +86,17 @@ function NavItemRow({
           aria-hidden
         />
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        {item.navBadge && (
+      {item.navBadge ? (
         <span
             className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
             style={{ background: SB.badgeBg, color: SB.badgeText }}
         >
           {item.navBadge}
         </span>
-        )}
-      </Link>
+      ) : null}
+      </CrmPrefetchLink>
       {item.extra && (
-        <Link
+        <CrmPrefetchLink
           href={item.extra.href}
           title={item.extra.label}
           onClick={onClick}
@@ -100,7 +104,7 @@ function NavItemRow({
           style={{ background: SB.plusBg, color: SB.plusText }}
         >
           <Plus size={13} strokeWidth={2.5} aria-hidden />
-        </Link>
+        </CrmPrefetchLink>
       )}
     </div>
   );
@@ -323,14 +327,17 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [userRole, setUserRole] = useState("");
+  const [accessCtx, setAccessCtx] = useState<{
+    baseRole: string;
+    permissoes: Record<string, boolean> | null;
+  }>({ baseRole: "", permissoes: null });
   const [flyoutId, setFlyoutId] = useState<string | null>(null);
 
   const railRef = useRef<HTMLDivElement>(null);
 
   const navGroups = useMemo(
-    () => filterCrmNavGroupsForRole(CRM_NAV_GROUPS, userRole),
-    [userRole],
+    () => filterCrmNavGroupsForAccess(CRM_NAV_GROUPS, accessCtx),
+    [accessCtx],
   );
 
   const activeGroupId = useMemo(
@@ -338,22 +345,36 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     [navGroups, pathname],
   );
 
-  /* load role */
+  /* cargos + permissões efectivas */
   useEffect(() => {
     let cancelled = false;
-    async function loadRole(u: User) {
-      const row = await supabase.from("users").select("role").eq("auth_id", u.id).maybeSingle();
-      if (!cancelled) setUserRole(row.data?.role != null ? String(row.data.role) : "");
+    async function loadAccess() {
+      try {
+        const res = await fetch("/api/crm/acessos/me", { headers: await crmApiHeaders() });
+        const json = (await res.json().catch(() => ({}))) as {
+          data?: { role?: string; permissoes?: Record<string, boolean> | null };
+        };
+        if (!cancelled && res.ok && json.data) {
+          setAccessCtx({
+            baseRole: String(json.data.role ?? ""),
+            permissoes: json.data.permissoes ?? null,
+          });
+        }
+      } catch {
+        if (!cancelled) setAccessCtx({ baseRole: "", permissoes: null });
+      }
     }
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      const u = session?.user;
-      if (u) void loadRole(u);
-      else setUserRole("");
+      if (session?.user) void loadAccess();
+      else setAccessCtx({ baseRole: "", permissoes: null });
     });
     void supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) void loadRole(user);
+      if (user) void loadAccess();
     });
-    return () => { cancelled = true; subscription.unsubscribe(); };
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   /* close flyout on route change */
@@ -396,16 +417,21 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   if (slimMobile) {
     return (
       <CrmQueryProvider>
+        <CrmFeedbackProvider>
+          <CrmListPrefetcher />
         <CrmHeaderProvider>
           <CrmShellProvider value={{ sidebarExpanded: false, toggleSidebar: () => {} }}>
             <div
-              className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain"
-              style={{ background: CRM_SURFACE_MAIN, WebkitOverflowScrolling: "touch" }}
+                className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain"
+                style={{ background: CRM_SURFACE_MAIN, WebkitOverflowScrolling: "touch" }}
             >
+              <CrmAccessGuard baseRole={accessCtx.baseRole} permissoes={accessCtx.permissoes}>
               {children}
+              </CrmAccessGuard>
             </div>
           </CrmShellProvider>
         </CrmHeaderProvider>
+        </CrmFeedbackProvider>
       </CrmQueryProvider>
     );
   }
@@ -413,6 +439,8 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   /* ── Desktop layout ────────────────────────────── */
   return (
     <CrmQueryProvider>
+    <CrmFeedbackProvider>
+    <CrmListPrefetcher />
     <CrmHeaderProvider>
       <CrmShellProvider value={{ sidebarExpanded, toggleSidebar }}>
           <div className="flex h-[100dvh] overflow-hidden" style={{ background: CRM_SURFACE_ALT }}>
@@ -519,14 +547,14 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
             aria-label="Voltar"
           >
                   <ChevronRight size={20} className="rotate-180" aria-hidden />
-                </button>
+          </button>
                 <Link href="/crm" className="flex items-center gap-2 no-underline">
                   <div
                     className="flex h-7 w-7 items-center justify-center rounded-lg"
                     style={{ background: "#0b1f10" }}
                   >
                     <WajeLogoMark size={16} />
-                  </div>
+            </div>
                   <WajeWordmark size="sm" tone="brand" />
                 </Link>
           <button
@@ -555,7 +583,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
+          <CrmAccessGuard baseRole={accessCtx.baseRole} permissoes={accessCtx.permissoes}>
           {children}
+          </CrmAccessGuard>
         </div>
       </div>
 
@@ -592,7 +622,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/crm" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2.5 no-underline">
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "#0b1f10" }}>
                       <WajeLogoMark size={20} />
-                    </div>
+          </div>
                     <WajeWordmark tone="brand" />
                   </Link>
                   <button
@@ -626,6 +656,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
         </div>
       </CrmShellProvider>
     </CrmHeaderProvider>
+    </CrmFeedbackProvider>
     </CrmQueryProvider>
   );
 }

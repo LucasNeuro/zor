@@ -21,6 +21,24 @@ export type RagExtensaoAceita = (typeof RAG_EXTENSOES_ACEITAS)[number];
 /** Valor do atributo `accept` no input file do wizard. */
 export const RAG_ACCEPT_ATTR = RAG_EXTENSOES_ACEITAS.join(",");
 
+/** Extensões + MIME types — melhora seleção múltipla no diálogo do Windows. */
+export const RAG_ACCEPT_INPUT_ATTR = [
+  ...RAG_EXTENSOES_ACEITAS,
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "text/html",
+  "text/xml",
+  "application/json",
+  "application/xml",
+  "application/pdf",
+  "application/rtf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.oasis.opendocument.text",
+].join(",");
+
 /** Exemplo público para download quando PDF/imagem falha. */
 export const RAG_EXEMPLO_MD_URL = "/rag-exemplos/exemplo-rag-sdr-obra10-plus.md";
 

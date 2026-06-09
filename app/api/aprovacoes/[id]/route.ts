@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  humanoResponsavelFromActor,
+  resolveActorFromRequest,
+} from "@/lib/crm/resolve-crm-actor";
 
 function db() {
   return createClient(
@@ -21,6 +25,9 @@ export async function PATCH(
   };
 
   const supabase = db();
+  const actor = await resolveActorFromRequest(supabase, request.headers);
+  const actorFallback = humanoResponsavelFromActor(actor);
+
   const { data: aprovacaoRow } = await supabase
     .from("hub_aprovacoes")
     .select("tipo, dados")
@@ -33,10 +40,10 @@ export async function PATCH(
   };
 
   if (status === "aprovado") {
-    updates.aprovado_por = aprovado_por || "wendel";
+    updates.aprovado_por = aprovado_por || actorFallback;
     updates.aprovado_em = new Date().toISOString();
   } else if (status === "rejeitado" || status === "ignorado") {
-    updates.rejeitado_por = aprovado_por || "wendel";
+    updates.rejeitado_por = aprovado_por || actorFallback;
     updates.rejeitado_em = new Date().toISOString();
     if (observacao) updates.observacao = observacao;
   }

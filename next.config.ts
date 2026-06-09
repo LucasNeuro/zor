@@ -5,6 +5,22 @@ import type { NextConfig } from "next";
  * Em dev usamos `.next-dev` separado para reduzir conflito com cache antigo / OneDrive.
  */
 const nextConfig: NextConfig = {
+  /**
+   * IPs da rede local (preenchido automaticamente por scripts/dev-insecure-tls.cjs).
+   * Sem isto, abrir http://192.168.x.x:3001 bloqueia JS/CSS e o login não funciona.
+   */
+  allowedDevOrigins:
+    process.env.NODE_ENV === "development"
+      ? [
+          ...new Set([
+            "localhost",
+            "127.0.0.1",
+            ...(process.env.NEXT_DEV_ALLOWED_ORIGINS?.split(",")
+              .map((s) => s.trim())
+              .filter(Boolean) ?? []),
+          ]),
+        ]
+      : undefined,
   /** Oculta o badge flutuante "N" do Next.js em dev (sobrepunha a barra mobile). */
   devIndicators: false,
   ...(process.env.NODE_ENV === "development"
@@ -32,6 +48,11 @@ const nextConfig: NextConfig = {
       {
         source: "/crm/kpis",
         destination: "/crm/analytics",
+        permanent: true,
+      },
+      {
+        source: "/crm/funis",
+        destination: "/crm/leads",
         permanent: true,
       },
     ];

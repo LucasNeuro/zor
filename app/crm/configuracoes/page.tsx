@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   BarChart2,
   Briefcase,
@@ -9,22 +9,47 @@ import {
   Eye,
   LayoutDashboard,
   MessageSquare,
+  Pencil,
   Plus,
   Search,
   Settings,
   Shield,
   SlidersHorizontal,
   Trash2,
+  CheckCircle2,
+  Copy,
+  EyeOff,
+  UserPlus,
   Users,
   UserSearch,
   Zap,
 } from "lucide-react";
+import { buildWajeAccessCopyText } from "@/lib/crm/access-permissions";
 import { ContaSectionTabs } from "@/components/crm/ContaSectionTabs";
+import {
+  CrmResizableDataTable,
+  type CrmResizableColumn,
+} from "@/components/crm/CrmResizableDataTable";
 import { PermissionToggleRow } from "@/components/crm/PermissionToggleRow";
+import {
+  RF_ACCENT,
+  RF_BG_DEEP,
+  RF_BG_PANEL,
+  RF_BORDER,
+  RF_BORDER_STRONG,
+  RF_INPUT_STYLE,
+  RF_LABEL_STYLE,
+  RF_OVERLAY,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+  RF_TEXT_SECONDARY,
+  rfAsideFooterStyle,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 import { isCrmAdminRole } from "@/lib/crm-nav-groups";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { normalizeUserRow } from "@/lib/crm/users-row";
 import { supabase } from "@/lib/supabase/client";
+import { useCrmConfirm, useCrmToast } from "@/lib/crm/crm-feedback";
 
 type MeProfile = {
   id: string;
@@ -134,6 +159,26 @@ function flagsFromPermissoes(p?: Record<string, boolean> | null): PermissionFlag
   };
 }
 
+const MODULO_LABELS: { key: keyof PermissionFlags; label: string }[] = [
+  { key: "pDashboard", label: "Dashboard" },
+  { key: "pLeads", label: "Leads" },
+  { key: "pNegocios", label: "Negócios" },
+  { key: "pAtendimento", label: "Atendimento" },
+  { key: "pAutomacoes", label: "Automações" },
+  { key: "pConfiguracoes", label: "Configurações" },
+];
+
+function modulosAtivosResumo(p?: Record<string, boolean> | null): string {
+  const flags = flagsFromPermissoes(p);
+  const labels = MODULO_LABELS.filter((m) => flags[m.key]).map((m) => m.label);
+  return labels.length ? labels.join(" · ") : "Nenhum módulo";
+}
+
+function modulosAtivosCount(p?: Record<string, boolean> | null): number {
+  const flags = flagsFromPermissoes(p);
+  return MODULO_LABELS.filter((m) => flags[m.key]).length;
+}
+
 function flagsFromBaseRole(role: string): PermissionFlags {
   const r = role.trim().toLowerCase();
   if (r === "owner" || r === "admin") return { ...ALL_PERMISSIONS_ON };
@@ -175,6 +220,9 @@ function acaoAuditoriaLabel(acao: string): string {
     cargo_excluido: "Cargo excluído",
     usuario_atualizado: "Usuário atualizado",
     usuario_excluido: "Usuário excluído",
+    usuario_convidado: "Usuário convidado",
+    usuario_cadastrado: "Usuário cadastrado",
+    usuario_vinculado: "Usuário vinculado",
   };
   return map[acao] ?? acao.replaceAll("_", " ");
 }
@@ -228,6 +276,53 @@ function IdBadge({ value, tone = "blue" }: { value?: string | null; tone?: "blue
   );
 }
 
+function TableActionGroup({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="inline-flex items-stretch overflow-hidden rounded-lg border border-[#d4ecd0] bg-white shadow-[0_1px_2px_rgba(11,31,16,0.04)]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+      </div>
+  );
+}
+
+function TableActionBtn({
+  onClick,
+  title,
+  ariaLabel,
+  children,
+  variant = "default",
+  disabled,
+}: {
+  onClick: () => void;
+  title: string;
+  ariaLabel: string;
+  children: ReactNode;
+  variant?: "default" | "primary" | "danger";
+  disabled?: boolean;
+}) {
+  const tone =
+    variant === "danger"
+      ? "text-[#c0392b] hover:bg-[#fff2f1]"
+      : variant === "primary"
+        ? "text-[#3f9848] hover:bg-[#f0f9ee]"
+        : "text-[#1e4a24] hover:bg-[#f0f9ee]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-9 w-9 items-center justify-center border-l border-[#d4ecd0] first:border-l-0 disabled:cursor-not-allowed disabled:opacity-45 ${tone}`}
+      aria-label={ariaLabel}
+      title={title}
+    >
+      {children}
+    </button>
+  );
+}
+
 function MetricCard({ title, value, subValue }: { title: string; value: string; subValue?: string }) {
   return (
     <div
@@ -242,9 +337,10 @@ function MetricCard({ title, value, subValue }: { title: string; value: string; 
 }
 
 export default function ContaPage() {
+  const { confirmDialog, setConfirmLoading, closeConfirmDialog } = useCrmConfirm();
+  const { success: toastSuccess } = useCrmToast();
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [savingRole, setSavingRole] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -256,6 +352,7 @@ export default function ContaPage() {
   const [roleDrawerOpen, setRoleDrawerOpen] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [userDrawerOpen, setUserDrawerOpen] = useState(false);
+  const [userDrawerMode, setUserDrawerMode] = useState<"view" | "edit">("view");
   const [savingUserDrawer, setSavingUserDrawer] = useState(false);
   const [selectedUser, setSelectedUser] = useState<TenantUser | null>(null);
   const [selectedUserName, setSelectedUserName] = useState("");
@@ -264,7 +361,7 @@ export default function ContaPage() {
   const [selectedUserAccessRole, setSelectedUserAccessRole] = useState("");
   const [userDrawerPerms, setUserDrawerPerms] = useState<PermissionFlags>(ALL_PERMISSIONS_ON);
   const [userDrawerPermsReadOnly, setUserDrawerPermsReadOnly] = useState(true);
-  const [contaSectionTab, setContaSectionTab] = useState<"equipe" | "auditoria">("equipe");
+  const [contaSectionTab, setContaSectionTab] = useState<"equipe" | "cargos" | "auditoria">("equipe");
   const [auditLogs, setAuditLogs] = useState<AuditoriaLog[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditWarning, setAuditWarning] = useState("");
@@ -286,6 +383,50 @@ export default function ContaPage() {
     pAutomacoes: false,
     pConfiguracoes: false,
   });
+  const [inviteDrawerOpen, setInviteDrawerOpen] = useState(false);
+  const [inviteSaving, setInviteSaving] = useState(false);
+  const [inviteForm, setInviteForm] = useState({
+    email: "",
+    name: "",
+    password: "",
+    passwordConfirm: "",
+    access_role_id: "",
+  });
+  const [showInvitePassword, setShowInvitePassword] = useState(false);
+  const [showInvitePasswordConfirm, setShowInvitePasswordConfirm] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState<{
+    email: string;
+    password: string;
+    cargoNome: string;
+    linked: boolean;
+  } | null>(null);
+  const [showSuccessPassword, setShowSuccessPassword] = useState(false);
+
+  function resetInviteForm() {
+    setInviteForm({
+      email: "",
+      name: "",
+      password: "",
+      passwordConfirm: "",
+      access_role_id: "",
+    });
+    setShowInvitePassword(false);
+    setShowInvitePasswordConfirm(false);
+  }
+
+  function abrirInviteDrawer() {
+    setInviteSuccess(null);
+    setShowSuccessPassword(false);
+    resetInviteForm();
+    setInviteDrawerOpen(true);
+  }
+
+  function fecharInviteDrawer() {
+    setInviteDrawerOpen(false);
+    setInviteSuccess(null);
+    setShowSuccessPassword(false);
+    resetInviteForm();
+  }
 
   const loadPage = useCallback(async () => {
     setLoading(true);
@@ -354,7 +495,8 @@ export default function ContaPage() {
   }, [loadPage]);
 
   const owner = isOwner(me?.role ?? "");
-  const canAudit = isCrmAdminRole(me?.role ?? "");
+  const canManageTeam = isCrmAdminRole(me?.role ?? "");
+  const canAudit = canManageTeam;
 
   const loadAuditoria = useCallback(async () => {
     if (!canAudit) return;
@@ -389,7 +531,7 @@ export default function ContaPage() {
   }, [contaSectionTab, canAudit, loadAuditoria]);
 
   useEffect(() => {
-    if (!canAudit && contaSectionTab === "auditoria") {
+    if (!canAudit && (contaSectionTab === "auditoria" || contaSectionTab === "cargos")) {
       setContaSectionTab("equipe");
     }
   }, [canAudit, contaSectionTab]);
@@ -419,6 +561,29 @@ export default function ContaPage() {
     return map;
   }, [roles]);
 
+  const userCountByRoleId = useMemo(() => {
+    const map = new Map<string, number>();
+    users.forEach((u) => {
+      if (!u.access_role_id) return;
+      map.set(u.access_role_id, (map.get(u.access_role_id) ?? 0) + 1);
+    });
+    return map;
+  }, [users]);
+
+  const filteredCargos = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return roles
+      .slice()
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+      .filter((r) => {
+        if (!q) return true;
+        const nome = String(r.nome ?? "").toLowerCase();
+        const slug = String(r.slug ?? "").toLowerCase();
+        const desc = String(r.descricao ?? "").toLowerCase();
+        return nome.includes(q) || slug.includes(q) || desc.includes(q);
+      });
+  }, [roles, searchQuery]);
+
   const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return users.filter((u) => {
@@ -442,6 +607,351 @@ export default function ContaPage() {
       return true;
     });
   }, [users, searchQuery, filterStatus, filterBaseRole, filterAccessRole]);
+
+  const colunasEquipe = useMemo((): CrmResizableColumn<TenantUser>[] => {
+    return [
+      {
+        id: "usuario",
+        label: "Usuário",
+        defaultWidth: 260,
+        minWidth: 160,
+        render: (u) => (
+          <>
+            <div className="text-sm font-semibold text-[#0b2210]" title={u.name ?? undefined}>
+              {u.name || "—"}
+            </div>
+            <div className="text-xs text-[#6f86a6]" title={u.email ?? undefined}>
+              {u.email || "—"}
+            </div>
+          </>
+        ),
+      },
+      {
+        id: "cargo",
+        label: "Cargo",
+        defaultWidth: 170,
+        minWidth: 120,
+        truncate: false,
+        render: (u) => {
+          const cargoNome = u.access_role_id ? roleNameById.get(u.access_role_id) : null;
+
+          if (!canManageTeam) {
+            return cargoNome ? (
+              <span className="inline-flex max-w-full items-center gap-1.5 text-xs font-semibold text-[#1e4a24]">
+                <Shield size={12} className="shrink-0 text-[#3f9848]" />
+                <span className="truncate">{cargoNome}</span>
+              </span>
+            ) : (
+              <span className="text-xs text-[#8aa195]">Sem cargo</span>
+            );
+          }
+
+          if (cargoNome) {
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openUserDrawer(u, "edit");
+                }}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#d4ecd0] bg-[#f0f9ee] px-3 py-1 text-xs font-semibold text-[#1e4a24] transition-colors hover:bg-[#e4f5df]"
+                title="Alterar cargo do usuário"
+              >
+                <Shield size={12} className="shrink-0 text-[#3f9848]" />
+                <span className="truncate">{cargoNome}</span>
+              </button>
+            );
+          }
+
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openUserDrawer(u, "edit");
+              }}
+              className="text-xs font-medium text-[#8aa195] underline-offset-2 transition-colors hover:text-[#1e4a24] hover:underline"
+              title="Atribuir cargo ao usuário"
+            >
+              Atribuir cargo
+            </button>
+          );
+        },
+      },
+      {
+        id: "status",
+        label: "Status",
+        defaultWidth: 110,
+        minWidth: 90,
+        truncate: false,
+        render: (u) => (
+          <span
+            className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+            style={{
+              background:
+                String(u.status).toLowerCase() === "ativo" ? "rgba(146,255,0,0.12)" : "rgba(0,0,0,0.05)",
+              color: String(u.status).toLowerCase() === "ativo" ? "#1e4a24" : "#6b8a76",
+              border:
+                String(u.status).toLowerCase() === "ativo"
+                  ? "1px solid rgba(146,255,0,0.3)"
+                  : "1px solid #d9d9d9",
+            }}
+          >
+            {u.status || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "perfil",
+        label: "Perfil Base",
+        defaultWidth: 110,
+        minWidth: 90,
+        render: (u) => <span className="text-sm text-[#1e4a24]">{roleLabel(u.role)}</span>,
+      },
+      {
+        id: "telefone",
+        label: "Telefone",
+        defaultWidth: 130,
+        minWidth: 100,
+        render: (u) => <span className="text-sm text-[#4e657f]">{u.phone || "—"}</span>,
+      },
+      {
+        id: "criado",
+        label: "Criado em",
+        defaultWidth: 150,
+        minWidth: 110,
+        render: (u) => <span className="text-xs text-[#4e657f]">{formatDateTime(u.created_at)}</span>,
+      },
+      {
+        id: "atualizado",
+        label: "Atualizado em",
+        defaultWidth: 150,
+        minWidth: 110,
+        render: (u) => <span className="text-xs text-[#4e657f]">{formatDateTime(u.updated_at)}</span>,
+      },
+      {
+        id: "id",
+        label: "ID",
+        defaultWidth: 130,
+        minWidth: 90,
+        render: (u) => <IdBadge value={u.id} tone="blue" />,
+      },
+      {
+        id: "auth_id",
+        label: "AUTH_ID",
+        defaultWidth: 130,
+        minWidth: 90,
+        render: (u) => <IdBadge value={u.auth_id} tone="gray" />,
+      },
+      {
+        id: "tenant",
+        label: "TENANT_ID",
+        defaultWidth: 140,
+        minWidth: 100,
+        render: (u) => <IdBadge value={u.tenant_id} tone="green" />,
+      },
+      {
+        id: "access_role_id",
+        label: "ACCESS_ROLE_ID",
+        defaultWidth: 150,
+        minWidth: 110,
+        render: (u) => <IdBadge value={u.access_role_id} tone="gray" />,
+      },
+      {
+        id: "acoes",
+        label: "Ações",
+        defaultWidth: 130,
+        minWidth: 112,
+        truncate: false,
+        align: "center",
+        render: (u) => (
+          <TableActionGroup>
+            <TableActionBtn
+              onClick={() => openUserDrawer(u, "view")}
+              ariaLabel="Ver detalhes"
+              title="Ver detalhes"
+            >
+              <Eye size={15} />
+            </TableActionBtn>
+            {canManageTeam ? (
+              <TableActionBtn
+                onClick={() => openUserDrawer(u, "edit")}
+                ariaLabel="Editar usuário"
+                title="Editar usuário"
+                variant="primary"
+              >
+                <Pencil size={15} />
+              </TableActionBtn>
+            ) : null}
+          </TableActionGroup>
+        ),
+      },
+    ];
+  }, [canManageTeam, roleNameById]);
+
+  const colunasCargos = useMemo((): CrmResizableColumn<AccessRole>[] => {
+    return [
+      {
+        id: "cargo",
+        label: "Cargo",
+        defaultWidth: 260,
+        minWidth: 180,
+        render: (r) => (
+          <>
+            <div className="text-sm font-semibold text-[#0b2210]" title={r.nome}>
+              {r.nome}
+            </div>
+            <div className="mt-0.5 line-clamp-2 text-xs text-[#6f86a6]" title={r.descricao ?? undefined}>
+              {r.descricao?.trim() || "Sem descrição"}
+            </div>
+          </>
+        ),
+      },
+      {
+        id: "slug",
+        label: "Slug",
+        defaultWidth: 150,
+        minWidth: 110,
+        render: (r) => (
+          <span className="rounded-md bg-[#f0f9ee] px-2 py-1 font-mono text-xs text-[#1e4a24]">{r.slug}</span>
+        ),
+      },
+      {
+        id: "usuarios",
+        label: "Usuários",
+        defaultWidth: 100,
+        minWidth: 80,
+        align: "center",
+        render: (r) => (
+          <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-[#eef5ec] px-2 text-xs font-bold text-[#1e4a24]">
+            {userCountByRoleId.get(r.id) ?? 0}
+          </span>
+        ),
+      },
+      {
+        id: "modulos",
+        label: "Módulos",
+        defaultWidth: 280,
+        minWidth: 160,
+        render: (r) => (
+          <div>
+            <span className="text-xs font-semibold text-[#1e4a24]">
+              {modulosAtivosCount(r.permissoes)}/{MODULO_LABELS.length} ativos
+            </span>
+            <p className="mt-0.5 line-clamp-2 text-[11px] text-[#6f86a6]" title={modulosAtivosResumo(r.permissoes)}>
+              {modulosAtivosResumo(r.permissoes)}
+            </p>
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        label: "Status",
+        defaultWidth: 110,
+        minWidth: 90,
+        truncate: false,
+        render: (r) => (
+          <span
+            className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+            style={{
+              background: r.ativo ? "rgba(146,255,0,0.12)" : "rgba(0,0,0,0.05)",
+              color: r.ativo ? "#1e4a24" : "#6b8a76",
+              border: r.ativo ? "1px solid rgba(146,255,0,0.3)" : "1px solid #d9d9d9",
+            }}
+          >
+            {r.ativo ? "Ativo" : "Inativo"}
+          </span>
+        ),
+      },
+      {
+        id: "acoes",
+        label: "Ações",
+        defaultWidth: 100,
+        minWidth: 88,
+        truncate: false,
+        align: "center",
+        render: (r) => (
+          <TableActionGroup>
+            <TableActionBtn
+              onClick={() => openRoleDrawerForEdit(r.id)}
+              ariaLabel="Editar cargo"
+              title="Editar cargo"
+              variant="primary"
+            >
+              <Pencil size={15} />
+            </TableActionBtn>
+            {owner ? (
+              <TableActionBtn
+                onClick={() => void deleteRole(r.id)}
+                ariaLabel="Excluir cargo"
+                title="Excluir cargo"
+                variant="danger"
+                disabled={savingRole}
+              >
+                <Trash2 size={15} />
+              </TableActionBtn>
+            ) : null}
+          </TableActionGroup>
+        ),
+      },
+    ];
+  }, [owner, savingRole, userCountByRoleId]);
+
+  const colunasAuditoria = useMemo((): CrmResizableColumn<AuditoriaLog>[] => {
+    return [
+      {
+        id: "data",
+        label: "Data",
+        defaultWidth: 160,
+        minWidth: 120,
+        render: (log) => <span className="text-xs text-[#4e657f]">{formatDateTime(log.criado_em)}</span>,
+      },
+      {
+        id: "quem",
+        label: "Quem",
+        defaultWidth: 200,
+        minWidth: 140,
+        render: (log) => (
+          <>
+            <div className="text-sm font-semibold text-[#0b2210]" title={log.actor_nome ?? undefined}>
+              {log.actor_nome || "—"}
+            </div>
+            <div className="text-xs text-[#6f86a6]" title={log.actor_email ?? undefined}>
+              {log.actor_email || "—"}
+            </div>
+          </>
+        ),
+      },
+      {
+        id: "acao",
+        label: "Ação",
+        defaultWidth: 140,
+        minWidth: 100,
+        render: (log) => <span className="text-sm text-[#1e4a24]">{acaoAuditoriaLabel(log.acao)}</span>,
+      },
+      {
+        id: "entidade",
+        label: "Entidade",
+        defaultWidth: 120,
+        minWidth: 90,
+        render: (log) => <span className="text-xs text-[#4e657f]">{log.entidade}</span>,
+      },
+      {
+        id: "resumo",
+        label: "Resumo",
+        defaultWidth: 320,
+        minWidth: 160,
+        render: (log) => <span className="text-sm text-[#0b2210]">{log.resumo}</span>,
+      },
+      {
+        id: "id",
+        label: "ID",
+        defaultWidth: 120,
+        minWidth: 90,
+        render: (log) => <IdBadge value={log.entidade_id} tone="gray" />,
+      },
+    ];
+  }, []);
 
   function exportFilteredCsv() {
     const header = ["nome", "email", "perfil_base", "cargo_acesso", "status"];
@@ -501,9 +1011,111 @@ export default function ContaPage() {
     }
   }
 
+  async function copiarCredenciais(
+    email: string,
+    password: string,
+    cargoNome?: string,
+  ) {
+    if (!email || password.length < 8) {
+      setErro("E-mail e senha são necessários para copiar o acesso.");
+      return;
+    }
+    try {
+      const text = buildWajeAccessCopyText(email, password, window.location.origin, cargoNome);
+      await navigator.clipboard.writeText(text);
+      toastSuccess("Credenciais copiadas para a área de transferência.");
+    } catch {
+      setErro("Não foi possível copiar. Verifique permissões do navegador.");
+    }
+  }
+
+  async function copiarAcessoUsuario() {
+    const cargoNome = rolesActive.find((r) => r.id === inviteForm.access_role_id)?.nome;
+    await copiarCredenciais(inviteForm.email.trim(), inviteForm.password, cargoNome);
+  }
+
+  async function cadastrarUsuario() {
+    if (!canManageTeam) {
+      setErro("Apenas administradores podem cadastrar membros.");
+      return;
+    }
+    const email = inviteForm.email.trim().toLowerCase();
+    if (!email) {
+      setErro("E-mail é obrigatório.");
+      return;
+    }
+    if (inviteForm.password.length < 8) {
+      setErro("Senha obrigatória (mínimo 8 caracteres).");
+      return;
+    }
+    if (inviteForm.password !== inviteForm.passwordConfirm) {
+      setErro("As senhas não coincidem.");
+      return;
+    }
+    if (!inviteForm.access_role_id) {
+      setErro("Selecione um cargo de acesso.");
+      return;
+    }
+
+    setInviteSaving(true);
+    setErro("");
+    try {
+      const res = await fetch("/api/crm/usuarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await crmApiHeaders()) },
+        body: JSON.stringify({
+          email,
+          name: inviteForm.name.trim() || undefined,
+          password: inviteForm.password,
+          access_role_id: inviteForm.access_role_id,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: TenantUser;
+        error?: string;
+        linked?: boolean;
+        share?: { email?: string; cargo_nome?: string };
+      };
+      if (!res.ok || !json.data) {
+        setErro(json.error || "Falha ao cadastrar membro.");
+        return;
+      }
+
+      const cargoNome =
+        json.share?.cargo_nome ??
+        rolesActive.find((r) => r.id === inviteForm.access_role_id)?.nome ??
+        "";
+
+      setUsers((prev) => {
+        const exists = prev.some((u) => u.id === json.data!.id);
+        if (exists) {
+          return prev.map((u) => (u.id === json.data!.id ? { ...u, ...json.data } : u));
+        }
+        return [...prev, json.data as TenantUser].sort((a, b) =>
+          String(a.name ?? a.email ?? "").localeCompare(String(b.name ?? b.email ?? "")),
+        );
+      });
+
+      setInviteSuccess({
+        email: json.share?.email ?? email,
+        password: inviteForm.password,
+        cargoNome,
+        linked: Boolean(json.linked) || res.status === 200,
+      });
+      setShowSuccessPassword(false);
+      toastSuccess(
+        json.linked || res.status === 200
+          ? "Membro vinculado. Copie as credenciais abaixo."
+          : "Usuário cadastrado. Copie as credenciais abaixo.",
+      );
+    } finally {
+      setInviteSaving(false);
+    }
+  }
+
   async function saveNewRole() {
-    if (!owner) {
-      setErro("Somente owner pode criar cargos.");
+    if (!canManageTeam) {
+      setErro("Apenas administradores podem criar cargos.");
       return;
     }
     const nome = roleForm.nome.trim();
@@ -595,27 +1207,59 @@ export default function ContaPage() {
     setRoleDrawerOpen(true);
   }
 
-  async function updateUserAccess(userId: string, accessRoleId: string | null) {
+  async function deleteRole(roleId: string) {
     if (!owner) {
-      setErro("Somente owner pode alterar acessos.");
+      setErro("Somente owner pode excluir cargo.");
       return;
     }
-    setSavingUserId(userId);
+    const role = roles.find((r) => r.id === roleId);
+    if (!role) return;
+
+    const vinculados = userCountByRoleId.get(roleId) ?? 0;
+    const confirmed = await confirmDialog({
+      title: "Excluir cargo?",
+      variant: "destructive",
+      confirmLabel: "Excluir cargo",
+      message: (
+        <>
+          <p style={{ margin: "0 0 10px" }}>
+            O cargo <strong style={{ color: "#0b1f10" }}>«{role.nome}»</strong> será removido permanentemente.
+          </p>
+          {vinculados > 0 ? (
+            <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>
+              Existem {vinculados} usuário(s) vinculados. Reatribua-os antes de excluir.
+            </p>
+          ) : (
+            <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>Esta operação não pode ser desfeita.</p>
+          )}
+        </>
+      ),
+    });
+    if (!confirmed) return;
+
+    setSavingRole(true);
+    setConfirmLoading(true);
     setErro("");
     try {
-      const res = await fetch(`/api/crm/acessos/usuarios/${userId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", ...(await crmApiHeaders()) },
-        body: JSON.stringify({ access_role_id: accessRoleId }),
+      const res = await fetch(`/api/crm/acessos/roles/${roleId}`, {
+        method: "DELETE",
+        headers: await crmApiHeaders(),
       });
-      const json = (await res.json()) as { data?: TenantUser; error?: string };
-      if (!res.ok || !json.data) {
-        setErro(json.error || "Falha ao atualizar acesso do usuário.");
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setErro(json.error || "Falha ao excluir cargo.");
         return;
       }
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, access_role_id: json.data?.access_role_id ?? null } : u)));
+      setRoles((prev) => prev.filter((r) => r.id !== roleId));
+      if (editingRoleId === roleId) {
+        setRoleDrawerOpen(false);
+        setEditingRoleId(null);
+      }
+      toastSuccess("Cargo excluído com sucesso.");
     } finally {
-      setSavingUserId(null);
+      setConfirmLoading(false);
+      closeConfirmDialog();
+      setSavingRole(false);
     }
   }
 
@@ -635,13 +1279,14 @@ export default function ContaPage() {
     setUserDrawerPermsReadOnly(true);
   }
 
-  function openUserDrawer(user: TenantUser) {
+  function openUserDrawer(user: TenantUser, mode: "view" | "edit" = "view") {
     setSelectedUser(user);
     setSelectedUserName(user.name ?? "");
     setSelectedUserStatus(user.status ?? "Ativo");
     setSelectedUserRole(user.role ?? "vendedor");
     setSelectedUserAccessRole(user.access_role_id ?? "");
     syncUserDrawerPerms(user.access_role_id ?? "", user.role ?? "vendedor");
+    setUserDrawerMode(mode);
     setUserDrawerOpen(true);
   }
 
@@ -675,7 +1320,7 @@ export default function ContaPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...(await crmApiHeaders()) },
         body: JSON.stringify({
-          name,
+        name,
           status: selectedUserStatus,
           role: selectedUserRole,
           access_role_id: selectedUserAccessRole || null,
@@ -730,10 +1375,26 @@ export default function ContaPage() {
       setErro("Somente owner pode excluir usuário.");
       return;
     }
-    const confirmed = typeof window !== "undefined" ? window.confirm("Tem certeza que deseja excluir este usuário?") : false;
+
+    const nome = selectedUser.name?.trim() || selectedUser.email || "este usuário";
+    const confirmed = await confirmDialog({
+      title: "Excluir usuário?",
+      variant: "destructive",
+      confirmLabel: "Excluir definitivamente",
+      message: (
+        <>
+          <p style={{ margin: "0 0 10px" }}>
+            O usuário <strong style={{ color: "#0b1f10" }}>«{nome}»</strong> perderá acesso ao CRM e será removido da
+            equipe.
+          </p>
+          <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>Esta operação não pode ser desfeita.</p>
+        </>
+      ),
+    });
     if (!confirmed) return;
 
     setSavingUserDrawer(true);
+    setConfirmLoading(true);
     setErro("");
     try {
       const res = await fetch(`/api/crm/acessos/usuarios/${selectedUser.id}`, {
@@ -748,7 +1409,10 @@ export default function ContaPage() {
       setUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));
       setUserDrawerOpen(false);
       setSelectedUser(null);
+      toastSuccess("Usuário excluído com sucesso.");
     } finally {
+      setConfirmLoading(false);
+      closeConfirmDialog();
       setSavingUserDrawer(false);
     }
   }
@@ -769,6 +1433,8 @@ export default function ContaPage() {
     );
   }
 
+  const userDrawerReadOnly = userDrawerMode === "view" || !owner;
+
   return (
     <div className="min-h-full w-full min-w-0 px-3 py-4 sm:px-5 lg:px-6 xl:px-8" style={{ background: "#f8fcf6" }}>
       <div className="w-full min-w-0">
@@ -788,10 +1454,15 @@ export default function ContaPage() {
             <ContaSectionTabs
               tabs={[
                 { id: "equipe", label: "Equipe e acessos" },
+                { id: "cargos", label: `Cargos (${roles.length})` },
                 { id: "auditoria", label: "Auditoria do sistema" },
               ]}
               activeId={contaSectionTab}
-              onSelect={(id) => setContaSectionTab(id as "equipe" | "auditoria")}
+              onSelect={(id) => {
+                setContaSectionTab(id as "equipe" | "cargos" | "auditoria");
+                setSearchQuery("");
+                setShowAdvancedFilters(false);
+              }}
             />
           ) : (
             <div className="flex items-center gap-2 border-b border-[#e7f1e4] px-4 py-3">
@@ -802,20 +1473,19 @@ export default function ContaPage() {
 
           {contaSectionTab === "equipe" ? (
             <>
-          <div className="flex items-center justify-end border-b border-[#eef5ec] px-4 py-2">
-            {owner ? (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#eef5ec] px-4 py-2">
+            {canManageTeam ? (
               <button
                 type="button"
-                onClick={() => openRoleDrawerForCreate()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-bold"
-                style={{ background: "#0b1f10", color: "#92ff00" }}
+                onClick={() => abrirInviteDrawer()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold"
+                style={{ borderColor: "#d4ecd0", color: "#1e4a24", background: "#fff" }}
               >
-                <Plus size={13} /> Novo cargo
+                <UserPlus size={13} /> Novo usuário
               </button>
             ) : null}
           </div>
 
-          {/* toolbar no padrão da tabela pipeline */}
           <div className="border-b border-[#eef5ec] px-4 py-3">
             <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto_auto]">
               <div className="flex h-10 items-center gap-2 rounded-xl border border-[#d4ecd0] bg-white px-3">
@@ -897,110 +1567,14 @@ export default function ContaPage() {
             )}
           </div>
 
-          <div className="w-full min-w-0 overflow-x-auto">
-            <div className="max-h-[min(70vh,calc(100dvh-16rem))] overflow-y-auto">
-              <table className="w-full min-w-[1600px] table-fixed text-left">
-              <thead className="bg-[#f7fbff]">
-                <tr>
-                  <th className="w-[130px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">ID</th>
-                  <th className="w-[130px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">AUTH_ID</th>
-                  <th className="w-[min(22%,320px)] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Usuário</th>
-                  <th className="w-[130px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Telefone</th>
-                  <th className="w-[120px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Perfil Base</th>
-                  <th className="w-[150px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Criado em</th>
-                  <th className="w-[150px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Atualizado em</th>
-                  <th className="w-[140px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">TENANT_ID</th>
-                  <th className="w-[min(18%,280px)] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Cargo de Acesso</th>
-                  <th className="w-[150px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">ACCESS_ROLE_ID</th>
-                  <th className="w-[120px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Status</th>
-                  <th className="w-[90px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((u, idx) => (
-                  <tr key={u.id} style={{ borderTop: idx > 0 ? "1px solid #edf3fb" : "none" }}>
-                    <td className="px-4 py-4 align-top">
-                      <IdBadge value={u.id} tone="blue" />
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <IdBadge value={u.auth_id} tone="gray" />
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <div className="truncate text-sm font-semibold text-[#0b2210]" title={u.name ?? undefined}>{u.name || "—"}</div>
-                      <div className="truncate text-xs text-[#6f86a6]" title={u.email ?? undefined}>{u.email || "—"}</div>
-                    </td>
-                    <td className="px-4 py-4 align-top text-sm text-[#4e657f]">{u.phone || "—"}</td>
-                    <td className="px-4 py-4 align-top text-sm text-[#1e4a24]">{roleLabel(u.role)}</td>
-                    <td className="px-4 py-4 align-top text-xs text-[#4e657f]">{formatDateTime(u.created_at)}</td>
-                    <td className="px-4 py-4 align-top text-xs text-[#4e657f]">{formatDateTime(u.updated_at)}</td>
-                    <td className="px-4 py-4 align-top">
-                      <IdBadge value={u.tenant_id} tone="green" />
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <select
-                          value={u.access_role_id || ""}
-                          disabled={!owner || savingUserId === u.id}
-                          onChange={(e) => {
-                            const newRoleId = e.target.value || null;
-                            void updateUserAccess(u.id, newRoleId);
-                          }}
-                          className="h-9 min-w-0 flex-1 rounded-lg border border-[#d4ecd0] bg-[#f0f9ee] px-2 text-xs font-medium text-[#1e4a24] disabled:opacity-60"
-                        >
-                          <option value="">Sem cargo customizado</option>
-                          {rolesActive.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.nome}
-                            </option>
-                          ))}
-                        </select>
-                        {owner && u.access_role_id ? (
-                          <button
-                            type="button"
-                            onClick={() => openRoleDrawerForEdit(u.access_role_id!)}
-                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#d4ecd0] bg-white text-[#3f9848] hover:bg-[#f0f9ee]"
-                            aria-label="Editar permissões do cargo"
-                            title="Editar permissões do cargo"
-                          >
-                            <Shield size={14} />
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <IdBadge value={u.access_role_id} tone="gray" />
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-                style={{
-                          background: String(u.status).toLowerCase() === "ativo" ? "rgba(146,255,0,0.12)" : "rgba(0,0,0,0.05)",
-                          color: String(u.status).toLowerCase() === "ativo" ? "#1e4a24" : "#6b8a76",
-                          border: String(u.status).toLowerCase() === "ativo" ? "1px solid rgba(146,255,0,0.3)" : "1px solid #d9d9d9",
-                        }}
-                      >
-                        {u.status || "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <button
-                        type="button"
-                        onClick={() => openUserDrawer(u)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d4ecd0] bg-white text-[#1e4a24] transition-colors hover:bg-[#f0f9ee]"
-                        aria-label="Ver usuário"
-                        title="Ver usuário"
-                      >
-                        <Eye size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-              </div>
-            </div>
-
-          {/* footer/paginação visual no padrão tabela de pipeline */}
+          <CrmResizableDataTable
+            tableId="crm-conta-equipe"
+            columns={colunasEquipe}
+            rows={filteredUsers}
+            rowKey={(u) => u.id}
+            rowCellClassName="px-4 py-3 align-top"
+            getRowStyle={(_, idx) => ({ borderTop: idx > 0 ? "1px solid #edf3fb" : "none" })}
+          />
           <div className="flex items-center justify-between border-t border-[#edf3fb] px-4 py-3">
             <p className="text-xs text-[#6f86a6]">
               {filteredUsers.length > 0
@@ -1033,6 +1607,74 @@ export default function ContaPage() {
             </div>
           </div>
             </>
+          ) : contaSectionTab === "cargos" ? (
+            <>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#eef5ec] px-4 py-2">
+            {canManageTeam ? (
+              <button
+                type="button"
+                onClick={() => openRoleDrawerForCreate()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-bold"
+                style={{ background: "#0b1f10", color: "#92ff00" }}
+              >
+                <Plus size={13} /> Novo cargo
+              </button>
+            ) : null}
+          </div>
+
+          <div className="border-b border-[#eef5ec] px-4 py-3">
+            <div className="flex h-10 items-center gap-2 rounded-xl border border-[#d4ecd0] bg-white px-3">
+              <Search size={14} className="text-[#6b8a76]" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar por cargo, slug ou descrição..."
+                className="w-full bg-transparent text-sm text-[#1e3a23] outline-none placeholder:text-[#90a89b]"
+              />
+            </div>
+          </div>
+
+          {filteredCargos.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <Shield className="mx-auto mb-3 h-8 w-8 text-[#3f9848]" />
+              <p className="text-sm font-semibold text-[#0b2210]">Nenhum cargo cadastrado</p>
+              <p className="mt-1 text-xs text-[#6b8a76]">
+                Crie cargos com permissões por módulo e atribua à equipe em Equipe e acessos.
+              </p>
+              {canManageTeam ? (
+                <button
+                  type="button"
+                  onClick={() => openRoleDrawerForCreate()}
+                  className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold"
+                  style={{ background: "#0b1f10", color: "#92ff00" }}
+                >
+                  <Plus size={14} />
+                  Criar primeiro cargo
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <CrmResizableDataTable
+                tableId="crm-conta-cargos"
+                columns={colunasCargos}
+                rows={filteredCargos}
+                rowKey={(r) => r.id}
+                rowCellClassName="px-4 py-3 align-top"
+                getRowStyle={(_, idx) => ({ borderTop: idx > 0 ? "1px solid #edf3fb" : "none" })}
+                onRowClick={canManageTeam ? (r) => openRoleDrawerForEdit(r.id) : undefined}
+              />
+              <div className="flex items-center justify-between border-t border-[#edf3fb] px-4 py-3">
+                <p className="text-xs text-[#6f86a6]">
+                  {filteredCargos.length > 0
+                    ? `Exibindo 1-${filteredCargos.length} de ${roles.length} cargos`
+                    : `Exibindo 0 de ${roles.length} cargos`}
+                </p>
+                <p className="text-xs text-[#6b8a76]">Clique numa linha ou use os botões de ação para gerir o cargo</p>
+              </div>
+            </>
+          )}
+            </>
           ) : (
             <div className="w-full min-w-0">
               <div className="flex items-center justify-between border-b border-[#eef5ec] px-4 py-3">
@@ -1064,39 +1706,14 @@ export default function ContaPage() {
                       Nenhum evento registado ainda. Alterações em usuários e cargos passam a aparecer aqui.
                     </p>
                   ) : (
-                    <table className="w-full min-w-[1100px] table-fixed text-left">
-                      <thead className="bg-[#f7fbff] sticky top-0 z-10">
-                        <tr>
-                          <th className="w-[160px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Data</th>
-                          <th className="w-[200px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Quem</th>
-                          <th className="w-[140px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Ação</th>
-                          <th className="w-[120px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Entidade</th>
-                          <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">Resumo</th>
-                          <th className="w-[120px] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#61789b]">ID</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {auditLogs.map((log, idx) => (
-                          <tr key={log.id} style={{ borderTop: idx > 0 ? "1px solid #edf3fb" : "none" }}>
-                            <td className="px-4 py-3 align-top text-xs text-[#4e657f]">{formatDateTime(log.criado_em)}</td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="truncate text-sm font-semibold text-[#0b2210]" title={log.actor_nome ?? undefined}>
-                                {log.actor_nome || "—"}
-                              </div>
-                              <div className="truncate text-xs text-[#6f86a6]" title={log.actor_email ?? undefined}>
-                                {log.actor_email || "—"}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 align-top text-sm text-[#1e4a24]">{acaoAuditoriaLabel(log.acao)}</td>
-                            <td className="px-4 py-3 align-top text-xs text-[#4e657f]">{log.entidade}</td>
-                            <td className="px-4 py-3 align-top text-sm text-[#0b2210]">{log.resumo}</td>
-                            <td className="px-4 py-3 align-top">
-                              <IdBadge value={log.entidade_id} tone="gray" />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <CrmResizableDataTable
+                      tableId="crm-conta-auditoria"
+                      columns={colunasAuditoria}
+                      rows={auditLogs}
+                      rowKey={(log) => log.id}
+                      rowCellClassName="px-4 py-3 align-top"
+                      getRowStyle={(_, idx) => ({ borderTop: idx > 0 ? "1px solid #edf3fb" : "none" })}
+                    />
                   )}
                 </div>
               </div>
@@ -1110,43 +1727,79 @@ export default function ContaPage() {
             type="button"
             onClick={() => setUserDrawerOpen(false)}
             className="absolute inset-0"
-            style={{ background: "rgba(11,31,16,0.32)" }}
+            style={{ background: RF_OVERLAY }}
             aria-label="Fechar painel do usuário"
           />
-          <div className="relative flex h-full w-full max-w-[48rem] flex-col border-l border-[#dcebd8] bg-white shadow-[-10px_0_40px_rgba(11,31,16,0.15)]">
-            <div className="flex-shrink-0 border-b border-[#e7f1e4] px-6 py-4">
+          <div
+            className="relative flex h-full w-full max-w-[48rem] flex-col"
+            style={{
+              background: RF_BG_DEEP,
+              borderLeft: `1px solid ${RF_BORDER_STRONG}`,
+              boxShadow: "-12px 0 32px rgba(0,0,0,0.55)",
+            }}
+          >
+            <div
+              className="flex-shrink-0 px-6 py-4"
+              style={{ borderBottom: `1px solid ${RF_BORDER}`, background: RF_BG_PANEL }}
+            >
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-base font-bold text-[#0b2210]">Detalhes do usuário</h3>
-                <span className="text-xs text-[#6f86a6]">ID: {selectedUser.id.slice(0, 8)}...</span>
+                <h3 className="text-base font-bold" style={{ color: RF_TEXT_PRIMARY }}>
+                  {userDrawerMode === "edit" ? "Editar usuário" : "Detalhes do usuário"}
+                </h3>
+                <span className="text-xs" style={{ color: RF_TEXT_MUTED }}>
+                  ID: {selectedUser.id.slice(0, 8)}...
+                </span>
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">Nome</span>
+                  <span style={RF_LABEL_STYLE}>Nome</span>
                   <input
                     value={selectedUserName}
                     onChange={(e) => setSelectedUserName(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#d4ecd0] px-3 text-sm text-[#0b2210] outline-none focus:ring-2 focus:ring-[#92ff00]/30"
+                    readOnly={userDrawerReadOnly}
+                style={{
+                      ...RF_INPUT_STYLE,
+                      height: 44,
+                      borderRadius: 12,
+                      fontSize: 14,
+                      ...(userDrawerReadOnly ? { opacity: 0.85, color: RF_TEXT_MUTED } : {}),
+                    }}
                   />
                 </label>
 
                 <label className="space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">E-mail</span>
+                  <span style={RF_LABEL_STYLE}>E-mail</span>
                   <input
                     value={selectedUser.email ?? ""}
                     readOnly
-                    className="h-11 w-full rounded-xl border border-[#e3eee0] bg-[#f8fdf6] px-3 text-sm text-[#567564] outline-none"
+                    style={{
+                      ...RF_INPUT_STYLE,
+                      height: 44,
+                      borderRadius: 12,
+                      fontSize: 14,
+                      opacity: 0.85,
+                      color: RF_TEXT_MUTED,
+                    }}
                   />
                 </label>
 
                 <label className="space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">Perfil base</span>
+                  <span style={RF_LABEL_STYLE}>Perfil base</span>
                   <select
                     value={selectedUserRole}
                     onChange={(e) => handleUserBaseRoleChange(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#d4ecd0] bg-white px-3 text-sm text-[#1e4a24]"
+                    disabled={userDrawerReadOnly}
+                    style={{
+                      ...RF_INPUT_STYLE,
+                      height: 44,
+                      borderRadius: 12,
+                      fontSize: 14,
+                      cursor: userDrawerReadOnly ? "default" : "pointer",
+                      ...(userDrawerReadOnly ? { opacity: 0.85, color: RF_TEXT_MUTED } : {}),
+                    }}
                   >
                     <option value="owner">Owner</option>
                     <option value="admin">Admin</option>
@@ -1157,11 +1810,19 @@ export default function ContaPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">Status</span>
+                  <span style={RF_LABEL_STYLE}>Status</span>
                   <select
                     value={selectedUserStatus}
                     onChange={(e) => setSelectedUserStatus(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#d4ecd0] bg-white px-3 text-sm text-[#1e4a24]"
+                    disabled={userDrawerReadOnly}
+                    style={{
+                      ...RF_INPUT_STYLE,
+                      height: 44,
+                      borderRadius: 12,
+                      fontSize: 14,
+                      cursor: userDrawerReadOnly ? "default" : "pointer",
+                      ...(userDrawerReadOnly ? { opacity: 0.85, color: RF_TEXT_MUTED } : {}),
+                    }}
                   >
                     <option value="Ativo">Ativo</option>
                     <option value="Inativo">Inativo</option>
@@ -1170,11 +1831,19 @@ export default function ContaPage() {
                 </label>
 
                 <label className="space-y-1 md:col-span-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">Cargo de acesso</span>
+                  <span style={RF_LABEL_STYLE}>Cargo de acesso</span>
                   <select
                     value={selectedUserAccessRole}
                     onChange={(e) => handleUserAccessRoleChange(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#d4ecd0] bg-white px-3 text-sm text-[#1e4a24]"
+                    disabled={userDrawerReadOnly}
+                    style={{
+                      ...RF_INPUT_STYLE,
+                      height: 44,
+                      borderRadius: 12,
+                      fontSize: 14,
+                      cursor: userDrawerReadOnly ? "default" : "pointer",
+                      ...(userDrawerReadOnly ? { opacity: 0.85, color: RF_TEXT_MUTED } : {}),
+                    }}
                   >
                     <option value="">Sem cargo customizado</option>
                     {rolesActive.map((r) => (
@@ -1183,11 +1852,12 @@ export default function ContaPage() {
                       </option>
                     ))}
                   </select>
-                  {owner && !selectedUserAccessRole ? (
+                  {canManageTeam && !userDrawerReadOnly && !selectedUserAccessRole ? (
                     <button
                       type="button"
                       onClick={() => openRoleDrawerForCreate()}
-                      className="mt-2 text-xs font-semibold text-[#3f9848] underline-offset-2 hover:underline"
+                      className="mt-2 text-xs font-semibold underline-offset-2 hover:underline"
+                      style={{ color: RF_ACCENT }}
                     >
                       + Criar cargo e atribuir a este usuário
                     </button>
@@ -1196,22 +1866,36 @@ export default function ContaPage() {
               </div>
 
               <div className="mt-6 space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">Permissões efetivas</p>
+                <p style={{ ...RF_LABEL_STYLE, marginBottom: 8 }}>Permissões efetivas</p>
                 {isOwner(selectedUserRole) && !selectedUserAccessRole ? (
-                  <p className="rounded-xl border border-[#dcebd8] bg-[#f0f9ee] px-3 py-2 text-xs leading-relaxed text-[#3d6b4f]">
-                    Perfil <strong>Owner</strong> tem acesso total ao sistema. Os toggles abaixo mostram o padrão completo (somente leitura).
-                    Para restringir módulos, crie um <strong>cargo de acesso</strong> e atribua a este usuário.
+                  <p
+                    className="rounded-xl px-3 py-2 text-xs leading-relaxed"
+                    style={{
+                      border: `1px solid ${RF_BORDER_STRONG}`,
+                      background: "rgba(146, 255, 0, 0.08)",
+                      color: RF_TEXT_SECONDARY,
+                    }}
+                  >
+                    Perfil <strong style={{ color: RF_ACCENT }}>Owner</strong> tem acesso total ao sistema. Os toggles abaixo mostram o padrão completo (somente leitura).
+                    Para restringir módulos, crie um <strong style={{ color: RF_ACCENT }}>cargo de acesso</strong> e atribua a este usuário.
                   </p>
                 ) : !selectedUserAccessRole ? (
-                  <p className="rounded-xl border border-[#dcebd8] bg-[#fafcfa] px-3 py-2 text-xs leading-relaxed text-[#6b8a76]">
+                  <p
+                    className="rounded-xl px-3 py-2 text-xs leading-relaxed"
+                    style={{
+                      border: `1px solid ${RF_BORDER}`,
+                      background: "rgba(6, 13, 8, 0.72)",
+                      color: RF_TEXT_SECONDARY,
+                    }}
+                  >
                     Sem cargo customizado: permissões estimadas pelo perfil base. Selecione um cargo acima para editar módulos com toggles.
                   </p>
                 ) : userDrawerPermsReadOnly ? (
-                  <p className="text-xs text-[#6b8a76]">
-                    Permissões do cargo <strong>{roleNameById.get(selectedUserAccessRole) ?? "—"}</strong>.
+                  <p className="text-xs" style={{ color: RF_TEXT_SECONDARY }}>
+                    Permissões do cargo <strong style={{ color: RF_ACCENT }}>{roleNameById.get(selectedUserAccessRole) ?? "—"}</strong>.
                   </p>
                 ) : (
-                  <p className="text-xs text-[#6b8a76]">
+                  <p className="text-xs" style={{ color: RF_TEXT_SECONDARY }}>
                     Alterações nos toggles atualizam o cargo vinculado e afetam todos os usuários com esse cargo.
                   </p>
                 )}
@@ -1223,7 +1907,8 @@ export default function ContaPage() {
                     description="Visão geral de métricas, KPIs e resumo operacional"
                     checked={userDrawerPerms.pDashboard}
                     onChange={(v) => setUserDrawerPerms((s) => ({ ...s, pDashboard: v }))}
-                    disabled={userDrawerPermsReadOnly}
+                    disabled={userDrawerReadOnly || userDrawerPermsReadOnly}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={UserSearch}
@@ -1231,7 +1916,8 @@ export default function ContaPage() {
                     description="Pipeline de leads e funil comercial"
                     checked={userDrawerPerms.pLeads}
                     onChange={(v) => setUserDrawerPerms((s) => ({ ...s, pLeads: v }))}
-                    disabled={userDrawerPermsReadOnly}
+                    disabled={userDrawerReadOnly || userDrawerPermsReadOnly}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={Briefcase}
@@ -1239,7 +1925,8 @@ export default function ContaPage() {
                     description="Negócios, propostas e oportunidades"
                     checked={userDrawerPerms.pNegocios}
                     onChange={(v) => setUserDrawerPerms((s) => ({ ...s, pNegocios: v }))}
-                    disabled={userDrawerPermsReadOnly}
+                    disabled={userDrawerReadOnly || userDrawerPermsReadOnly}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={MessageSquare}
@@ -1247,15 +1934,8 @@ export default function ContaPage() {
                     description="Inbox, WhatsApp e atendimento"
                     checked={userDrawerPerms.pAtendimento}
                     onChange={(v) => setUserDrawerPerms((s) => ({ ...s, pAtendimento: v }))}
-                    disabled={userDrawerPermsReadOnly}
-                  />
-                  <PermissionToggleRow
-                    icon={Users}
-                    title="Cadastros"
-                    description="Pessoas, empresas e parceiros"
-                    checked={userDrawerPerms.pCadastros}
-                    onChange={(v) => setUserDrawerPerms((s) => ({ ...s, pCadastros: v }))}
-                    disabled={userDrawerPermsReadOnly}
+                    disabled={userDrawerReadOnly || userDrawerPermsReadOnly}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={Zap}
@@ -1263,7 +1943,8 @@ export default function ContaPage() {
                     description="Fluxos, ciclos e agentes IA"
                     checked={userDrawerPerms.pAutomacoes}
                     onChange={(v) => setUserDrawerPerms((s) => ({ ...s, pAutomacoes: v }))}
-                    disabled={userDrawerPermsReadOnly}
+                    disabled={userDrawerReadOnly || userDrawerPermsReadOnly}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={Settings}
@@ -1271,41 +1952,359 @@ export default function ContaPage() {
                     description="Conta, cargos e permissões da equipe"
                     checked={userDrawerPerms.pConfiguracoes}
                     onChange={(v) => setUserDrawerPerms((s) => ({ ...s, pConfiguracoes: v }))}
-                    disabled={userDrawerPermsReadOnly}
+                    disabled={userDrawerReadOnly || userDrawerPermsReadOnly}
+                    theme="dark"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-[#e7f1e4] px-6 py-4">
-              <button
-                type="button"
-                onClick={() => void deleteSelectedUser()}
-                disabled={savingUserDrawer || !owner}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold disabled:opacity-60"
-                style={{ borderColor: "#f0c0bd", color: "#c0392b", background: "#fff2f1" }}
-              >
-                <Trash2 size={14} /> Excluir usuário
-              </button>
+            <div
+              className={`flex flex-shrink-0 items-center gap-2 px-6 py-4 ${userDrawerMode === "edit" ? "justify-between" : "justify-end"}`}
+              style={rfAsideFooterStyle()}
+            >
+              {userDrawerMode === "edit" ? (
+                <button
+                  type="button"
+                  onClick={() => void deleteSelectedUser()}
+                  disabled={savingUserDrawer || !owner}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold disabled:opacity-60"
+                  style={{ borderColor: "rgba(248, 81, 73, 0.45)", color: "#f85149", background: "rgba(248, 81, 73, 0.14)" }}
+                >
+                  <Trash2 size={14} /> Excluir usuário
+                </button>
+              ) : (
+                <span />
+              )}
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setUserDrawerOpen(false)}
-                  className="h-10 rounded-xl border border-[#d4ecd0] px-3 text-sm font-medium text-[#3d6b4f]"
+                  className="h-10 rounded-xl border px-3 text-sm font-medium"
+                  style={{ borderColor: RF_BORDER_STRONG, color: RF_TEXT_SECONDARY, background: "rgba(6, 13, 8, 0.6)" }}
                 >
                   Fechar
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void saveUserDrawer()}
-                  disabled={savingUserDrawer || !owner}
-                  className="h-10 rounded-xl px-4 text-sm font-semibold disabled:opacity-60"
-                  style={{ background: "#0b1f10", color: "#92ff00" }}
-                >
-                  {savingUserDrawer ? "Salvando..." : "Salvar alterações"}
-                </button>
+                {userDrawerMode === "edit" ? (
+                  <button
+                    type="button"
+                    onClick={() => void saveUserDrawer()}
+                    disabled={savingUserDrawer || !owner}
+                    className="h-10 rounded-xl px-4 text-sm font-semibold disabled:opacity-60"
+                    style={{ background: "#0b1f10", color: "#92ff00" }}
+                  >
+                    {savingUserDrawer ? "Salvando..." : "Salvar alterações"}
+                  </button>
+                ) : canManageTeam ? (
+                  <button
+                    type="button"
+                    onClick={() => setUserDrawerMode("edit")}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold"
+                    style={{ background: "#0b1f10", color: "#92ff00" }}
+                  >
+                    <Pencil size={14} />
+                    Editar
+                  </button>
+                ) : null}
+            </div>
+          </div>
+        </div>
+          </div>
+        )}
+
+      {inviteDrawerOpen && (
+        <div className="fixed inset-0 z-[122] flex justify-end">
+          <button
+            type="button"
+            onClick={() => fecharInviteDrawer()}
+            className="absolute inset-0"
+            style={{ background: RF_OVERLAY }}
+            aria-label="Fechar painel"
+          />
+          <div
+            className="relative flex h-full w-full max-w-[48rem] flex-col"
+            style={{
+              background: RF_BG_DEEP,
+              borderLeft: `1px solid ${RF_BORDER_STRONG}`,
+              boxShadow: "-12px 0 32px rgba(0,0,0,0.55)",
+            }}
+          >
+            <div
+              className="flex-shrink-0 px-6 py-4"
+              style={{ borderBottom: `1px solid ${RF_BORDER}`, background: RF_BG_PANEL }}
+            >
+              <div className="flex items-center gap-2">
+                {inviteSuccess ? (
+                  <CheckCircle2 size={16} style={{ color: RF_ACCENT }} />
+                ) : (
+                  <UserPlus size={16} style={{ color: RF_ACCENT }} />
+                )}
+                <h3 className="text-base font-bold" style={{ color: RF_TEXT_PRIMARY }}>
+                  {inviteSuccess ? "Usuário criado" : "Novo usuário"}
+                </h3>
               </div>
+              <p className="mt-2 text-xs leading-relaxed" style={{ color: RF_TEXT_MUTED }}>
+                {inviteSuccess ? (
+                  <>
+                    {inviteSuccess.linked
+                      ? "O membro foi vinculado à empresa com o cargo selecionado."
+                      : "O usuário foi cadastrado com sucesso."}{" "}
+                    Copie as credenciais abaixo e envie de forma segura para a pessoa.
+                  </>
+                ) : (
+                  <>
+                    O acesso no Waje é definido pelo <strong style={{ color: RF_ACCENT }}>cargo de acesso</strong>.
+                    Cadastre e-mail e senha, copie os dados para enviar à pessoa e escolha o cargo com as permissões
+                    desejadas.
+                  </>
+                )}
+              </p>
+          </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              {inviteSuccess ? (
+                <div className="space-y-4">
+                  <div
+                    className="rounded-xl border px-4 py-3"
+                    style={{
+                      borderColor: "rgba(146,255,0,0.35)",
+                      background: "rgba(146,255,0,0.08)",
+                    }}
+                  >
+                    <p className="text-sm font-semibold" style={{ color: RF_ACCENT }}>
+                      Pronto para compartilhar
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: RF_TEXT_MUTED }}>
+                      Estas credenciais só aparecem agora. Copie antes de fechar este painel.
+                    </p>
+        </div>
+
+                  <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: RF_BORDER, background: RF_BG_PANEL }}>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: RF_TEXT_MUTED }}>
+                        URL de acesso
+                      </p>
+                      <p className="mt-1 break-all text-sm font-medium" style={{ color: RF_TEXT_PRIMARY }}>
+                        {`${window.location.origin}/login`}
+                      </p>
+            </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: RF_TEXT_MUTED }}>
+                        E-mail
+                      </p>
+                      <p className="mt-1 break-all text-sm font-medium" style={{ color: RF_TEXT_PRIMARY }}>
+                        {inviteSuccess.email}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: RF_TEXT_MUTED }}>
+                        Senha
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="flex-1 break-all font-mono text-sm" style={{ color: RF_TEXT_PRIMARY }}>
+                          {showSuccessPassword ? inviteSuccess.password : "••••••••••••"}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowSuccessPassword((v) => !v)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg"
+                          style={{ color: RF_TEXT_MUTED, background: "transparent", border: "none", cursor: "pointer" }}
+                          aria-label={showSuccessPassword ? "Ocultar senha" : "Mostrar senha"}
+                        >
+                          {showSuccessPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                    {inviteSuccess.cargoNome ? (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: RF_TEXT_MUTED }}>
+                          Cargo de acesso
+                        </p>
+                        <p className="mt-1 text-sm font-medium" style={{ color: RF_TEXT_PRIMARY }}>
+                          {inviteSuccess.cargoNome}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void copiarCredenciais(
+                        inviteSuccess.email,
+                        inviteSuccess.password,
+                        inviteSuccess.cargoNome,
+                      )
+                    }
+                    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold"
+                    style={{ background: "#0b1f10", color: "#92ff00" }}
+                  >
+                    <Copy size={16} />
+                    Copiar credenciais
+                  </button>
+                </div>
+              ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="space-y-1 md:col-span-2">
+                  <span style={RF_LABEL_STYLE}>E-mail *</span>
+                  <input
+                    type="email"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                    style={{ ...RF_INPUT_STYLE, height: 44, borderRadius: 12, fontSize: 14 }}
+                    placeholder="usuario@empresa.com"
+                  />
+                </label>
+
+                <label className="space-y-1 md:col-span-2">
+                  <span style={RF_LABEL_STYLE}>Nome</span>
+                  <input
+                    value={inviteForm.name}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
+                    style={{ ...RF_INPUT_STYLE, height: 44, borderRadius: 12, fontSize: 14 }}
+                    placeholder="Nome completo"
+                  />
+                </label>
+
+                <label className="space-y-1">
+                  <span style={RF_LABEL_STYLE}>Senha *</span>
+                  <div className="relative">
+                    <input
+                      type={showInvitePassword ? "text" : "password"}
+                      value={inviteForm.password}
+                      onChange={(e) => setInviteForm((f) => ({ ...f, password: e.target.value }))}
+                      style={{ ...RF_INPUT_STYLE, height: 44, borderRadius: 12, fontSize: 14, paddingRight: 44 }}
+                      placeholder="Mínimo 8 caracteres"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInvitePassword((v) => !v)}
+                      className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg"
+                      style={{ color: RF_TEXT_MUTED, background: "transparent", border: "none", cursor: "pointer" }}
+                      aria-label={showInvitePassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showInvitePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </label>
+
+                <label className="space-y-1">
+                  <span style={RF_LABEL_STYLE}>Confirmar senha *</span>
+                  <div className="relative">
+                    <input
+                      type={showInvitePasswordConfirm ? "text" : "password"}
+                      value={inviteForm.passwordConfirm}
+                      onChange={(e) => setInviteForm((f) => ({ ...f, passwordConfirm: e.target.value }))}
+                      style={{ ...RF_INPUT_STYLE, height: 44, borderRadius: 12, fontSize: 14, paddingRight: 44 }}
+                      placeholder="Repita a senha"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInvitePasswordConfirm((v) => !v)}
+                      className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg"
+                      style={{ color: RF_TEXT_MUTED, background: "transparent", border: "none", cursor: "pointer" }}
+                      aria-label={showInvitePasswordConfirm ? "Ocultar confirmação" : "Mostrar confirmação"}
+                    >
+                      {showInvitePasswordConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </label>
+
+                <label className="space-y-1 md:col-span-2">
+                  <span style={RF_LABEL_STYLE}>Cargo de acesso *</span>
+                  <select
+                    value={inviteForm.access_role_id}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, access_role_id: e.target.value }))}
+                    style={{ ...RF_INPUT_STYLE, height: 44, borderRadius: 12, fontSize: 14, cursor: "pointer" }}
+                  >
+                    <option value="">Selecione um cargo</option>
+                    {rolesActive.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.nome}
+                      </option>
+                    ))}
+                  </select>
+                  {rolesActive.length === 0 ? (
+                    <p className="mt-1 text-xs" style={{ color: RF_TEXT_MUTED }}>
+                      Crie um cargo em <strong style={{ color: RF_ACCENT }}>Novo cargo</strong> antes de cadastrar o
+                      usuário.
+                    </p>
+                  ) : null}
+                </label>
+          </div>
+        )}
+            </div>
+
+            <div
+              className="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 px-6 py-4"
+              style={rfAsideFooterStyle()}
+            >
+              {inviteSuccess ? (
+                <>
+          <button
+            type="button"
+                    onClick={() => {
+                      setInviteSuccess(null);
+                      setShowSuccessPassword(false);
+                      resetInviteForm();
+                    }}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl border px-4 text-sm font-medium"
+                    style={{ borderColor: RF_BORDER_STRONG, color: RF_ACCENT, background: "rgba(6, 13, 8, 0.6)" }}
+                  >
+                    <UserPlus size={14} />
+                    Cadastrar outro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fecharInviteDrawer()}
+                    className="h-10 rounded-xl px-5 text-sm font-semibold"
+                    style={{ background: "#0b1f10", color: "#92ff00" }}
+                  >
+                    Fechar
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void copiarAcessoUsuario()}
+                    disabled={!inviteForm.email.trim() || inviteForm.password.length < 8}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl border px-4 text-sm font-medium disabled:opacity-50"
+                    style={{ borderColor: RF_BORDER_STRONG, color: RF_ACCENT, background: "rgba(6, 13, 8, 0.6)" }}
+                  >
+                    <Copy size={14} />
+                    Copiar acesso
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fecharInviteDrawer()}
+                      className="h-10 rounded-xl border px-4 text-sm font-medium"
+                      style={{ borderColor: RF_BORDER_STRONG, color: RF_TEXT_SECONDARY, background: "rgba(6, 13, 8, 0.6)" }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void cadastrarUsuario()}
+                      disabled={
+                        inviteSaving ||
+                        !inviteForm.email.trim() ||
+                        !inviteForm.access_role_id ||
+                        inviteForm.password.length < 8 ||
+                        inviteForm.password !== inviteForm.passwordConfirm
+                      }
+                      className="h-10 rounded-xl px-5 text-sm font-semibold disabled:opacity-60"
+                      style={{ background: "#0b1f10", color: "#92ff00" }}
+                    >
+                      {inviteSaving ? "Salvando..." : "Cadastrar usuário"}
+          </button>
+        </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1317,56 +2316,78 @@ export default function ContaPage() {
             type="button"
             onClick={() => setRoleDrawerOpen(false)}
             className="absolute inset-0"
-            style={{ background: "rgba(11,31,16,0.32)" }}
+            style={{ background: RF_OVERLAY }}
             aria-label="Fechar painel"
           />
-          <div className="relative flex h-full w-full max-w-[48rem] flex-col border-l border-[#dcebd8] bg-white shadow-[-10px_0_40px_rgba(11,31,16,0.15)]">
+          <div
+            className="relative flex h-full w-full max-w-[48rem] flex-col"
+            style={{
+              background: RF_BG_DEEP,
+              borderLeft: `1px solid ${RF_BORDER_STRONG}`,
+              boxShadow: "-12px 0 32px rgba(0,0,0,0.55)",
+            }}
+          >
             {/* Header fixo */}
-            <div className="flex-shrink-0 border-b border-[#e7f1e4] px-6 py-4">
+            <div
+              className="flex-shrink-0 px-6 py-4"
+              style={{ borderBottom: `1px solid ${RF_BORDER}`, background: RF_BG_PANEL }}
+            >
               <div className="flex items-center gap-2">
-                <Shield size={16} className="text-[#3f9848]" />
-                <h3 className="text-base font-bold text-[#0b2210]">{editingRoleId ? "Editar cargo de acesso" : "Novo cargo de acesso"}</h3>
+                <Shield size={16} style={{ color: RF_ACCENT }} />
+                <h3 className="text-base font-bold" style={{ color: RF_TEXT_PRIMARY }}>
+                  {editingRoleId ? "Editar cargo de acesso" : "Novo cargo de acesso"}
+                </h3>
               </div>
+              <p className="mt-2 text-xs leading-relaxed" style={{ color: RF_TEXT_MUTED }}>
+                {editingRoleId ? (
+                  <>
+                    {userCountByRoleId.get(editingRoleId) ?? 0} usuário(s) vinculado(s). Alterações nas permissões
+                    afetam todos os membros com este cargo.
+                  </>
+                ) : (
+                  <>Defina nome, módulos e status. Depois atribua o cargo aos usuários em Equipe e acessos.</>
+                )}
+              </p>
             </div>
 
             {/* Conteúdo com scroll */}
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
             <div className="space-y-3">
               <label className="space-y-1">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">Nome</span>
+                <span style={RF_LABEL_STYLE}>Nome</span>
                 <input
                   value={roleForm.nome}
                   onChange={(e) => setRoleForm((s) => ({ ...s, nome: e.target.value }))}
-                  className="h-11 w-full rounded-xl border border-[#d4ecd0] px-3 text-sm text-[#0b2210] outline-none focus:ring-2 focus:ring-[#92ff00]/30"
+                  style={{ ...RF_INPUT_STYLE, height: 44, borderRadius: 12, fontSize: 14 }}
                   placeholder="Ex: Comercial SDR"
                 />
               </label>
 
               <label className="space-y-1">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">Slug</span>
+                <span style={RF_LABEL_STYLE}>Slug</span>
                 <input
                   value={roleForm.slug}
                   onChange={(e) => setRoleForm((s) => ({ ...s, slug: e.target.value }))}
-                  className="h-11 w-full rounded-xl border border-[#d4ecd0] px-3 text-sm text-[#0b2210] outline-none focus:ring-2 focus:ring-[#92ff00]/30"
+                  style={{ ...RF_INPUT_STYLE, height: 44, borderRadius: 12, fontSize: 14 }}
                   placeholder="comercial-sdr"
                 />
               </label>
 
               <label className="space-y-1">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#89a095]">Descrição</span>
+                <span style={RF_LABEL_STYLE}>Descrição</span>
                 <textarea
                   value={roleForm.descricao}
                   onChange={(e) => setRoleForm((s) => ({ ...s, descricao: e.target.value }))}
-                  className="min-h-24 w-full rounded-xl border border-[#d4ecd0] px-3 py-2 text-sm text-[#0b2210] outline-none focus:ring-2 focus:ring-[#92ff00]/30"
+                  style={{ ...RF_INPUT_STYLE, minHeight: 96, borderRadius: 12, fontSize: 14, resize: "vertical" }}
                   placeholder="Resumo das responsabilidades deste cargo"
                 />
               </label>
 
               <div className="space-y-2">
-                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#89a095" }}>
+                <p className="mb-3" style={RF_LABEL_STYLE}>
                   Permissões do cargo
                 </p>
-                <p className="text-xs leading-relaxed text-[#6b8a76]">
+                <p className="text-xs leading-relaxed" style={{ color: RF_TEXT_SECONDARY }}>
                   Defina os módulos que este cargo pode acessar. O status de cada bloco mostra imediatamente se o acesso está ativo ou inativo.
                 </p>
 
@@ -1378,17 +2399,21 @@ export default function ContaPage() {
                   checked={Boolean(roleForm.ativo)}
                   onChange={(v) => setRoleForm((s) => ({ ...s, ativo: v }))}
                   variant="status"
+                  theme="dark"
                 />
 
                 {/* Permissões individuais */}
                 <div className="mt-3 space-y-2">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#96a89e" }}>Módulos disponíveis</p>
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: RF_TEXT_MUTED }}>
+                    Módulos disponíveis
+                  </p>
                   <PermissionToggleRow
                     icon={LayoutDashboard}
                     title="Dashboard"
                     description="Visão geral de métricas, KPIs e resumo operacional do dia"
                     checked={Boolean(roleForm.pDashboard)}
                     onChange={(v) => setRoleForm((s) => ({ ...s, pDashboard: v }))}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={UserSearch}
@@ -1396,6 +2421,7 @@ export default function ContaPage() {
                     description="Pipeline de leads, qualificações e estágios de funil"
                     checked={Boolean(roleForm.pLeads)}
                     onChange={(v) => setRoleForm((s) => ({ ...s, pLeads: v }))}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={Briefcase}
@@ -1403,6 +2429,7 @@ export default function ContaPage() {
                     description="Gestão de negócios, propostas e oportunidades comerciais"
                     checked={Boolean(roleForm.pNegocios)}
                     onChange={(v) => setRoleForm((s) => ({ ...s, pNegocios: v }))}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={MessageSquare}
@@ -1410,13 +2437,7 @@ export default function ContaPage() {
                     description="Inbox de conversas, WhatsApp e atendimento ao cliente"
                     checked={Boolean(roleForm.pAtendimento)}
                     onChange={(v) => setRoleForm((s) => ({ ...s, pAtendimento: v }))}
-                  />
-                  <PermissionToggleRow
-                    icon={Users}
-                    title="Cadastros"
-                    description="Cadastro de pessoas, empresas e parceiros"
-                    checked={Boolean(roleForm.pCadastros)}
-                    onChange={(v) => setRoleForm((s) => ({ ...s, pCadastros: v }))}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={Zap}
@@ -1424,6 +2445,7 @@ export default function ContaPage() {
                     description="Fluxos automáticos, ciclos e agentes IA"
                     checked={Boolean(roleForm.pAutomacoes)}
                     onChange={(v) => setRoleForm((s) => ({ ...s, pAutomacoes: v }))}
+                    theme="dark"
                   />
                   <PermissionToggleRow
                     icon={Settings}
@@ -1431,6 +2453,7 @@ export default function ContaPage() {
                     description="Configurações da conta, cargos e permissões de equipe"
                     checked={Boolean(roleForm.pConfiguracoes)}
                     onChange={(v) => setRoleForm((s) => ({ ...s, pConfiguracoes: v }))}
+                    theme="dark"
                   />
                 </div>
               </div>
@@ -1438,11 +2461,12 @@ export default function ContaPage() {
             </div>
 
             {/* Footer fixo */}
-            <div className="flex flex-shrink-0 items-center justify-end gap-2 border-t border-[#e7f1e4] px-6 py-4">
+            <div className="flex flex-shrink-0 items-center justify-end gap-2 px-6 py-4" style={rfAsideFooterStyle()}>
               <button
                 type="button"
                 onClick={() => setRoleDrawerOpen(false)}
-                className="h-10 rounded-xl border border-[#d4ecd0] px-4 text-sm font-medium text-[#3d6b4f]"
+                className="h-10 rounded-xl border px-4 text-sm font-medium"
+                style={{ borderColor: RF_BORDER_STRONG, color: RF_TEXT_SECONDARY, background: "rgba(6, 13, 8, 0.6)" }}
               >
                 Cancelar
               </button>

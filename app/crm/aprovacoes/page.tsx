@@ -6,6 +6,7 @@ import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
+import { useCrmToast } from "@/lib/crm/crm-feedback";
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const C = {
@@ -55,21 +56,6 @@ function rel(d: string) {
   return m < 1 ? "agora" : m < 60 ? `${Math.round(m)}min` : `${Math.round(m / 60)}h`;
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-function Toast({ msg, tipo }: { msg: string; tipo: "ok" | "erro" }) {
-  return (
-    <div style={{
-      position: "fixed", bottom: 24, right: 24, zIndex: 9999,
-      background: tipo === "ok" ? C.green : C.red,
-      color: "#fff", padding: "10px 18px", borderRadius: 10,
-      fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,40,26,0.2)",
-      animation: "fadeInUp 0.25s ease",
-    }}>
-      {tipo === "ok" ? "✓ " : "✕ "}{msg}
-    </div>
-  );
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 function AprovacoesInner() {
   const searchParams = useSearchParams();
@@ -84,11 +70,11 @@ function AprovacoesInner() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [processando, setProcessando] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; tipo: "ok" | "erro" } | null>(null);
+  const { success: toastSuccess, error: toastError } = useCrmToast();
 
   function showToast(msg: string, tipo: "ok" | "erro" = "ok") {
-    setToast({ msg, tipo });
-    setTimeout(() => setToast(null), 3500);
+    if (tipo === "erro") toastError(msg);
+    else toastSuccess(msg);
   }
 
   useEffect(() => {
@@ -410,7 +396,6 @@ function AprovacoesInner() {
         )}
       </div>
 
-      {toast && <Toast msg={toast.msg} tipo={toast.tipo} />}
     </div>
   );
 }

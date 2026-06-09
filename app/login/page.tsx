@@ -40,6 +40,15 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [devHostHint, setDevHostHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const host = window.location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      setDevHostHint(host);
+    }
+  }, []);
 
   useEffect(() => {
     const err = searchParams.get("error");
@@ -110,8 +119,23 @@ function LoginForm() {
     }
     setLoading(false);
     const next = searchParams.get("next");
-    router.push(getSafeReturnPath(next, "/crm"));
+    const destino = getSafeReturnPath(next, "/crm");
+    router.push(destino);
     router.refresh();
+    // Fallback se o router client não hidratar (ex.: chunks bloqueados pelo IP da rede).
+    window.setTimeout(() => {
+      if (window.location.pathname.startsWith("/login")) {
+        window.location.assign(destino);
+      }
+    }, 500);
+  }
+
+  function alternarVisibilidadeSenha() {
+    setShowPassword((v) => !v);
+    const el = document.getElementById("login-password");
+    if (el instanceof HTMLInputElement) {
+      el.type = el.type === "password" ? "text" : "password";
+    }
   }
 
   return (
@@ -146,6 +170,19 @@ function LoginForm() {
             <p className="mb-8 text-sm text-[#58745d]">
               Faça login com e-mail e senha para abrir seu CRM.
             </p>
+
+            {devHostHint ? (
+              <div
+                role="status"
+                className="mb-5 rounded-xl border border-[#e6d9a8] bg-[#fffbeb] px-4 py-3 text-xs leading-snug text-[#7a5c00]"
+              >
+                Está a aceder por <strong>{devHostHint}</strong>. Em desenvolvimento, use{" "}
+                <a href="http://localhost:3001/login" className="font-semibold underline">
+                  localhost:3001
+                </a>{" "}
+                neste PC se o botão Entrar não responder.
+              </div>
+            ) : null}
 
             <form onSubmit={onSubmit} className="flex flex-col gap-5">
               <div className="space-y-1.5">
@@ -188,7 +225,7 @@ function LoginForm() {
                     type="button"
                     aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     className="absolute right-0 top-0 flex h-full w-11 items-center justify-center rounded-r-xl text-[#6d846f] transition-colors hover:text-[#3f9848] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#92ff00]/50"
-                    onClick={() => setShowPassword((v: boolean) => !v)}
+                    onClick={alternarVisibilidadeSenha}
                   >
                     {showPassword ? (
                       <EyeOff className="h-[18px] w-[18px]" aria-hidden />

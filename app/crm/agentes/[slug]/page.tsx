@@ -1,20 +1,74 @@
 "use client";
-import { useState, useEffect, useCallback, type CSSProperties, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, ArrowLeft, BookOpen, Sparkles, Trash2 } from "lucide-react";
+import {
+  Activity,
+  Archive,
+  ArrowLeft,
+  BookOpen,
+  Plug,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
+import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
-import { AgenteBriefingDrawer } from "@/components/crm/AgenteBriefingChatPanel";
-import { AgentePlaybookCalibracaoDrawer } from "@/components/crm/AgentePlaybookCalibracaoDrawer";
-import { AgenteFerramentasIaBlock, type CatalogoFerramentaCustomLite } from "@/components/crm/AgenteFerramentasIaBlock";
+import { AgenteAvatar } from "@/components/crm/AgenteAvatar";
+import { AgenteCiclosOperacaoList } from "@/components/crm/AgenteCiclosOperacaoList";
+import { AgentePerformancePanel } from "@/components/crm/AgentePerformancePanel";
+import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
+import { CRM_ACCENT, crmBtnPrimary, crmInfoBox } from "@/lib/crm/crm-button-styles";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
+import { AgentePersonalidadeEixosPanel } from "@/components/crm/AgentePersonalidadeEixosPanel";
+import { useCrmToast } from "@/lib/crm/crm-feedback";
+import { diasSemanaParaGravacao, diasSemanaParaUi } from "@/lib/hub/agente-dias-semana";
+import {
+  AgenteFerramentasIaBlock,
+  type CatalogoFerramentaCustomLite,
+  type CatalogoFerramentaExternaLite,
+  type CatalogoFerramentaIntegradorLite,
+} from "@/components/crm/AgenteFerramentasIaBlock";
+import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-externas";
+import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
-import { INFERENCIA_IA_CRM_COPIA } from "@/lib/ia/hub-model-defaults";
+import { hubModeloExibicaoProduto } from "@/lib/ia/hub-model-defaults";
 import {
   mergeUsoFerramentasComPadraoPreservandoCustom,
 } from "@/lib/hub/agente-ferramentas-registry";
+import { gerarPersonalidadeAgente, parsearValoresPersonalidade } from "@/lib/hub/agente-personalidade-eixos";
+import { MERCADO_PREFIXO_PADRAO } from "@/lib/crm/negocio-cadastro";
+import { mensagemErroHubAgente } from "@/lib/hub/agente-hub-errors";
+
+/** Drawers pesados (playbook + React Flow) em chunks separados — evita ChunkLoadError no dev. */
+const AgenteBriefingDrawer = dynamic(
+  () =>
+    import("@/components/crm/AgenteBriefingChatPanel").then((m) => ({
+      default: m.AgenteBriefingDrawer,
+    })),
+  { ssr: false }
+);
+
+const AgentePlaybookCalibracaoDrawer = dynamic(
+  () =>
+    import("@/components/crm/AgentePlaybookCalibracaoDrawer").then((m) => ({
+      default: m.AgentePlaybookCalibracaoDrawer,
+    })),
+  { ssr: false }
+);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const MERCADOS_FIXOS = ["IMB", "ARQ", "RFM", "MRC", "ENG", "SRV", "PRO", "FOR"];
 
 const SEGMENTO_COR: Record<string, string> = {
   Marketing: "#3b82f6",
@@ -30,88 +84,11 @@ const NIVEL_COR: Record<string, string> = {
 
 const DIAS_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-const EIXOS = [
-  {
-    nome: "Analítico / Criativo",
-    frases: [
-      "Baseie todas as respostas em dados e lógica. Evite linguagem subjetiva.",
-      "Priorize dados, mas use analogias simples para clareza quando necessário.",
-      "Equilibre argumentos racionais com exemplos práticos e linguagem acessível.",
-      "Use linguagem envolvente, exemplos criativos e storytelling leve.",
-      "Seja criativo, use metáforas e linguagem que engaje emocionalmente.",
-    ],
-  },
-  {
-    nome: "Formal / Informal",
-    frases: [
-      "Mantenha linguagem completamente formal. Sem contrações nem gírias.",
-      "Linguagem profissional e clara, pode usar contrações ocasionalmente.",
-      "Tom neutro e acessível, nem muito formal nem coloquial.",
-      "Linguagem descontraída e próxima, como conversa entre colegas.",
-      "Totalmente informal: uso de gírias leves e tom de conversa casual.",
-    ],
-  },
-  {
-    nome: "Direto / Detalhista",
-    frases: [
-      "Seja extremamente conciso. Máximo 2 frases por resposta.",
-      "Respostas curtas com a informação essencial. Evite explicações longas.",
-      "Resposta completa mas sem excessos. Explique o necessário.",
-      "Inclua contexto e justificativas relevantes nas respostas.",
-      "Seja completo e detalhado. Antecipe dúvidas e inclua exemplos.",
-    ],
-  },
-  {
-    nome: "Conservador / Arrojado",
-    frases: [
-      "Seja cauteloso. Prefira caminhos testados e seguros. Aponte riscos.",
-      "Sugira caminhos tradicionais como padrão, mas apresente alternativas.",
-      "Equilibre sugestões convencionais com oportunidades inovadoras.",
-      "Proponha abordagens ousadas e diferenciadas. Destaque oportunidades.",
-      "Seja provocador e disruptivo. Proponha ideias inovadoras.",
-    ],
-  },
-  {
-    nome: "Empático / Objetivo",
-    frases: [
-      "Priorize o lado humano: valide sentimentos antes de resolver.",
-      "Reconheça o contexto emocional antes de apresentar soluções.",
-      "Equilibre empatia e objetividade. Valide brevemente e siga para a solução.",
-      "Foque na solução e nos resultados práticos. Seja cordial mas eficiente.",
-      "Totalmente focado em resultado e eficiência. Sem rodeios emocionais.",
-    ],
-  },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function iniciais(nome: string): string {
-  return (nome || "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() || "")
-    .join("");
-}
-
-function gerarPersonalidade(valores: number[]): string {
-  return (
-    "## Tom e estilo de comunicação\n\n" +
-    EIXOS.map((e, i) => e.frases[valores[i] - 1]).join("\n")
-  );
-}
 
 function nivelTag(nivel: string | number | undefined): string {
   if (nivel === undefined || nivel === null) return "";
   return typeof nivel === "number" ? `N${nivel}` : nivel;
-}
-
-function parsearValores(texto: string): number[] {
-  const linhas = (texto || "").split("\n").filter((l) => l.trim() && !l.startsWith("#"));
-  return EIXOS.map((eixo, i) => {
-    const idx = eixo.frases.findIndex((f) => linhas[i]?.trim() === f.trim());
-    return idx >= 0 ? idx + 1 : 3;
-  });
 }
 
 type Agente = {
@@ -121,6 +98,7 @@ type Agente = {
   area?: string;
   nivel?: string | number;
   modelo_padrao?: string;
+  modelo_efetivo?: string;
   prefixo_mercado?: string;
   personalidade?: string;
   bio?: string;
@@ -129,7 +107,7 @@ type Agente = {
   system_prompt_base?: string;
   horario_inicio?: string;
   horario_fim?: string;
-  dias_semana?: number[];
+  dias_semana?: number[] | string[];
   arquivado_em?: string | null;
   ativo?: boolean;
   [key: string]: unknown;
@@ -157,13 +135,13 @@ export default function AgentePage() {
   const params = useParams();
   const router = useRouter();
   const slug = params?.slug as string;
+  const { success: toastSuccess } = useCrmToast();
 
   const [agente, setAgente] = useState<Agente | null>(null);
   const [carregando, setCarregando] = useState(true);
 
   // Campos editáveis
   const [nome, setNome] = useState("");
-  const [mercados, setMercados] = useState<string[]>([]);
   const [valores, setValores] = useState<number[]>([3, 3, 3, 3, 3]);
   const [horarioInicio, setHorarioInicio] = useState("08:00");
   const [horarioFim, setHorarioFim] = useState("22:00");
@@ -180,6 +158,10 @@ export default function AgentePage() {
     mergeUsoFerramentasComPadraoPreservandoCustom({})
   );
   const [catalogoCustomFerramentas, setCatalogoCustomFerramentas] = useState<CatalogoFerramentaCustomLite[]>([]);
+  const [catalogoExternaFerramentas, setCatalogoExternaFerramentas] = useState<CatalogoFerramentaExternaLite[]>([]);
+  const [catalogoIntegradorFerramentas, setCatalogoIntegradorFerramentas] = useState<
+    CatalogoFerramentaIntegradorLite[]
+  >([]);
   const [syncMistralLoading, setSyncMistralLoading] = useState(false);
 
   // UI state
@@ -188,7 +170,6 @@ export default function AgentePage() {
   const [arquivando, setArquivando] = useState(false);
   const [showConfirmSalvar, setShowConfirmSalvar] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [toast, setToast] = useState("");
   const [erro, setErro] = useState("");
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [calibracaoOpen, setCalibracaoOpen] = useState(false);
@@ -202,6 +183,18 @@ export default function AgentePage() {
   } | null>(null);
   const [incluirBriefingAoLimpar, setIncluirBriefingAoLimpar] = useState(true);
 
+  type OperacaoPayload = {
+    ciclos: Record<string, unknown>[];
+    execucoes_ciclo: Record<string, unknown>[];
+    acoes: Record<string, unknown>[];
+    ultimo_prompt_em: string | null;
+  };
+  const [operacao, setOperacao] = useState<OperacaoPayload | null>(null);
+  const [operacaoLoading, setOperacaoLoading] = useState(false);
+
+  type AbaFichaAgente = "geral" | "personalidade" | "integracoes" | "operacao";
+  const [abaFicha, setAbaFicha] = useState<AbaFichaAgente>("geral");
+
   const carregar = useCallback(async () => {
     if (!slug) return;
     setCarregando(true);
@@ -212,16 +205,10 @@ export default function AgentePage() {
         setAgente(data);
         // Popular campos editáveis
         setNome(data.nome || "");
-        setMercados(
-          (data.prefixo_mercado || "")
-            .split(",")
-            .map((m: string) => m.trim())
-            .filter(Boolean)
-        );
-        setValores(parsearValores(data.personalidade || ""));
+        setValores(parsearValoresPersonalidade(data.personalidade || ""));
         setHorarioInicio(data.horario_inicio || "08:00");
         setHorarioFim(data.horario_fim || "22:00");
-        setDiasSemana(data.dias_semana || [0, 1, 2, 3, 4, 5, 6]);
+        setDiasSemana(diasSemanaParaUi(data.dias_semana));
         setBio(data.bio || "");
         setTomVoz(data.tom_voz || "");
         setEstiloComunicacao(data.estilo_comunicacao || "");
@@ -242,22 +229,58 @@ export default function AgentePage() {
   useEffect(() => {
     void (async () => {
       try {
-        const r = await fetch("/api/hub/ferramentas-custom?all=true", { headers: internalApiHeaders() });
+        const headers = internalApiHeaders();
+        const [r, externas, resInt] = await Promise.all([
+          fetch("/api/hub/ferramentas-custom?all=true", { headers }),
+          fetchHubFerramentasExternas(headers, false).catch(() => []),
+          fetch("/api/hub/integradores", { headers }).catch(() => null),
+        ]);
         const d: unknown = await r.json().catch(() => null);
-        if (!r.ok || !Array.isArray(d)) return;
-        setCatalogoCustomFerramentas(
-          (d as Record<string, unknown>[]).map((x) => ({
-            ferramenta_key: String(x.ferramenta_key ?? ""),
-            titulo: String(x.titulo ?? ""),
-            builtin_impl: String(x.builtin_impl ?? ""),
-            smart_provider: String(x.smart_provider ?? "none"),
+        if (r.ok && Array.isArray(d)) {
+          setCatalogoCustomFerramentas(
+            (d as Record<string, unknown>[]).map((x) => ({
+              ferramenta_key: String(x.ferramenta_key ?? ""),
+              titulo: String(x.titulo ?? ""),
+              builtin_impl: String(x.builtin_impl ?? ""),
+              smart_provider: String(x.smart_provider ?? "none"),
+              ativo: x.ativo !== false,
+              descricao_curta:
+                x.descricao_curta != null && String(x.descricao_curta).trim()
+                  ? String(x.descricao_curta).trim()
+                  : null,
+            }))
+          );
+        }
+        setCatalogoExternaFerramentas(
+          externas.map((x) => ({
+            ferramenta_key: x.ferramenta_key,
+            titulo: x.titulo,
+            metodo_http: x.metodo_http,
+            politica: x.politica,
             ativo: x.ativo !== false,
-            descricao_curta:
-              x.descricao_curta != null && String(x.descricao_curta).trim()
-                ? String(x.descricao_curta).trim()
-                : null,
+            descricao_curta: x.descricao_curta ?? null,
           }))
         );
+        if (resInt?.ok) {
+          const j = (await resInt.json()) as {
+            catalogo?: IntegradorCatalogoEntry[];
+            conexoes?: Record<string, { configurado?: boolean }>;
+          };
+          const lista: CatalogoFerramentaIntegradorLite[] = [];
+          for (const entry of j.catalogo ?? []) {
+            if (j.conexoes?.[entry.id]?.configurado !== true) continue;
+            for (const f of entry.ferramentas) {
+              lista.push({
+                ferramenta_key: f.ferramenta_key,
+                titulo: f.titulo,
+                integrador_nome: entry.nome,
+                politica: f.politica,
+                descricao_curta: f.descricao_curta ?? null,
+              });
+            }
+          }
+          setCatalogoIntegradorFerramentas(lista);
+        }
       } catch {
         /* ignore */
       }
@@ -268,11 +291,33 @@ export default function AgentePage() {
     carregar();
   }, [carregar]);
 
-  function toggleMercado(m: string) {
-    setMercados((prev) =>
-      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]
-    );
-  }
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    setOperacaoLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/operacao`, {
+          headers: internalApiHeaders(),
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as OperacaoPayload;
+        if (!cancelled) setOperacao(data);
+      } catch {
+        /* métricas opcionais */
+      } finally {
+        if (!cancelled) setOperacaoLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  const avatarUrl = useMemo(() => {
+    const v = agente?.avatar_url;
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+  }, [agente?.avatar_url]);
 
   function toggleDia(d: number) {
     setDiasSemana((prev) =>
@@ -325,17 +370,17 @@ export default function AgentePage() {
       };
       if (!res.ok) {
         setErro(data.error || "Não foi possível limpar as memórias.");
+        setShowLimparMemorias(false);
         return;
       }
       const nMem = data.memoriasRemovidas ?? 0;
       const nBrief = data.briefingSessoesRemovidas ?? 0;
       const nLeads = data.leadsResetados ?? 0;
       const nMemLead = data.memoriasLeadRemovidas ?? 0;
-      setToast(
-        `Reset completo: ${nMem} memória(s) do agente${incluirBriefingAoLimpar ? `, ${nBrief} sessão(ões) de briefing` : ""}, ${nLeads} lead(s) com fluxo WhatsApp zerado (${nMemLead} memória(s) de lead).`
+      toastSuccess(
+        `Reset completo: ${nMem} memória(s) do agente${incluirBriefingAoLimpar ? `, ${nBrief} sessão(ões) de briefing` : ""}, ${nLeads} lead(s) com fluxo WhatsApp zerado (${nMemLead} memória(s) de lead).`,
       );
       setShowLimparMemorias(false);
-      setTimeout(() => setToast(""), 5000);
     } catch {
       setErro("Falha de rede ao limpar memórias.");
     } finally {
@@ -364,7 +409,7 @@ export default function AgentePage() {
         router.push("/crm/agentes");
       } else {
         const data = (await res.json().catch(() => ({}))) as { erro?: string };
-        setErro(data.erro || "Falha ao arquivar.");
+        setErro(mensagemErroHubAgente(data.erro || "Falha ao arquivar."));
         setShowArquivar(false);
       }
     } catch {
@@ -385,11 +430,11 @@ export default function AgentePage() {
         headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           nome,
-          prefixo_mercado: mercados.join(","),
-          personalidade: gerarPersonalidade(valores),
+          prefixo_mercado: MERCADO_PREFIXO_PADRAO,
+          personalidade: gerarPersonalidadeAgente(valores),
           horario_inicio: horarioInicio,
           horario_fim: horarioFim,
-          dias_semana: diasSemana,
+          dias_semana: diasSemanaParaGravacao(diasSemana),
           bio,
           tom_voz: tomVoz,
           estilo_comunicacao: estiloComunicacao,
@@ -400,13 +445,12 @@ export default function AgentePage() {
         }),
       });
       if (res.ok) {
-        setToast("✓ Salvo");
-        setTimeout(() => setToast(""), 3000);
+        toastSuccess("Alterações salvas com sucesso.");
         setShowConfirmSalvar(false);
         await carregar();
       } else {
         const data = (await res.json().catch(() => ({}))) as { erro?: string; error?: string };
-        setErro(data.erro || data.error || "Erro ao salvar.");
+        setErro(mensagemErroHubAgente(data.erro || data.error || "Erro ao salvar."));
         setShowConfirmSalvar(false);
       }
     } catch {
@@ -414,6 +458,28 @@ export default function AgentePage() {
       setShowConfirmSalvar(false);
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function alternarAtivoAgente() {
+    if (!agente || agente.arquivado_em) return;
+    const proximo = agente.ativo === false;
+    setErro("");
+    try {
+      const res = await fetch(`/api/hub/agentes/${slug}`, {
+        method: "PATCH",
+        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ ativo: proximo }),
+      });
+      if (res.ok) {
+        toastSuccess(proximo ? "Agente ativado" : "Agente desativado");
+        await carregar();
+      } else {
+        const data = (await res.json().catch(() => ({}))) as { erro?: string; error?: string };
+        setErro(mensagemErroHubAgente(data.erro || data.error || "Não foi possível alterar o estado."));
+      }
+    } catch {
+      setErro("Falha de rede ao alterar estado.");
     }
   }
 
@@ -428,8 +494,7 @@ export default function AgentePage() {
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; mistral_agent_id?: string };
       if (res.ok) {
-        setToast("✓ Agent Mistral sincronizado");
-        setTimeout(() => setToast(""), 3500);
+        toastSuccess("Agent Mistral sincronizado");
         await carregar();
       } else {
         setErro(data.error || "Falha ao sincronizar com Mistral.");
@@ -470,12 +535,15 @@ export default function AgentePage() {
   const nivelCor = NIVEL_COR[nivelTag(agente.nivel)] || "#5d7a67";
   const statusBadge = badgeStatusAgente(agente);
 
-  const chipStyle = (ativo: boolean): React.CSSProperties => ({
-    padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-    cursor: "pointer",
-    border: `1px solid ${ativo ? "#c9a24a" : "#dcebd8"}`,
-    background: ativo ? "#c9a24a22" : "#ffffff",
-    color: ativo ? "#c9a24a" : "#5d7a67",
+  const chipStyle = (ativo: boolean, clicavel = true): React.CSSProperties => ({
+    padding: "6px 14px",
+    borderRadius: 20,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: clicavel ? "pointer" : "default",
+    border: `1px solid ${ativo ? CRM_ACCENT : "#d4ecd0"}`,
+    background: ativo ? "#3f984818" : "#ffffff",
+    color: ativo ? CRM_ACCENT : BRAND_TEXT_DARK,
     transition: "all 150ms",
   });
 
@@ -487,265 +555,79 @@ export default function AgentePage() {
 
   const inputDisabledStyle: React.CSSProperties = {
     ...inputStyle,
-    color: "#5d7a67", cursor: "not-allowed", opacity: 0.6,
+    color: "#3d5c48",
+    cursor: "not-allowed",
+    opacity: 0.85,
   };
 
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: 11,
+    color: "#3d5c48",
+    fontWeight: 700,
+    display: "block",
+    marginBottom: 4,
+  };
+
+  const labelSectionStyle: React.CSSProperties = {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: 0.8,
+    color: "#2d4a38",
+    textTransform: "uppercase",
+  };
+
+  const cardShell: CSSProperties = {
+    background: "#ffffff",
+    border: "1px solid rgba(18, 56, 43, 0.12)",
+    borderRadius: 16,
+    padding: 20,
+    boxShadow: "0 8px 24px rgba(15, 56, 39, 0.05)",
+  };
+
+  const sectionHeadingStyle: CSSProperties = {
+    color: "#6b8a76",
+    fontSize: 11,
+    fontWeight: 800,
+    margin: 0,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  };
+
+  const botaoSalvar = (
+    <button
+      type="button"
+      onClick={() => setShowConfirmSalvar(true)}
+      style={{ ...crmBtnPrimary(), width: "100%", padding: "12px 0", fontSize: 13, marginTop: 8 }}
+    >
+      Salvar alterações
+    </button>
+  );
+
+  const cicloCount = operacao?.ciclos?.length ?? 0;
+
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fcf6" }}>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ background: "#f8fcf6" }}>
 
-      {/* MODAL ARQUIVAR */}
-      {showArquivar && (
+      {/* HEADER — permanece visível; scroll só no painel da aba */}
+      <div
+        style={{
+          flexShrink: 0,
+          background: "#ffffff",
+          borderBottom: "1px solid rgba(18, 56, 43, 0.14)",
+          boxShadow: "0 4px 24px rgba(15, 56, 39, 0.08)",
+        }}
+      >
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setShowArquivar(false); }}
           style={{
-            position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.75)",
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-          }}
-        >
-          <div style={{
-            background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 16,
-            padding: 28, width: "100%", maxWidth: 460,
-          }}>
-            <h2 style={{ color: "#0b2210", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
-              Arquivar agente
-            </h2>
-            <p style={{ color: "#5d7a67", fontSize: 13, margin: "0 0 14px" }}>
-              Agente: <strong style={{ color: "#0b2210" }}>{agente.nome}</strong>
-            </p>
-
-            {/* Aviso */}
-            <div style={{
-              background: "#ef444411", border: "1px solid #ef444433",
-              borderRadius: 8, padding: "10px 14px", marginBottom: 16,
-            }}>
-              <p style={{ color: "#ef4444", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-                Esta ação não pode ser desfeita pelo UI.
-              </p>
-            </div>
-
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 8 }}>
-              Motivo do arquivamento <span style={{ color: "#ef4444" }}>*</span>
-            </label>
-            <textarea
-              value={motivoArquivamento}
-              onChange={(e) => setMotivoArquivamento(e.target.value)}
-              placeholder="Descreva o motivo (mínimo 10 caracteres)..."
-              rows={3}
-              style={{
-                ...inputStyle, resize: "none", marginBottom: 6,
-                border: `1px solid ${motivoArquivamento.length > 0 && motivoArquivamento.trim().length < 10 ? "#ef4444" : "#dcebd8"}`,
-              }}
-            />
-            {motivoArquivamento.length > 0 && motivoArquivamento.trim().length < 10 && (
-              <p style={{ color: "#ef4444", fontSize: 11, margin: "0 0 12px" }}>
-                Mínimo 10 caracteres ({motivoArquivamento.trim().length}/10)
-              </p>
-            )}
-
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button
-                onClick={() => setShowArquivar(false)}
-                style={{
-                  flex: 1, padding: "10px 0", borderRadius: 8,
-                  background: "#eef7eb", border: "1px solid #dcebd8",
-                  color: "#5d7a67", fontSize: 13, fontWeight: 700, cursor: "pointer",
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmarArquivamento}
-                disabled={arquivando || motivoArquivamento.trim().length < 10}
-                style={{
-                  flex: 1, padding: "10px 0", borderRadius: 8,
-                  background: motivoArquivamento.trim().length >= 10 ? "#dc2626" : "#dcebd8",
-                  border: "none", color: "white", fontSize: 13, fontWeight: 700,
-                  cursor: arquivando || motivoArquivamento.trim().length < 10 ? "not-allowed" : "pointer",
-                  opacity: arquivando ? 0.6 : 1,
-                }}
-              >
-                {arquivando ? "Arquivando..." : "Confirmar arquivamento"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL LIMPAR MEMÓRIAS */}
-      {showLimparMemorias && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowLimparMemorias(false);
-          }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 200,
-            background: "rgba(0,0,0,0.75)",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+            padding: "14px 24px",
           }}
         >
-          <div
-            style={{
-              background: "#ffffff",
-              border: "1px solid #dcebd8",
-              borderRadius: 16,
-              padding: 28,
-              width: "100%",
-              maxWidth: 480,
-            }}
-          >
-            <h2 style={{ color: "#0b2210", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
-              Limpar memórias do agente
-            </h2>
-            <p style={{ color: "#5d7a67", fontSize: 13, margin: "0 0 14px", lineHeight: 1.55 }}>
-              Remove aprendizados persistentes de <strong style={{ color: "#0b2210" }}>{agente.nome}</strong> e zera o
-              fluxo conversacional de todos os leads atribuídos a este agente — incluindo playbook WhatsApp (
-              <code style={{ fontSize: 11 }}>wa_playbook_*</code>), menu de triagem, memórias de lead e estado da
-              sessão. Útil para testar o atendimento do zero (ex.: enviar &quot;Olá&quot; de novo).
-            </p>
-            {contagemMemorias ? (
-              <p style={{ color: "#adbac7", fontSize: 12, margin: "0 0 12px" }}>
-                Encontrado: <strong>{contagemMemorias.memorias}</strong> memória(s) operacional(is)
-                {incluirBriefingAoLimpar ? (
-                  <>
-                    {" "}
-                    e <strong>{contagemMemorias.briefingSessoes}</strong> sessão(ões) de briefing
-                  </>
-                ) : null}
-                ; <strong>{contagemMemorias.leads}</strong> lead(s) com estado conversacional (
-                <strong>{contagemMemorias.memoriasLead}</strong> memória(s) de lead).
-              </p>
-            ) : (
-              <p style={{ color: "#5d7a67", fontSize: 12, margin: "0 0 12px" }}>A contar registos…</p>
-            )}
-            <label
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 10,
-                marginBottom: 16,
-                cursor: "pointer",
-                fontSize: 12,
-                color: "#adbac7",
-                lineHeight: 1.5,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={incluirBriefingAoLimpar}
-                onChange={(e) => setIncluirBriefingAoLimpar(e.target.checked)}
-                style={{ marginTop: 2 }}
-              />
-              <span>
-                Também apagar histórico do chat <strong>AI — Funcionários</strong> (sessões de briefing deste
-                agente).
-              </span>
-            </label>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => setShowLimparMemorias(false)}
-                disabled={limpandoMemorias}
-                style={{
-                  flex: 1,
-                  padding: "10px 0",
-                  borderRadius: 8,
-                  background: "#eef7eb",
-                  border: "1px solid #dcebd8",
-                  color: "#5d7a67",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: limpandoMemorias ? "not-allowed" : "pointer",
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => void confirmarLimparMemorias()}
-                disabled={limpandoMemorias}
-                style={{
-                  flex: 1,
-                  padding: "10px 0",
-                  borderRadius: 8,
-                  background: "#7c2d12",
-                  border: "1px solid #ea580c66",
-                  color: "#fdba74",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: limpandoMemorias ? "wait" : "pointer",
-                  opacity: limpandoMemorias ? 0.7 : 1,
-                }}
-              >
-                {limpandoMemorias ? "A limpar…" : "Limpar memórias"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CONFIRMAR SALVAR */}
-      {showConfirmSalvar && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmSalvar(false); }}
-          style={{
-            position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.75)",
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-          }}
-        >
-          <div style={{
-            background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 16,
-            padding: 28, width: "100%", maxWidth: 420,
-          }}>
-            <h2 style={{ color: "#0b2210", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
-              Confirmar alterações
-            </h2>
-            <p style={{ color: "#5d7a67", fontSize: 13, margin: "0 0 20px", lineHeight: 1.5 }}>
-              Confirmar alterações no agente{" "}
-              <strong style={{ color: "#0b2210" }}>{nome}</strong>?
-            </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                onClick={() => setShowConfirmSalvar(false)}
-                style={{
-                  flex: 1, padding: "10px 0", borderRadius: 8,
-                  background: "#eef7eb", border: "1px solid #dcebd8",
-                  color: "#5d7a67", fontSize: 13, fontWeight: 700, cursor: "pointer",
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={salvar}
-                disabled={salvando}
-                style={{
-                  flex: 1, padding: "10px 0", borderRadius: 8,
-                  background: "#003b26", border: "none",
-                  color: "#c9a24a", fontSize: 13, fontWeight: 700,
-                  cursor: salvando ? "wait" : "pointer",
-                  opacity: salvando ? 0.6 : 1,
-                }}
-              >
-                {salvando ? "Salvando..." : "Confirmar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* HEADER */}
-      <div style={{
-        position: "sticky", top: 0, zIndex: 50,
-        background: "linear-gradient(180deg, #ffffff 0%, #f8fcf6 100%)",
-        borderBottom: "1px solid #dcebd8",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
-        padding: "18px 24px 14px",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
             <button
               type="button"
@@ -757,7 +639,7 @@ export default function AgentePage() {
                 borderRadius: 10,
                 border: "1px solid #dcebd8",
                 background: "#eef7eb",
-                color: "#c9d1d9",
+                color: BRAND_TEXT_DARK,
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -767,87 +649,113 @@ export default function AgentePage() {
             >
               <ArrowLeft size={18} />
             </button>
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 16,
-                background: `linear-gradient(135deg, ${segCor} 0%, #f8fcf6 140%)`,
-                border: `1px solid ${segCor}55`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 18,
-                fontWeight: 800,
-                color: "white",
-                flexShrink: 0,
-                boxShadow: `0 8px 24px ${segCor}33`,
-              }}
-            >
-              {iniciais(agente.nome)}
-            </div>
+            <AgenteAvatar
+              seed={agente.agente_slug}
+              nome={agente.nome}
+              imageUrl={avatarUrl}
+              size={64}
+              shape="circle"
+              status={
+                agente.arquivado_em ? "arquivado" : agente.ativo === false ? "inativo" : "ativo"
+              }
+              alt={agente.nome}
+            />
             <div style={{ minWidth: 0 }}>
-              <h1 style={{ color: "#0b2210", fontSize: 20, fontWeight: 800, margin: "0 0 4px", letterSpacing: -0.2 }}>
+              <h1
+                style={{
+                  color: BRAND_TEXT_DARK,
+                  fontSize: 22,
+                  fontWeight: 800,
+                  margin: "0 0 6px",
+                  letterSpacing: -0.3,
+                }}
+              >
                 {agente.nome}
               </h1>
-              <p style={{ color: "#5d7a67", fontSize: 12, margin: "0 0 8px", lineHeight: 1.45 }}>
-                {agente.cargo}
-                <span style={{ color: "#484f58", marginLeft: 8 }}>@{agente.agente_slug}</span>
-              </p>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: "3px 9px",
-                    borderRadius: 999,
-                    background: statusBadge.bg,
-                    color: statusBadge.fg,
-                    border: `1px solid ${statusBadge.border}`,
-                  }}
-                >
-                  {statusBadge.label}
-                </span>
-                {agente.area ? (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
-                    background: segCor + "22", color: segCor, border: `1px solid ${segCor}44`,
-                  }}>
-                    {agente.area}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "#3d5c48",
+                  fontWeight: 600,
+                }}
+              >
+                {agente.ativo !== false && !agente.arquivado_em ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      color: CRM_ACCENT,
+                      fontWeight: 700,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: BRAND_GREEN_BRIGHT,
+                        boxShadow: `0 0 6px ${BRAND_GREEN_BRIGHT}`,
+                      }}
+                    />
+                    Ativo
                   </span>
-                ) : null}
-                {agente.nivel ? (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
-                    background: nivelCor + "22", color: nivelCor, border: `1px solid ${nivelCor}44`,
-                  }}>
-                    {nivelTag(agente.nivel)}
-                  </span>
-                ) : null}
+                ) : (
+                  <span style={{ fontWeight: 700, color: statusBadge.fg }}>{statusBadge.label}</span>
+                )}
+                <span style={{ color: "#b8d4bc", fontWeight: 400 }}>|</span>
+                <span style={{ color: "#2d4a38" }}>{agente.cargo}</span>
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-            {toast ? (
-              <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 700 }}>{toast}</span>
-            ) : null}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0, minWidth: 0 }}>
             {erro ? (
-              <span style={{ fontSize: 11, color: "#ef4444", maxWidth: 320, textAlign: "right" }}>{erro}</span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "#ef4444",
+                  maxWidth: 420,
+                  textAlign: "right",
+                  lineHeight: 1.45,
+                }}
+              >
+                {erro}
+              </span>
             ) : null}
-            <HeaderActionGroup>
+            <HeaderActionGroup aria-label="Ações do agente">
+              <HeaderActionButton
+                icon={<Activity size={15} />}
+                label="Ver Logs de Atividade"
+                onClick={() => router.push(`/crm/agentes?abrir=${encodeURIComponent(slug)}`)}
+                variant="secondary"
+                position="first"
+              />
+              {!agente.arquivado_em ? (
+                <HeaderActionButton
+                  icon={null}
+                  label={agente.ativo !== false ? "Desativar Agente" : "Ativar Agente"}
+                  onClick={() => void alternarAtivoAgente()}
+                  variant={agente.ativo !== false ? "danger" : "accent"}
+                  position="middle"
+                />
+              ) : null}
               <HeaderActionButton
                 icon={<Sparkles size={15} />}
-                label="AI — Funcionários"
+                label="Briefing IA"
                 onClick={() => setBriefingOpen(true)}
-                variant="ai"
-                position="first"
+                variant="accent"
+                position="middle"
               />
               <HeaderActionButton
                 icon={<BookOpen size={15} />}
                 label="Playbook — Calibração"
                 onClick={() => setCalibracaoOpen(true)}
-                variant="ai"
+                variant="accent"
                 position="middle"
               />
               <HeaderActionButton
@@ -861,7 +769,10 @@ export default function AgentePage() {
               <HeaderActionButton
                 icon={<Archive size={15} />}
                 label="Arquivar"
-                onClick={() => { setShowArquivar(true); setMotivoArquivamento(""); }}
+                onClick={() => {
+                  setShowArquivar(true);
+                  setMotivoArquivamento("");
+                }}
                 variant="default"
                 position="last"
               />
@@ -870,42 +781,49 @@ export default function AgentePage() {
         </div>
       </div>
 
-      {/* CONTEÚDO */}
-      <div
-        style={{
-          maxWidth: 1200,
-          margin: "0 auto",
-          padding: "28px 32px 48px",
-          width: "100%",
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          gap: 28,
-        }}
-      >
-        {/* BLOCO: Configurações fixas */}
-        <div>
-          {/* Banner amarelo */}
-          <div style={{
-            background: "#c9a24a11", border: "1px solid #c9a24a33",
-            borderRadius: 8, padding: "10px 16px", marginBottom: 16,
-          }}>
-            <p style={{ color: "#c9a24a", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-              Cargo, segmento, nível e referência de modelo são imutáveis após criação — protegidos por trigger no banco. O ID efectivo da API segue <code style={{ fontSize: 11 }}>MISTRAL_MODEL</code> quando o registo usa o sentinel Mistral.
-            </p>
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CrmStickyTabs
+          variant="light"
+          equalColumns
+          activeId={abaFicha}
+          onChange={(id) => setAbaFicha(id as AbaFichaAgente)}
+          style={{ position: "relative", top: 0, zIndex: 10 }}
+          tabs={[
+            { id: "geral", label: "Geral", icon: Settings2 },
+            { id: "personalidade", label: "Personalidade", icon: SlidersHorizontal },
+            { id: "integracoes", label: "Integrações", icon: Plug },
+            { id: "operacao", label: `Operação (${cicloCount})`, icon: Activity },
+          ]}
+        />
 
-          <div style={{
-            background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 20,
-            display: "flex", flexDirection: "column", gap: 16,
-          }}>
-            <h2 style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
-              Configurações fixas
-            </h2>
-            <p style={{ fontSize: 11, color: "#64748b", margin: "-4px 0 0", lineHeight: 1.45 }}>{INFERENCIA_IA_CRM_COPIA}</p>
+        <div
+          role="tabpanel"
+          aria-labelledby={`crm-tab-${abaFicha}`}
+          className="min-h-0 flex-1 overflow-y-auto"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div
+            style={{
+              maxWidth: 1240,
+              margin: "0 auto",
+              padding: "24px 32px 40px",
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          >
+            {abaFicha === "geral" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                <div style={{ ...crmInfoBox(), marginBottom: 0 }}>
+                  <p style={{ margin: 0 }}>
+                    Cargo, área e nível são definidos na criação do agente.
+                  </p>
+                </div>
+
+                <div style={{ ...cardShell, display: "flex", flexDirection: "column", gap: 16 }}>
+                  <h2 style={sectionHeadingStyle}>Configurações fixas</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
               <div>
-                <label style={{ fontSize: 11, color: "#5d7a67", display: "block", marginBottom: 4 }}>Cargo</label>
+                <label style={fieldLabelStyle}>Cargo</label>
                 <input
                   value={agente.cargo || "—"}
                   disabled
@@ -913,7 +831,7 @@ export default function AgentePage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: "#5d7a67", display: "block", marginBottom: 4 }}>Área</label>
+                <label style={fieldLabelStyle}>Área</label>
                 <input
                   value={agente.area || "—"}
                   disabled
@@ -921,7 +839,7 @@ export default function AgentePage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: "#5d7a67", display: "block", marginBottom: 4 }}>Nível</label>
+                <label style={fieldLabelStyle}>Nível</label>
                 <div style={{
                   ...inputDisabledStyle, display: "flex", alignItems: "center", gap: 8,
                   padding: "6px 12px",
@@ -938,18 +856,23 @@ export default function AgentePage() {
                   )}
                 </div>
               </div>
+              <div>
+                <label style={fieldLabelStyle}>Modelo</label>
+                <input
+                  value={
+                    typeof agente.modelo_efetivo === "string" && agente.modelo_efetivo.trim()
+                      ? agente.modelo_efetivo
+                      : hubModeloExibicaoProduto(agente.modelo_padrao)
+                  }
+                  disabled
+                  style={inputDisabledStyle}
+                />
+              </div>
             </div>
-          </div>
-        </div>
+                </div>
 
-        {/* BLOCO: Configurações editáveis */}
-        <div style={{
-          background: "#ffffff", border: "1px solid #dcebd8", borderRadius: 12, padding: 20,
-          display: "flex", flexDirection: "column", gap: 20,
-        }}>
-          <h2 style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
-            Configurações editáveis
-          </h2>
+                <div style={{ ...cardShell, display: "flex", flexDirection: "column", gap: 20 }}>
+                  <h2 style={sectionHeadingStyle}>Configurações editáveis</h2>
 
           {/* Nome */}
           <div>
@@ -961,58 +884,6 @@ export default function AgentePage() {
               onChange={(e) => setNome(e.target.value)}
               style={inputStyle}
             />
-          </div>
-
-          {/* Mercados */}
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 10 }}>
-              Mercados
-            </label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {MERCADOS_FIXOS.map((m) => (
-                <button
-                  key={m}
-                  onClick={() => toggleMercado(m)}
-                  style={chipStyle(mercados.includes(m))}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Personalidade — 5 eixos */}
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#0b2210", display: "block", marginBottom: 14 }}>
-              Personalidade
-            </label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
-              {EIXOS.map((eixo, i) => (
-                <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ fontSize: 11, color: "#5d7a67", fontWeight: 700 }}>{eixo.nome}</span>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {[1, 2, 3, 4, 5].map((v) => {
-                      const ativo = valores[i] === v;
-                      return (
-                        <button
-                          key={v}
-                          onClick={() => setValor(i, v)}
-                          style={{
-                            width: 34, height: 34, borderRadius: "50%", fontSize: 12, fontWeight: 700,
-                            cursor: "pointer", border: `2px solid ${ativo ? "#c9a24a" : "#dcebd8"}`,
-                            background: ativo ? "#c9a24a" : "#f8fcf6",
-                            color: ativo ? "#003b26" : "#5d7a67",
-                            transition: "all 150ms",
-                          }}
-                        >
-                          {v}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Horário */}
@@ -1108,154 +979,356 @@ export default function AgentePage() {
             />
           </div>
 
-          <div
-            style={{
-              borderTop: "1px solid #dcebd8",
-              paddingTop: 18,
-            }}
-          >
-            {agente.modo_operacao === "canal_whatsapp" ? (
-              <AgenteUazapiBlock
-                agenteSlug={slug}
-                agenteNome={agente.nome}
-                snapshot={{
-                  uazapi_instance_id:
-                    typeof agente.uazapi_instance_id === "string" ? agente.uazapi_instance_id : null,
-                  uazapi_instance_name:
-                    typeof agente.uazapi_instance_name === "string" ? agente.uazapi_instance_name : null,
-                  uazapi_connection_status:
-                    typeof agente.uazapi_connection_status === "string"
-                      ? agente.uazapi_connection_status
-                      : null,
-                  uazapi_has_instance_token: agente.uazapi_has_instance_token === true,
-                  uazapi_proxy_country:
-                    typeof agente.uazapi_proxy_country === "string" ? agente.uazapi_proxy_country : null,
-                  uazapi_proxy_state:
-                    typeof agente.uazapi_proxy_state === "string" ? agente.uazapi_proxy_state : null,
-                  uazapi_proxy_city:
-                    typeof agente.uazapi_proxy_city === "string" ? agente.uazapi_proxy_city : null,
-                }}
-                onSnapshotPatch={(patch: Partial<AgenteUazapiSnapshot>) => {
-                  setAgente((prev) => {
-                    if (!prev) return prev;
-                    return {
-                      ...prev,
-                      ...(patch.uazapi_instance_id !== undefined && {
-                        uazapi_instance_id: patch.uazapi_instance_id,
-                      }),
-                      ...(patch.uazapi_instance_name !== undefined && {
-                        uazapi_instance_name: patch.uazapi_instance_name,
-                      }),
-                      ...(patch.uazapi_connection_status !== undefined && {
-                        uazapi_connection_status: patch.uazapi_connection_status,
-                      }),
-                      ...(patch.uazapi_has_instance_token !== undefined && {
-                        uazapi_has_instance_token: patch.uazapi_has_instance_token,
-                      }),
-                      ...(patch.uazapi_proxy_country !== undefined && {
-                        uazapi_proxy_country: patch.uazapi_proxy_country,
-                      }),
-                      ...(patch.uazapi_proxy_state !== undefined && {
-                        uazapi_proxy_state: patch.uazapi_proxy_state,
-                      }),
-                      ...(patch.uazapi_proxy_city !== undefined && {
-                        uazapi_proxy_city: patch.uazapi_proxy_city,
-                      }),
-                    };
-                  });
-                }}
-              />
+                  {botaoSalvar}
+                </div>
+              </div>
             ) : null}
-            <AgenteFerramentasIaBlock
-              motorHabilitado={motorFerramentasHub}
-              onMotorChange={setMotorFerramentasHub}
-              mistralSyncHabilitado={mistralProvisionar}
-              onMistralSyncChange={setMistralProvisionar}
-              usoFerramentas={usoFerramentasIa}
-              onUsoChange={(id, ativo) =>
-                setUsoFerramentasIa((prev) => ({
-                  ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
-                  [id]: ativo,
-                }))
-              }
-              customCatalog={catalogoCustomFerramentas}
-              mistralAgentId={typeof agente.mistral_agent_id === "string" ? agente.mistral_agent_id : null}
-              mistralSyncEm={typeof agente.mistral_agent_sync_em === "string" ? agente.mistral_agent_sync_em : null}
-              mistralSyncErro={
-                typeof agente.mistral_agent_sync_erro === "string" ? agente.mistral_agent_sync_erro : null
-              }
-              destacarWhatsApp={agente.modo_operacao === "canal_whatsapp"}
-            />
-            <button
-              type="button"
-              onClick={sincronizarMistralAgora}
-              disabled={syncMistralLoading || !mistralProvisionar}
-              style={{
-                marginTop: 12,
-                padding: "10px 16px",
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: mistralProvisionar && !syncMistralLoading ? "pointer" : "not-allowed",
-                border: "1px solid #dcebd8",
-                background: mistralProvisionar ? "#ffffff" : "#f8fcf6",
-                color: mistralProvisionar ? "#c9a24a" : "#484f58",
-              }}
-            >
-              {syncMistralLoading ? "A sincronizar…" : "Sincronizar com Mistral agora"}
-            </button>
-            <p style={{ color: "#484f58", fontSize: 11, margin: "8px 0 0", lineHeight: 1.45 }}>
-              Requer chave <code style={{ fontSize: 10 }}>MISTRAL_API_KEY</code> no servidor e opção de provisionamento
-              ativa.
-            </p>
-          </div>
 
-          {/* Botão salvar */}
-          <button
-            onClick={() => setShowConfirmSalvar(true)}
-            style={{
-              padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
-              background: "#003b26", border: "none", color: "#c9a24a", cursor: "pointer",
-            }}
-          >
-            Salvar alterações
-          </button>
+            {abaFicha === "personalidade" ? (
+              <div style={{ ...cardShell, display: "flex", flexDirection: "column", gap: 20 }}>
+                <div>
+                  <h2 style={{ ...sectionHeadingStyle, marginBottom: 8 }}>Personalidade</h2>
+                  <p style={{ fontSize: 12, color: "#3d5c48", margin: 0, lineHeight: 1.5 }}>
+                    Ajuste os cinco eixos de comportamento. O texto gerado entra no prompt do agente ao salvar.
+                  </p>
+                </div>
+                <AgentePersonalidadeEixosPanel
+                  valores={valores}
+                  onChange={setValor}
+                  mostrarResultado
+                  theme="light"
+                />
+                {botaoSalvar}
+              </div>
+            ) : null}
+
+            {abaFicha === "integracoes" ? (
+              <div style={{ ...cardShell, display: "flex", flexDirection: "column", gap: 20 }}>
+                <div>
+                  <h2 style={{ ...sectionHeadingStyle, marginBottom: 8 }}>Integrações</h2>
+                  <p style={{ fontSize: 12, color: "#3d5c48", margin: 0, lineHeight: 1.5 }}>
+                    WhatsApp e ferramentas disponíveis para este agente.
+                  </p>
+                </div>
+                {agente.modo_operacao === "canal_whatsapp" ? (
+                  <AgenteUazapiBlock
+                    agenteSlug={slug}
+                    agenteNome={agente.nome}
+                    snapshot={{
+                      uazapi_instance_id:
+                        typeof agente.uazapi_instance_id === "string" ? agente.uazapi_instance_id : null,
+                      uazapi_instance_name:
+                        typeof agente.uazapi_instance_name === "string" ? agente.uazapi_instance_name : null,
+                      uazapi_connection_status:
+                        typeof agente.uazapi_connection_status === "string"
+                          ? agente.uazapi_connection_status
+                          : null,
+                      uazapi_has_instance_token: agente.uazapi_has_instance_token === true,
+                      uazapi_proxy_country:
+                        typeof agente.uazapi_proxy_country === "string" ? agente.uazapi_proxy_country : null,
+                      uazapi_proxy_state:
+                        typeof agente.uazapi_proxy_state === "string" ? agente.uazapi_proxy_state : null,
+                      uazapi_proxy_city:
+                        typeof agente.uazapi_proxy_city === "string" ? agente.uazapi_proxy_city : null,
+                    }}
+                    onSnapshotPatch={(patch: Partial<AgenteUazapiSnapshot>) => {
+                      setAgente((prev) => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          ...(patch.uazapi_instance_id !== undefined && {
+                            uazapi_instance_id: patch.uazapi_instance_id,
+                          }),
+                          ...(patch.uazapi_instance_name !== undefined && {
+                            uazapi_instance_name: patch.uazapi_instance_name,
+                          }),
+                          ...(patch.uazapi_connection_status !== undefined && {
+                            uazapi_connection_status: patch.uazapi_connection_status,
+                          }),
+                          ...(patch.uazapi_has_instance_token !== undefined && {
+                            uazapi_has_instance_token: patch.uazapi_has_instance_token,
+                          }),
+                          ...(patch.uazapi_proxy_country !== undefined && {
+                            uazapi_proxy_country: patch.uazapi_proxy_country,
+                          }),
+                          ...(patch.uazapi_proxy_state !== undefined && {
+                            uazapi_proxy_state: patch.uazapi_proxy_state,
+                          }),
+                          ...(patch.uazapi_proxy_city !== undefined && {
+                            uazapi_proxy_city: patch.uazapi_proxy_city,
+                          }),
+                        };
+                      });
+                    }}
+                  />
+                ) : null}
+                <AgenteFerramentasIaBlock
+                  motorHabilitado={motorFerramentasHub}
+                  onMotorChange={setMotorFerramentasHub}
+                  mistralSyncHabilitado={mistralProvisionar}
+                  onMistralSyncChange={setMistralProvisionar}
+                  usoFerramentas={usoFerramentasIa}
+                  onUsoChange={(id, ativo) =>
+                    setUsoFerramentasIa((prev) => ({
+                      ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                      [id]: ativo,
+                    }))
+                  }
+                  customCatalog={catalogoCustomFerramentas}
+                  externaCatalog={catalogoExternaFerramentas}
+                  integradorCatalog={catalogoIntegradorFerramentas}
+                  mistralAgentId={typeof agente.mistral_agent_id === "string" ? agente.mistral_agent_id : null}
+                  mistralSyncEm={typeof agente.mistral_agent_sync_em === "string" ? agente.mistral_agent_sync_em : null}
+                  mistralSyncErro={
+                    typeof agente.mistral_agent_sync_erro === "string" ? agente.mistral_agent_sync_erro : null
+                  }
+                  destacarWhatsApp={agente.modo_operacao === "canal_whatsapp"}
+                />
+                <button
+                  type="button"
+                  onClick={sincronizarMistralAgora}
+                  disabled={syncMistralLoading || !mistralProvisionar}
+                  style={{
+                    padding: "10px 16px",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: mistralProvisionar && !syncMistralLoading ? "pointer" : "not-allowed",
+                    border: "1px solid #dcebd8",
+                    background: mistralProvisionar ? "#ffffff" : "#f8fcf6",
+                    color: mistralProvisionar ? CRM_ACCENT : "#484f58",
+                  }}
+                >
+                  {syncMistralLoading ? "A sincronizar…" : "Sincronizar na nuvem agora"}
+                </button>
+                <p style={{ color: "#484f58", fontSize: 11, margin: 0, lineHeight: 1.45 }}>
+                  A sincronização na nuvem requer a opção de provisionamento activa.
+                </p>
+                {botaoSalvar}
+              </div>
+            ) : null}
+
+            {abaFicha === "operacao" ? (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                  gap: 24,
+                  alignItems: "stretch",
+                }}
+              >
+                <div
+                  style={{
+                    ...cardShell,
+                    padding: 18,
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: "100%",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+                    <h3 style={labelSectionStyle}>Ciclos atribuídos ({cicloCount})</h3>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/crm/ciclos?q=${encodeURIComponent(slug)}`)}
+                      style={{
+                        border: "1px solid rgba(146, 255, 0, 0.45)",
+                        background: "rgba(146, 255, 0, 0.12)",
+                        color: "#1a5c32",
+                        borderRadius: 8,
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Ciclos IA
+                    </button>
+                  </div>
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+                    {operacaoLoading ? (
+                      <p style={{ margin: 0, fontSize: 12, color: "#4a6356", fontWeight: 500 }}>A carregar ciclos…</p>
+                    ) : (
+                      <AgenteCiclosOperacaoList
+                        ciclos={operacao?.ciclos ?? []}
+                        theme="light"
+                        mostrarDescricao={false}
+                      />
+                    )}
+                  </div>
+                </div>
+                <AgentePerformancePanel
+                  agenteSlug={slug}
+                  ativo={agente.ativo !== false}
+                  arquivado={!!agente.arquivado_em}
+                  operacao={operacao}
+                  operacaoLoading={operacaoLoading}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      <AgenteBriefingDrawer
-        open={briefingOpen}
-        onClose={() => setBriefingOpen(false)}
-        agenteSlug={slug}
-        agenteNome={agente.nome}
-      />
-      <AgentePlaybookCalibracaoDrawer
-        open={calibracaoOpen}
-        onClose={() => {
-          setCalibracaoOpen(false);
-        }}
-        agenteSlug={slug}
-        agenteNome={agente.nome}
-      />
+      {briefingOpen ? (
+        <AgenteBriefingDrawer
+          open
+          onClose={() => setBriefingOpen(false)}
+          agenteSlug={slug}
+          agenteNome={agente.nome}
+        />
+      ) : null}
+      {calibracaoOpen ? (
+        <AgentePlaybookCalibracaoDrawer
+          open
+          onClose={() => setCalibracaoOpen(false)}
+          agenteSlug={slug}
+          agenteNome={agente.nome}
+        />
+      ) : null}
+
+      <CrmConfirmDialog
+        open={showArquivar}
+        title="Arquivar agente"
+        variant="destructive"
+        confirmLabel="Confirmar arquivamento"
+        loading={arquivando}
+        loadingLabel="Arquivando…"
+        confirmDisabled={motivoArquivamento.trim().length < 10}
+        onCancel={() => !arquivando && setShowArquivar(false)}
+        onConfirm={() => void confirmarArquivamento()}
+      >
+        <p style={{ margin: "0 0 10px" }}>
+          Agente: <strong style={{ color: "#0b1f10" }}>{agente.nome}</strong>
+        </p>
+        <p style={{ margin: "0 0 14px", color: "#b3261e", fontWeight: 600 }}>
+          Esta operação não pode ser desfeita.
+        </p>
+        <label style={{ fontSize: 12, fontWeight: 700, color: "#0b1f10", display: "block", marginBottom: 8 }}>
+          Motivo do arquivamento <span style={{ color: "#ef4444" }}>*</span>
+        </label>
+        <textarea
+          value={motivoArquivamento}
+          onChange={(e) => setMotivoArquivamento(e.target.value)}
+          placeholder="Descreva o motivo (mínimo 10 caracteres)..."
+          rows={3}
+          style={{
+            ...inputStyle,
+            resize: "none",
+            width: "100%",
+            boxSizing: "border-box",
+            border: `1px solid ${motivoArquivamento.length > 0 && motivoArquivamento.trim().length < 10 ? "#ef4444" : "#dcebd8"}`,
+          }}
+        />
+        {motivoArquivamento.length > 0 && motivoArquivamento.trim().length < 10 ? (
+          <p style={{ color: "#ef4444", fontSize: 11, margin: "8px 0 0" }}>
+            Mínimo 10 caracteres ({motivoArquivamento.trim().length}/10)
+          </p>
+        ) : null}
+      </CrmConfirmDialog>
+
+      <CrmConfirmDialog
+        open={showLimparMemorias}
+        title="Limpar memórias do agente"
+        variant="destructive"
+        confirmLabel="Limpar memórias"
+        loading={limpandoMemorias}
+        loadingLabel="A limpar…"
+        onCancel={() => !limpandoMemorias && setShowLimparMemorias(false)}
+        onConfirm={() => void confirmarLimparMemorias()}
+      >
+        <p style={{ margin: "0 0 10px" }}>
+          Remove aprendizados persistentes de <strong style={{ color: "#0b1f10" }}>{agente.nome}</strong> e zera o
+          fluxo conversacional de todos os leads atribuídos a este agente.
+        </p>
+        {contagemMemorias ? (
+          <p style={{ fontSize: 12, margin: "0 0 12px" }}>
+            Encontrado: <strong>{contagemMemorias.memorias}</strong> memória(s) operacional(is)
+            {incluirBriefingAoLimpar ? (
+              <>
+                {" "}
+                e <strong>{contagemMemorias.briefingSessoes}</strong> sessão(ões) de briefing
+              </>
+            ) : null}
+            ; <strong>{contagemMemorias.leads}</strong> lead(s) com estado conversacional (
+            <strong>{contagemMemorias.memoriasLead}</strong> memória(s) de lead).
+          </p>
+        ) : (
+          <p style={{ fontSize: 12, margin: "0 0 12px" }}>A contar registos…</p>
+        )}
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            cursor: "pointer",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={incluirBriefingAoLimpar}
+            onChange={(e) => setIncluirBriefingAoLimpar(e.target.checked)}
+            style={{ marginTop: 2 }}
+          />
+          <span>
+            Também apagar histórico do chat <strong>AI — Funcionários</strong> (sessões de briefing deste agente).
+          </span>
+        </label>
+        <p style={{ margin: "12px 0 0", color: "#b3261e", fontWeight: 600 }}>Esta operação não pode ser desfeita.</p>
+      </CrmConfirmDialog>
+
+      <CrmConfirmDialog
+        open={showConfirmSalvar}
+        title="Confirmar alterações"
+        confirmLabel="Confirmar"
+        loading={salvando}
+        loadingLabel="Salvando…"
+        onCancel={() => !salvando && setShowConfirmSalvar(false)}
+        onConfirm={() => void salvar()}
+      >
+        <p style={{ margin: 0 }}>
+          Confirmar alterações no agente <strong style={{ color: "#0b1f10" }}>{nome}</strong>?
+        </p>
+      </CrmConfirmDialog>
     </div>
   );
 }
 
-function HeaderActionGroup({ children }: { children: ReactNode }) {
+function HeaderActionGroup({
+  children,
+  "aria-label": ariaLabel,
+}: {
+  children: ReactNode;
+  "aria-label"?: string;
+}) {
+  const items = Children.toArray(children).filter(Boolean);
   return (
     <div
+      role="group"
+      aria-label={ariaLabel}
       style={{
         display: "inline-flex",
         alignItems: "stretch",
-        borderRadius: 12,
-        border: "1px solid #dcebd8",
-        overflow: "hidden",
-        background: "#f8fcf6",
-        boxShadow: "0 4px 18px rgba(0,0,0,0.28)",
+        flexWrap: "nowrap",
+        maxWidth: "100%",
+        overflowX: "auto",
+        borderRadius: 10,
+        border: "1px solid #d4ecd0",
+        background: "#ffffff",
+        boxShadow: "0 2px 8px rgba(11, 31, 16, 0.08)",
         flexShrink: 0,
+        WebkitOverflowScrolling: "touch",
       }}
     >
-      {children}
+      {items.map((child, index) => {
+        if (!isValidElement<{ position?: "first" | "middle" | "last" }>(child)) return child;
+        const position: "first" | "middle" | "last" =
+          index === 0 ? "first" : index === items.length - 1 ? "last" : "middle";
+        return cloneElement(child, { position });
+      })}
     </div>
   );
 }
@@ -1268,17 +1341,32 @@ function HeaderActionButton({
   position,
   title,
 }: {
-  icon: ReactNode;
+  icon?: ReactNode | null;
   label: string;
   onClick: () => void;
-  variant: "default" | "ai";
+  variant: "default" | "accent" | "secondary" | "danger";
   position: "first" | "middle" | "last";
   title?: string;
 }) {
-  const palette =
-    variant === "ai"
-      ? { bg: "#2e106418", hoverBg: "#2e106428", color: "#c4b5fd", divider: "#6d28d944" }
-      : { bg: "#eef7eb", hoverBg: "#dcebd8", color: "#c9d1d9", divider: "#dcebd8" };
+  const palette = (() => {
+    switch (variant) {
+      case "accent":
+        return { bg: "#ecffd8", hoverBg: "#dcebd8", color: CRM_ACCENT, divider: "#d4ecd0" };
+      case "secondary":
+        return { bg: "#f8fcf6", hoverBg: "#eef7eb", color: "#3d5c48", divider: "#eef7eb" };
+      case "danger":
+        return { bg: "#fff5f5", hoverBg: "#fee2e2", color: "#dc2626", divider: "#fecaca" };
+      default:
+        return { bg: "#ffffff", hoverBg: "#eef7eb", color: BRAND_TEXT_DARK, divider: "#eef7eb" };
+    }
+  })();
+
+  const radius =
+    position === "first"
+      ? { borderTopLeftRadius: 9, borderBottomLeftRadius: 9 }
+      : position === "last"
+        ? { borderTopRightRadius: 9, borderBottomRightRadius: 9 }
+        : {};
 
   return (
     <button
@@ -1299,6 +1387,8 @@ function HeaderActionButton({
         cursor: "pointer",
         whiteSpace: "nowrap",
         transition: "background 140ms ease",
+        flexShrink: 0,
+        ...radius,
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.background = palette.hoverBg;

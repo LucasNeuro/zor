@@ -1,17 +1,26 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Eye, Pencil, Trash2, User } from "lucide-react";
+import { Eye, Pencil, User } from "lucide-react";
 import { AgenteSideoverEntityCard, AgenteSideoverInfoGrid } from "@/components/crm/AgenteSideoverCards";
 import { CrmTelefoneCell } from "@/components/crm/CrmTelefoneCell";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import { CrmSideoverFold } from "@/components/crm/CrmSideoverFold";
+import { CadastroClienteAtendimentosTab } from "@/components/crm/cadastro/CadastroClienteAtendimentosTab";
+import { CadastroClienteComprasTab } from "@/components/crm/cadastro/CadastroClienteComprasTab";
+import {
+  CadastroClienteSideoverTabs,
+  type CadastroClienteTabId,
+} from "@/components/crm/cadastro/CadastroClienteSideoverTabs";
+import { CadastroClienteTimelineTab } from "@/components/crm/cadastro/CadastroClienteTimelineTab";
+import { CadastroSideoverFooterActions } from "@/components/crm/cadastro/CadastroSideoverFooterActions";
 import {
   CadastroPremiumSideover,
   CadastroSideoverPanel,
   CadastroTipoBadge,
 } from "@/components/crm/cadastro/CadastroPremiumSideover";
+import { useClienteCrmResumo } from "@/components/crm/cadastro/useClienteCrmResumo";
 import { crmApiHeadersWithActor } from "@/lib/internal-api-headers-client";
-import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
 import {
   formatarCnpjMascara,
   formatarCpfMascara,
@@ -23,6 +32,14 @@ import {
   cepValidoParaBusca,
   formatarCepMascara,
 } from "@/lib/crm/viacep";
+import {
+  RF_ACCENT,
+  RF_BORDER_STRONG,
+  RF_INPUT_STYLE,
+  RF_LABEL_STYLE,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 
 export type ContactoLista = {
   id: string;
@@ -52,19 +69,9 @@ type PessoaDetalhe = ContactoLista & {
 
 type Actor = { id?: string; email?: string; name?: string };
 
-const INPUT: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: 8,
-  border: "1px solid #dcebd8",
-  background: "#ffffff",
-  color: "#0b2210",
-  fontSize: 13,
-  boxSizing: "border-box",
-};
-
+const INPUT: React.CSSProperties = { ...RF_INPUT_STYLE, padding: "10px 12px", fontSize: 13 };
 const LABEL: React.CSSProperties = {
-  color: "#5d7a67",
+  ...RF_LABEL_STYLE,
   fontSize: 11,
   fontWeight: 600,
   display: "block",
@@ -82,12 +89,6 @@ function formatarData(v?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function mercadosDeExtras(dados?: Record<string, unknown>): string[] {
-  const raw = dados?.mercados;
-  if (!Array.isArray(raw)) return [];
-  return raw.map((m) => labelMercadoPrefixo(String(m))).filter(Boolean);
 }
 
 type Props = {
@@ -123,6 +124,14 @@ export function CadastroContactoSideover({
   const [secContacto, setSecContacto] = useState(true);
   const [secEndereco, setSecEndereco] = useState(true);
   const [secCrm, setSecCrm] = useState(true);
+  const [tab, setTab] = useState<CadastroClienteTabId>("timeline");
+
+  const { resumo, loading: loadingResumo } = useClienteCrmResumo(
+    "pessoa",
+    pessoaId,
+    actor,
+    open && mode === "view"
+  );
 
   const carregar = useCallback(async () => {
     if (!pessoaId) return;
@@ -154,10 +163,12 @@ export function CadastroContactoSideover({
       setForm({});
       setConfirmExcluir(false);
       setErro("");
+      setTab("timeline");
       return;
     }
+    if (mode === "view") setTab("timeline");
     void carregar();
-  }, [open, carregar]);
+  }, [open, mode, carregar]);
 
   async function salvar() {
     if (!pessoaId) return;
@@ -236,7 +247,6 @@ export function CadastroContactoSideover({
         ? formatarCpfMascara(pessoa.documento)
         : "—";
 
-  const mercados = mercadosDeExtras(pessoa?.dados_extras);
   const opencnpj = pessoa?.dados_extras?.opencnpj as Record<string, unknown> | undefined;
   const situacaoCnpj =
     opencnpj && typeof opencnpj.situacao_cadastral === "string"
@@ -245,117 +255,22 @@ export function CadastroContactoSideover({
 
   const footer =
     mode === "view" ? (
-      <>
-        <button
-          type="button"
-          onClick={onStartEdit}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "10px 16px",
-            borderRadius: 8,
-            border: "1px solid #dcebd8",
-            background: "#eef7eb",
-            color: "#0b2210",
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: 13,
-          }}
-        >
-          <Pencil size={16} /> Editar
-        </button>
-        {!confirmExcluir ? (
-          <button
-            type="button"
-            onClick={() => setConfirmExcluir(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "10px 16px",
-              borderRadius: 8,
-              border: "1px solid #f8514966",
-              background: "transparent",
-              color: "#f85149",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 13,
-            }}
-          >
-            <Trash2 size={16} /> Excluir
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => setConfirmExcluir(false)}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 8,
-                border: "1px solid #dcebd8",
-                background: "transparent",
-                color: "#5d7a67",
-                cursor: "pointer",
-              }}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => void excluir()}
-              disabled={excluindo}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 8,
-                border: "none",
-                background: "#da3633",
-                color: "#fff",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              {excluindo ? "Excluindo…" : "Confirmar exclusão"}
-            </button>
-          </>
-        )}
-      </>
+      <CadastroSideoverFooterActions
+        mode="view"
+        onEdit={onStartEdit}
+        onDelete={() => setConfirmExcluir(true)}
+      />
     ) : (
-      <>
-        <button
-          type="button"
-          onClick={onBackToView}
-          style={{
-            padding: "10px 16px",
-            borderRadius: 8,
-            border: "1px solid #dcebd8",
-            background: "transparent",
-            color: "#5d7a67",
-            cursor: "pointer",
-          }}
-        >
-          Voltar
-        </button>
-        <button
-          type="button"
-          onClick={() => void salvar()}
-          disabled={salvando}
-          style={{
-            padding: "10px 20px",
-            borderRadius: 8,
-            border: "none",
-            background: "#238636",
-            color: "#fff",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          {salvando ? "Salvando…" : "Guardar alterações"}
-        </button>
-      </>
+      <CadastroSideoverFooterActions
+        mode="edit"
+        onBack={onBackToView}
+        onSave={() => void salvar()}
+        saving={salvando}
+      />
     );
 
   return (
+    <>
     <CadastroPremiumSideover
       open={open}
       onClose={onClose}
@@ -406,114 +321,146 @@ export function CadastroContactoSideover({
       )}
 
       {mode === "view" && pessoa && !loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <AgenteSideoverEntityCard
-            accent="#c9a24a"
-            Icon={User}
-            avatarCaption={pessoa.codigo || "Cadastro"}
-            footer={
-              <AgenteSideoverInfoGrid
-                rows={[
-                  {
-                    label: "Telefone",
-                    value: pessoa.telefone ? (
-                      <CrmTelefoneCell telefone={pessoa.telefone} />
-                    ) : (
-                      "—"
-                    ),
-                  },
-                  { label: "E-mail", value: pessoa.email || "—" },
-                  {
-                    label: "Local",
-                    value: [pessoa.cidade, pessoa.estado].filter(Boolean).join(" / ") || "—",
-                  },
-                ]}
-              />
-            }
-          >
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0b2210", lineHeight: 1.35 }}>
-              {pessoa.nome}
-            </p>
-            <p style={{ margin: "6px 0 0", fontSize: 11, color: "#94a3b8", lineHeight: 1.45 }}>
-              {labelAreaAtuacao(pessoa.area_atuacao || "") || "Área não informada"}
-              {pessoa.origem ? ` · origem ${pessoa.origem}` : ""}
-            </p>
-          </AgenteSideoverEntityCard>
+        <>
+          <CadastroClienteSideoverTabs
+            tab={tab}
+            onTabChange={setTab}
+            comprasCount={resumo.negocios.length}
+            atendimentosCount={resumo.leads.length}
+          />
 
-          <CadastroSideoverPanel>
-            <CrmSideoverFold
-              isFirst
-              title="Identidade"
-              open={secIdentidade}
-              onToggle={() => setSecIdentidade((o) => !o)}
-            >
-              <AgenteSideoverInfoGrid
-                rows={[
-                  { label: "Código", value: pessoa.codigo || "—" },
-                  { label: "Tipo", value: pessoa.tipo_pessoa || "—" },
-                  { label: "Documento", value: docFmt },
-                  ...(pessoa.tipo_pessoa === "PJ"
-                    ? [{ label: "Nome fantasia", value: pessoa.empresa || "—" }]
-                    : []),
-                  ...(situacaoCnpj ? [{ label: "Situação CNPJ", value: situacaoCnpj }] : []),
-                ]}
-              />
-            </CrmSideoverFold>
+          {tab === "timeline" ? (
+            <CadastroClienteTimelineTab
+              events={resumo.timeline_events}
+              loading={loadingResumo}
+              clienteNome={pessoa.nome}
+            />
+          ) : null}
 
-            <CrmSideoverFold title="Contato" open={secContacto} onToggle={() => setSecContacto((o) => !o)}>
-              <AgenteSideoverInfoGrid
-                rows={[
-                  {
-                    label: "Telefone",
-                    value: pessoa.telefone ? (
-                      <CrmTelefoneCell telefone={pessoa.telefone} />
-                    ) : (
-                      "—"
-                    ),
-                  },
-                  { label: "E-mail", value: pessoa.email || "—" },
-                  { label: "Área", value: labelAreaAtuacao(pessoa.area_atuacao || "") || "—" },
-                ]}
-              />
-            </CrmSideoverFold>
+          {tab === "compras" ? (
+            <CadastroClienteComprasTab negocios={resumo.negocios} loading={loadingResumo} />
+          ) : null}
 
-            <CrmSideoverFold title="Endereço" open={secEndereco} onToggle={() => setSecEndereco((o) => !o)}>
-              <AgenteSideoverInfoGrid
-                rows={[
-                  { label: "CEP", value: pessoa.cep || "—" },
-                  { label: "Logradouro", value: pessoa.logradouro || "—" },
-                  { label: "Número", value: pessoa.numero || "—" },
-                  { label: "Complemento", value: pessoa.complemento || "—" },
-                  { label: "Bairro", value: pessoa.bairro || "—" },
-                  {
-                    label: "Cidade / UF",
-                    value: [pessoa.cidade, pessoa.estado].filter(Boolean).join(" / ") || "—",
-                  },
-                ]}
-              />
-            </CrmSideoverFold>
+          {tab === "atendimentos" ? (
+            <CadastroClienteAtendimentosTab leads={resumo.leads} loading={loadingResumo} />
+          ) : null}
 
-            <CrmSideoverFold title="CRM e metadados" open={secCrm} onToggle={() => setSecCrm((o) => !o)}>
-              <AgenteSideoverInfoGrid
-                rows={[
-                  { label: "Origem", value: pessoa.origem || "—" },
-                  { label: "Criado em", value: formatarData(pessoa.criado_em) },
-                  {
-                    label: "Mercados",
-                    value: mercados.length ? mercados.join(", ") : "—",
-                  },
-                ]}
-              />
-            </CrmSideoverFold>
-          </CadastroSideoverPanel>
+          {tab === "dados" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <AgenteSideoverEntityCard
+                accent="#c9a24a"
+                Icon={User}
+                avatarCaption={pessoa.codigo || "Cadastro"}
+                footer={
+                  <AgenteSideoverInfoGrid
+                    rows={[
+                      {
+                        label: "Telefone",
+                        value: pessoa.telefone ? (
+                          <CrmTelefoneCell telefone={pessoa.telefone} />
+                        ) : (
+                          "—"
+                        ),
+                      },
+                      { label: "E-mail", value: pessoa.email || "—" },
+                      {
+                        label: "Local",
+                        value: [pessoa.cidade, pessoa.estado].filter(Boolean).join(" / ") || "—",
+                      },
+                    ]}
+                  />
+                }
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: RF_TEXT_PRIMARY,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {pessoa.nome}
+                </p>
+                <p style={{ margin: "6px 0 0", fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+                  {labelAreaAtuacao(pessoa.area_atuacao || "") || "Área não informada"}
+                  {pessoa.origem ? ` · origem ${pessoa.origem}` : ""}
+                </p>
+              </AgenteSideoverEntityCard>
 
-          {confirmExcluir && (
-            <p style={{ fontSize: 12, color: "#f85149", margin: 0 }}>
-              A exclusão será registada em auditoria
-              {actor.email ? ` (${actor.email})` : ""}.
-            </p>
-          )}
-        </div>
+              <CadastroSideoverPanel>
+                <CrmSideoverFold
+                  isFirst
+                  title="Identidade"
+                  open={secIdentidade}
+                  onToggle={() => setSecIdentidade((o) => !o)}
+                >
+                  <AgenteSideoverInfoGrid
+                    rows={[
+                      { label: "Código", value: pessoa.codigo || "—" },
+                      { label: "Tipo", value: pessoa.tipo_pessoa || "—" },
+                      { label: "Documento", value: docFmt },
+                      ...(pessoa.tipo_pessoa === "PJ"
+                        ? [{ label: "Nome fantasia", value: pessoa.empresa || "—" }]
+                        : []),
+                      ...(situacaoCnpj ? [{ label: "Situação CNPJ", value: situacaoCnpj }] : []),
+                    ]}
+                  />
+                </CrmSideoverFold>
+
+                <CrmSideoverFold
+                  title="Contato"
+                  open={secContacto}
+                  onToggle={() => setSecContacto((o) => !o)}
+                >
+                  <AgenteSideoverInfoGrid
+                    rows={[
+                      {
+                        label: "Telefone",
+                        value: pessoa.telefone ? (
+                          <CrmTelefoneCell telefone={pessoa.telefone} />
+                        ) : (
+                          "—"
+                        ),
+                      },
+                      { label: "E-mail", value: pessoa.email || "—" },
+                      { label: "Área", value: labelAreaAtuacao(pessoa.area_atuacao || "") || "—" },
+                    ]}
+                  />
+                </CrmSideoverFold>
+
+                <CrmSideoverFold
+                  title="Endereço"
+                  open={secEndereco}
+                  onToggle={() => setSecEndereco((o) => !o)}
+                >
+                  <AgenteSideoverInfoGrid
+                    rows={[
+                      { label: "CEP", value: pessoa.cep || "—" },
+                      { label: "Logradouro", value: pessoa.logradouro || "—" },
+                      { label: "Número", value: pessoa.numero || "—" },
+                      { label: "Complemento", value: pessoa.complemento || "—" },
+                      { label: "Bairro", value: pessoa.bairro || "—" },
+                      {
+                        label: "Cidade / UF",
+                        value: [pessoa.cidade, pessoa.estado].filter(Boolean).join(" / ") || "—",
+                      },
+                    ]}
+                  />
+                </CrmSideoverFold>
+
+                <CrmSideoverFold title="CRM e metadados" open={secCrm} onToggle={() => setSecCrm((o) => !o)}>
+                  <AgenteSideoverInfoGrid
+                    rows={[
+                      { label: "Origem", value: pessoa.origem || "—" },
+                      { label: "Criado em", value: formatarData(pessoa.criado_em) },
+                    ]}
+                  />
+                </CrmSideoverFold>
+              </CadastroSideoverPanel>
+            </div>
+          ) : null}
+        </>
       )}
 
       {mode === "edit" && !loading && pessoa && (
@@ -633,6 +580,26 @@ export function CadastroContactoSideover({
         </div>
       )}
     </CadastroPremiumSideover>
+
+    <CrmConfirmDialog
+      open={confirmExcluir}
+      title="Excluir contacto?"
+      variant="destructive"
+      confirmLabel="Confirmar exclusão"
+      loading={excluindo}
+      loadingLabel="Excluindo…"
+      onCancel={() => !excluindo && setConfirmExcluir(false)}
+      onConfirm={() => void excluir()}
+    >
+      <p style={{ margin: "0 0 10px" }}>
+        O contacto <strong style={{ color: "#0b1f10" }}>«{pessoa?.nome || "—"}»</strong> será removido permanentemente.
+      </p>
+      <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>Esta operação não pode ser desfeita.</p>
+      <p style={{ margin: "10px 0 0", fontSize: 12 }}>
+        A exclusão será registada em auditoria{actor.email ? ` (${actor.email})` : ""}.
+      </p>
+    </CrmConfirmDialog>
+    </>
   );
 }
 

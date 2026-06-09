@@ -143,7 +143,8 @@ export async function rodarCicloML(): Promise<{
 // Não é chamada automaticamente em nenhuma circunstância
 export async function aplicarMudancaConfirmada(
   sugestaoId: string,
-  confirmacaoHumana: string
+  confirmacaoHumana: string,
+  aprovadoPor = "operador"
 ): Promise<{
   sucesso: boolean;
   preview?: Record<string, unknown>;
@@ -210,7 +211,7 @@ export async function aplicarMudancaConfirmada(
         metadata: {
           sugestao_id: sugestaoId,
           tipo: s.tipo_mudanca,
-          aprovado_por: "wendel",
+          aprovado_por: aprovadoPor,
           aplicado_em: new Date().toISOString(),
         },
       });
@@ -219,7 +220,7 @@ export async function aplicarMudancaConfirmada(
         .from("hub_ml_sugestoes")
         .update({
           status: "aplicado",
-          aprovado_por: "wendel",
+          aprovado_por: aprovadoPor,
           aprovado_em: new Date().toISOString(),
         })
         .eq("id", sugestaoId);

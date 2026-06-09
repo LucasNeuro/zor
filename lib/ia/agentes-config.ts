@@ -163,13 +163,16 @@ export function identificarIntencao(mensagem: string): IntencaoId {
 
 // ─── Market identification ────────────────────────────────────────────────────
 
+/** Identifica segmento por palavras-chave; default neutro Waje é `geral`. */
 export function identificarMercado(mensagem: string): MercadoId {
-  const t = mensagem.toLowerCase();
-  const order: MercadoId[] = ["imobiliario", "arquitetura", "reforma", "fornecedor", "produto"];
+  const t = mensagem.toLowerCase().trim();
+  if (!t) return "geral";
+
+  const order: MercadoId[] = ["produto", "fornecedor", "imobiliario", "arquitetura", "reforma"];
 
   for (const id of order) {
     const mercado = MERCADOS[id];
-    if (mercado.palavrasChave.some(kw => t.includes(kw))) return id;
+    if (mercado.palavrasChave.some((kw) => t.includes(kw))) return id;
   }
   return "geral";
 }
@@ -263,14 +266,14 @@ ${m.emoji} ${m.label} — foque em temas relacionados a: ${m.palavrasChave.slice
 }
 
 // ============================================================
-// FLUXOS DE ATENDIMENTO — MARI
-// Documento Técnico-Operacional v1.0
-// Módulo Imobiliário + Arquitetura
+// FLUXOS DE ATENDIMENTO — legado (Mari/Obra10+)
+// @deprecated Preferir playbook publicado + cargo hub_cargos_catalogo (Waje).
 // ============================================================
 
 export const MARI_CONFIG = {
-  nome: "Mari",
-  apresentacao: "Seja muito bem-vindo ao Obra 10+.\nMeu nome é Mari e vou te acompanhar neste primeiro atendimento.\nMe fale qual é o seu nome, por gentileza?",
+  nome: "Assistente",
+  apresentacao:
+    "Olá! Sou o assistente virtual e vou te acompanhar neste atendimento.\nMe fale qual é o seu nome, por gentileza?",
   apos_nome: "Obrigado pela informação. É um prazer te atender.",
   follow_up: "Conseguiu ver minha mensagem? Posso seguir com seu atendimento por aqui.",
   regras_gerais: [
@@ -285,6 +288,7 @@ export const MARI_CONFIG = {
   ],
 } as const;
 
+/** @deprecated Legado imobiliário Obra10+. Use playbook/cargo Waje. */
 export const FLUXO_IMOBILIARIO = {
   identificacao: {
     cliente_final: ["comprar","alugar","visitar","condomínio","valor","disponibilidade","apartamento","casa","imovel","imóvel","quero ver","quanto é","tem disponível"],
@@ -295,7 +299,7 @@ export const FLUXO_IMOBILIARIO = {
   fluxo_1a: {
     nome: "Cliente Final — Compra/Locação",
     passos: [
-      { acao: "apresentar", mensagem: "Seja muito bem-vindo ao Obra 10+.\nMeu nome é Mari e vou te acompanhar neste primeiro atendimento.\nMe fale qual é o seu nome, por gentileza?" },
+      { acao: "apresentar", mensagem: "Olá! Sou o assistente virtual e vou te acompanhar neste atendimento.\nMe fale qual é o seu nome, por gentileza?" },
       { acao: "apos_nome", mensagem: "Obrigado pela informação. É um prazer te atender." },
       { acao: "encaminhar", mensagem: "Eu cuido desse primeiro contato e já vou te direcionar para o corretor responsável pelo imóvel.\nEle vai te chamar por aqui com todas as informações do imóvel.\nEu continuo acompanhando seu atendimento e fico à disposição para o que precisar." },
     ],
@@ -327,7 +331,7 @@ export const FLUXO_IMOBILIARIO = {
   fluxo_1b: {
     nome: "Proprietário — Venda/Locação",
     passos: [
-      { acao: "apresentar", mensagem: "Seja muito bem-vindo ao Obra 10+.\nMeu nome é Mari e vou te acompanhar neste atendimento.\nMe fale qual é o seu nome, por gentileza?" },
+      { acao: "apresentar", mensagem: "Olá! Sou o assistente virtual e vou te acompanhar neste atendimento.\nMe fale qual é o seu nome, por gentileza?" },
       { acao: "apos_nome", mensagem: "Obrigado pela informação. É um prazer te atender." },
       { acao: "tipo_operacao", mensagem: "Você quer vender ou alugar esse imóvel?" },
       { acao: "cidade_bairro", mensagem: "Qual a cidade e o bairro onde está o imóvel?" },
@@ -352,7 +356,7 @@ export const FLUXO_IMOBILIARIO = {
   fluxo_1c: {
     nome: "Corretor/Imobiliária Parceira",
     passos: [
-      { acao: "apresentar", mensagem: "Seja muito bem-vindo ao Obra 10+.\nMeu nome é Mari e vou te acompanhar neste atendimento.\nMe fale qual é o seu nome, por gentileza?" },
+      { acao: "apresentar", mensagem: "Olá! Sou o assistente virtual e vou te acompanhar neste atendimento.\nMe fale qual é o seu nome, por gentileza?" },
       { acao: "apos_nome", mensagem: "Obrigado pela informação. É um prazer te atender." },
       { acao: "email_intencao", mensagem: "Agora me informe seu email para darmos continuidade.\nVocê quer cadastrar um imóvel ou falar sobre parceria?" },
     ],
@@ -378,12 +382,13 @@ export const FLUXO_IMOBILIARIO = {
   },
 } as const;
 
+/** @deprecated Legado arquitetura Obra10+. Use playbook/cargo Waje. */
 export const FLUXO_ARQUITETURA = {
-  nome: "Módulo Arquitetura",
+  nome: "Módulo de projetos (legado)",
   canais_entrada: ["Instagram Ads","Facebook Ads","WhatsApp direto","Indicação","Lead importado manualmente"],
   regra_critica: "Cliente de tráfego pago tem baixa paciência. Qualificar com poucas perguntas, preferentemente por múltipla escolha, e encaminhar rapidamente.",
   passos: [
-    { etapa: 1, acao: "saudar", mensagem: "Seja muito bem-vindo ao Obra 10+.\nMeu nome é Mari e vou te acompanhar para garantir que seu projeto saia exatamente como você deseja.\nMe fale qual é o seu nome, por gentileza?" },
+    { etapa: 1, acao: "saudar", mensagem: "Olá! Sou o assistente virtual e vou te acompanhar neste atendimento.\nMe fale qual é o seu nome, por gentileza?" },
     { etapa: 2, acao: "apos_nome", mensagem: "Obrigado pela informação. É um prazer te atender." },
     { etapa: 3, acao: "tamanho", mensagem: "Qual o tamanho aproximado do imóvel?\n\n1. De 50 a 100 m²\n2. De 100 a 200 m²\n3. Acima de 200 m²" },
     { etapa: 4, acao: "prazo", mensagem: "Para quando você pretende iniciar o projeto?\n\n1. Imediatamente\n2. Dentro dos próximos 90 dias\n3. Mais para frente, acima de 90 dias" },
@@ -402,8 +407,8 @@ export const FLUXO_ARQUITETURA = {
     "Não encerrar sem indicar próximo passo",
   ],
   respostas_rapidas: {
-    como_funciona: "No Obra 10+, entendemos sua necessidade inicial e direcionamos você para arquitetos homologados.\nEles entram em contato para explicar o processo e apresentar as melhores opções para o seu projeto.",
-    arquitetos_hub: "Os arquitetos são homologados pelo HUB Obra 10+.\nIsso significa que passam por uma avaliação para garantir mais segurança, qualidade e padrão de atendimento.",
+    como_funciona: "Entendemos sua necessidade inicial e direcionamos você para o especialista responsável.\nEle entra em contato para explicar o processo e apresentar as melhores opções.",
+    arquitetos_hub: "Os profissionais são homologados pela plataforma.\nIsso significa que passam por avaliação para garantir segurança, qualidade e padrão de atendimento.",
     quanto_custa: "O valor depende do tamanho, tipo de projeto e nível de detalhamento necessário.\nO arquiteto vai te passar os valores com mais precisão no atendimento.",
     falar_arquiteto: "Sim. Vou organizar suas informações iniciais e direcionar para os arquitetos responsáveis.\nAssim eles já entram em contato com mais clareza sobre o que você precisa.",
     seguro: "Sim. O HUB trabalha com profissionais homologados e acompanhamento do atendimento.\nA ideia é trazer mais segurança desde o primeiro contato até a continuidade do projeto.",

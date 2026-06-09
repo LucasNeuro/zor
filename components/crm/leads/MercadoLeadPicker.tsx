@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { mercadoIcon } from "@/lib/crm/mercado-visual";
@@ -15,8 +15,8 @@ export function MercadoLeadPicker({ mercados, onToggle, disabled }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs leading-relaxed text-[#5d7a67]">
-        Escolhe um ou mais mercados. Se nenhum estiver activo, o lead entra em{" "}
-        <strong className="text-[#0b2210]">IMB</strong> (imobiliário).
+        Escolhe um ou mais segmentos. Se nenhum estiver activo, o lead entra em{" "}
+        <strong className="text-[#0b2210]">GRL</strong> (geral / multi-setor).
       </p>
       {MERCADOS_PREFIXO_OPTIONS.map((m) => {
         const sigla = m.value;

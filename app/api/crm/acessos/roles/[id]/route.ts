@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crmDb } from "@/lib/crm/supabase-server";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
-import { requireCrmOwner } from "@/lib/crm/crm-api-auth";
+import { requireCrmAdmin, requireCrmOwner } from "@/lib/crm/crm-api-auth";
 import { getAuditoriaActor, logAuditoriaSistema } from "@/lib/crm/auditoria-sistema";
 
 const ROLE_SELECT = "id, tenant_id, slug, nome, descricao, permissoes, ativo, criado_em, atualizado_em";
@@ -25,8 +25,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ownerErr = await requireCrmOwner(request);
-  if (ownerErr) return ownerErr;
+  const adminErr = await requireCrmAdmin(request);
+  if (adminErr) return adminErr;
 
   const tenantId = await resolveTenantIdFromCaller(request);
   const actor = await getAuditoriaActor(request);

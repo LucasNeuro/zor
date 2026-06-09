@@ -31,56 +31,28 @@ import {
   normalizarCep,
 
 } from "@/lib/crm/viacep";
+import {
+  RF_ACCENT,
+  RF_BORDER_STRONG,
+  RF_INPUT_STYLE,
+  RF_LABEL_STYLE,
+  RF_SECTION_STYLE,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+  rfAsideBodyStyle,
+  rfAsideHeaderStyle,
+  rfAsideStyle,
+  rfCloseButtonStyle,
+  rfOverlayStyle,
+} from "@/lib/crm/crm-retrofit-dark-theme";
+
+const INPUT: React.CSSProperties = { ...RF_INPUT_STYLE, padding: "12px 14px", borderRadius: 10, fontSize: 14 };
+
+const LABEL: React.CSSProperties = { ...RF_LABEL_STYLE, fontWeight: 600 };
 
 
 
-const INPUT: React.CSSProperties = {
-
-  width: "100%",
-
-  padding: "12px 14px",
-
-  borderRadius: 10,
-
-  border: "1px solid #dcebd8",
-
-  background: "#ffffff",
-
-  color: "#0b2210",
-
-  fontSize: 14,
-
-  boxSizing: "border-box",
-
-};
-
-
-
-const LABEL: React.CSSProperties = {
-
-  color: "#5d7a67",
-
-  fontSize: 12,
-
-  fontWeight: 600,
-
-  display: "block",
-
-  marginBottom: 6,
-
-};
-
-
-
-const SECTION: React.CSSProperties = {
-
-  marginTop: 4,
-
-  paddingTop: 14,
-
-  borderTop: "1px solid #eef7eb",
-
-};
+const SECTION: React.CSSProperties = RF_SECTION_STYLE;
 
 
 
@@ -494,41 +466,22 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
   if (!open) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="pessoa-form-title"
-      style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex" }}
-    >
-      <div style={{ flex: 1, background: "rgba(1, 4, 9, 0.72)" }} onClick={onClose} />
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: 440,
-          height: "100%",
-          maxHeight: "100dvh",
-          display: "flex",
-          flexDirection: "column",
-          background: "#f8fcf6",
-          borderLeft: "1px solid #dcebd8",
-          boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
-        }}
-      >
+    <div role="dialog" aria-modal="true" aria-labelledby="pessoa-form-title">
+      <button type="button" aria-label="Fechar" onClick={onClose} style={rfOverlayStyle(200)} />
+      <div onClick={(e) => e.stopPropagation()} style={rfAsideStyle(440, 201)}>
         <div
           style={{
+            ...rfAsideHeaderStyle(),
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
             padding: "18px 20px 12px",
-            borderBottom: "1px solid #eef7eb",
-            flexShrink: 0,
           }}
         >
 
           <div>
 
-            <h2 id="pessoa-form-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0b2210" }}>
+            <h2 id="pessoa-form-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: RF_TEXT_PRIMARY }}>
 
               Novo cliente
 
@@ -613,11 +566,11 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
                   borderRadius: 10,
 
-                  border: active ? "1px solid #c9a24a66" : "1px solid #dcebd8",
+                  border: active ? `1px solid ${RF_BORDER_STRONG}` : `1px solid ${RF_BORDER_STRONG}`,
 
-                  background: active ? "#c9a24a18" : "#ffffff",
+                  background: active ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
 
-                  color: active ? "#c9a24a" : "#5d7a67",
+                  color: active ? "#92ff00" : "#7a9a7e",
 
                   fontWeight: 700,
 
@@ -1032,11 +985,11 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
                 borderRadius: 10,
 
-                border: "1px solid #dcebd8",
+                border: `1px solid ${RF_BORDER_STRONG}`,
 
                 background: "transparent",
 
-                color: "#5d7a67",
+                color: RF_TEXT_MUTED,
 
                 fontSize: 13,
 
@@ -1070,9 +1023,9 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
                 border: "none",
 
-                background: loading ? "#dcebd8" : "#003b26",
+                background: loading ? "rgba(6, 13, 8, 0.5)" : "#0b1f10",
 
-                color: loading ? "#5d7a67" : "#c9a24a",
+                color: loading ? RF_TEXT_MUTED : RF_ACCENT,
 
                 fontSize: 13,
 

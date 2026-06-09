@@ -1,6 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { limparSessaoConversaExpirada } from "@/lib/ia/sessao-conversa-ttl";
 
+/** Tabela/coluna ainda não migrada — PostgREST: "schema cache" / Postgres: "does not exist". */
+function tabelaInexistente(msg: string, tabela: string): boolean {
+  const m = msg.toLowerCase();
+  const t = tabela.toLowerCase();
+  if (!m.includes(t)) return false;
+  return (
+    m.includes("does not exist") ||
+    m.includes("schema cache") ||
+    m.includes("could not find the table") ||
+    m.includes("could not find")
+  );
+}
+
 export type LimparMemoriasAgenteResult = {
   memoriasRemovidas: number;
   briefingSessoesRemovidas: number;
@@ -111,7 +124,7 @@ export async function limparMemoriasAgente(
     .select("id");
 
   if (memErr) {
-    if (!memErr.message.includes("hub_memorias_agente") || !memErr.message.includes("does not exist")) {
+    if (!tabelaInexistente(memErr.message, "hub_memorias_agente")) {
       throw new Error(memErr.message);
     }
   } else {
@@ -126,10 +139,7 @@ export async function limparMemoriasAgente(
       .select("id");
 
     if (briefErr) {
-      if (
-        !briefErr.message.includes("hub_crm_agente_briefing_sessao") ||
-        !briefErr.message.includes("does not exist")
-      ) {
+      if (!tabelaInexistente(briefErr.message, "hub_crm_agente_briefing_sessao")) {
         throw new Error(briefErr.message);
       }
     } else {

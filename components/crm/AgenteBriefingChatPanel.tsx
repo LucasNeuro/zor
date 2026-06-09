@@ -3,6 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Send, User, X } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
+import {
+  RF_ACCENT,
+  RF_BORDER,
+  RF_BORDER_STRONG,
+  RF_INPUT_STYLE,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+  RF_TEXT_SECONDARY,
+  rfCloseButtonStyle,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 
 type Msg = {
   id: string;
@@ -82,7 +93,11 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
       };
       if (!res.ok) {
         setMensagens((prev) => prev.filter((m) => m.id !== tempId));
-        setErro(typeof data?.error === "string" ? data.error : `Erro ${res.status}`);
+        setErro(
+          mensagemErroBriefingChat(
+            typeof data?.error === "string" ? data.error : `Erro ${res.status}`
+          )
+        );
         setInput(t);
         if (res.status === 409) setSessaoId(null);
         return;
@@ -126,8 +141,8 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
           height: "100vh",
           width: "min(100vw, 820px)",
           maxWidth: "100%",
-          background: "#f8fcf6",
-          borderLeft: "1px solid #dcebd8",
+          background: "#060d08",
+          borderLeft: "1px solid rgba(63, 152, 72, 0.42)",
           boxShadow: open ? "-12px 0 40px rgba(0,0,0,0.45)" : "none",
           transform: open ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
@@ -140,19 +155,19 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
           style={{
             flexShrink: 0,
             padding: "14px 16px",
-            borderBottom: "1px solid #dcebd8",
+            borderBottom: "1px solid rgba(146, 255, 0, 0.16)",
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "space-between",
             gap: 12,
-            background: "linear-gradient(180deg, #ffffff 0%, #f8fcf6 100%)",
+            background: "#0b1f10",
           }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
-            <h2 style={{ color: "#0b2210", fontSize: 15, fontWeight: 700, margin: 0 }}>Copiloto IA</h2>
+            <h2 style={{ color: RF_TEXT_PRIMARY, fontSize: 15, fontWeight: 700, margin: 0 }}>Copiloto IA</h2>
             <p
               style={{
-                color: "#5d7a67",
+                color: RF_TEXT_MUTED,
                 fontSize: 12,
                 fontWeight: 600,
                 margin: "4px 0 0",
@@ -178,9 +193,9 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
                 style={{
                   padding: "8px 12px",
                   borderRadius: 8,
-                  border: `1px solid ${modoChat === "briefing_interno" ? "#c9a24a88" : "#dcebd8"}`,
-                  background: modoChat === "briefing_interno" ? "#c9a24a22" : "#eef7eb",
-                  color: modoChat === "briefing_interno" ? "#d6b976" : "#5d7a67",
+                  border: `1px solid ${modoChat === "briefing_interno" ? RF_BORDER_STRONG : RF_BORDER}`,
+                  background: modoChat === "briefing_interno" ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
+                  color: modoChat === "briefing_interno" ? RF_ACCENT : RF_TEXT_MUTED,
                   fontSize: 12,
                   fontWeight: 700,
                   cursor: enviando ? "not-allowed" : "pointer",
@@ -195,9 +210,9 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
                 style={{
                   padding: "8px 12px",
                   borderRadius: 8,
-                  border: `1px solid ${modoChat === "simulacao_canal" ? "#c9a24a88" : "#dcebd8"}`,
-                  background: modoChat === "simulacao_canal" ? "#c9a24a22" : "#eef7eb",
-                  color: modoChat === "simulacao_canal" ? "#d6b976" : "#5d7a67",
+                  border: `1px solid ${modoChat === "simulacao_canal" ? RF_BORDER_STRONG : RF_BORDER}`,
+                  background: modoChat === "simulacao_canal" ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
+                  color: modoChat === "simulacao_canal" ? RF_ACCENT : RF_TEXT_MUTED,
                   fontSize: 12,
                   fontWeight: 700,
                   cursor: enviando ? "not-allowed" : "pointer",
@@ -208,33 +223,21 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
             </div>
             <p style={{ fontSize: 10, color: "#6e7681", margin: "8px 0 0", lineHeight: 1.45 }}>
               {modoChat === "briefing_interno"
-                ? "Visão de operação: extractos reais (ciclos, logs, acções). Sem invocar ferramentas Hub — isso só na conversa ao vivo com lead em sessão."
-                : "Simulação de texto com o mesmo prompt de produção; sem lead nem chamadas a ferramentas. Teste de tom e respostas, não de integrações."}
+                ? "Visão de operação: ciclos, logs e acções reais do agente. Sem ferramentas — isso só na conversa ao vivo com o cliente."
+                : "Simulação de texto com o mesmo prompt de produção; sem cliente nem integrações. Teste de tom antes do WhatsApp."}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            style={{
-              flexShrink: 0,
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              border: "1px solid #dcebd8",
-              background: "#eef7eb",
-              color: "#c9d1d9",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            style={rfCloseButtonStyle()}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, background: "#f8fcf6" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, background: "#060d08" }}>
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px 20px" }}>
             {erro && (
               <div
@@ -254,13 +257,13 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
               </div>
             )}
             {mensagens.length === 0 && !erro && !enviando && (
-              <p style={{ color: "#5d7a67", fontSize: 13, lineHeight: 1.55, maxWidth: 640 }}>
+              <p style={{ color: RF_TEXT_SECONDARY, fontSize: 13, lineHeight: 1.55, maxWidth: 640 }}>
                 {modoChat === "briefing_interno" ? (
                   <>
-                    Envie uma mensagem: o <strong style={{ color: "#aebccf" }}>funcionário IA</strong> interpreta{" "}
-                    <strong style={{ color: "#aebccf" }}>ciclos, logs e ações</strong> já registados no hub. Estas respostas
-                    <strong style={{ color: "#aebccf" }}> não usam</strong> as ferramentas Mistral (resumo de lead, notas,
-                    etc.) — essas só na <strong style={{ color: "#aebccf" }}>engine com lead</strong> no canal.
+                    Envie uma mensagem: o agente interpreta{" "}
+                    <strong style={{ color: "#aebccf" }}>ciclos, logs e ações</strong> já registados. Estas respostas
+                    <strong style={{ color: "#aebccf" }}> não usam</strong> ferramentas automáticas — essas só na conversa
+                    ao vivo com o cliente no WhatsApp.
                   </>
                 ) : (
                   <>
@@ -340,12 +343,12 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
                       </div>
                       <div
                         style={{
-                          background: isUser ? "#1c2a3a" : "#ffffff",
-                          border: `1px solid ${isUser ? "#388bfd44" : "#dcebd8"}`,
+                          background: isUser ? "rgba(11, 31, 16, 0.95)" : "rgba(6, 13, 8, 0.85)",
+                          border: `1px solid ${isUser ? RF_BORDER_STRONG : RF_BORDER}`,
                           borderRadius: isUser ? "16px 16px 6px 16px" : "16px 16px 16px 6px",
                           padding: "12px 14px",
                           fontSize: 13,
-                          color: "#0b2210",
+                          color: RF_TEXT_PRIMARY,
                           lineHeight: 1.55,
                           whiteSpace: "pre-wrap",
                           ...(isOptimisticUserMessage(m) ? { animation: "bubbleIn 0.28s ease-out" } : {}),
@@ -424,8 +427,8 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
                       aria-live="polite"
                       aria-busy="true"
                       style={{
-                        background: "#ffffff",
-                        border: "1px solid #dcebd8",
+                        background: "rgba(6, 13, 8, 0.85)",
+                        border: `1px solid ${RF_BORDER}`,
                         borderRadius: "16px 16px 16px 6px",
                         padding: "14px 16px",
                         display: "flex",
@@ -461,8 +464,8 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
             style={{
               flexShrink: 0,
               padding: "12px 16px 16px",
-              borderTop: "1px solid #dcebd8",
-              background: "#ffffff",
+              borderTop: `1px solid ${RF_BORDER}`,
+              background: "#0b1f10",
             }}
           >
             <div
@@ -470,8 +473,8 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
                 display: "flex",
                 alignItems: "flex-end",
                 gap: 10,
-                background: "#f8fcf6",
-                border: "1px solid #dcebd8",
+                background: "rgba(6, 13, 8, 0.85)",
+                border: `1px solid ${RF_BORDER_STRONG}`,
                 borderRadius: 14,
                 padding: "8px 10px 8px 14px",
               }}
@@ -495,7 +498,7 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
                   resize: "none",
                   border: "none",
                   background: "transparent",
-                  color: "#0b2210",
+                  color: RF_TEXT_PRIMARY,
                   fontSize: 13,
                   lineHeight: 1.45,
                   outline: "none",

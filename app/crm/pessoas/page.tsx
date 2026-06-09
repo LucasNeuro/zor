@@ -3,18 +3,17 @@
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-/** Redireciona listagem legada para o hub unificado de cadastro. */
+/** Listagem legada — redireciona para Leads. */
 export default function PessoasRedirectPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
     const q = searchParams.toString();
-    const dest = q ? `/crm/cadastro?${q}` : "/crm/cadastro";
-    router.replace(dest);
+    router.replace(q ? `/crm/leads?${q}` : "/crm/leads");
   }, [router, searchParams]);
 
   return (
-    <p style={{ padding: 24, color: "#5d7a67", fontSize: 13 }}>A redireccionar para Cadastro…</p>
+    <p className="p-6 text-sm text-[#6b8a76]">A redirecionar para Leads…</p>
   );
 }

@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Component, useEffect, useMemo, useState } from "react";
 import { CrmSideoverShell } from "@/components/crm/CrmSideoverShell";
+import { RF_ACCENT, RF_TEXT_MUTED } from "@/lib/crm/crm-retrofit-dark-theme";
 import { PlaybookFlowReactFlowPanel } from "@/components/crm/PlaybookFlowReactFlowPanel";
 import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
 
@@ -153,12 +154,12 @@ const hintStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
-  color: "#5d7a67",
+  color: RF_TEXT_MUTED,
   fontSize: 11,
   lineHeight: 1.45,
 };
 
 const savedHintStyle: CSSProperties = {
-  color: "#3fb950",
+  color: RF_ACCENT,
   fontWeight: 700,
 };

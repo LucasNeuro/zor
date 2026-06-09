@@ -24,7 +24,14 @@ export async function uazapiSendText(
   }
 
   const url = `${base}/send/text`;
-  const number = numero.replace(/\D/g, "");
+  const raw = numero.trim();
+  const number =
+    raw.includes("@g.us") ||
+    raw.includes("@s.whatsapp.net") ||
+    raw.includes("@lid") ||
+    raw.includes("@newsletter")
+      ? raw
+      : raw.replace(/\D/g, "");
 
   try {
     const res = await fetch(url, {

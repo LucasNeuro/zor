@@ -1,9 +1,8 @@
 import type { LucideIcon } from "lucide-react";
+import type { CrmPermissionKey } from "@/lib/crm/access-permissions";
 import {
   Users,
   Briefcase,
-  User,
-  Handshake,
   MessageSquare,
   MessageCircle,
   ClipboardCheck,
@@ -12,6 +11,7 @@ import {
   Wrench,
   Sparkles,
   Settings,
+  BookOpen,
 } from "lucide-react";
 
 export type CrmNavItem = {
@@ -23,6 +23,8 @@ export type CrmNavItem = {
   navBadge?: string;
   /** Ocultar para utilizadores sem papel admin (owner/admin). */
   adminOnly?: boolean;
+  /** Módulo exigido em `hub_acesso_cargos.permissoes` (utilizadores com cargo). */
+  permission?: CrmPermissionKey;
 };
 
 export type CrmNavGroup = {
@@ -44,9 +46,11 @@ export const CRM_NAV_GROUPS: CrmNavGroup[] = [
         label: "Agentes IA",
         icon: LayoutTemplate,
         extra: { href: "/crm/agentes/novo", label: "Novo agente" },
+        permission: "automacoes",
       },
-      { href: "/crm/ciclos", label: "Automações", icon: Zap },
-      { href: "/crm/ferramentas", label: "Ferramentas", icon: Wrench },
+      { href: "/crm/ciclos", label: "Automações", icon: Zap, permission: "automacoes" },
+      { href: "/crm/conhecimento", label: "Conhecimento", icon: BookOpen, permission: "automacoes" },
+      { href: "/crm/ferramentas", label: "Ferramentas", icon: Wrench, permission: "automacoes" },
     ],
   },
   {
@@ -54,17 +58,8 @@ export const CRM_NAV_GROUPS: CrmNavGroup[] = [
     label: "Vendas",
     sectionIcon: Briefcase,
     items: [
-      { href: "/crm/leads", label: "Leads", icon: Users },
-      { href: "/crm/negocios", label: "Negócios", icon: Briefcase },
-    ],
-  },
-  {
-    id: "cadastros",
-    label: "Cadastros",
-    sectionIcon: User,
-    items: [
-      { href: "/crm/cadastro", label: "Cadastro", icon: User },
-      { href: "/crm/parceiros", label: "Parceiros", icon: Handshake },
+      { href: "/crm/leads", label: "Leads", icon: Users, permission: "leads" },
+      { href: "/crm/negocios", label: "Negócios", icon: Briefcase, permission: "negocios" },
     ],
   },
   {
@@ -72,16 +67,16 @@ export const CRM_NAV_GROUPS: CrmNavGroup[] = [
     label: "Atendimento",
     sectionIcon: MessageSquare,
     items: [
-      { href: "/crm/atendimento", label: "Atendimento", icon: MessageSquare },
-      { href: "/crm/canais", label: "Canais", icon: MessageCircle },
-      { href: "/crm/aprovacoes", label: "Aprovações", icon: ClipboardCheck },
+      { href: "/crm/atendimento", label: "Atendimento", icon: MessageSquare, permission: "atendimento" },
+      { href: "/crm/canais", label: "Canais", icon: MessageCircle, permission: "atendimento" },
+      { href: "/crm/aprovacoes", label: "Aprovações", icon: ClipboardCheck, permission: "atendimento" },
     ],
   },
   {
     id: "sistema",
     label: "Sistema",
     sectionIcon: Settings,
-    items: [{ href: "/crm/configuracoes", label: "Conta", icon: Settings }],
+    items: [{ href: "/crm/configuracoes", label: "Conta", icon: Settings, permission: "configuracoes" }],
   },
 ];
 

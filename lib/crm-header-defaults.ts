@@ -62,11 +62,11 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
   const map: Record<string, CrmHeaderDefault> = {
     analytics: { title: "Analytics", subtitle: "KPIs, métricas e tendências — últimas 24h" },
     kpis: { title: "Analytics", subtitle: "KPIs, métricas e tendências — últimas 24h" },
-    leads: { title: "Pipeline de Leads" },
+    leads: { title: "Leads", subtitle: "Pipeline do seu escritório — configure os estágios aqui" },
     pessoas: { title: "Pessoas" },
     empresas: { title: "Empresas" },
     imoveis: { title: "Imóveis" },
-    negocios: { title: "Negócios" },
+    negocios: { title: "Negócios", subtitle: "Pipeline comercial do seu escritório" },
     atendimento: { title: "Inbox", subtitle: "Central de conversas e atendimento" },
     aprovacoes: { title: "Central de Aprovações" },
     parceiros: { title: "Parceiros" },
@@ -89,7 +89,11 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
       title: "Canais WhatsApp",
       subtitle: "Instâncias UAZAPI conectadas aos agentes — operação e status",
     },
-    ferramentas: { title: "Ferramentas IA", subtitle: "Catálogo e uso por modelo" },
+    ferramentas: { title: "Ferramentas IA", subtitle: "Catálogo de ferramentas e uso por agente" },
+    conhecimento: {
+      title: "Conhecimento",
+      subtitle: "Base documental da empresa para cargos e agentes IA",
+    },
     contatos: {
       title: "Contatos de Notificação",
       subtitle: "Quem recebe alertas de novos leads e aprovações",
@@ -101,6 +105,10 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
     configuracoes: {
       title: "Conta",
       subtitle: "Regras operacionais sem precisar de programador",
+    },
+    cadastro: {
+      title: "Leads",
+      subtitle: "Pipeline do seu escritório — configure os estágios aqui",
     },
     "onboarding-tenant": {
       title: "Onboarding",

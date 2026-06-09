@@ -135,15 +135,39 @@ export async function receberDemanda(demanda: Demanda): Promise<AgenteSelecionad
 }
 
 /** Carrega um agente ativo por slug (fluxo, regras, hierarquia) — usado p.ex. pelo WhatsApp com mercado já resolvido. */
+function isArquivadoColumnMissing(message?: string): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes("arquivado_em") &&
+    m.includes("hub_agente_identidade") &&
+    (m.includes("does not exist") || m.includes("schema cache") || m.includes("could not find"))
+  );
+}
+
 export async function carregarAgentePorSlug(slug: string, demanda: Demanda): Promise<AgenteSelecionado | null> {
   const db = supabase();
-  const { data: agenteRow } = await db
+  let agenteRow: Record<string, unknown> | null = null;
+
+  const comArquivado = await db
     .from("hub_agente_identidade")
     .select("*")
     .eq("agente_slug", slug)
     .eq("ativo", true)
     .is("arquivado_em", null)
     .maybeSingle();
+
+  if (comArquivado.error && isArquivadoColumnMissing(comArquivado.error.message)) {
+    const semArquivado = await db
+      .from("hub_agente_identidade")
+      .select("*")
+      .eq("agente_slug", slug)
+      .eq("ativo", true)
+      .maybeSingle();
+    agenteRow = (semArquivado.data as Record<string, unknown> | null) ?? null;
+  } else {
+    agenteRow = (comArquivado.data as Record<string, unknown> | null) ?? null;
+  }
 
   if (!agenteRow) return null;
 

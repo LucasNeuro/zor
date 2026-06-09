@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { updateHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-compat";
 
 function db() {
   return createClient(
@@ -35,33 +36,29 @@ export async function POST(
   }
 
   const supabase = db();
-  const { data, error } = await supabase
-    .from("hub_agente_identidade")
-    .update({
-      arquivado_em: new Date().toISOString(),
-      arquivado_motivo: motivo,
-      ativo: false,
-    })
-    .eq("agente_slug", slug)
-    .select("agente_slug")
-    .maybeSingle();
+  const { data, error } = await updateHubAgenteIdentidadeCompat(supabase, slug, {
+    arquivado_em: new Date().toISOString(),
+    arquivado_motivo: motivo,
+    ativo: false,
+  });
 
   if (error) {
     const msg = error.message ?? "";
-    if (msg.includes("arquivado_em") && msg.includes("does not exist")) {
+    if (/arquivado_em/i.test(msg) && /does not exist|schema cache|could not find/i.test(msg)) {
       return NextResponse.json(
         {
           erro:
-            "Coluna arquivado_em ausente no banco. Aplique a migração supabase/migrations/20260522200000_hub_agente_arquivado_em.sql.",
+            "Arquivamento indisponível neste ambiente. Execute no Supabase o ficheiro supabase/scripts/ensure_hub_agente_arquivado_em.sql.",
         },
         { status: 503 }
       );
     }
-    return NextResponse.json({ erro: error.message }, { status: 500 });
+    return NextResponse.json({ erro: msg }, { status: 500 });
   }
   if (!data) {
     return NextResponse.json({ erro: "Agente não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true, agente_slug: data.agente_slug });
+  const agenteSlug = typeof data.agente_slug === "string" ? data.agente_slug : slug;
+  return NextResponse.json({ ok: true, agente_slug: agenteSlug });
 }

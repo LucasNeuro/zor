@@ -123,7 +123,7 @@ export function validarSuperCadastro(
 
   let prefixo_mercado: PrefixoMercado | undefined;
   if (tipo === "PJ") {
-    const prefixo = String(b.prefixo_mercado || mercados[0] || "IMB")
+    const prefixo = String(b.prefixo_mercado || mercados[0] || "GRL")
       .trim()
       .toUpperCase() as PrefixoMercado;
     if (!MERCADOS_PREFIXO.includes(prefixo)) {

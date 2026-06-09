@@ -114,7 +114,7 @@ async function insertLead(
     indicado_por?: string | null;
   }
 ): Promise<{ id: string; codigo: string } | null> {
-  const mercadoPrincipal = params.mercados[0] ?? "IMB";
+  const mercadoPrincipal = params.mercados[0] ?? "GRL";
   const row = await prepararRowHubLeadInsert(
     supabase,
     {

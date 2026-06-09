@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  humanoResponsavelFromActor,
+  resolveActorFromRequest,
+} from "@/lib/crm/resolve-crm-actor";
 
 function db() {
   return createClient(
@@ -18,11 +22,15 @@ export async function POST(request: NextRequest) {
 
   const descricao = `Reunião agendada para ${body.data} às ${body.hora}${body.notas ? ` — ${body.notas}` : ""}`;
 
-  const { error } = await db().from("hub_atividades").insert({
+  const supabase = db();
+  const actor = await resolveActorFromRequest(supabase, request.headers);
+  const feitoPor = humanoResponsavelFromActor(actor);
+
+  const { error } = await supabase.from("hub_atividades").insert({
     lead_id: body.lead_id,
     tipo: "agendamento",
     descricao,
-    feito_por: "wendel",
+    feito_por: feitoPor,
     feito_por_tipo: "humano",
     metadata: { data: body.data, hora: body.hora, notas: body.notas },
   });

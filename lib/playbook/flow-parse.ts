@@ -1,4 +1,9 @@
-﻿import type { PlaybookFlowDefinition } from "./flow-definition-types";
+import type { PlaybookFlowDefinition } from "./flow-definition-types";
+import {
+  hasPlaybookFlowSchemaMarker,
+  isPlaybookFlowFenceTag,
+  normalizePlaybookFlowDefinition,
+} from "./flow-schema";
 
 type ParsedWithSource = {
   parsed: unknown;
@@ -13,7 +18,7 @@ export type ParsePlaybookFlowResult =
     }
   | { ok: false; reason: "not_found" | "invalid_json" | "missing_schema"; errors: string[] };
 
-/** Captura a linha de abertura inteira (ex.: `json obra10_playbook_flow`). */
+/** Captura a linha de abertura inteira (ex.: `json waje_playbook_flow`). */
 const FENCED_CODE_BLOCK_RE = /```([^\n]*)\n([\s\S]*?)```/g;
 
 function parseJsonSafe(raw: string): unknown | null {
@@ -22,23 +27,6 @@ function parseJsonSafe(raw: string): unknown | null {
   } catch {
     return null;
   }
-}
-
-function hasSchemaMarker(value: unknown): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return Object.prototype.hasOwnProperty.call(value, "obra10_playbook_flow_schema");
-}
-
-function normalizeFenceInfo(raw: string): string {
-  return raw.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function isObra10PlaybookFlowFence(info: string): boolean {
-  const normalized = normalizeFenceInfo(info);
-  if (!normalized) return false;
-  if (normalized === "obra10_playbook_flow") return true;
-  if (normalized.includes("obra10_playbook_flow")) return true;
-  return false;
 }
 
 function extractFencedJsonBlocks(markdown: string): Array<{ info: string; code: string }> {
@@ -55,7 +43,7 @@ function extractFencedJsonBlocks(markdown: string): Array<{ info: string; code: 
 function findTaggedFence(markdown: string): ParsedWithSource | null {
   const blocks = extractFencedJsonBlocks(markdown);
   for (const block of blocks) {
-    if (!isObra10PlaybookFlowFence(block.info)) continue;
+    if (!isPlaybookFlowFenceTag(block.info)) continue;
     const parsed = parseJsonSafe(block.code);
     if (!parsed) {
       return {
@@ -72,7 +60,7 @@ function findFallbackSchemaBlock(markdown: string): ParsedWithSource | null {
   const blocks = extractFencedJsonBlocks(markdown);
   for (const block of blocks) {
     const maybeJson = parseJsonSafe(block.code);
-    if (!hasSchemaMarker(maybeJson)) continue;
+    if (!hasPlaybookFlowSchemaMarker(maybeJson)) continue;
     return { parsed: maybeJson, source: "generic_fence" };
   }
   return null;
@@ -80,8 +68,8 @@ function findFallbackSchemaBlock(markdown: string): ParsedWithSource | null {
 
 /**
  * Extrai definição de fluxo em markdown.
- * Preferência: bloco fenced com lang `obra10_playbook_flow`.
- * Fallback: primeiro fenced block JSON que contenha `obra10_playbook_flow_schema`.
+ * Preferência: bloco fenced `waje_playbook_flow` (ou legado `obra10_playbook_flow`).
+ * Fallback: primeiro fenced block JSON que contenha schema de fluxo.
  */
 export function parsePlaybookFlowFromMarkdown(markdown: string): ParsePlaybookFlowResult {
   if (typeof markdown !== "string" || !markdown.trim()) {
@@ -99,24 +87,26 @@ export function parsePlaybookFlowFromMarkdown(markdown: string): ParsePlaybookFl
         ok: false,
         reason: "invalid_json",
         errors: [
-          "Bloco `obra10_playbook_flow` encontrado, mas o JSON está inválido.",
+          "Bloco de fluxo encontrado, mas o JSON está inválido.",
           "Revise vírgulas, aspas duplas e chaves do bloco fenced.",
         ],
       };
     }
-    if (!hasSchemaMarker(tagged.parsed)) {
+    if (!hasPlaybookFlowSchemaMarker(tagged.parsed)) {
       return {
         ok: false,
         reason: "missing_schema",
         errors: [
-          "Bloco `obra10_playbook_flow` não contém `obra10_playbook_flow_schema`.",
+          "Bloco de fluxo não contém `waje_playbook_flow_schema` (ou legado obra10).",
           "Inclua o campo de schema para validar o fluxo dinâmico.",
         ],
       };
     }
     return {
       ok: true,
-      definition: tagged.parsed as PlaybookFlowDefinition,
+      definition: normalizePlaybookFlowDefinition(
+        tagged.parsed as Record<string, unknown>
+      ) as PlaybookFlowDefinition,
       source: tagged.source,
     };
   }
@@ -125,7 +115,9 @@ export function parsePlaybookFlowFromMarkdown(markdown: string): ParsePlaybookFl
   if (fallback) {
     return {
       ok: true,
-      definition: fallback.parsed as PlaybookFlowDefinition,
+      definition: normalizePlaybookFlowDefinition(
+        fallback.parsed as Record<string, unknown>
+      ) as PlaybookFlowDefinition,
       source: fallback.source,
     };
   }
@@ -133,6 +125,6 @@ export function parsePlaybookFlowFromMarkdown(markdown: string): ParsePlaybookFl
   return {
     ok: false,
     reason: "not_found",
-    errors: ["Nenhum bloco de fluxo encontrado no markdown (`obra10_playbook_flow_schema`)."],
+    errors: ["Nenhum bloco de fluxo encontrado no markdown (`waje_playbook_flow_schema`)."],
   };
 }

@@ -19,6 +19,6 @@ export async function fetchAuthUserFromAccessToken(accessToken: string) {
     return (await res.json()) as { id: string; email?: string | null };
   } catch (err) {
     console.error("[fetchAuthUserFromAccessToken] rede / TLS / Supabase:", err);
-    return null;
+    throw err;
   }
 }

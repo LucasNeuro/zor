@@ -1,11 +1,9 @@
-﻿"use client";
+"use client";
 
 import { Loader2, Download } from "lucide-react";
-import {
-  PLAYBOOK_EXEMPLO_ARQUIVO,
-  PLAYBOOK_EXEMPLO_LEGADO_MARI_MD_URL,
-  PLAYBOOK_EXEMPLO_MD_URL,
-} from "@/lib/playbook/playbook-exemplo";
+import { PLAYBOOK_EXEMPLO_ARQUIVO, PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
+import { crmBtnOutline, crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
+import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 
 export type PlaybookUploadStatus = "idle" | "hover" | "enviando" | "sucesso" | "erro";
 
@@ -42,6 +40,18 @@ type Props = {
   onHoverChange: (hover: boolean) => void;
   onFileSelect: (file: File) => void;
   onAnalisar: () => void;
+  /** Interrompe análise em curso (barra de progresso). */
+  onCancelarAnalise?: () => void;
+  /** Remove ficheiro carregado da sessão do wizard. */
+  onLimparArquivo?: () => void;
+  /** Legenda sob a barra de progresso (ex.: nome do ficheiro ou cargo). */
+  progressoContexto?: string;
+  /** Texto acima da dropzone (modo pré-criação). */
+  introPreCriacao?: string;
+  /** Se false, análise é recomendada mas não bloqueia o wizard. */
+  analiseObrigatoria?: boolean;
+  /** Tema do painel — `dark` em sideovers retrofit Waje. */
+  theme?: "light" | "dark";
 };
 
 function corNota(nota: number): string {
@@ -68,22 +78,37 @@ export function PlaybookUploadAnalisePanel({
   onHoverChange,
   onFileSelect,
   onAnalisar,
+  onCancelarAnalise,
+  onLimparArquivo,
+  progressoContexto,
+  introPreCriacao,
+  analiseObrigatoria = true,
+  theme = "light",
 }: Props) {
   const enviando = uploadStatus === "enviando";
+  const dark = theme === "dark";
+  const panelBg = dark ? "rgba(6, 13, 8, 0.72)" : "#f8fcf6";
+  const panelBorder = dark ? "rgba(63, 152, 72, 0.42)" : "#dcebd8";
+  const titleColor = dark ? "#e8f5e9" : "#0b2210";
+  const mutedColor = dark ? "#7a9a7e" : "#5d7a67";
+  const resultBg = dark ? "rgba(11, 31, 16, 0.92)" : "#ffffff";
+  const dropzoneTitleColor = dark ? "#e8f5e9" : "#0b2210";
+  const dropzoneMuted = dark ? "#7a9a7e" : "#5d7a67";
+  const temArquivo = Boolean(arquivoNome.trim() || conteudoCarregado);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {modoPreCriacao ? (
         <p style={{ color: "#5d7a67", fontSize: 12, margin: 0, lineHeight: 1.55 }}>
-          Carregue o playbook aqui, solicite uma <strong style={{ color: "#0b2210" }}>nota de qualidade</strong> e so
-          entao avance. O arquivo sera publicado automaticamente apos criar o agente.
+          {introPreCriacao ??
+            "Carregue o playbook aqui, solicite uma nota de qualidade e só então avance. O arquivo será publicado automaticamente após criar o agente."}
         </p>
       ) : null}
 
       <div
         role="button"
         tabIndex={0}
-        aria-label="Ãrea de upload do playbook. Arraste e solte arquivo .md ou .txt."
+        aria-label="Área de upload do playbook. Arraste e solte arquivo .md ou .txt."
         onDragEnter={(e) => {
           e.preventDefault();
           if (!enviando) onHoverChange(true);
@@ -120,7 +145,7 @@ export function PlaybookUploadAnalisePanel({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <p style={{ color: "#0b2210", fontSize: 13, margin: 0, fontWeight: 700 }}>
+          <p style={{ color: dropzoneTitleColor, fontSize: 13, margin: 0, fontWeight: 700 }}>
             {modoPreCriacao ? "Arraste o playbook aqui" : "Upload do playbook (.md ou .txt)"}
           </p>
           <span
@@ -144,10 +169,10 @@ export function PlaybookUploadAnalisePanel({
                   : "PRONTO"}
           </span>
         </div>
-        <p style={{ color: "#5d7a67", fontSize: 12, margin: "8px 0 0", lineHeight: 1.55 }}>
-          Arraste e solte o arquivo nesta Ã¡rea ou use o botÃ£o para selecionar. Tamanho mÃ¡ximo: 2 MB.
+        <p style={{ color: dropzoneMuted, fontSize: 12, margin: "8px 0 0", lineHeight: 1.55 }}>
+          Arraste e solte o arquivo nesta área ou use o botão para selecionar. Tamanho máximo: 2 MB.
         </p>
-        <p style={{ color: "#5d7a67", fontSize: 12, margin: "10px 0 0", lineHeight: 1.55 }}>
+        <p style={{ color: dropzoneMuted, fontSize: 12, margin: "10px 0 0", lineHeight: 1.55 }}>
           Sem modelo?{" "}
           <a
             href={PLAYBOOK_EXEMPLO_MD_URL}
@@ -163,16 +188,7 @@ export function PlaybookUploadAnalisePanel({
             }}
           >
             <Download size={14} aria-hidden />
-            Baixar template padrao v1 (.md)
-          </a>
-          {" Â· "}
-          <a
-            href={PLAYBOOK_EXEMPLO_LEGADO_MARI_MD_URL}
-            download="exemplo-playbook-mari-obra10-plus.md"
-            onClick={(e) => e.stopPropagation()}
-            style={{ color: "#5d7a67", textDecoration: "none" }}
-          >
-            Exemplo Mari (legado)
+            Baixar template Waje v1 (.md)
           </a>
         </p>
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
@@ -185,22 +201,33 @@ export function PlaybookUploadAnalisePanel({
               if (input instanceof HTMLInputElement) input.click();
             }}
             style={{
-              borderRadius: 8,
-              border: "1px solid #dcebd8",
-              background: "#eef7eb",
-              color: "#c9a24a",
-              fontSize: 12,
-              fontWeight: 700,
-              padding: "8px 12px",
+              ...crmBtnOutline(enviando),
               cursor: enviando ? "wait" : "pointer",
-              opacity: enviando ? 0.75 : 1,
             }}
           >
             Selecionar arquivo
           </button>
-          <span style={{ color: "#5d7a67", fontSize: 12 }}>
+          <span style={{ color: dropzoneMuted, fontSize: 12 }}>
             {arquivoNome ? `Arquivo: ${arquivoNome}` : "Nenhum arquivo selecionado."}
           </span>
+          {temArquivo && onLimparArquivo ? (
+            <button
+              type="button"
+              disabled={enviando || analiseLoading}
+              onClick={(e) => {
+                e.stopPropagation();
+                onLimparArquivo();
+              }}
+              style={{
+                ...crmBtnOutline(enviando || analiseLoading),
+                cursor: enviando || analiseLoading ? "not-allowed" : "pointer",
+                color: dark ? "#f85149" : "#b3261e",
+                border: `1px solid ${dark ? "rgba(248, 81, 73, 0.45)" : "#fecaca"}`,
+              }}
+            >
+              Limpar
+            </button>
+          ) : null}
         </div>
         <input
           id={inputId}
@@ -256,27 +283,49 @@ export function PlaybookUploadAnalisePanel({
       {conteudoPreview ? (
         <div
           style={{
-            background: "#f8fcf6",
-            border: "1px solid #dcebd8",
+            background: panelBg,
+            border: `1px solid ${panelBorder}`,
             borderRadius: 10,
             padding: 12,
           }}
         >
-          <p style={{ color: "#5d7a67", fontSize: 11, fontWeight: 700, margin: "0 0 8px" }}>PRÃ‰-VISUALIZAÃ‡ÃƒO</p>
-          <pre
+          <div
             style={{
-              margin: 0,
-              color: "#c9d1d9",
-              fontSize: 11,
-              lineHeight: 1.45,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              maxHeight: 160,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <p style={{ color: titleColor, fontSize: 11, fontWeight: 700, margin: 0 }}>PRÉ-VISUALIZAÇÃO</p>
+            <span style={{ color: mutedColor, fontSize: 10, fontWeight: 600 }}>Início do arquivo</span>
+          </div>
+          <div
+            style={{
+              background: "#0b1f10",
+              border: "1px solid #1e3a2f",
+              borderRadius: 8,
+              padding: "12px 14px",
+              maxHeight: 220,
               overflow: "auto",
             }}
           >
-            {conteudoPreview}
-          </pre>
+            <pre
+              style={{
+                margin: 0,
+                color: "#e8f5e9",
+                fontSize: 12,
+                lineHeight: 1.55,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontFamily:
+                  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+              }}
+            >
+              {conteudoPreview}
+            </pre>
+          </div>
         </div>
       ) : null}
 
@@ -286,24 +335,19 @@ export function PlaybookUploadAnalisePanel({
           onClick={onAnalisar}
           disabled={analiseLoading || enviando || !conteudoCarregado}
           style={{
-            width: "100%",
-            borderRadius: 8,
-            border: "1px solid #c9a24a55",
-            background: "#c9a24a18",
-            color: "#d6b976",
-            fontSize: 13,
-            fontWeight: 700,
-            padding: "11px 14px",
-            cursor:
-              analiseLoading || enviando || !conteudoCarregado ? "not-allowed" : "pointer",
-            opacity: analiseLoading || enviando || !conteudoCarregado ? 0.55 : 1,
+            ...crmBtnPrimaryLg(analiseLoading || enviando || !conteudoCarregado, { fullWidth: true }),
+            cursor: analiseLoading ? "wait" : analiseLoading || enviando || !conteudoCarregado ? "not-allowed" : "pointer",
           }}
         >
           {analiseLoading ? "A analisar playbook..." : "Analisar playbook"}
         </button>
-        <p style={{ color: "#5d7a67", fontSize: 11, margin: "8px 0 0", lineHeight: 1.5 }}>
-          A IA lÃª o conteÃºdo, atribui uma nota de 0 a 10 e aponta pontos fortes, lacunas, riscos e sugestÃµes.
-          {modoPreCriacao ? " Ã‰ necessÃ¡rio analisar antes de avanÃ§ar." : ""}
+        <p style={{ color: mutedColor, fontSize: 11, margin: "8px 0 0", lineHeight: 1.5 }}>
+          A IA lê o conteúdo, atribui uma nota de 0 a 10 e aponta pontos fortes, lacunas, riscos e sugestões.
+          {modoPreCriacao && analiseObrigatoria
+            ? " É necessário analisar antes de avançar."
+            : modoPreCriacao
+              ? " A análise é recomendada, mas opcional neste modo."
+              : ""}
         </p>
         {analiseLoading ? (
           <div
@@ -311,8 +355,8 @@ export function PlaybookUploadAnalisePanel({
               marginTop: 12,
               padding: "12px 14px",
               borderRadius: 10,
-              border: "1px solid #c9a24a44",
-              background: "#c9a24a0f",
+              border: `1px solid ${panelBorder}`,
+              background: dark ? "rgba(6, 13, 8, 0.72)" : "#eef7eb",
             }}
           >
             <div
@@ -322,6 +366,7 @@ export function PlaybookUploadAnalisePanel({
                 alignItems: "center",
                 marginBottom: 8,
                 gap: 12,
+                flexWrap: "wrap",
               }}
             >
               <span
@@ -331,29 +376,45 @@ export function PlaybookUploadAnalisePanel({
                   gap: 8,
                   fontSize: 11,
                   fontWeight: 700,
-                  color: "#d6b976",
+                  color: dark ? "#e8f5e9" : BRAND_TEXT_DARK,
                 }}
               >
                 <Loader2 size={14} className="animate-spin" aria-hidden />
                 A analisar playbook...
               </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  color: "#c9a24a",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {analisePct}%
-              </span>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: dark ? "#92ff00" : "#2d6a4f",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {analisePct}%
+                </span>
+                {onCancelarAnalise ? (
+                  <button
+                    type="button"
+                    onClick={onCancelarAnalise}
+                    style={{
+                      ...crmBtnOutline(false),
+                      padding: "4px 10px",
+                      fontSize: 10,
+                      color: dark ? "#f85149" : "#b3261e",
+                      border: `1px solid ${dark ? "rgba(248, 81, 73, 0.45)" : "#fecaca"}`,
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                ) : null}
+              </div>
             </div>
             <div
               style={{
                 height: 8,
                 borderRadius: 999,
-                background: "#eef7eb",
-                border: "1px solid #dcebd8",
+                background: "#dcebd8",
                 overflow: "hidden",
               }}
             >
@@ -362,13 +423,15 @@ export function PlaybookUploadAnalisePanel({
                   height: "100%",
                   width: `${Math.max(6, Math.min(100, analisePct))}%`,
                   borderRadius: 999,
-                  background: "linear-gradient(90deg, #003b26 0%, #c9a24a 100%)",
+                  background: `linear-gradient(90deg, ${BRAND_TEXT_DARK} 0%, ${BRAND_GREEN_BRIGHT} 100%)`,
                   transition: "width 0.22s ease-out",
                 }}
               />
             </div>
-            <p style={{ color: "#5d7a67", fontSize: 11, margin: "8px 0 0", lineHeight: 1.45 }}>
-              Lendo estrutura, fluxos e regras do playbook. Isso pode levar alguns segundos.
+            <p style={{ color: mutedColor, fontSize: 11, margin: "8px 0 0", lineHeight: 1.45 }}>
+              {progressoContexto?.trim() ||
+                arquivoNome ||
+                "Lendo estrutura, fluxos e regras do playbook. Isso pode levar alguns segundos."}
             </p>
           </div>
         ) : null}
@@ -393,8 +456,8 @@ export function PlaybookUploadAnalisePanel({
       {analiseResultado ? (
         <div
           style={{
-            background: "#ffffff",
-            border: "1px solid #dcebd8",
+            background: resultBg,
+            border: `1px solid ${panelBorder}`,
             borderRadius: 12,
             padding: 16,
             display: "flex",
@@ -434,12 +497,13 @@ export function PlaybookUploadAnalisePanel({
             <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, fontWeight: 700 }}>
               RESUMO {analiseResultado.modelo ? `(${analiseResultado.modelo})` : ""}
             </p>
-            <p style={{ margin: "6px 0 0", color: "#c9d1d9", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: "6px 0 0", color: "#0b2210", fontSize: 12, lineHeight: 1.5 }}>
               {analiseResultado.resumo}
             </p>
             {analiseResultado.origem === "fallback" ? (
-              <p style={{ margin: "8px 0 0", color: "#d29922", fontSize: 11 }}>
-                AnÃ¡lise local â€” configure MISTRAL_API_KEY para nota automÃ¡tica completa.
+              <p style={{ margin: "8px 0 0", color: "#d29922", fontSize: 11, lineHeight: 1.45 }}>
+                Análise local (sem Mistral). Verifique MISTRAL_API_KEY e faturamento no console Mistral para nota
+                automática completa.
               </p>
             ) : null}
           </div>
@@ -447,7 +511,7 @@ export function PlaybookUploadAnalisePanel({
           {analiseResultado.pontosChave.length > 0 ? (
             <div>
               <p style={{ margin: 0, color: "#3fb950", fontSize: 11, fontWeight: 700 }}>PONTOS FORTES</p>
-              <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#aebccf", fontSize: 12, lineHeight: 1.5 }}>
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#2d4a38", fontSize: 12, lineHeight: 1.5 }}>
                 {analiseResultado.pontosChave.map((item, idx) => (
                   <li key={idx}>{item}</li>
                 ))}
@@ -458,7 +522,7 @@ export function PlaybookUploadAnalisePanel({
           {analiseResultado.gaps.length > 0 ? (
             <div>
               <p style={{ margin: 0, color: "#d29922", fontSize: 11, fontWeight: 700 }}>LACUNAS</p>
-              <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#aebccf", fontSize: 12, lineHeight: 1.5 }}>
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#2d4a38", fontSize: 12, lineHeight: 1.5 }}>
                 {analiseResultado.gaps.map((item, idx) => (
                   <li key={idx}>{item}</li>
                 ))}
@@ -471,7 +535,7 @@ export function PlaybookUploadAnalisePanel({
               {analiseResultado.riscos.length > 0 ? (
                 <div>
                   <p style={{ margin: 0, color: "#f85149", fontSize: 11, fontWeight: 700 }}>RISCOS</p>
-                  <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#aebccf", fontSize: 12, lineHeight: 1.5 }}>
+                  <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#2d4a38", fontSize: 12, lineHeight: 1.5 }}>
                     {analiseResultado.riscos.map((item, idx) => (
                       <li key={idx}>{item}</li>
                     ))}
@@ -480,8 +544,8 @@ export function PlaybookUploadAnalisePanel({
               ) : null}
               {analiseResultado.recomendacoes.length > 0 ? (
                 <div>
-                  <p style={{ margin: 0, color: "#58a6ff", fontSize: 11, fontWeight: 700 }}>SUGESTÃ•ES</p>
-                  <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#aebccf", fontSize: 12, lineHeight: 1.5 }}>
+                  <p style={{ margin: 0, color: "#58a6ff", fontSize: 11, fontWeight: 700 }}>SUGESTÕES</p>
+                  <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#2d4a38", fontSize: 12, lineHeight: 1.5 }}>
                     {analiseResultado.recomendacoes.map((item, idx) => (
                       <li key={idx}>{item}</li>
                     ))}

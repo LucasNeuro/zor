@@ -5,6 +5,15 @@ import {
   type CargoCatalogoContextRow,
   type MercadoContextRow,
 } from "@/lib/hub/sugerir-cargo-catalogo";
+import { cargoTituloFromRow, selectCargosContextoSugerir } from "@/lib/hub/cargo-catalogo-db";
+import {
+  buscarTrechosAnaliseNegocio,
+  buscarTrechosConhecimentoTenant,
+  formatarAnaliseNegocioParaPrompt,
+  formatarTrechosConhecimentoParaPrompt,
+  lerAnaliseNegocioTenant,
+} from "@/lib/hub/tenant-conhecimento-rag";
+import { tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
@@ -31,15 +40,11 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = db();
+  const tenantId = tenantIdFromRequest(request.headers);
 
   const [{ data: cargosData, error: cErr }, mercadosQuery] = await Promise.all([
-    supabase
-      .from("hub_cargos_catalogo")
-      .select("slug,titulo,segmento,especialidade,nivel")
-      .eq("ativo", true)
-      .order("segmento")
-      .limit(48),
-    supabase.from("hub_mercados").select("sigla,nome").eq("ativo", true).order("sigla").limit(40),
+    selectCargosContextoSugerir(supabase),
+    supabase.from("hub_mercados").select("sigla,nome,codigo").eq("ativo", true).limit(40),
   ]);
 
   if (cErr) {
@@ -47,26 +52,49 @@ export async function POST(request: NextRequest) {
   }
 
   const cargosExistentes: CargoCatalogoContextRow[] = (cargosData || []).map((r) => ({
-    slug: String((r as { slug?: string }).slug ?? ""),
-    titulo: (r as { titulo?: string }).titulo ?? null,
-    segmento: (r as { segmento?: string }).segmento ?? null,
-    especialidade: (r as { especialidade?: string }).especialidade ?? null,
-    nivel: (r as { nivel?: number }).nivel ?? null,
+    slug: String(r.slug ?? ""),
+    titulo: cargoTituloFromRow(r) || null,
+    segmento: (r.segmento as string | undefined) ?? null,
+    especialidade: (r.especialidade as string | undefined) ?? null,
+    nivel: (r.nivel as number | undefined) ?? null,
   }));
 
   let mercados: MercadoContextRow[] | undefined;
   const { data: mercadosData, error: mErr } = mercadosQuery;
   if (!mErr && mercadosData?.length) {
     mercados = mercadosData.map((r) => ({
-      sigla: String((r as { sigla?: string }).sigla ?? ""),
+      sigla: String((r as { sigla?: string }).sigla ?? (r as { codigo?: string }).codigo ?? ""),
       nome: (r as { nome?: string }).nome ?? null,
     }));
   }
+
+  const [analiseCache, trechosCargo, trechosNegocio] = await Promise.all([
+    lerAnaliseNegocioTenant(supabase, tenantId),
+    buscarTrechosConhecimentoTenant(
+      supabase,
+      tenantId,
+      `${titulo} atendimento cliente serviço operação`,
+      { limit: 4, threshold: 0.58 }
+    ),
+    buscarTrechosAnaliseNegocio(supabase, tenantId),
+  ]);
+
+  const blocos: string[] = [];
+  if (analiseCache?.analise) {
+    blocos.push(`## Perfil consolidado do negócio\n${formatarAnaliseNegocioParaPrompt(analiseCache.analise)}`);
+  }
+  const trechos = [...trechosCargo, ...trechosNegocio].filter(
+    (t, i, arr) => arr.findIndex((x) => x.conteudo.slice(0, 100) === t.conteudo.slice(0, 100)) === i
+  );
+  const trechosFmt = formatarTrechosConhecimentoParaPrompt(trechos.slice(0, 8));
+  if (trechosFmt) blocos.push(trechosFmt);
+  const conhecimentoEmpresa = blocos.join("\n\n");
 
   const out = await sugerirCargoCatalogoComMistral({
     tituloPedido: titulo,
     cargosExistentes,
     mercados,
+    conhecimentoEmpresa: conhecimentoEmpresa || undefined,
   });
 
   if (!out.ok) {

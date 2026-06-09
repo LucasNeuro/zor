@@ -9,10 +9,14 @@ export type CrmStickyTab = {
   icon: LucideIcon;
 };
 
+type CrmStickyTabsVariant = "dark" | "light";
+
 type CrmStickyTabsProps = {
   tabs: CrmStickyTab[];
   activeId: string;
   onChange: (id: string) => void;
+  /** Tema da barra: `light` para páginas CRM claras (#f8fcf6). */
+  variant?: CrmStickyTabsVariant;
   /** Abas largas: rolagem horizontal em vez de dividir espaço igualmente. */
   scrollable?: boolean;
   /**
@@ -24,36 +28,53 @@ type CrmStickyTabsProps = {
   style?: CSSProperties;
 };
 
-const BAR: CSSProperties = {
+const BAR_BASE: CSSProperties = {
   position: "sticky",
   top: 0,
   zIndex: 25,
   flexShrink: 0,
   display: "flex",
-  background: "rgba(13, 17, 23, 0.94)",
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
-  borderBottom: "1px solid #dcebd8",
-  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
+};
+
+const BAR_BY_VARIANT: Record<CrmStickyTabsVariant, CSSProperties> = {
+  dark: {
+    background: "rgba(13, 17, 23, 0.94)",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+    borderBottom: "1px solid #dcebd8",
+    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
+  },
+  light: {
+    background: "#f8fcf6",
+    borderBottom: "1px solid #d4ecd0",
+    boxShadow: "0 1px 0 rgba(18, 56, 43, 0.06)",
+  },
+};
+
+const TAB_COLORS: Record<CrmStickyTabsVariant, { active: string; inactive: string; underline: string }> = {
+  dark: { active: "#c9a24a", inactive: "#5d7a67", underline: "#c9a24a" },
+  light: { active: "#0b1f10", inactive: "#5d7a67", underline: "#92ff00" },
 };
 
 export function CrmStickyTabs({
   tabs,
   activeId,
   onChange,
+  variant = "dark",
   scrollable = false,
   equalColumns = false,
   className,
   style,
 }: CrmStickyTabsProps) {
   const useScroll = scrollable && !equalColumns;
+  const tabColors = TAB_COLORS[variant];
 
   return (
     <div
       role="tablist"
       aria-orientation="horizontal"
       className={className}
-      style={{ ...BAR, ...style }}
+      style={{ ...BAR_BASE, ...BAR_BY_VARIANT[variant], ...style }}
     >
       <div
         style={{
@@ -82,7 +103,7 @@ export function CrmStickyTabs({
                 minWidth: useScroll ? undefined : 0,
                 paddingLeft: useScroll ? 14 : undefined,
                 paddingRight: useScroll ? 14 : undefined,
-                color: active ? "#c9a24a" : "#5d7a67",
+                color: active ? tabColors.active : tabColors.inactive,
                 background: "transparent",
                 cursor: "pointer",
                 outline: "none",
@@ -90,7 +111,7 @@ export function CrmStickyTabs({
                 borderTop: "none",
                 borderLeft: "none",
                 borderRight: "none",
-                borderBottom: active ? "2px solid #c9a24a" : "2px solid transparent",
+                borderBottom: active ? `2px solid ${tabColors.underline}` : "2px solid transparent",
                 marginBottom: -1,
                 whiteSpace: equal ? "normal" : "nowrap",
                 textAlign: equal ? "center" : undefined,

@@ -122,11 +122,15 @@ export async function uazapiFetchJson<T = unknown>(
         res.status === 404
           ? " Verifique UAZAPI_BASE_URL (ex.: https://SUBDOMINIO.uazapi.com, sem /api no fim) e UAZAPI_ADMIN_TOKEN no painel."
           : "";
+      const hint401 =
+        res.status === 401
+          ? " Token inválido ou expirado: confira UAZAPI_BASE_URL (ex.: https://fitbot.uazapi.com) e o token da instância (hub_agente_identidade.uazapi_instance_token ou UAZAPI_INSTANCE_TOKEN no Render)."
+          : "";
       return {
         ok: false,
         status: res.status,
         data: data as T,
-        error: msg + hint404,
+        error: msg + hint404 + hint401,
         request: requestMeta,
       };
     }

@@ -1,6 +1,8 @@
 ﻿"use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Bot, type LucideIcon } from "lucide-react";
+import { resolverAvatarAgenteUrl } from "@/lib/crm/agente-avatar-gen";
 
 export type CrmBotRingAvatarProps = {
   /** Fraction of the outer ring filled (0–1). Omit for `fallbackProgress`. */
@@ -13,6 +15,10 @@ export type CrmBotRingAvatarProps = {
   size?: number;
   accent?: string;
   imageUrl?: string | null;
+  /** Slug do agente — activa o mesmo retrato Notionists que `AgenteAvatar`. */
+  avatarSeed?: string;
+  /** Nome do agente — define género do retrato autogerado. */
+  avatarNome?: string | null;
   /** Shown inside the dial when no image. Defaults to lucide Bot. */
   Icon?: LucideIcon;
   /** De-emphasize colors (e.g. inactive). */
@@ -34,11 +40,25 @@ export function CrmBotRingAvatar({
   size: sizeProp,
   accent = "#22c55e",
   imageUrl,
+  avatarSeed,
+  avatarNome,
   Icon = Bot,
   dim = false,
   pulse = false,
   hideProgressRing = false,
 }: CrmBotRingAvatarProps) {
+  const resolvedUrl = useMemo(() => {
+    const seed = avatarSeed?.trim();
+    if (seed) return resolverAvatarAgenteUrl(seed, imageUrl, avatarNome);
+    const trim = typeof imageUrl === "string" ? imageUrl.trim() : "";
+    return trim || null;
+  }, [avatarSeed, avatarNome, imageUrl]);
+
+  const [src, setSrc] = useState(resolvedUrl);
+  useEffect(() => {
+    setSrc(resolvedUrl);
+  }, [resolvedUrl]);
+
   const pixelSize = sizeProp ?? pixelProp ?? 52;
   const pad = pixelSize <= 44 ? 1.75 : pixelSize <= 52 ? 2 : 2.5;
   const rOuter = 24;
@@ -52,8 +72,7 @@ export function CrmBotRingAvatar({
   const showArc = !hideProgressRing && p > 0.002;
   const rInnerDecor = rOuter - 5;
 
-  const trim = typeof imageUrl === "string" ? imageUrl.trim() : "";
-  const hasImg = trim.length > 0;
+  const hasImg = Boolean(src);
   const core = Math.max(30, pixelSize - pad * 2 - 14);
 
   return (
@@ -147,7 +166,12 @@ export function CrmBotRingAvatar({
         {hasImg ? (
           // URLs arbitrárias (avatar em storage/CDN): alinhado aos cards CRM com <img>.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={trim} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img
+            src={src!}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setSrc(null)}
+          />
         ) : (
           <Icon
             size={Math.min(22, Math.round(core * 0.45))}

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
@@ -15,30 +15,25 @@ import {
   normalizarCep,
 } from "@/lib/crm/viacep";
 
-const INPUT: React.CSSProperties = {
-  width: "100%",
-  padding: "12px 14px",
-  borderRadius: 10,
-  border: "1px solid #dcebd8",
-  background: "#ffffff",
-  color: "#0b2210",
-  fontSize: 14,
-  boxSizing: "border-box",
-};
+import {
+  RF_ACCENT,
+  RF_BORDER_STRONG,
+  RF_INPUT_STYLE,
+  RF_LABEL_STYLE,
+  RF_SECTION_STYLE,
+  RF_TEXT_PRIMARY,
+  RF_TEXT_MUTED,
+  rfAsideBodyStyle,
+  rfAsideFooterStyle,
+  rfAsideHeaderStyle,
+  rfAsideStyle,
+  rfCloseButtonStyle,
+  rfOverlayStyle,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 
-const LABEL: React.CSSProperties = {
-  color: "#5d7a67",
-  fontSize: 12,
-  fontWeight: 600,
-  display: "block",
-  marginBottom: 6,
-};
-
-const SECTION: React.CSSProperties = {
-  marginTop: 4,
-  paddingTop: 14,
-  borderTop: "1px solid #eef7eb",
-};
+const INPUT: React.CSSProperties = { ...RF_INPUT_STYLE, padding: "12px 14px", borderRadius: 10, fontSize: 14 };
+const LABEL: React.CSSProperties = { ...RF_LABEL_STYLE, fontWeight: 600 };
+const SECTION: React.CSSProperties = RF_SECTION_STYLE;
 
 type FormState = {
   razao_social: string;
@@ -62,7 +57,7 @@ const emptyForm = (): FormState => ({
   email: "",
   telefone: "",
   segmento: "cliente",
-  prefixo_mercado: "IMB",
+  prefixo_mercado: "GRL",
   cep: "",
   logradouro: "",
   bairro: "",
@@ -191,61 +186,21 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
   if (!open) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="empresa-form-title"
-      style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex" }}
-    >
-      <div style={{ flex: 1, background: "rgba(1, 4, 9, 0.72)" }} onClick={onClose} />
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          height: "100%",
-          maxHeight: "100dvh",
-          display: "flex",
-          flexDirection: "column",
-          background: "#f8fcf6",
-          borderLeft: "1px solid #dcebd8",
-          boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "16px 20px",
-            borderBottom: "1px solid #dcebd8",
-            flexShrink: 0,
-          }}
-        >
-          <h2 id="empresa-form-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0b2210" }}>
+    <div role="dialog" aria-modal="true" aria-labelledby="empresa-form-title">
+      <button type="button" aria-label="Fechar" onClick={onClose} style={rfOverlayStyle(200)} />
+      <div onClick={(e) => e.stopPropagation()} style={rfAsideStyle(420, 201)}>
+        <div style={{ ...rfAsideHeaderStyle(), display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px" }}>
+          <h2 id="empresa-form-title" style={{ margin: 0, fontSize: 18, fontWeight: 800, color: RF_TEXT_PRIMARY }}>
             Nova empresa
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#5d7a67",
-              fontSize: 22,
-              cursor: "pointer",
-            }}
-          >
+          <button type="button" onClick={onClose} aria-label="Fechar" style={{ ...rfCloseButtonStyle(), fontSize: 18 }}>
             ×
           </button>
         </div>
 
         <div
           style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
+            ...rfAsideBodyStyle(),
             padding: "20px",
             display: "flex",
             flexDirection: "column",
@@ -357,9 +312,9 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
                   alignSelf: "flex-end",
                   padding: "12px 14px",
                   borderRadius: 10,
-                  border: "1px solid #dcebd8",
-                  background: "#ffffff",
-                  color: "#c9a24a",
+                  border: `1px solid ${RF_BORDER_STRONG}`,
+                  background: "rgba(6, 13, 8, 0.6)",
+                  color: RF_ACCENT,
                   fontSize: 12,
                   fontWeight: 700,
                   cursor: buscandoCep ? "wait" : "pointer",
@@ -404,15 +359,7 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
           {erro && <p style={{ color: "#ef4444", fontSize: 12, margin: 0 }}>{erro}</p>}
         </div>
 
-        <div
-          style={{
-            padding: "16px 20px",
-            borderTop: "1px solid #dcebd8",
-            flexShrink: 0,
-            display: "flex",
-            gap: 10,
-          }}
-        >
+        <div style={{ ...rfAsideFooterStyle(), padding: "16px 20px" }}>
           <button
             type="button"
             onClick={onClose}
@@ -421,9 +368,9 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
               flex: 1,
               padding: "12px",
               borderRadius: 10,
-              border: "1px solid #dcebd8",
+              border: `1px solid ${RF_BORDER_STRONG}`,
               background: "transparent",
-              color: "#5d7a67",
+              color: RF_TEXT_MUTED,
               fontSize: 13,
               fontWeight: 600,
               cursor: loading ? "not-allowed" : "pointer",
@@ -440,8 +387,8 @@ export function EmpresaFormDrawer({ open, onClose, onSaved }: Props) {
               padding: "12px",
               borderRadius: 10,
               border: "none",
-              background: !podeSalvar ? "#dcebd8" : "#003b26",
-              color: !podeSalvar ? "#5d7a67" : "#c9a24a",
+              background: !podeSalvar ? "rgba(6, 13, 8, 0.5)" : "#0b1f10",
+              color: !podeSalvar ? RF_TEXT_MUTED : RF_ACCENT,
               fontSize: 13,
               fontWeight: 800,
               cursor: !podeSalvar ? "not-allowed" : "pointer",

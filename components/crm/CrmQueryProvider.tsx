@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QUERY_GC_MS, QUERY_STALE_DETAIL_MS } from "@/lib/crm/query-config";
 
 /**
  * Cache cliente para dados CRM (TanStack Query) — deduplicação, staleness e menos “trancos” ao reabrir gavetas.
@@ -13,11 +14,12 @@ export function CrmQueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 5 * 60 * 1000,
-            gcTime: 45 * 60 * 1000,
+            staleTime: QUERY_STALE_DETAIL_MS,
+            gcTime: QUERY_GC_MS,
             retry: 1,
             refetchOnWindowFocus: false,
             refetchOnReconnect: false,
+            refetchOnMount: false,
           },
         },
       })

@@ -2,16 +2,22 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   Factory,
+  Globe2,
   Hammer,
   HardHat,
   Layers,
   Package,
   Wrench,
 } from "lucide-react";
-import { MERCADOS_PREFIXO, type PrefixoMercado } from "@/lib/crm/negocio-cadastro";
+import {
+  MERCADO_PREFIXO_PADRAO,
+  MERCADOS_PREFIXO,
+  type PrefixoMercado,
+} from "@/lib/crm/negocio-cadastro";
 import { labelMercadoPrefixo } from "@/lib/crm/negocio-cadastro";
 
 export const MERCADO_ICON: Record<string, LucideIcon> = {
+  GRL: Globe2,
   IMB: Building2,
   ARQ: Layers,
   RFM: Hammer,
@@ -24,6 +30,7 @@ export const MERCADO_ICON: Record<string, LucideIcon> = {
 
 /** Cor do anel/acento por mercado (pipeline global). */
 export const MERCADO_ACCENT: Record<string, string> = {
+  GRL: "#3f9848",
   IMB: "#8b5cf6",
   ARQ: "#f59e0b",
   RFM: "#f97316",
@@ -35,12 +42,12 @@ export const MERCADO_ACCENT: Record<string, string> = {
 };
 
 export function mercadoIcon(sigla: string | null | undefined): LucideIcon {
-  const key = String(sigla || "IMB").trim().toUpperCase();
-  return MERCADO_ICON[key] ?? Building2;
+  const key = String(sigla || MERCADO_PREFIXO_PADRAO).trim().toUpperCase();
+  return MERCADO_ICON[key] ?? Globe2;
 }
 
 export function mercadoAccent(sigla: string | null | undefined): string {
-  const key = String(sigla || "IMB").trim().toUpperCase();
+  const key = String(sigla || MERCADO_PREFIXO_PADRAO).trim().toUpperCase();
   return MERCADO_ACCENT[key] ?? "#6b7280";
 }
 
@@ -60,7 +67,7 @@ export function resolverMercadoLead(metadata: unknown): PrefixoMercado {
       return first as PrefixoMercado;
     }
   }
-  return "IMB";
+  return MERCADO_PREFIXO_PADRAO;
 }
 
 export function labelMercadoLead(metadata: unknown): string {

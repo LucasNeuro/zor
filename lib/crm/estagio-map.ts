@@ -40,7 +40,10 @@ export function buildLeadEstagioPatch(novoFunilOuLegado: string): LeadEstagioPat
   };
 }
 
-/** Agrupa lead no kanban pela coluna ativa. */
+/** Agrupa lead no kanban pela coluna ativa (slug do estágio na BD). */
 export function estagioParaColunaKanban(estagio: string | null | undefined): string {
-  return legacyToFunil(estagio) as string;
+  const s = (estagio ?? "").trim();
+  if (!s) return "novo";
+  if (crmFeatureFlags.pipelineV2()) return s;
+  return legacyToFunil(s) as string;
 }

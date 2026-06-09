@@ -18,7 +18,9 @@ import {
   Check,
   Loader2,
   Minus,
+  Pencil,
   Plus,
+  Power,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -30,32 +32,33 @@ import {
   nomesSegmentosConceito,
   segmentoNoConceito,
 } from "@/lib/hub/documento-conceito-catalogo";
-import { INFERENCIA_IA_CRM_COPIA } from "@/lib/ia/hub-model-defaults";
+import { CrmIconButtonGroup } from "@/components/crm/CrmIconButtonGroup";
+import {
+  crmBtnDangerSoft,
+  crmBtnPrimary,
+  crmBtnSecondary,
+} from "@/lib/crm/crm-button-styles";
+import { RF } from "@/lib/crm/crm-retrofit-dark-theme";
 
 const SEGMENTO_COR: Record<string, string> = {
   Marketing: "#3b82f6",
   Comercial: "#10b981",
   Operações: "#f59e0b",
+  Suporte: "#6366f1",
 };
 
-/** Tokens alinhados ao layout CRM (`app/crm/layout.tsx` / agentes). */
-const OB = {
-  verde: "var(--obra-verde, #003b26)",
-  dourado: "var(--obra-dourado, #c9a24a)",
-  douradoLight: "var(--obra-dourado-light, #e0b86a)",
-  borda: "var(--obra-borda, #dcebd8)",
-  texto: "var(--obra-texto, #0b2210)",
-  texto2: "var(--obra-texto-2, #5d7a67)",
-  texto3: "var(--obra-texto-3, #484f58)",
-  surface: "var(--obra-dark-3, #eef7eb)",
-  panel: "#0f1620",
-  danger: "#f85149",
-  dangerMuted: "rgba(248, 81, 73, 0.14)",
-  ok: "#3fb950",
-  okMuted: "rgba(63, 185, 80, 0.14)",
+/** Tokens retrofit escuro Waje — sideover unificado. */
+const OB = RF;
+
+const lbl: CSSProperties = {
+  display: "block",
+  color: OB.label,
+  fontSize: 11,
+  fontWeight: 600,
+  marginBottom: 6,
 };
 
-type ToolbarIconVariant = "green" | "red" | "slate" | "emphasis" | "gold" | "ia";
+type ToolbarIconVariant = "green" | "red" | "slate" | "emphasis" | "primary" | "ia";
 
 function toolbarIconButtonStyle(variant: ToolbarIconVariant, disabled: boolean): CSSProperties {
   const base: CSSProperties = {
@@ -75,7 +78,7 @@ function toolbarIconButtonStyle(variant: ToolbarIconVariant, disabled: boolean):
     return {
       ...base,
       border: `1px solid ${OB.borda}`,
-      background: "#ffffff",
+      background: OB.surface,
       color: OB.texto3,
       opacity: 0.72,
     };
@@ -110,19 +113,19 @@ function toolbarIconButtonStyle(variant: ToolbarIconVariant, disabled: boolean):
         background: "rgba(72, 79, 88, 0.2)",
         color: OB.texto,
       };
-    case "gold":
+    case "primary":
       return {
         ...base,
-        border: "1px solid rgba(201, 162, 74, 0.45)",
-        background: "rgba(201, 162, 74, 0.14)",
-        color: OB.dourado,
+        border: "none",
+        background: OB.verde,
+        color: OB.limao,
       };
     case "ia":
       return {
         ...base,
-        border: "1px solid rgba(201, 162, 74, 0.42)",
-        background: "rgba(201, 162, 74, 0.1)",
-        color: OB.douradoLight,
+        border: `1px solid ${OB.borda}`,
+        background: OB.okMuted,
+        color: OB.limao,
       };
     default:
       return base;
@@ -130,6 +133,27 @@ function toolbarIconButtonStyle(variant: ToolbarIconVariant, disabled: boolean):
 }
 
 type CargoRow = Record<string, unknown> & { slug?: string };
+
+function segmentoFromArea(area: unknown): string {
+  const a = String(area ?? "").trim().toLowerCase();
+  if (!a || a === "geral") return "";
+  const map: Record<string, string> = {
+    comercial: "Comercial",
+    marketing: "Marketing",
+    operacoes: "Operações",
+    operac: "Operações",
+    suporte: "Suporte",
+    financeiro: "Financeiro",
+  };
+  return map[a] ?? a.charAt(0).toUpperCase() + a.slice(1);
+}
+
+function segmentoLabelCargo(c: CargoRow): string {
+  const seg = String(c.segmento ?? "").trim();
+  if (seg) return seg;
+  const fromArea = segmentoFromArea(c.area);
+  return fromArea || "Outros";
+}
 
 type CargoFormFields = {
   slug: string;
@@ -204,9 +228,9 @@ function rowToForm(row: CargoRow): CargoFormFields {
   };
   return {
     slug: String(row.slug ?? ""),
-    titulo: String(row.titulo ?? ""),
+    titulo: String(row.titulo ?? row.nome ?? "").trim(),
     novo_slug: "",
-    segmento: String(row.segmento ?? ""),
+    segmento: String(row.segmento ?? "").trim() || segmentoFromArea(row.area),
     especialidade: String(row.especialidade ?? ""),
     descricao_curta: String(row.descricao_curta ?? ""),
     area: String(row.area ?? "geral"),
@@ -311,8 +335,13 @@ function mergeSugestao(prev: CargoFormFields, s: Record<string, unknown>): Cargo
   return next;
 }
 
+function slugSugeridoDoTitulo(titulo: string): string {
+  const t = titulo.trim();
+  return t ? slugifyCargoSlug(t) : "";
+}
+
 const inp = {
-  background: "#ffffff",
+  background: "rgba(6, 13, 8, 0.85)",
   border: `1px solid ${OB.borda}`,
   color: OB.texto,
   borderRadius: 8,
@@ -383,9 +412,9 @@ function ObraCheckbox({
           height: 18,
           borderRadius: 5,
           border: `1px solid ${
-            checked || parcial ? "rgba(201, 162, 74, 0.45)" : OB.borda
+            checked || parcial ? "rgba(146, 255, 0, 0.55)" : OB.borda
           }`,
-          background: checked ? OB.verde : parcial ? "rgba(201, 162, 74, 0.12)" : "#ffffff",
+          background: checked ? OB.verde : parcial ? OB.okMuted : "rgba(6, 13, 8, 0.85)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -393,13 +422,13 @@ function ObraCheckbox({
           opacity: disabled ? 0.45 : 1,
           boxSizing: "border-box",
           boxShadow:
-            checked || parcial ? `inset 0 0 0 1px rgba(201, 162, 74, 0.15)` : undefined,
+            checked || parcial ? `inset 0 0 0 1px rgba(146, 255, 0, 0.2)` : undefined,
         }}
       >
         {checked ? (
-          <Check size={11} strokeWidth={3} style={{ color: OB.dourado }} aria-hidden />
+          <Check size={11} strokeWidth={3} style={{ color: OB.limao }} aria-hidden />
         ) : parcial ? (
-          <Minus size={11} strokeWidth={3} style={{ color: OB.dourado }} aria-hidden />
+          <Minus size={11} strokeWidth={3} style={{ color: OB.limao }} aria-hidden />
         ) : null}
       </span>
     </label>
@@ -443,6 +472,8 @@ export function CrmCargosCatalogDrawer({
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [sugerindo, setSugerindo] = useState(false);
   const [iaProgressPct, setIaProgressPct] = useState(0);
+  const iaAbortRef = useRef<AbortController | null>(null);
+  const iaTickRef = useRef<number | null>(null);
 
   /** Selecção para eliminar vários cargos de uma vez */
   const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(() => new Set());
@@ -454,6 +485,10 @@ export function CrmCargosCatalogDrawer({
   const [focusSlug, setFocusSlug] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
   const [form, setForm] = useState<CargoFormFields>(() => emptyForm());
+  /** Quando true, o slug deixa de ser derivado automaticamente do título. */
+  const slugEditadoManualRef = useRef(false);
+  /** Evita duplo POST ao clicar «Guardar» duas vezes seguidas. */
+  const salvarLockRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
@@ -463,14 +498,15 @@ export function CrmCargosCatalogDrawer({
       setSelectedSlugs(new Set());
       setFiltroBusca("");
       setFiltroSetor("");
+      slugEditadoManualRef.current = false;
     }
   }, [open]);
 
   const setoresOpcoes = useMemo(() => {
     const s = new Set<string>(nomesSegmentosConceito());
     for (const c of cargos) {
-      const seg = String(c.segmento || "").trim();
-      if (seg.length > 0) s.add(seg);
+      const seg = segmentoLabelCargo(c);
+      if (seg !== "Outros") s.add(seg);
     }
     return [...s].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
   }, [cargos]);
@@ -492,11 +528,11 @@ export function CrmCargosCatalogDrawer({
     const q = filtroBusca.trim().toLowerCase();
     const setorSel = filtroSetor.trim();
     return cargos.filter((c) => {
-      const seg = String(c.segmento || "").trim();
+      const seg = segmentoLabelCargo(c);
       if (setorSel && seg !== setorSel) return false;
       if (!q) return true;
       const slug = String(c.slug || "").toLowerCase();
-      const titulo = String(c.titulo || "").toLowerCase();
+      const titulo = String(c.titulo || c.nome || "").toLowerCase();
       const esp = String(c.especialidade || "").toLowerCase();
       const segL = seg.toLowerCase();
       return titulo.includes(q) || slug.includes(q) || esp.includes(q) || segL.includes(q);
@@ -506,7 +542,7 @@ export function CrmCargosCatalogDrawer({
   const cargosPorSegmento = useMemo(() => {
     const m = new Map<string, CargoRow[]>();
     for (const c of cargosFiltrados) {
-      const seg = String(c.segmento || "").trim() || "Outros";
+      const seg = segmentoLabelCargo(c);
       const bucket = m.get(seg);
       if (bucket) bucket.push(c);
       else m.set(seg, [c]);
@@ -519,7 +555,7 @@ export function CrmCargosCatalogDrawer({
     return keys.map((k) => {
       const list = [...(m.get(k) || [])];
       list.sort((a, b) =>
-        String(a.titulo || a.slug).localeCompare(String(b.titulo || b.slug), "pt-BR", {
+        String(a.titulo || a.nome || a.slug).localeCompare(String(b.titulo || b.nome || b.slug), "pt-BR", {
           sensitivity: "base",
         })
       );
@@ -685,6 +721,7 @@ export function CrmCargosCatalogDrawer({
   }
 
   function abrirNovo() {
+    slugEditadoManualRef.current = false;
     setCriando(true);
     setFocusSlug(null);
     setForm(emptyForm());
@@ -692,12 +729,30 @@ export function CrmCargosCatalogDrawer({
 
   function abrirEditar(cargo: CargoRow) {
     const slug = String(cargo.slug || "");
+    slugEditadoManualRef.current = false;
     setCriando(false);
     setFocusSlug(slug);
     setForm(rowToForm(cargo));
   }
 
+  function actualizarTituloNovo(titulo: string) {
+    setForm((p) => {
+      const next = { ...p, titulo };
+      if (criando && !slugEditadoManualRef.current) {
+        next.slug = slugSugeridoDoTitulo(titulo);
+      }
+      return next;
+    });
+  }
+
+  function actualizarSlugNovo(valor: string) {
+    if (!valor.trim()) slugEditadoManualRef.current = false;
+    else slugEditadoManualRef.current = true;
+    setForm((p) => ({ ...p, slug: valor }));
+  }
+
   async function salvar() {
+    if (salvarLockRef.current) return;
     const titulo = form.titulo.trim();
     if (!titulo) {
       setErro("Título é obrigatório.");
@@ -733,6 +788,7 @@ export function CrmCargosCatalogDrawer({
       basePayload.limite_autonomia_brl = limNum;
     }
 
+    salvarLockRef.current = true;
     setBusySlug("_save");
     setErro(null);
     try {
@@ -781,6 +837,7 @@ export function CrmCargosCatalogDrawer({
       setFocusSlug(newSlug);
       setForm(rowToForm(data as CargoRow));
     } finally {
+      salvarLockRef.current = false;
       setBusySlug(null);
     }
   }
@@ -794,17 +851,38 @@ export function CrmCargosCatalogDrawer({
     });
   }
 
+  function pararProgressoSugestaoIa() {
+    if (iaTickRef.current != null) {
+      window.clearInterval(iaTickRef.current);
+      iaTickRef.current = null;
+    }
+  }
+
+  function cancelarSugestaoIa() {
+    iaAbortRef.current?.abort();
+    iaAbortRef.current = null;
+    pararProgressoSugestaoIa();
+    setSugerindo(false);
+    setIaProgressPct(0);
+    setErro("Sugestão cancelada.");
+  }
+
   async function sugerirComMistral() {
     const titulo = form.titulo.trim();
     if (!titulo) {
       setErro("Escreva um título para o cargo antes de pedir sugestão.");
       return;
     }
+    iaAbortRef.current?.abort();
+    const abort = new AbortController();
+    iaAbortRef.current = abort;
+
     setErro(null);
     setIaProgressPct(6);
     setSugerindo(true);
 
-    const tick = window.setInterval(() => {
+    pararProgressoSugestaoIa();
+    iaTickRef.current = window.setInterval(() => {
       setIaProgressPct((p) => {
         if (p >= 92) return p;
         const step = Math.max(1, Math.round((92 - p) * (0.06 + Math.random() * 0.06)));
@@ -818,6 +896,7 @@ export function CrmCargosCatalogDrawer({
         method: "POST",
         headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ titulo }),
+        signal: abort.signal,
       });
       const data = await res.json().catch(() => ({}));
       ok = res.ok;
@@ -831,9 +910,24 @@ export function CrmCargosCatalogDrawer({
         ok = false;
         return;
       }
-      setForm((prev) => mergeSugestao(prev, sug));
+      setForm((prev) => {
+        const merged = mergeSugestao(prev, sug);
+        if (criando && !slugEditadoManualRef.current) {
+          merged.slug = slugSugeridoDoTitulo(merged.titulo);
+        }
+        return merged;
+      });
+    } catch (e) {
+      if (abort.signal.aborted) return;
+      setErro(e instanceof Error ? e.message : "Falha ao pedir sugestão.");
     } finally {
-      window.clearInterval(tick);
+      if (abort.signal.aborted) {
+        pararProgressoSugestaoIa();
+        iaAbortRef.current = null;
+        return;
+      }
+      pararProgressoSugestaoIa();
+      iaAbortRef.current = null;
       if (ok) {
         setIaProgressPct(100);
         await new Promise((r) => setTimeout(r, 420));
@@ -855,9 +949,10 @@ export function CrmCargosCatalogDrawer({
           position: "fixed",
           inset: 0,
           zIndex: 52,
-          background: "rgba(0,0,0,0.55)",
+          background: "rgba(11, 31, 16, 0.55)",
           border: "none",
           padding: 0,
+          cursor: "pointer",
         }}
       />
       <aside
@@ -866,11 +961,11 @@ export function CrmCargosCatalogDrawer({
           top: 0,
           right: 0,
           bottom: 0,
-          width: "min(960px, 100vw)",
+          width: "min(1180px, 98vw)",
           zIndex: 53,
           background: OB.panel,
           borderLeft: `1px solid ${OB.borda}`,
-          boxShadow: "-12px 0 32px rgba(0,0,0,0.45)",
+          boxShadow: "-8px 0 32px rgba(11, 31, 16, 0.12)",
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
@@ -880,7 +975,7 @@ export function CrmCargosCatalogDrawer({
           style={{
             borderBottom: `1px solid ${OB.borda}`,
             padding: 16,
-            background: "linear-gradient(180deg,#121a26 0%, #101722 100%)",
+            background: OB.shell,
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
@@ -896,7 +991,9 @@ export function CrmCargosCatalogDrawer({
               >
                 ADMINISTRAÇÃO
               </p>
-              <h3 style={{ margin: "3px 0 0", color: OB.texto, fontSize: 17 }}>Gerenciar cargos</h3>
+              <h3 style={{ margin: "3px 0 0", color: OB.titulo, fontSize: 18, fontWeight: 800 }}>
+                Gerenciar cargos
+              </h3>
             </div>
             <button
               type="button"
@@ -914,7 +1011,7 @@ export function CrmCargosCatalogDrawer({
             </button>
           </div>
           <p style={{ margin: "8px 0 0", color: OB.texto2, fontSize: 12 }}>
-            Catálogo completo em <code style={{ fontSize: 11, color: OB.douradoLight }}>hub_cargos_catalogo</code> —
+            Catálogo completo em <code style={{ fontSize: 11, color: OB.limao, fontWeight: 700 }}>hub_cargos_catalogo</code> —
             disponível no wizard de novos agentes quando activo. Sugestões IA usam cargos e mercados actuais do Hub como
             contexto.
           </p>
@@ -933,7 +1030,7 @@ export function CrmCargosCatalogDrawer({
                   overflowY: "hidden",
                   WebkitOverflowScrolling: "touch",
                   maxWidth: "100%",
-                  background: "#121923",
+                  background: "rgba(6, 13, 8, 0.85)",
                 }}
               >
                 <div
@@ -945,7 +1042,7 @@ export function CrmCargosCatalogDrawer({
                     alignItems: "center",
                     gap: 8,
                     padding: "6px 10px",
-                    background: "#0f1419",
+                    background: OB.surface,
                     boxSizing: "border-box",
                   }}
                 >
@@ -961,7 +1058,7 @@ export function CrmCargosCatalogDrawer({
                       minWidth: 72,
                       height: 32,
                       boxSizing: "border-box",
-                      background: "#ffffff",
+                      background: "rgba(6, 13, 8, 0.85)",
                       border: `1px solid ${OB.borda}`,
                       color: OB.texto,
                       borderRadius: 8,
@@ -979,7 +1076,7 @@ export function CrmCargosCatalogDrawer({
                       maxWidth: "min(168px, 34vw)",
                       height: 32,
                       boxSizing: "border-box",
-                      background: "#ffffff",
+                      background: "rgba(6, 13, 8, 0.85)",
                       border: `1px solid ${OB.borda}`,
                       color: OB.texto,
                       borderRadius: 8,
@@ -1016,7 +1113,7 @@ export function CrmCargosCatalogDrawer({
                           alignItems: "center",
                           gap: 6,
                           padding: "6px 10px",
-                          background: "#141d29",
+                          background: OB.surface,
                           flexShrink: 0,
                         }}
                       >
@@ -1155,7 +1252,7 @@ export function CrmCargosCatalogDrawer({
                     alignItems: "center",
                     gap: 6,
                     padding: "6px 10px",
-                    background: "#161c26",
+                    background: OB.surface,
                     flexShrink: 0,
                   }}
                 >
@@ -1165,7 +1262,7 @@ export function CrmCargosCatalogDrawer({
                     disabled={painelBusy}
                     title="Novo cargo"
                     aria-label="Novo cargo"
-                    style={toolbarIconButtonStyle("gold", painelBusy)}
+                    style={toolbarIconButtonStyle("primary", painelBusy)}
                   >
                     <Plus size={17} strokeWidth={2} aria-hidden />
                   </button>
@@ -1189,7 +1286,7 @@ export function CrmCargosCatalogDrawer({
                     alignItems: "center",
                     gap: 6,
                     padding: "6px 10px",
-                    background: "rgba(0, 59, 38, 0.15)",
+                    background: OB.okMuted,
                     flexShrink: 0,
                   }}
                 >
@@ -1235,15 +1332,40 @@ export function CrmCargosCatalogDrawer({
                         gap: 8,
                         fontSize: 11,
                         fontWeight: 700,
-                        color: OB.douradoLight,
+                        color: OB.texto2,
                       }}
                     >
                       <Loader2 size={14} className="animate-spin" aria-hidden />
                       A gerar sugestão com base no Hub…
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: OB.dourado, fontVariantNumeric: "tabular-nums" }}>
-                      {iaProgressPct}%
-                    </span>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          color: OB.limao,
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {iaProgressPct}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={cancelarSugestaoIa}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(248, 81, 73, 0.45)",
+                          background: "rgba(248, 81, 73, 0.1)",
+                          color: "#f85149",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                   <div
                     style={{
@@ -1259,11 +1381,24 @@ export function CrmCargosCatalogDrawer({
                         height: "100%",
                         width: `${iaProgressPct}%`,
                         borderRadius: 999,
-                        background: `linear-gradient(90deg, ${OB.verde} 0%, ${OB.dourado} 100%)`,
+                        background: `linear-gradient(90deg, ${OB.verde} 0%, ${OB.limao} 100%)`,
                         transition: "width 0.22s ease-out",
                       }}
                     />
                   </div>
+                  {form.titulo.trim() ? (
+                    <p
+                      style={{
+                        margin: "8px 0 0",
+                        color: OB.texto2,
+                        fontSize: 11,
+                        lineHeight: 1.45,
+                        textAlign: "center",
+                      }}
+                    >
+                      {form.titulo.trim()}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </>
@@ -1273,10 +1408,11 @@ export function CrmCargosCatalogDrawer({
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           <div
             style={{
-              flex: "0 0 clamp(300px, 48%, 520px)",
+              flex: "0 0 clamp(300px, 36%, 420px)",
               borderRight: `1px solid ${OB.borda}`,
               overflowY: "auto",
               padding: 12,
+              background: OB.shell,
             }}
           >
             {cargosListaPendente ? (
@@ -1284,10 +1420,10 @@ export function CrmCargosCatalogDrawer({
             ) : erroExibicao ? (
               <div
                 style={{
-                  color: "#f87171",
-                  background: "#3a1518",
-                  border: "1px solid #7f1d1d",
-                  borderRadius: 8,
+                  color: OB.danger,
+                  background: "#fff5f5",
+                  border: "1px solid #fecaca",
+                  borderRadius: 10,
                   padding: 10,
                   fontSize: 12,
                 }}
@@ -1340,27 +1476,29 @@ export function CrmCargosCatalogDrawer({
                         }}
                       />
                       <span style={{ width: 3, minWidth: 3, height: 14, borderRadius: 2, background: corBarra }} />
-                      <span style={{ fontSize: 12, fontWeight: 800, color: "#b8c5d6", letterSpacing: 0.4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: OB.texto, letterSpacing: 0.4 }}>
                         {segmentoLabel}
                       </span>
-                      <span style={{ fontSize: 11, color: "#5c6b80" }}>({lista.length})</span>
+                      <span style={{ fontSize: 11, color: OB.texto3 }}>({lista.length})</span>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {lista.map((cargo) => {
                         const slug = String(cargo.slug || "");
                         const sel = focusSlug === slug && !criando;
                         const ativo = cargo.ativo !== false;
-                        const seg = cargo.segmento ? String(cargo.segmento) : "";
+                        const seg = segmentoLabelCargo(cargo);
+                        const segDisplay = seg !== "Outros" ? seg : "";
                         const esp = cargo.especialidade ? String(cargo.especialidade) : "";
-                        const meta = `@${slug}${seg ? ` · ${seg}` : ""}${esp ? ` · ${esp}` : ""}`;
+                        const meta = `@${slug}${segDisplay ? ` · ${segDisplay}` : ""}${esp ? ` · ${esp}` : ""}`;
                         return (
                           <div
                             key={slug}
                             style={{
-                              background: sel ? "#1a2838" : "#131c28",
-                              border: `1px solid ${sel ? "rgba(201, 162, 74, 0.45)" : OB.borda}`,
-                              borderRadius: 10,
+                              background: sel ? OB.okMuted : "rgba(6, 13, 8, 0.72)",
+                              border: sel ? `2px solid ${OB.limao}` : `1px solid ${OB.borda}`,
+                              borderRadius: 12,
                               padding: "10px 12px",
+                              boxShadow: sel ? "0 2px 8px rgba(146, 255, 0, 0.12)" : "0 1px 3px rgba(11, 31, 16, 0.04)",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "space-between",
@@ -1386,7 +1524,7 @@ export function CrmCargosCatalogDrawer({
                               <p
                                 style={{
                                   margin: 0,
-                                  color: "#0b2210",
+                                  color: OB.texto,
                                   fontSize: 13,
                                   fontWeight: 700,
                                   whiteSpace: "nowrap",
@@ -1394,12 +1532,12 @@ export function CrmCargosCatalogDrawer({
                                   textOverflow: "ellipsis",
                                 }}
                               >
-                                {String(cargo.titulo || slug)}
+                                {String(cargo.titulo || cargo.nome || slug)}
                               </p>
                               <p
                                 style={{
                                   margin: "2px 0 0",
-                                  color: "#8394ab",
+                                  color: OB.texto3,
                                   fontSize: 11,
                                   whiteSpace: "nowrap",
                                   overflow: "hidden",
@@ -1409,84 +1547,45 @@ export function CrmCargosCatalogDrawer({
                                 {meta}
                               </p>
                             </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: 6,
-                                alignItems: "center",
-                                justifyContent: "flex-end",
-                                flexShrink: 0,
-                              }}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => abrirEditar(cargo)}
-                                disabled={painelBusy || bulkLoading}
-                                style={{
-                                  border: `1px solid ${OB.borda}`,
-                                  background: OB.surface,
-                                  color: painelBusy || bulkLoading ? OB.texto3 : OB.texto2,
-                                  borderRadius: 8,
-                                  padding: "6px 9px",
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  cursor: painelBusy || bulkLoading ? "not-allowed" : "pointer",
-                                }}
-                              >
-                                Editar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void alternarAtivo(cargo)}
-                                disabled={painelBusy || bulkLoading || busySlug === slug}
-                                style={{
-                                  border: `1px solid ${ativo ? "rgba(248, 81, 73, 0.35)" : "rgba(63, 185, 80, 0.35)"}`,
-                                  background: ativo ? OB.dangerMuted : OB.okMuted,
-                                  color: ativo ? OB.danger : OB.ok,
-                                  borderRadius: 999,
-                                  padding: "6px 10px",
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  cursor:
-                                    painelBusy || bulkLoading || busySlug === slug ? "wait" : "pointer",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {busySlug === slug ? "…" : ativo ? "Desativar" : "Ativar"}
-                              </button>
-                              <button
-                                type="button"
-                                title={`Eliminar «${String(cargo.titulo || slug)}»`}
-                                aria-label={`Eliminar cargo ${slug}`}
-                                onClick={() =>
-                                  setConfirmExclusaoCargo({
-                                    kind: "one",
-                                    slug,
-                                    rotulo: String(cargo.titulo || slug),
-                                  })
-                                }
-                                disabled={painelBusy || bulkLoading || busySlug === slug || sugerindo}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  width: 34,
-                                  height: 32,
-                                  padding: 0,
-                                  border: `1px solid rgba(248, 81, 73, 0.35)`,
-                                  background: OB.dangerMuted,
-                                  color: OB.danger,
-                                  borderRadius: 8,
-                                  cursor:
-                                    painelBusy || bulkLoading || busySlug === slug || sugerindo
-                                      ? "not-allowed"
-                                      : "pointer",
-                                  opacity: painelBusy || bulkLoading || busySlug === slug || sugerindo ? 0.45 : 1,
-                                }}
-                              >
-                                <Trash2 size={15} aria-hidden />
-                              </button>
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <CrmIconButtonGroup
+                                aria-label={`Ações do cargo ${slug}`}
+                                items={[
+                                  {
+                                    key: "editar",
+                                    variant: "green",
+                                    icon: <Pencil size={14} strokeWidth={2.25} aria-hidden />,
+                                    onClick: () => abrirEditar(cargo),
+                                    disabled: painelBusy || bulkLoading,
+                                    title: "Editar cargo",
+                                    "aria-label": `Editar cargo ${slug}`,
+                                  },
+                                  {
+                                    key: "toggle",
+                                    variant: "green",
+                                    icon: <Power size={14} strokeWidth={2.25} aria-hidden />,
+                                    onClick: () => void alternarAtivo(cargo),
+                                    disabled: painelBusy || bulkLoading || busySlug === slug,
+                                    loading: busySlug === slug,
+                                    title: ativo ? "Desativar cargo" : "Ativar cargo",
+                                    "aria-label": ativo ? `Desativar cargo ${slug}` : `Ativar cargo ${slug}`,
+                                  },
+                                  {
+                                    key: "excluir",
+                                    variant: "red",
+                                    icon: <Trash2 size={14} strokeWidth={2.25} aria-hidden />,
+                                    onClick: () =>
+                                      setConfirmExclusaoCargo({
+                                        kind: "one",
+                                        slug,
+                                        rotulo: String(cargo.titulo || cargo.nome || slug),
+                                      }),
+                                    disabled: painelBusy || bulkLoading || busySlug === slug || sugerindo,
+                                    title: `Eliminar «${String(cargo.titulo || cargo.nome || slug)}»`,
+                                    "aria-label": `Eliminar cargo ${slug}`,
+                                  },
+                                ]}
+                              />
                             </div>
                           </div>
                         );
@@ -1498,14 +1597,14 @@ export function CrmCargosCatalogDrawer({
             )}
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: 16, background: OB.shell }}>
             {erro ? (
               <div
                 style={{
-                  color: "#f87171",
-                  background: "#3a1518",
-                  border: "1px solid #7f1d1d",
-                  borderRadius: 8,
+                  color: OB.danger,
+                  background: "#fff5f5",
+                  border: "1px solid #fecaca",
+                  borderRadius: 10,
                   padding: 10,
                   fontSize: 13,
                   marginBottom: 12,
@@ -1518,56 +1617,110 @@ export function CrmCargosCatalogDrawer({
             {!focusSlug && !criando ? (
               <p style={{ color: OB.texto2, fontSize: 13, marginTop: 24 }}>
                 Seleccione um cargo na lista ou clique em{" "}
-                <strong style={{ color: OB.dourado }}>+ Novo cargo</strong>.
+                <strong style={{ color: OB.limao }}>+ Novo cargo</strong>.
               </p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    border: `1px solid ${OB.borda}`,
+                    background: OB.surface,
+                    fontSize: 11,
+                    color: OB.texto2,
+                    lineHeight: 1.45,
+                  }}
+                >
                   <span
                     style={{
                       padding: "4px 10px",
                       borderRadius: 999,
                       fontSize: 11,
                       fontWeight: 800,
-                      background: criando ? "rgba(201, 162, 74, 0.2)" : "rgba(63, 185, 80, 0.16)",
-                      color: criando ? OB.dourado : OB.ok,
-                      border: `1px solid ${criando ? "rgba(201, 162, 74, 0.35)" : "rgba(63, 185, 80, 0.3)"}`,
+                      background: criando ? OB.okMuted : "rgba(11, 31, 16, 0.06)",
+                      color: criando ? OB.limao : OB.ok,
+                      border: `1px solid ${criando ? "rgba(146, 255, 0, 0.35)" : OB.borda}`,
                       flexShrink: 0,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {criando ? "NOVO" : "EDITAR"}
                   </span>
-                  <span style={{ fontSize: 11, color: OB.texto2, lineHeight: 1.45 }}>
-                    Sugestão IA: use o ícone{" "}
-                    <Sparkles size={13} strokeWidth={2} style={{ verticalAlign: "-2px", color: OB.dourado }} aria-hidden />{" "}
-                    na barra acima (à direita).
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      flexWrap: "nowrap",
+                      minWidth: 0,
+                    }}
+                  >
+                    <span style={{ whiteSpace: "nowrap" }}>
+                      Sugestão IA: use o ícone
+                    </span>
+                    <Sparkles
+                      size={13}
+                      strokeWidth={2}
+                      style={{ flexShrink: 0, color: OB.limao }}
+                      aria-hidden
+                    />
+                    <span style={{ whiteSpace: "nowrap" }}>na barra acima (à direita).</span>
+                    {(criando || focusSlug !== null) &&
+                    !cargosListaPendente &&
+                    !form.titulo.trim() &&
+                    !sugerindo ? (
+                      <>
+                        <span style={{ color: OB.texto3, padding: "0 2px" }} aria-hidden>
+                          ·
+                        </span>
+                        <span>
+                          Preencha o <strong style={{ color: OB.texto }}>título</strong> para activar a sugestão.
+                        </span>
+                      </>
+                    ) : null}
                   </span>
                 </div>
-                {(criando || focusSlug !== null) &&
-                !cargosListaPendente &&
-                !form.titulo.trim() &&
-                !sugerindo ? (
-                  <p style={{ margin: 0, fontSize: 11, color: OB.texto2, lineHeight: 1.45 }}>
-                    Preencha o <strong style={{ color: OB.texto }}>título</strong> no formulário para activar a
-                    sugestão (usa cargos e mercados actuais do Hub).
-                  </p>
-                ) : null}
+
+                <label style={{ display: "block" }}>
+                  <span style={lbl}>
+                    Título *
+                  </span>
+                  <input
+                    value={form.titulo}
+                    onChange={(e) => actualizarTituloNovo(e.target.value)}
+                    style={inp}
+                  />
+                </label>
 
                 {criando ? (
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
-                      Slug (opcional — derivado do título se vazio)
+                    <span style={lbl}>
+                      Slug (gerado do título — pode editar)
                     </span>
                     <input
                       value={form.slug}
-                      onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value }))}
-                      placeholder="ex.: coordenador_obras_sp"
+                      onChange={(e) => actualizarSlugNovo(e.target.value)}
+                      placeholder={
+                        form.titulo.trim()
+                          ? slugSugeridoDoTitulo(form.titulo) || "ex.: sdr_marcos"
+                          : "ex.: sdr_marcos"
+                      }
                       style={inp}
                     />
+                    {form.titulo.trim() && !form.slug.trim() ? (
+                      <span style={{ display: "block", marginTop: 4, fontSize: 10, color: OB.texto3 }}>
+                        Ao guardar será usado: <code style={{ fontSize: 10 }}>{slugSugeridoDoTitulo(form.titulo)}</code>
+                      </span>
+                    ) : null}
                   </label>
                 ) : (
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Renomear slug (opcional)
                     </span>
                     <input
@@ -1578,17 +1731,6 @@ export function CrmCargosCatalogDrawer({
                     />
                   </label>
                 )}
-
-                <label style={{ display: "block" }}>
-                  <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
-                    Título *
-                  </span>
-                  <input
-                    value={form.titulo}
-                    onChange={(e) => setForm((p) => ({ ...p, titulo: e.target.value }))}
-                    style={inp}
-                  />
-                </label>
 
                 <datalist id="crm-catalog-segmentos-conceito">
                   {nomesSegmentosConceito().map((n) => (
@@ -1603,7 +1745,7 @@ export function CrmCargosCatalogDrawer({
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Segmento (setor)
                     </span>
                     <input
@@ -1616,7 +1758,7 @@ export function CrmCargosCatalogDrawer({
                     />
                   </label>
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Especialidade (secção interna do setor)
                     </span>
                     <input
@@ -1629,7 +1771,7 @@ export function CrmCargosCatalogDrawer({
                     />
                   </label>
                 </div>
-                <p style={{ margin: 0, fontSize: 10, color: OB.texto3, lineHeight: 1.45 }}>
+                <p style={{ margin: 0, fontSize: 11, color: OB.texto2, lineHeight: 1.45 }}>
                   Taxonomia oficial em código:{" "}
                   <code style={{ fontSize: 10, color: OB.texto2 }}>lib/hub/documento-conceito-catalogo.ts</code>
                   . Novos setores ou mudanças nas secções do playbook devem actualizar esse ficheiro primeiro; a IA de
@@ -1640,12 +1782,12 @@ export function CrmCargosCatalogDrawer({
                     style={{
                       margin: 0,
                       fontSize: 11,
-                      color: OB.douradoLight,
+                      color: OB.limao,
                       lineHeight: 1.45,
                       padding: "8px 10px",
                       borderRadius: 8,
-                      border: `1px solid rgba(201, 162, 74, 0.35)`,
-                      background: "rgba(201, 162, 74, 0.08)",
+                      border: `1px solid rgba(146, 255, 0, 0.35)`,
+                      background: OB.okMuted,
                     }}
                   >
                     Este segmento não está no documento conceito ({nomesSegmentosConceito().join(", ")}). Só continue se
@@ -1656,7 +1798,7 @@ export function CrmCargosCatalogDrawer({
                 ) : null}
 
                 <label style={{ display: "block" }}>
-                  <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                  <span style={lbl}>
                     Descrição curta
                   </span>
                   <input
@@ -1668,7 +1810,7 @@ export function CrmCargosCatalogDrawer({
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>Área</span>
+                    <span style={lbl}>Área</span>
                     <input
                       value={form.area}
                       onChange={(e) => setForm((p) => ({ ...p, area: e.target.value }))}
@@ -1676,7 +1818,7 @@ export function CrmCargosCatalogDrawer({
                     />
                   </label>
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Nível (1–5)
                     </span>
                     <input
@@ -1691,7 +1833,7 @@ export function CrmCargosCatalogDrawer({
                 </div>
 
                 <label style={{ display: "block" }}>
-                  <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                  <span style={lbl}>
                     Limite autonomia (BRL, opcional)
                   </span>
                   <input
@@ -1703,11 +1845,9 @@ export function CrmCargosCatalogDrawer({
                   />
                 </label>
 
-                <p style={{ color: OB.texto2, fontSize: 11, margin: 0 }}>{INFERENCIA_IA_CRM_COPIA}</p>
-
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Modelo padrão
                     </span>
                     <input
@@ -1717,7 +1857,7 @@ export function CrmCargosCatalogDrawer({
                     />
                   </label>
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Modelo crítico
                     </span>
                     <input
@@ -1727,7 +1867,7 @@ export function CrmCargosCatalogDrawer({
                     />
                   </label>
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Alto valor
                     </span>
                     <input
@@ -1739,7 +1879,7 @@ export function CrmCargosCatalogDrawer({
                 </div>
 
                 <label style={{ display: "block" }}>
-                  <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                  <span style={lbl}>
                     Supervisor (slug de outro cargo)
                   </span>
                   <input
@@ -1750,7 +1890,7 @@ export function CrmCargosCatalogDrawer({
                 </label>
 
                 <label style={{ display: "block" }}>
-                  <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                  <span style={lbl}>
                     Pode fazer (um por linha)
                   </span>
                   <textarea
@@ -1762,7 +1902,7 @@ export function CrmCargosCatalogDrawer({
                 </label>
 
                 <label style={{ display: "block" }}>
-                  <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                  <span style={lbl}>
                     Não pode fazer (um por linha)
                   </span>
                   <textarea
@@ -1774,7 +1914,7 @@ export function CrmCargosCatalogDrawer({
                 </label>
 
                 <label style={{ display: "block" }}>
-                  <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                  <span style={lbl}>
                     Prompt template (base para novos agentes)
                   </span>
                   <textarea
@@ -1788,12 +1928,13 @@ export function CrmCargosCatalogDrawer({
                 <div
                   style={{
                     border: `1px solid ${OB.borda}`,
-                    borderRadius: 10,
-                    background: "#121923",
+                    borderRadius: 12,
+                    background: "rgba(6, 13, 8, 0.85)",
                     padding: 12,
                     display: "flex",
                     flexDirection: "column",
                     gap: 10,
+                    boxShadow: "0 1px 3px rgba(11, 31, 16, 0.04)",
                   }}
                 >
                   <div
@@ -1805,7 +1946,7 @@ export function CrmCargosCatalogDrawer({
                       flexWrap: "wrap",
                     }}
                   >
-                    <p style={{ margin: 0, color: OB.douradoLight, fontSize: 11, fontWeight: 800, letterSpacing: 0.3 }}>
+                    <p style={{ margin: 0, color: OB.limao, fontSize: 11, fontWeight: 800, letterSpacing: 0.3 }}>
                       CONFIGURAÇÃO DE ATENDIMENTO EXTERNO
                     </p>
                     <button
@@ -1816,15 +1957,10 @@ export function CrmCargosCatalogDrawer({
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 6,
-                        border: "1px solid rgba(201, 162, 74, 0.42)",
-                        background: "rgba(201, 162, 74, 0.1)",
-                        color: OB.douradoLight,
-                        borderRadius: 8,
+                        ...crmBtnSecondary(sugerindo || !form.titulo.trim()),
                         padding: "6px 10px",
+                        borderRadius: 8,
                         fontSize: 11,
-                        fontWeight: 700,
-                        cursor: sugerindo || !form.titulo.trim() ? "not-allowed" : "pointer",
-                        opacity: sugerindo || !form.titulo.trim() ? 0.7 : 1,
                       }}
                       title="Gera saudação e sequência de perguntas com IA a partir do cargo."
                     >
@@ -1834,7 +1970,7 @@ export function CrmCargosCatalogDrawer({
                   </div>
 
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Saudação padrão (cliente)
                     </span>
                     <textarea
@@ -1847,7 +1983,7 @@ export function CrmCargosCatalogDrawer({
                   </label>
 
                   <label style={{ display: "block" }}>
-                    <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                    <span style={lbl}>
                       Comprimento padrão
                     </span>
                     <input
@@ -1872,7 +2008,7 @@ export function CrmCargosCatalogDrawer({
 
                   {form.usar_perguntas_essenciais ? (
                     <label style={{ display: "block" }}>
-                      <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                      <span style={lbl}>
                         Perguntas essenciais (uma por linha)
                       </span>
                       <textarea
@@ -1887,7 +2023,7 @@ export function CrmCargosCatalogDrawer({
 
                   {form.usar_perguntas_essenciais ? (
                     <label style={{ display: "block" }}>
-                      <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                      <span style={lbl}>
                         Ordem das perguntas
                       </span>
                       <select
@@ -1914,7 +2050,7 @@ export function CrmCargosCatalogDrawer({
                 </div>
 
                 <label style={{ display: "block" }}>
-                  <span style={{ display: "block", color: OB.texto2, fontSize: 11, marginBottom: 6 }}>
+                  <span style={lbl}>
                     Descrição longa (documentação interna)
                   </span>
                   <textarea
@@ -1955,16 +2091,7 @@ export function CrmCargosCatalogDrawer({
                     type="button"
                     onClick={() => void salvar()}
                     disabled={painelBusy}
-                    style={{
-                      border: `1px solid rgba(201, 162, 74, 0.35)`,
-                      background: painelBusy ? "rgba(0, 59, 38, 0.35)" : OB.verde,
-                      color: painelBusy ? OB.texto3 : OB.dourado,
-                      borderRadius: 8,
-                      padding: "10px 18px",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: painelBusy ? "wait" : "pointer",
-                    }}
+                    style={crmBtnPrimary(painelBusy)}
                   >
                     {busySlug === "_save" ? "A gravar…" : "Guardar"}
                   </button>
@@ -1977,14 +2104,7 @@ export function CrmCargosCatalogDrawer({
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 8,
-                        border: `1px solid rgba(248, 81, 73, 0.35)`,
-                        background: OB.dangerMuted,
-                        color: OB.danger,
-                        borderRadius: 8,
-                        padding: "10px 14px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: painelBusy ? "wait" : "pointer",
+                        ...crmBtnDangerSoft(painelBusy),
                       }}
                     >
                       <Trash2 size={14} aria-hidden />
@@ -2001,6 +2121,7 @@ export function CrmCargosCatalogDrawer({
       <CrmConfirmDialog
         open={confirmExclusaoCargo?.kind === "one"}
         title="Eliminar cargo do catálogo?"
+        theme="dark"
         danger
         confirmLabel="Eliminar definitivamente"
         cancelLabel="Cancelar"
@@ -2015,11 +2136,11 @@ export function CrmCargosCatalogDrawer({
       >
         {confirmExclusaoCargo?.kind === "one" ? (
           <>
-            <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
-              O cargo <strong style={{ color: "#0b2210" }}>«{confirmExclusaoCargo.rotulo}»</strong> (
-              <code style={{ color: "#c9a24a" }}>@{confirmExclusaoCargo.slug}</code>) será removido do catálogo.
+            <p style={{ margin: 0, color: OB.texto2, fontSize: 13, lineHeight: 1.55 }}>
+              O cargo <strong style={{ color: OB.limao }}>«{confirmExclusaoCargo.rotulo}»</strong> (
+              <code style={{ color: OB.limao }}>@{confirmExclusaoCargo.slug}</code>) será removido do catálogo.
             </p>
-            <p style={{ margin: "10px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: "10px 0 0", color: OB.texto3, fontSize: 12, lineHeight: 1.5 }}>
               Se existirem agentes com este título, a operação será bloqueada.
             </p>
           </>
@@ -2029,6 +2150,7 @@ export function CrmCargosCatalogDrawer({
       <CrmConfirmDialog
         open={confirmExclusaoCargo?.kind === "batch"}
         title="Eliminar cargos seleccionados?"
+        theme="dark"
         danger
         confirmLabel="Eliminar seleccionados"
         cancelLabel="Cancelar"
@@ -2043,14 +2165,14 @@ export function CrmCargosCatalogDrawer({
       >
         {confirmExclusaoCargo?.kind === "batch" ? (
           <>
-            <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
-              Serão eliminados <strong style={{ color: "#0b2210" }}>{confirmExclusaoCargo.slugs.length}</strong>{" "}
+            <p style={{ margin: 0, color: OB.texto2, fontSize: 13, lineHeight: 1.55 }}>
+              Serão eliminados <strong style={{ color: OB.limao }}>{confirmExclusaoCargo.slugs.length}</strong>{" "}
               cargo(s) do catálogo.
             </p>
             <p
               style={{
                 margin: "10px 0 0",
-                color: "#5d7a67",
+                color: OB.texto3,
                 fontSize: 11,
                 lineHeight: 1.45,
                 fontFamily: "ui-monospace, monospace",
@@ -2062,7 +2184,7 @@ export function CrmCargosCatalogDrawer({
                 ? ` … (+${confirmExclusaoCargo.slugs.length - 10})`
                 : ""}
             </p>
-            <p style={{ margin: "10px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: "10px 0 0", color: OB.texto3, fontSize: 12, lineHeight: 1.5 }}>
               Linhas em uso por agentes não serão apagadas e aparecerão no relatório de erros.
             </p>
           </>

@@ -24,7 +24,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message, mensagens: [] }, { status: 500 });
     }
 
-    return NextResponse.json({ mensagens: data ?? [] });
+    const { data: notas, error: notasErr } = await supabase
+      .from("hub_notas")
+      .select("id, conteudo, criado_por, criado_em")
+      .eq("lead_id", leadId)
+      .order("criado_em", { ascending: true })
+      .limit(100);
+
+    if (notasErr) {
+      return NextResponse.json({ error: notasErr.message, mensagens: [] }, { status: 500 });
+    }
+
+    return NextResponse.json({ mensagens: data ?? [], notas: notas ?? [] });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "unknown error";
     return NextResponse.json({ error: msg, mensagens: [] }, { status: 500 });

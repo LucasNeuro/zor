@@ -1,5 +1,6 @@
 ﻿"use client";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeadersWithActor, getCrmSessionActor } from "@/lib/internal-api-headers-client";
 import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -15,8 +16,11 @@ import {
   Phone,
   Send,
   UserCheck,
+  Users,
   X,
 } from "lucide-react";
+import { AtendentesEquipePanel } from "@/components/crm/atendimento/AtendentesEquipePanel";
+import { effectiveHumanoResponsavel } from "@/lib/crm/resolve-crm-actor";
 
 interface Lead {
   id: string;
@@ -90,8 +94,26 @@ function AtendimentoContent() {
   const [carregandoMensagens, setCarregandoMensagens] = useState(false);
   const [sendStrip, setSendStrip] = useState<{ kind: "error" | "success" | "info"; text: string } | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [vistaLateral, setVistaLateral] = useState<"conversas" | "equipe">("conversas");
   const chatRef = useRef<HTMLDivElement>(null);
   const leadsCarregados = useRef(false);
+  const [sessionActor, setSessionActor] = useState<{ id?: string; email?: string; name?: string }>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void getCrmSessionActor().then((actor) => {
+      if (!cancelled) setSessionActor(actor);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      void getCrmSessionActor().then((actor) => {
+        if (!cancelled) setSessionActor(actor);
+      });
+    });
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Auto-scroll ao fundo quando chegam mensagens
   useEffect(() => {
@@ -191,7 +213,7 @@ function AtendimentoContent() {
 
   function selecionarLead(lead: Lead) {
     setLeadSel(lead);
-    setAssumido(!!lead.humano_responsavel);
+    setAssumido(!!effectiveHumanoResponsavel(lead.humano_responsavel));
     setTexto("");
     setSendStrip(null);
     setMensagensLoadError(null);
@@ -221,7 +243,7 @@ function AtendimentoContent() {
     const fresh = leads.find((l) => l.id === leadSel.id);
     if (fresh) {
       setLeadSel(fresh);
-      setAssumido(!!fresh.humano_responsavel);
+      setAssumido(!!effectiveHumanoResponsavel(fresh.humano_responsavel));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- apenas id estável + lista nova
   }, [leads, leadSel?.id]);
@@ -250,26 +272,60 @@ function AtendimentoContent() {
 
   async function assumirAtendimento() {
     if (!leadSel) return;
-    await supabase.from("hub_leads_crm").update({ humano_responsavel: "wendel" }).eq("id", leadSel.id);
-    await supabase.from("hub_atividades").insert({
-      lead_id: leadSel.id, tipo: "ia_acao",
-      descricao: "Atendimento assumido por Wendel",
-      feito_por: "wendel", feito_por_tipo: "humano",
-    });
-    setAssumido(true);
-    setLeadSel(prev => prev ? { ...prev, humano_responsavel: "wendel" } : prev);
+    try {
+      const res = await fetch("/api/crm/atendimento/assumir", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await crmApiHeadersWithActor(sessionActor)),
+        },
+        body: JSON.stringify({ leadId: leadSel.id }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        humano_responsavel?: string;
+      };
+      if (!res.ok) {
+        setSendStrip({
+          kind: "error",
+          text: typeof json.error === "string" ? json.error : "Não foi possível assumir o atendimento.",
+        });
+        return;
+      }
+      const humano = json.humano_responsavel ?? sessionActor.name ?? "operador";
+      setAssumido(true);
+      setLeadSel((prev) => (prev ? { ...prev, humano_responsavel: humano } : prev));
+    } catch {
+      setSendStrip({ kind: "error", text: "Erro de rede ao assumir." });
+    }
   }
 
   async function devolverIA() {
     if (!leadSel) return;
-    await supabase.from("hub_leads_crm").update({ humano_responsavel: null }).eq("id", leadSel.id);
-    await supabase.from("hub_atividades").insert({
-      lead_id: leadSel.id, tipo: "ia_acao",
-      descricao: "Atendimento devolvido para a IA",
-      feito_por: "wendel", feito_por_tipo: "humano",
-    });
-    setAssumido(false);
-    setLeadSel(prev => prev ? { ...prev, humano_responsavel: undefined } : prev);
+    try {
+      const res = await fetch("/api/crm/atendimento/devolver-ia", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await crmApiHeadersWithActor(sessionActor)),
+        },
+        body: JSON.stringify({ leadId: leadSel.id }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setSendStrip({
+          kind: "error",
+          text: typeof json.error === "string" ? json.error : "Não foi possível devolver à IA.",
+        });
+        return;
+      }
+      setAssumido(false);
+      setLeadSel((prev) => (prev ? { ...prev, humano_responsavel: undefined } : prev));
+    } catch {
+      setSendStrip({ kind: "error", text: "Erro de rede ao devolver à IA." });
+    }
   }
 
   async function enviarMensagem() {
@@ -284,7 +340,7 @@ function AtendimentoContent() {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...internalApiHeaders(),
+          ...(await crmApiHeadersWithActor(sessionActor)),
         },
         body: JSON.stringify({ leadId: leadSel.id, texto: msg }),
       });
@@ -389,7 +445,41 @@ function AtendimentoContent() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* LISTA DE LEADS */}
-        <div className={`flex flex-shrink-0 flex-col border-r ${C.border} ${C.bgAlt} ${isMobile ? (leadSel ? "hidden" : "w-full") : "w-72"}`}>
+        <div className={`flex flex-shrink-0 flex-col border-r ${C.border} ${C.bgAlt} ${isMobile ? (leadSel ? "hidden" : "w-full") : "w-80"}`}>
+          <div className={`border-b ${C.border} p-2`}>
+            <div className="mb-2 flex gap-1 rounded-lg border border-white/[0.06] bg-black/20 p-0.5">
+              <button
+                type="button"
+                onClick={() => setVistaLateral("conversas")}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-[11px] font-bold transition-colors ${
+                  vistaLateral === "conversas"
+                    ? "bg-[#c9a24a]/20 text-[#c9a24a]"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                <MessageSquare size={14} />
+                Conversas
+              </button>
+              <button
+                type="button"
+                onClick={() => setVistaLateral("equipe")}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-[11px] font-bold transition-colors ${
+                  vistaLateral === "equipe"
+                    ? "bg-[#c9a24a]/20 text-[#c9a24a]"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                <Users size={14} />
+                Equipe
+              </button>
+            </div>
+          </div>
+          {vistaLateral === "equipe" ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
+              <AtendentesEquipePanel variant="atendimento" />
+            </div>
+          ) : (
+          <>
           <div className={`p-3 border-b ${C.border} space-y-2`}>
             <input
               value={busca} onChange={e => setBusca(e.target.value)}
@@ -441,6 +531,8 @@ function AtendimentoContent() {
               </button>
             ))}
           </div>
+          </>
+          )}
         </div>
 
         {/* ÁREA DO CHAT */}
@@ -548,7 +640,10 @@ function AtendimentoContent() {
                 )}
                 {mensagens.map(msg => {
                   const entrada = msg.direcao === "entrada";
-                  const isHumano = !entrada && msg.agente_id === "wendel";
+                  const meta = msg.metadata && typeof msg.metadata === "object" ? msg.metadata as Record<string, unknown> : {};
+                  const isHumano =
+                    !entrada &&
+                    (meta.feito_por_tipo === "humano" || Boolean(leadSel?.humano_responsavel));
                   return (
                     <div key={msg.id} className={`flex ${entrada ? "justify-start" : "justify-end"}`}>
                       <div className={`max-w-[min(28rem,85vw)] flex flex-col gap-0.5 ${entrada ? "items-start" : "items-end"}`}>

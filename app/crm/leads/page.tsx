@@ -1,17 +1,37 @@
-﻿"use client";
+"use client";
 import dynamic from "next/dynamic";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
-import { PipelineTabsBar } from "@/components/crm/pipelines/PipelineTabsBar";
+import { CrmPipelinePageToolbar } from "@/components/crm/pipelines/CrmPipelinePageToolbar";
+import { CrmKanbanBoardScroll } from "@/components/crm/pipelines/CrmKanbanBoardScroll";
+import { CrmKanbanColumn } from "@/components/crm/pipelines/CrmKanbanColumn";
+import type { CrmResizableColumn } from "@/components/crm/CrmResizableDataTable";
+import {
+  CrmRetrofitAdvancedFiltersGrid,
+  CrmRetrofitFilterField,
+  CrmRetrofitTablePanel,
+  crmRetrofitFilterInputClass,
+  crmRetrofitFilterSelectClass,
+  crmTableIdBadge,
+  crmTableStagePill,
+  crmTableStatusPill,
+} from "@/components/crm/CrmRetrofitTablePanel";
+import { crmHeaderPrimaryBtnStyle } from "@/lib/crm/crm-list-pill-styles";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
 import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
-import { ESTAGIOS_FALLBACK_UI } from "@/lib/crm/pipeline-defaults";
-import { FUNIL_LEAD_ETAPAS, MOTIVOS_PERDA, MOTIVOS_PERDA_LABEL } from "@/lib/crm/pipelines";
-import { LeadEncaminharModal } from "@/components/crm/leads/LeadEncaminharModal";
+import { ESTAGIOS_FALLBACK_LEAD_UI } from "@/lib/crm/pipeline-defaults";
+import { labelPipelineTab } from "@/lib/crm/tenant-pipelines";
+import { useCrmToast } from "@/lib/crm/crm-feedback";
+import { CrmTableNotesCell } from "@/components/crm/CrmTableNotesCell";
+import {
+  loadNotasPreviewMap,
+  notasParaLead,
+} from "@/lib/crm/load-notas-preview";
+import type { NotaPreview } from "@/components/crm/CrmKanbanNotesSection";
 
 const LeadRapidoSideover = dynamic(
   () =>
@@ -33,6 +53,14 @@ const PipelineConfigSideover = dynamic(
   () =>
     import("@/components/crm/leads/PipelineConfigSideover").then((m) => ({
       default: m.PipelineConfigSideover,
+    })),
+  { ssr: false }
+);
+
+const LeadEditSideover = dynamic(
+  () =>
+    import("@/components/crm/leads/LeadEditSideover").then((m) => ({
+      default: m.LeadEditSideover,
     })),
   { ssr: false }
 );
@@ -81,33 +109,9 @@ type PipelineUi = {
   estagios: { slug: string; label: string; cor: string; ativo: boolean; ordem?: number }[];
 };
 
-type Atividade = {
-  id: string;
-  tipo: string;
-  descricao: string;
-  feito_por: string;
-  feito_por_tipo: string;
-  criado_em: string;
-};
-
-type Nota = {
-  id: string;
-  conteudo: string;
-  criado_por: string;
-  criado_em: string;
-};
-
-type Memoria = {
-  id: string;
-  chave: string;
-  valor: string;
-  confianca: number;
-  criado_em: string;
-};
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ESTAGIOS_FALLBACK: EstagioUi[] = ESTAGIOS_FALLBACK_UI.map((e) => ({
+const ESTAGIOS_FALLBACK: EstagioUi[] = ESTAGIOS_FALLBACK_LEAD_UI.map((e) => ({
   id: e.id,
   label: e.label,
   color: e.color,
@@ -123,11 +127,6 @@ const ORIGENS_COLOR: Record<string, string> = {
   google_ads: "#EA4335", linkedin: "#0A66C2", site: "#6366F1",
   indicacao: "#F59E0B", outro: "#6B7280",
 };
-const ATIVIDADE_ICON: Record<string, string> = {
-  mensagem: "💬", ligacao: "📞", email: "📧", reuniao: "📅",
-  nota: "📝", proposta: "📄", follow_up: "🔄", status_change: "📍", ia_acao: "🤖",
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function moeda(v: number) {
@@ -144,20 +143,19 @@ function tempo(iso: string) {
   return `${Math.floor(m / 1440)}d`;
 }
 
-function borderColor(iso: string) {
-  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (m < 5) return "#22C55E";
-  if (m < 15) return "#EAB308";
-  return "#EF4444";
+function formatData(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
-function isPipelineGlobal(pipe: PipelineUi | null): boolean {
+function isPipelinePrincipal(pipe: PipelineUi | null, pipelines: PipelineUi[]): boolean {
   if (!pipe) return true;
-  return (
-    pipe.slug === "leads-global" ||
-    pipe.slug === "lead-global" ||
-    /^leads?\s+[—-]\s+pipeline global$/i.test(pipe.nome)
-  );
+  const first = pipelines[0];
+  return first?.id === pipe.id;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -167,32 +165,31 @@ export default function LeadsPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { setSlot } = useCrmHeaderSlot();
+  const { error: toastError } = useCrmToast();
   const narrow = useNarrowViewport();
   const isMobile = narrow !== false;
   const [leads, setLeads] = useState<Lead[]>([]);
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [busca, setBusca] = useState("");
   const [filtroEstagio, setFiltroEstagio] = useState("");
-  const [detalhe, setDetalhe] = useState<Lead | null>(null);
-  const [tabDetalhe, setTabDetalhe] = useState<"info" | "timeline" | "notas" | "memorias">("info");
-  const [atividades, setAtividades] = useState<Atividade[]>([]);
-  const [notas, setNotas] = useState<Nota[]>([]);
-  const [memorias, setMemorias] = useState<Memoria[]>([]);
-  const [novaNota, setNovaNota] = useState("");
-  const [motivoPerda, setMotivoPerda] = useState("");
-  const [motivoPerdaOutro, setMotivoPerdaOutro] = useState("");
-  const [confirmandoPerda, setConfirmandoPerda] = useState(false);
-  const [perdaComoSpam, setPerdaComoSpam] = useState(false);
-  const [encaminharLead, setEncaminharLead] = useState<Lead | null>(null);
-  const [convertendoNegocio, setConvertendoNegocio] = useState(false);
+  const [filtroOrigem, setFiltroOrigem] = useState("");
+  const [filtroScoreMin, setFiltroScoreMin] = useState("");
+  const [filtroScoreMax, setFiltroScoreMax] = useState("");
+  const [filtroDataInicio, setFiltroDataInicio] = useState("");
+  const [filtroDataFim, setFiltroDataFim] = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [editLead, setEditLead] = useState<Lead | null>(null);
   const [leadDragId, setLeadDragId] = useState<string | null>(null);
+  const [notasMap, setNotasMap] = useState<Map<string, NotaPreview[]>>(new Map());
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [leadRapidoOpen, setLeadRapidoOpen] = useState(false);
   const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
+  const [pipelineConfigFocusCreate, setPipelineConfigFocusCreate] = useState(false);
   const [pipelines, setPipelines] = useState<PipelineUi[]>([]);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [estagiosKanban, setEstagiosKanban] = useState<EstagioUi[]>(ESTAGIOS_FALLBACK);
   const [sucessoLead, setSucessoLead] = useState<string | null>(null);
+  const pendingStageMovesRef = useRef(new Set<string>());
 
   const carregarPipeline = useCallback(async () => {
     try {
@@ -205,11 +202,7 @@ export default function LeadsPage() {
       setPipelines(list);
       setPipelineId((prev) => {
         if (prev && list.some((p) => p.id === prev)) return prev;
-        return (
-          list.find((p) => p.slug === "leads-global" || p.slug === "lead-global")?.id ||
-          list[0]?.id ||
-          null
-        );
+        return list[0]?.id ?? null;
       });
     } catch {
       /* fallback ESTAGIOS_FALLBACK */
@@ -303,7 +296,6 @@ export default function LeadsPage() {
     const v = searchParams.get("view");
     if (est) setFiltroEstagio(est);
     if (v === "kanban" || v === "lista") setView(v);
-    else if (isMobile) setView("lista");
     if (searchParams.get("novo") === "1") {
       setLeadRapidoOpen(true);
       const p = new URLSearchParams(searchParams.toString());
@@ -322,6 +314,11 @@ export default function LeadsPage() {
     [pipelines, pipelineId]
   );
 
+  const pipelineTitulo = useMemo(
+    () => (pipelineAtivo ? labelPipelineTab(pipelineAtivo) : "Leads"),
+    [pipelineAtivo]
+  );
+
   useEffect(() => {
     const cols =
       pipelineAtivo?.estagios
@@ -334,99 +331,102 @@ export default function LeadsPage() {
   useEffect(() => {
     carregar();
     const ch = supabase.channel("leads_rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "hub_leads_crm" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_leads_crm" }, (payload) => {
+        const leadId =
+          (payload.new as { id?: string } | null)?.id ??
+          (payload.old as { id?: string } | null)?.id;
+        if (leadId && pendingStageMovesRef.current.has(leadId)) return;
+        carregar();
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [carregar]);
 
-  async function abrirDetalhe(lead: Lead) {
-    setDetalhe(lead);
-    setTabDetalhe("info");
-    setConfirmandoPerda(false);
-    setMotivoPerda("");
-    const [{ data: a }, { data: n }, { data: m }] = await Promise.all([
-      supabase.from("hub_atividades").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }).limit(30),
-      supabase.from("hub_notas").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }),
-      supabase.from("hub_memorias_lead").select("*").eq("lead_id", lead.id).order("criado_em", { ascending: false }),
-    ]);
-    setAtividades((a || []) as Atividade[]);
-    setNotas((n || []) as Nota[]);
-    setMemorias((m || []) as Memoria[]);
-  }
+  const abrirEditLead = useCallback((lead: Lead) => {
+    setEditLead(lead);
+  }, []);
 
-  async function moverEstagio(leadId: string, novoEstagio: string, extra?: Record<string, unknown>) {
+  async function moverEstagio(
+    leadId: string,
+    novoEstagio: string,
+    extra?: Record<string, unknown>,
+    options?: { optimistic?: boolean }
+  ) {
     const leadAtual = leads.find((l) => l.id === leadId);
+    const estagioAnterior = leadAtual?.estagio;
+
+    if (options?.optimistic) {
+      if (estagioAnterior && estagioParaColunaKanban(estagioAnterior) === novoEstagio) {
+        return true;
+      }
+      pendingStageMovesRef.current.add(leadId);
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === leadId ? { ...l, estagio: novoEstagio, estagio_funil: novoEstagio } : l
+        )
+      );
+      if (editLead?.id === leadId) {
+        setEditLead((d) =>
+          d ? { ...d, estagio: novoEstagio, estagio_funil: novoEstagio } : null
+        );
+      }
+    }
+
     const res = await patchLeadCrm(leadId, {
       estagio: novoEstagio,
-      _estagio_anterior: leadAtual?.estagio,
+      _estagio_anterior: estagioAnterior,
       ...extra,
     });
+
+    if (options?.optimistic) {
+      pendingStageMovesRef.current.delete(leadId);
+    }
+
     if (!res.ok) {
-      alert(res.error);
+      if (options?.optimistic && estagioAnterior) {
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.id === leadId ? { ...l, estagio: estagioAnterior, estagio_funil: estagioAnterior } : l
+          )
+        );
+        if (editLead?.id === leadId) {
+          setEditLead((d) =>
+            d ? { ...d, estagio: estagioAnterior, estagio_funil: estagioAnterior } : null
+          );
+        }
+      }
+      toastError(res.error);
       return false;
     }
+
     const data = res.data as { estagio?: string; estagio_funil?: string };
     const est = String(data.estagio_funil ?? data.estagio ?? novoEstagio);
     setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, estagio: est, estagio_funil: est } : l)));
-    if (detalhe?.id === leadId) setDetalhe((d) => (d ? { ...d, estagio: est, estagio_funil: est } : null));
+    if (editLead?.id === leadId) setEditLead((d) => (d ? { ...d, estagio: est, estagio_funil: est } : null));
     return true;
   }
 
-  async function converterNegocio(lead: Lead) {
-    setConvertendoNegocio(true);
-    const res = await fetch(`/api/crm/leads/${encodeURIComponent(lead.id)}/converter-negocio`, {
-      method: "POST",
-      credentials: "include",
-      headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const json = await res.json().catch(() => ({}));
-    setConvertendoNegocio(false);
-    if (!res.ok) {
-      alert(typeof json?.error === "string" ? json.error : "Não foi possível criar o negócio.");
-      return;
-    }
-    const negocioId = json?.data?.id as string | undefined;
+  async function onNegocioCreated(lead: Lead, negocioId: string) {
     await moverEstagio(lead.id, "convertido_negocio");
     void carregar();
-    if (negocioId) router.push(`/crm/negocios/${negocioId}`);
-    setDetalhe(null);
+    router.push(`/crm/negocios/${negocioId}`);
+    setEditLead(null);
   }
 
-  async function marcarGanho() {
-    if (!detalhe) return;
-    await converterNegocio(detalhe);
-  }
-
-  async function marcarPerdido() {
-    const motivo =
-      motivoPerda === "outro" ? motivoPerdaOutro.trim() : motivoPerda.trim();
-    if (!detalhe || !motivo) return;
-    const estagio = perdaComoSpam ? "spam_invalido" : "perdido";
-    const ok = await moverEstagio(detalhe.id, estagio, { motivo_perda: motivo });
-    if (!ok) return;
-    setDetalhe(null);
-    setMotivoPerda("");
-    setConfirmandoPerda(false);
-    setPerdaComoSpam(false);
-    void carregar();
-  }
-
-  async function adicionarNota() {
-    if (!detalhe || !novaNota.trim()) return;
-    const { data } = await supabase.from("hub_notas").insert({ lead_id: detalhe.id, conteudo: novaNota.trim(), criado_por: "humano" }).select().single();
-    if (data) setNotas(prev => [data as Nota, ...prev]);
-    await supabase.from("hub_atividades").insert({ lead_id: detalhe.id, tipo: "nota", descricao: novaNota.trim().slice(0, 80), feito_por: "humano", feito_por_tipo: "humano" });
-    setNovaNota("");
-  }
-
-  const leadsDoPipeline = leads.filter((l) => {
+  const leadsDoPipeline = useMemo(
+    () =>
+      leads.filter((l) => {
     if (!pipelineAtivo) return true;
-    if (isPipelineGlobal(pipelineAtivo)) return true;
-    return l.pipeline_id === pipelineAtivo.id;
-  });
+        if (l.pipeline_id === pipelineAtivo.id) return true;
+        if (!l.pipeline_id && isPipelinePrincipal(pipelineAtivo, pipelines)) return true;
+        return false;
+      }),
+    [leads, pipelineAtivo, pipelines]
+  );
 
-  const filtrados = leadsDoPipeline.filter(l => {
+  const filtrados = useMemo(
+    () =>
+      leadsDoPipeline.filter((l) => {
     if (
       busca &&
       !l.nome.toLowerCase().includes(busca.toLowerCase()) &&
@@ -437,21 +437,83 @@ export default function LeadsPage() {
       return false;
     }
     if (filtroEstagio && estagioParaColunaKanban(l.estagio) !== filtroEstagio) return false;
+        if (filtroOrigem && l.origem !== filtroOrigem) return false;
+        if (filtroScoreMin && l.score < Number(filtroScoreMin)) return false;
+        if (filtroScoreMax && l.score > Number(filtroScoreMax)) return false;
+        if (filtroDataInicio) {
+          const inicio = new Date(filtroDataInicio);
+          inicio.setHours(0, 0, 0, 0);
+          if (new Date(l.criado_em) < inicio) return false;
+        }
+        if (filtroDataFim) {
+          const fim = new Date(filtroDataFim);
+          fim.setHours(23, 59, 59, 999);
+          if (new Date(l.criado_em) > fim) return false;
+        }
     return true;
-  });
+      }),
+    [
+      leadsDoPipeline,
+      busca,
+      filtroEstagio,
+      filtroOrigem,
+      filtroScoreMin,
+      filtroScoreMax,
+      filtroDataInicio,
+      filtroDataFim,
+    ]
+  );
 
-  const hoje = new Date().toDateString();
+  const filtradosIdsKey = useMemo(
+    () => filtrados.map((l) => l.id).join(","),
+    [filtrados]
+  );
+
+  useEffect(() => {
+    const ids = filtradosIdsKey ? filtradosIdsKey.split(",") : [];
+    if (!ids.length) {
+      setNotasMap((prev) => (prev.size === 0 ? prev : new Map()));
+      return;
+    }
+    let cancelled = false;
+    void loadNotasPreviewMap(supabase, { leadIds: ids }).then((map) => {
+      if (!cancelled) setNotasMap(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [filtradosIdsKey]);
+
+  const recarregarNotasPreviews = useCallback(() => {
+    const ids = filtradosIdsKey ? filtradosIdsKey.split(",") : [];
+    if (!ids.length) {
+      setNotasMap((prev) => (prev.size === 0 ? prev : new Map()));
+      return;
+    }
+    void loadNotasPreviewMap(supabase, { leadIds: ids }).then(setNotasMap);
+  }, [filtradosIdsKey]);
+
   const semResposta = leadsDoPipeline.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 86_400_000).length;
-  const emRisco = leadsDoPipeline.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 3_600_000).reduce((s, l) => s + l.valor_estimado, 0);
   const pipeline = leadsDoPipeline.filter(l => !["ganho", "perdido"].includes(l.estagio)).reduce((s, l) => s + l.valor_estimado, 0);
+
+  const pipelineCount = useCallback(
+    (pid: string) => {
+      const principal = pipelines[0]?.id;
+      return leads.filter((l) => {
+        if (l.pipeline_id === pid) return true;
+        if (!l.pipeline_id && pid === principal) return true;
+        return false;
+      }).length;
+    },
+    [leads, pipelines]
+  );
 
   const botaoNovoLead = useMemo(
     () => (
       <button
         type="button"
         onClick={() => setLeadRapidoOpen(true)}
-        className="min-h-11 shrink-0 rounded-lg px-4 py-2 text-sm font-bold min-[480px]:min-h-10"
-        style={{ background: "#003b26", color: "#c9a24a", border: "none", cursor: "pointer" }}
+        style={crmHeaderPrimaryBtnStyle()}
       >
         + Novo lead
       </button>
@@ -466,112 +528,180 @@ export default function LeadsPage() {
     }
     setSlot({
       path: pathname,
-      subtitle: `${pipelineAtivo?.nome || "Pipeline de Leads"} · ${leadsDoPipeline.length} leads`,
-      actions: (
-        <>
-          {botaoNovoLead}
-          <div className="inline-flex w-full rounded-lg bg-[#eef7eb] p-0.5 min-[480px]:w-auto">
-            <button
-              type="button"
-              onClick={() => setView("kanban")}
-              className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "kanban" ? "bg-[#dcebd8] text-white" : "text-[#5d7a67] hover:text-[#0b2210]"}`}
-            >
-              Kanban
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("lista")}
-              className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "lista" ? "bg-[#dcebd8] text-white" : "text-[#5d7a67] hover:text-[#0b2210]"}`}
-            >
-              Lista
-            </button>
-          </div>
-          <input
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar lead..."
-            className="w-full min-h-11 min-w-0 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-44"
-          />
-          <select
-            value={filtroEstagio}
-            onChange={e => setFiltroEstagio(e.target.value)}
-            className="w-full min-h-11 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
-          >
-            <option value="">Todos os estágios</option>
-            {estagiosKanban.map(e => (
-              <option key={e.id} value={e.id}>
-                {e.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => setPipelineConfigOpen(true)}
-            className="min-h-11 shrink-0 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-xs font-bold text-[#5d7a67] hover:text-[#0b2210] min-[480px]:min-h-10"
-            title="Configurar pipeline"
-          >
-            Pipeline
-          </button>
-        </>
-      ),
+      subtitle: `${pipelineTitulo} · ${leadsDoPipeline.length} leads`,
+      actions: botaoNovoLead,
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, pipelineAtivo, leadsDoPipeline.length, view, busca, filtroEstagio, isMobile, botaoNovoLead, estagiosKanban]);
+  }, [pathname, setSlot, pipelineTitulo, leadsDoPipeline.length, isMobile, botaoNovoLead]);
 
-  const headerControls = (
-    <>
-      {botaoNovoLead}
-      <div className="inline-flex w-full rounded-lg bg-[#eef7eb] p-0.5 min-[480px]:w-auto">
-        <button
-          type="button"
-          onClick={() => setView("kanban")}
-          className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "kanban" ? "bg-[#dcebd8] text-white" : "text-[#5d7a67] hover:text-[#0b2210]"}`}
-        >
-          Kanban
-        </button>
-        <button
-          type="button"
-          onClick={() => setView("lista")}
-          className={`min-h-11 flex-1 touch-manipulation rounded-md px-3 py-2 text-xs font-bold transition-colors min-[480px]:min-h-10 min-[480px]:flex-none min-[480px]:py-1.5 ${view === "lista" ? "bg-[#dcebd8] text-white" : "text-[#5d7a67] hover:text-[#0b2210]"}`}
-        >
-          Lista
-        </button>
-      </div>
-      <input
-        value={busca}
-        onChange={e => setBusca(e.target.value)}
-        placeholder="Buscar lead..."
-        className="w-full min-h-11 min-w-0 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none placeholder:text-[#6e7681] focus:border-[#c9a24a] min-[480px]:min-h-10 min-[480px]:w-44"
-      />
-      <select
-        value={filtroEstagio}
-        onChange={e => setFiltroEstagio(e.target.value)}
-        className="w-full min-h-11 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-sm text-[#0b2210] outline-none min-[480px]:min-h-10 min-[480px]:w-[11.5rem]"
-      >
-        <option value="">Todos os estágios</option>
-        {estagiosKanban.map(e => (
-          <option key={e.id} value={e.id}>
-            {e.label}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        onClick={() => setPipelineConfigOpen(true)}
-        className="min-h-11 shrink-0 rounded-lg border border-[#dcebd8] bg-[#eef7eb] px-3 py-2 text-xs font-bold text-[#5d7a67] hover:text-[#0b2210] min-[480px]:min-h-10"
-      >
-        Pipeline
-      </button>
-    </>
+  const colunasLeads = useMemo((): CrmResizableColumn<Lead>[] => {
+    const estagioInfo = (lead: Lead) =>
+      estagiosKanban.find((e) => e.id === estagioParaColunaKanban(lead.estagio));
+
+    return [
+      {
+        id: "nome",
+        label: "Nome",
+        defaultWidth: 200,
+        minWidth: 140,
+        render: (lead) => (
+          <span className="font-semibold text-[#0b2210]">{lead.nome}</span>
+        ),
+      },
+      {
+        id: "origem",
+        label: "Origem",
+        defaultWidth: 120,
+        minWidth: 90,
+        render: (lead) => {
+          if (!lead.origem) return "—";
+          const color = ORIGENS_COLOR[lead.origem] || "#6B7280";
+          return crmTableStagePill(
+            ORIGENS_LABEL[lead.origem] || lead.origem,
+            color
+          );
+        },
+      },
+      {
+        id: "estagio",
+        label: "Estágio",
+        defaultWidth: 130,
+        minWidth: 100,
+        render: (lead) => {
+          const est = estagioInfo(lead);
+          if (!est) return "—";
+          return crmTableStagePill(est.label, est.color);
+        },
+      },
+      {
+        id: "valor",
+        label: "Valor",
+        defaultWidth: 100,
+        minWidth: 80,
+        align: "right",
+        render: (lead) =>
+          lead.valor_estimado > 0 ? moeda(lead.valor_estimado) : "—",
+      },
+      {
+        id: "score",
+        label: "Score",
+        defaultWidth: 80,
+        minWidth: 64,
+        align: "center",
+        render: (lead) =>
+          crmTableStatusPill(String(lead.score), lead.score >= 50),
+      },
+      {
+        id: "observacoes",
+        label: "Observações",
+        defaultWidth: 160,
+        minWidth: 120,
+        render: (lead) => (
+          <CrmTableNotesCell notas={notasParaLead(notasMap, lead.id)} />
+        ),
+      },
+      {
+        id: "agente",
+        label: "Agente",
+        defaultWidth: 140,
+        minWidth: 100,
+        render: (lead) => lead.agente_responsavel || "—",
+      },
+      {
+        id: "telefone",
+        label: "Telefone",
+        defaultWidth: 130,
+        minWidth: 100,
+        render: (lead) => lead.telefone || "—",
+      },
+      {
+        id: "codigo",
+        label: "Código",
+        defaultWidth: 110,
+        minWidth: 80,
+        render: (lead) => {
+          const cod = lead.codigo || lead._pessoa_codigo;
+          return cod ? crmTableIdBadge(cod, "green") : "—";
+        },
+      },
+      {
+        id: "atualizado",
+        label: "Atualizado",
+        defaultWidth: 110,
+        minWidth: 90,
+        render: (lead) => (
+          <span className="text-[#6b8a76]" title={formatData(lead.atualizado_em)}>
+            {tempo(lead.atualizado_em)}
+          </span>
+        ),
+      },
+      {
+        id: "criado",
+        label: "Criado em",
+        defaultWidth: 110,
+        minWidth: 90,
+        render: (lead) => formatData(lead.criado_em),
+      },
+    ];
+  }, [estagiosKanban, notasMap]);
+
+  const leadsExportConfig = useMemo(
+    () => ({
+      filename: `leads-${new Date().toISOString().slice(0, 10)}.csv`,
+      headers: [
+        "Nome",
+        "Origem",
+        "Estágio",
+        "Valor",
+        "Score",
+        "Agente",
+        "Telefone",
+        "Código",
+        "Criado em",
+      ],
+      rowValues: (lead: Lead) => {
+        const est = estagiosKanban.find(
+          (e) => e.id === estagioParaColunaKanban(lead.estagio)
+        );
+        return [
+          lead.nome,
+          lead.origem ? ORIGENS_LABEL[lead.origem] || lead.origem : "",
+          est?.label || lead.estagio,
+          lead.valor_estimado > 0 ? String(lead.valor_estimado) : "",
+          String(lead.score),
+          lead.agente_responsavel || "",
+          lead.telefone || "",
+          lead.codigo || lead._pessoa_codigo || "",
+          formatData(lead.criado_em),
+        ];
+      },
+    }),
+    [estagiosKanban]
   );
 
-  const pipelineTabs = pipelines.length > 0 ? (
-    <PipelineTabsBar
+  const leadsFooterSummary =
+    filtrados.length > 0
+      ? `Exibindo 1-${filtrados.length} de ${leadsDoPipeline.length} leads`
+      : `Exibindo 0 de ${leadsDoPipeline.length} leads`;
+
+  const pipelineToolbar = (
+    <CrmPipelinePageToolbar
       pipelines={pipelines}
       activePipelineId={pipelineId}
-      onSelect={setPipelineId}
+      onSelectPipeline={setPipelineId}
+      pipelineCount={pipelineCount}
+      view={view}
+      onViewChange={setView}
+      onCreatePipeline={() => {
+        setPipelineConfigFocusCreate(true);
+        setPipelineConfigOpen(true);
+      }}
+      onOpenStages={() => {
+        setPipelineConfigFocusCreate(false);
+        setPipelineConfigOpen(true);
+      }}
     />
-  ) : null;
+  );
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f8fcf6]">
@@ -593,31 +723,27 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {pipelineTabs}
+      {pipelineToolbar}
 
       {isMobile && (
-        <div className="sticky top-0 z-20 shrink-0 space-y-2 border-b border-[#dcebd8] bg-[#ffffff] px-3 py-3">
-          <div>
-            <h1 className="text-base font-bold text-[#0b2210]">{pipelineAtivo?.nome || "Leads"}</h1>
-            <p className="text-[11px] text-[#5d7a67]">{leadsDoPipeline.length} leads · tempo real</p>
-          </div>
-          <div className="flex flex-col gap-2">{headerControls}</div>
+        <div className="sticky top-0 z-20 shrink-0 border-b border-[#dcebd8] bg-[#ffffff] px-3 py-3">
+          {botaoNovoLead}
         </div>
       )}
 
       {/* ─── METRICS ─── */}
-      <div className="grid grid-cols-2 gap-px sm:grid-cols-4 flex-shrink-0 bg-[#dcebd8]">
-        {[
-          { label: "Leads Hoje", value: String(leadsDoPipeline.filter(l => new Date(l.criado_em).toDateString() === hoje).length), cor: "#F97316" },
-          { label: "Sem Resposta +24h", value: String(semResposta), cor: semResposta > 0 ? "#EF4444" : "#22C55E" },
-          { label: "Em Risco +1h", value: emRisco > 0 ? moeda(emRisco) : "—", cor: emRisco > 0 ? "#EAB308" : "#6B7280" },
-          { label: "Pipeline Total", value: moeda(pipeline), cor: "#22C55E" },
-        ].map(m => (
-          <div key={m.label} className="bg-[#ffffff] px-3 py-2.5 sm:px-5">
-            <p className="mb-0.5 text-xs text-[#5d7a67]">{m.label}</p>
-            <p className="text-base font-black sm:text-lg" style={{ color: m.cor }}>{m.value}</p>
-          </div>
-        ))}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#dcebd8] bg-[#ffffff] px-4 py-2.5 text-sm flex-shrink-0">
+        <span className="text-[#5d7a67]">
+          <strong className="text-[#0b2210]">{filtrados.length}</strong> leads
+        </span>
+        <span className="text-[#5d7a67]">
+          Pipeline <strong className="text-[#22c55e]">{moeda(pipeline)}</strong>
+        </span>
+        {semResposta > 0 ? (
+          <span className="text-[#5d7a67]">
+            Sem resposta +24h <strong className="text-[#ef4444]">{semResposta}</strong>
+          </span>
+        ) : null}
       </div>
 
       {/* ─── MAIN ─── */}
@@ -625,35 +751,31 @@ export default function LeadsPage() {
         {view === "kanban" ? (
 
           /* KANBAN */
-          <div
-            className={`flex h-full overflow-x-auto ${isMobile ? "snap-x snap-mandatory scroll-pl-3 gap-2.5 px-3 py-3 scrollbar-none" : "gap-3 p-4"}`}
-          >
+          <CrmKanbanBoardScroll isMobile={isMobile}>
             {estagiosKanban.map(est => {
               const col = filtrados.filter((l) => estagioParaColunaKanban(l.estagio) === est.id);
               const total = col.reduce((s, l) => s + l.valor_estimado, 0);
               return (
-                <div
+                <CrmKanbanColumn
                   key={est.id}
-                  className={`flex flex-shrink-0 flex-col ${isMobile ? "w-[clamp(11rem,72vw,18rem)] snap-start" : "min-w-[300px] w-[300px]"}`}
-                >
-                  {/* Column header */}
-                  <div className="rounded-t-xl px-3 py-2.5" style={{ backgroundColor: est.color + "1A", borderLeft: `3px solid ${est.color}`, borderTop: `1px solid ${est.color}40`, borderRight: `1px solid ${est.color}40` }}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-white font-bold text-xs">{est.label}</span>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: est.color + "40" }}>{col.length}</span>
-                    </div>
-                    {total > 0 && <p className="text-xs mt-0.5 font-bold" style={{ color: est.color }}>{moeda(total)}</p>}
-                  </div>
-                  {/* Cards */}
-                  <div className="flex-1 space-y-2 overflow-y-auto rounded-b-xl border border-t-0 border-[#dcebd8] bg-[#ffffff]/60 p-2 transition-colors"
-                    style={{ minHeight: 80, backgroundColor: dragOver === est.id ? est.color + "12" : undefined }}
+                  stageId={est.id}
+                  label={est.label}
+                  color={est.color}
+                  count={col.length}
+                  totalValue={total > 0 ? moeda(total) : null}
+                  dragOver={dragOver === est.id}
+                  isMobile={isMobile}
                     onDragOver={e => { e.preventDefault(); setDragOver(est.id); }}
                     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
-                    onDrop={e => { e.preventDefault(); const lid = e.dataTransfer.getData("leadId"); if (lid) moverEstagio(lid, est.id); setLeadDragId(null); setDragOver(null); }}>
+                  onDrop={e => { e.preventDefault(); const lid = e.dataTransfer.getData("leadId"); if (lid) void moverEstagio(lid, est.id, undefined, { optimistic: true }); setLeadDragId(null); setDragOver(null); }}
+                >
                     {col.map(lead => (
                       <LeadKanbanCard
                         key={lead.id}
                         lead={lead}
+                        notas={notasParaLead(notasMap, lead.id)}
+                        stageLabel={est.label}
+                        stageColor={est.color}
                         dragging={leadDragId === lead.id}
                         isMobile={isMobile}
                         draggable={!isMobile}
@@ -665,364 +787,139 @@ export default function LeadsPage() {
                           setLeadDragId(null);
                           setDragOver(null);
                         }}
-                        onOpen={() =>
-                          isMobile ? abrirDetalhe(lead) : router.push(`/crm/leads/${lead.id}`)
-                        }
-                        onEdit={() =>
-                          isMobile ? abrirDetalhe(lead) : router.push(`/crm/leads/${lead.id}`)
-                        }
+                        onOpen={() => abrirEditLead(lead)}
+                        onEdit={() => abrirEditLead(lead)}
                       />
                     ))}
                     {col.length === 0 && <p className="py-4 text-center text-xs text-[#484f58]">vazio</p>}
-                  </div>
-                </div>
+                </CrmKanbanColumn>
               );
             })}
-          </div>
+          </CrmKanbanBoardScroll>
 
         ) : (
 
           /* LISTA */
-          <div className="h-full overflow-y-auto">
-            {isMobile ? (
-              <ul className="space-y-2 p-3 pb-24">
-                {filtrados.map(lead => {
-                  const est = estagiosKanban.find((e) => e.id === estagioParaColunaKanban(lead.estagio));
-                  return (
-                    <li key={lead.id}>
-                      <button
-                        type="button"
-                        onClick={() => abrirDetalhe(lead)}
-                        className="flex w-full min-h-14 flex-col gap-2 rounded-xl border border-[#dcebd8] bg-[#ffffff] p-3 text-left"
-                        style={{ borderLeftWidth: 3, borderLeftColor: borderColor(lead.atualizado_em) }}
+          <div className="h-full overflow-y-auto pt-4">
+            <CrmRetrofitTablePanel
+              tableId="crm-leads-lista"
+              columns={colunasLeads}
+              rows={filtrados}
+              rowKey={(lead) => lead.id}
+              emptyMessage="Nenhum lead encontrado"
+              footerSummary={leadsFooterSummary}
+              onRowClick={abrirEditLead}
+              onEditRow={abrirEditLead}
+              onViewRow={abrirEditLead}
+              exportConfig={leadsExportConfig}
+              toolbar={{
+                searchValue: busca,
+                onSearchChange: setBusca,
+                searchPlaceholder: "Buscar nome, telefone ou código…",
+                showAdvancedFilters,
+                onToggleAdvancedFilters: () => setShowAdvancedFilters((v) => !v),
+                advancedFilters: (
+                  <CrmRetrofitAdvancedFiltersGrid>
+                    <CrmRetrofitFilterField label="Estágio">
+                      <select
+                        value={filtroEstagio}
+                        onChange={(e) => setFiltroEstagio(e.target.value)}
+                        className={crmRetrofitFilterSelectClass}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-[#0b2210]">{lead.nome}</p>
-                            {lead.telefone && <p className="text-xs text-[#5d7a67]">{lead.telefone}</p>}
-                          </div>
-                          {est && (
-                            <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: est.color + "25", color: est.color }}>
-                              {est.label}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {lead.valor_estimado > 0 && <span className="text-xs font-bold text-[#22C55E]">{moeda(lead.valor_estimado)}</span>}
-                          <span className="ml-auto text-xs text-[#5d7a67]">{tempo(lead.atualizado_em)}</span>
-                        </div>
-                        {lead.telefone && (
-                          <a
-                            href={`https://wa.me/55${lead.telefone.replace(/\D/g, "")}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="flex min-h-11 w-full items-center justify-center rounded-lg bg-[#25D366] text-xs font-bold text-white"
-                          >
-                            WhatsApp
-                          </a>
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-                {filtrados.length === 0 && (
-                  <p className="py-12 text-center text-sm text-[#5d7a67]">Nenhum lead encontrado</p>
-                )}
-              </ul>
-            ) : (
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-gray-900 border-b border-gray-800">
-                <tr>
-                  {["Nome", "Origem", "Estágio", "Valor", "Score", "Agente", "Atualizado", ""].map(h => (
-                    <th key={h} className="text-left text-xs text-gray-500 font-bold uppercase tracking-wide px-4 py-3">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtrados.map(lead => {
-                  const est = estagiosKanban.find((e) => e.id === estagioParaColunaKanban(lead.estagio));
-                  return (
-                    <tr key={lead.id} onClick={() => router.push(`/crm/leads/${lead.id}`)}
-                      className="border-b border-gray-800/50 hover:bg-gray-900/60 cursor-pointer transition-colors">
-                      <td className="px-4 py-3">
-                        <p className="text-white font-bold">{lead.nome}</p>
-                        {(lead.codigo || lead._pessoa_codigo) && (
-                          <p className="text-[#c9a24a] font-mono text-xs mt-0.5">
-                            {lead.codigo || lead._pessoa_codigo}
-                            {lead.codigo && lead._pessoa_codigo && lead.codigo !== lead._pessoa_codigo && (
-                              <span className="text-white/40"> · {lead._pessoa_codigo}</span>
-                            )}
-                          </p>
-                        )}
-                        {lead.telefone && <p className="text-gray-500 text-xs">{lead.telefone}</p>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {lead.origem ? (
-                          <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ backgroundColor: (ORIGENS_COLOR[lead.origem] || "#6B7280") + "25", color: ORIGENS_COLOR[lead.origem] || "#9CA3AF" }}>
-                            {ORIGENS_LABEL[lead.origem] || lead.origem}
-                          </span>
-                        ) : <span className="text-gray-600">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {est && <span className="text-xs px-2 py-1 rounded-full font-bold" style={{ backgroundColor: est.color + "20", color: est.color }}>{est.label}</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {lead.valor_estimado > 0 ? <span className="text-green-400 font-bold">{moeda(lead.valor_estimado)}</span> : <span className="text-gray-600">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-12 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${lead.score}%` }} />
-                          </div>
-                          <span className="text-gray-500 text-xs">{lead.score}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{lead.agente_responsavel || "—"}</td>
-                      <td className="px-4 py-3 text-gray-600 text-xs">{tempo(lead.atualizado_em)}</td>
-                      <td className="px-4 py-3"><button className="text-[#c9a24a] hover:text-[#e0b86a] text-xs">Ver →</button></td>
-                    </tr>
-                  );
-                })}
-                {filtrados.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-600 text-sm">Nenhum lead encontrado</td></tr>
-                )}
-              </tbody>
-            </table>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ─── LEAD DETAIL SLIDE-OVER ─── */}
-      {detalhe && (
-        <div className="fixed inset-0 z-50 flex">
-          {!isMobile && (
-            <div className="flex-1 bg-black/50" onClick={() => { setDetalhe(null); setConfirmandoPerda(false); }} />
-          )}
-          <div className={`flex h-full flex-col overflow-hidden border-[#dcebd8] bg-[#ffffff] shadow-2xl ${isMobile ? "w-full" : "w-[520px] border-l"}`}>
-
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-800 flex-shrink-0">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-white font-black text-lg truncate">{detalhe.nome}</h2>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {detalhe.telefone && <span className="text-gray-500 text-xs">{detalhe.telefone}</span>}
-                    {detalhe.email && <span className="text-gray-500 text-xs">{detalhe.email}</span>}
-                    {detalhe.origem && (
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: (ORIGENS_COLOR[detalhe.origem] || "#6B7280") + "25", color: ORIGENS_COLOR[detalhe.origem] || "#9CA3AF" }}>
-                        {ORIGENS_LABEL[detalhe.origem] || detalhe.origem}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <button onClick={() => { setDetalhe(null); setConfirmandoPerda(false); }} className="text-gray-500 hover:text-white text-2xl">×</button>
-              </div>
-
-              {/* Stage selector */}
-              <div className="flex gap-1 flex-wrap">
-                {estagiosKanban.map(e => (
-                  <button key={e.id} onClick={() => void moverEstagio(detalhe.id, e.id)}
-                    className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
-                    style={{
-                      backgroundColor: estagioParaColunaKanban(detalhe.estagio) === e.id ? e.color : e.color + "18",
-                      color: estagioParaColunaKanban(detalhe.estagio) === e.id ? "#fff" : e.color,
-                      border: `1px solid ${estagioParaColunaKanban(detalhe.estagio) === e.id ? e.color : e.color + "40"}`,
-                    }}>
+                        <option value="">Todos os estágios</option>
+                        {estagiosKanban.map((e) => (
+                          <option key={e.id} value={e.id}>
                     {e.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick actions */}
-            <div className="flex gap-2 px-5 py-3 border-b border-gray-800 flex-shrink-0 overflow-x-auto">
-              {[
-                { label: "📞 Ligar", action: () => {} },
-                { label: "↗ Encaminhar", action: () => setEncaminharLead(detalhe) },
-                { label: "💼 Negócio", action: () => void converterNegocio(detalhe) },
-                { label: "📝 Nota", action: () => setTabDetalhe("notas") },
-                { label: "❌ Perdido", action: () => { setPerdaComoSpam(false); setConfirmandoPerda(true); } },
-                { label: "🚫 Spam", action: () => { setPerdaComoSpam(true); setConfirmandoPerda(true); } },
-              ].map(a => (
-                <button key={a.label} onClick={a.action}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 flex-shrink-0 transition-colors">
-                  {a.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tabs */}
-            <div className="flex border-b border-gray-800 flex-shrink-0">
-              {(["info", "timeline", "notas", "memorias"] as const).map(t => (
-                <button key={t} onClick={() => setTabDetalhe(t)}
-                  className={`flex-1 py-2.5 text-xs font-bold transition-colors ${tabDetalhe === t ? "text-[#c9a24a] border-b-2 border-[#c9a24a]" : "text-gray-500 hover:text-white"}`}>
-                  {t === "info" ? "Info" : t === "timeline" ? "Timeline" : t === "notas" ? `Notas (${notas.length})` : "Memórias IA"}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab content */}
-            <div className="flex-1 overflow-y-auto">
-
-              {tabDetalhe === "info" && (
-                <div className="p-5 space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: "Valor", value: detalhe.valor_estimado > 0 ? moeda(detalhe.valor_estimado) : "—" },
-                      { label: "Score", value: `${detalhe.score}/100` },
-                      { label: "Campanha", value: detalhe.campanha || "—" },
-                      { label: "Agente", value: detalhe.agente_responsavel || "—" },
-                      { label: "Responsável", value: detalhe.humano_responsavel || "—" },
-                      { label: "Criado", value: new Date(detalhe.criado_em).toLocaleDateString("pt-BR") },
-                    ].map(item => (
-                      <div key={item.label} className="bg-gray-800 rounded-xl p-3 border border-gray-700">
-                        <p className="text-gray-500 text-xs font-bold uppercase mb-1">{item.label}</p>
-                        <p className="text-white text-sm font-bold truncate">{item.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {detalhe.proxima_acao && (
-                    <div className="bg-[#1a1200] border border-[#4a3500] rounded-xl p-3">
-                      <p className="text-[#c9a24a] text-xs font-bold uppercase mb-1">Próxima Ação</p>
-                      <p className="text-white text-sm">{detalhe.proxima_acao}</p>
-                    </div>
-                  )}
-                  {detalhe.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {detalhe.tags.map(tag => (
-                        <span key={tag} className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded-full border border-gray-700">{tag}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {tabDetalhe === "timeline" && (
-                <div className="p-5">
-                  {atividades.length === 0
-                    ? <p className="text-gray-600 text-sm text-center py-8">Nenhuma atividade registrada</p>
-                    : (
-                      <div>
-                        {atividades.map((a, i) => (
-                          <div key={a.id} className="flex gap-3 pb-4">
-                            <div className="flex flex-col items-center flex-shrink-0">
-                              <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-sm">
-                                {ATIVIDADE_ICON[a.tipo] || "•"}
-                              </div>
-                              {i < atividades.length - 1 && <div className="w-px flex-1 bg-gray-800 mt-1" />}
-                            </div>
-                            <div className="pt-1 flex-1 min-w-0">
-                              <p className="text-white text-sm leading-snug">{a.descricao}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-gray-600 text-xs">{a.feito_por}</span>
-                                <span className="text-gray-700">·</span>
-                                <span className="text-gray-600 text-xs">{tempo(a.criado_em)} atrás</span>
-                                {a.feito_por_tipo === "ia" && <span className="text-[#c9a24a] text-xs font-bold">IA</span>}
-                              </div>
-                            </div>
-                          </div>
+                          </option>
                         ))}
-                      </div>
-                    )}
-                </div>
-              )}
-
-              {tabDetalhe === "notas" && (
-                <div className="p-5 space-y-3">
-                  <div>
-                    <textarea value={novaNota} onChange={e => setNovaNota(e.target.value)}
-                      placeholder="Escreva uma nota..."
-                      rows={3}
-                      className="w-full bg-gray-800 text-white text-sm rounded-xl p-3 border border-gray-700 focus:border-[#c9a24a] outline-none resize-none placeholder:text-gray-600" />
-                    <button onClick={adicionarNota} disabled={!novaNota.trim()}
-                      className="w-full mt-2 bg-[#c9a24a] hover:bg-[#e0b86a] disabled:opacity-40 text-white text-sm py-2 rounded-xl font-bold transition-colors">
-                      + Adicionar Nota
-                    </button>
-                  </div>
-                  {notas.length === 0
-                    ? <p className="text-gray-600 text-sm text-center py-4">Nenhuma nota ainda</p>
-                    : notas.map(n => (
-                      <div key={n.id} className="bg-gray-800 rounded-xl p-3 border border-gray-700">
-                        <p className="text-white text-sm leading-relaxed">{n.conteudo}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-gray-600 text-xs">{n.criado_por}</span>
-                          <span className="text-gray-700">·</span>
-                          <span className="text-gray-600 text-xs">{tempo(n.criado_em)} atrás</span>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-
-              {tabDetalhe === "memorias" && (
-                <div className="p-5">
-                  {memorias.length === 0
-                    ? <p className="text-gray-600 text-sm text-center py-8">A IA ainda não registrou memórias sobre este lead</p>
-                    : (
-                      <div className="space-y-2">
-                        {memorias.map(m => (
-                          <div key={m.id} className="bg-gray-800 rounded-xl p-3 border border-gray-700">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[#c9a24a] text-xs font-bold uppercase">{m.chave}</span>
-                              <span className="text-gray-600 text-xs">{Math.round(m.confianca * 100)}% confiança</span>
-                            </div>
-                            <p className="text-white text-sm">{m.valor}</p>
-                            <p className="text-gray-600 text-xs mt-1">{tempo(m.criado_em)} atrás</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                </div>
-              )}
-            </div>
-
-            {/* Marcar perdido */}
-            {confirmandoPerda && (
-              <div className="flex-shrink-0 p-4 border-t border-red-900 bg-[#1a0000]">
-                <p className="text-red-400 text-xs font-bold mb-2">
-                  {perdaComoSpam ? "Motivo (spam/inválido):" : "Motivo da perda (obrigatório):"}
-                </p>
+                      </select>
+                    </CrmRetrofitFilterField>
+                    <CrmRetrofitFilterField label="Origem">
                 <select
-                  value={motivoPerda}
-                  onChange={(e) => setMotivoPerda(e.target.value)}
-                  className="w-full bg-red-900 text-white text-sm rounded-lg px-3 py-2 border border-red-700 outline-none mb-2"
-                >
-                  <option value="">Selecione…</option>
-                  {MOTIVOS_PERDA.map((m) => (
-                    <option key={m} value={m}>
-                      {MOTIVOS_PERDA_LABEL[m] ?? m}
+                        value={filtroOrigem}
+                        onChange={(e) => setFiltroOrigem(e.target.value)}
+                        className={crmRetrofitFilterSelectClass}
+                      >
+                        <option value="">Todas as origens</option>
+                        {Object.entries(ORIGENS_LABEL).map(([id, label]) => (
+                          <option key={id} value={id}>
+                            {label}
                     </option>
                   ))}
                 </select>
-                {motivoPerda === "outro" && (
+                    </CrmRetrofitFilterField>
+                    <CrmRetrofitFilterField label="Score mínimo">
                   <input
-                    value={motivoPerdaOutro}
-                    onChange={(e) => setMotivoPerdaOutro(e.target.value)}
-                    placeholder="Descreva o motivo…"
-                    className="w-full bg-red-900 text-white text-sm rounded-lg px-3 py-2 border border-red-700 outline-none placeholder:text-red-400 mb-2"
-                  />
-                )}
-                <div className="flex gap-2">
-                  <button onClick={() => { setConfirmandoPerda(false); setPerdaComoSpam(false); }} className="flex-1 bg-gray-800 text-gray-400 text-sm py-2 rounded-lg font-bold hover:text-white transition-colors">Cancelar</button>
-                  <button
-                    onClick={() => void marcarPerdido()}
-                    disabled={!motivoPerda.trim() || (motivoPerda === "outro" && !motivoPerdaOutro.trim())}
-                    className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg font-bold transition-colors"
-                  >
-                    Confirmar
-                  </button>
-                </div>
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={filtroScoreMin}
+                        onChange={(e) => setFiltroScoreMin(e.target.value)}
+                        placeholder="0"
+                        className={crmRetrofitFilterInputClass}
+                      />
+                    </CrmRetrofitFilterField>
+                    <CrmRetrofitFilterField label="Score máximo">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={filtroScoreMax}
+                        onChange={(e) => setFiltroScoreMax(e.target.value)}
+                        placeholder="100"
+                        className={crmRetrofitFilterInputClass}
+                      />
+                    </CrmRetrofitFilterField>
+                    <CrmRetrofitFilterField label="Criado a partir de">
+                      <input
+                        type="date"
+                        value={filtroDataInicio}
+                        onChange={(e) => setFiltroDataInicio(e.target.value)}
+                        className={crmRetrofitFilterInputClass}
+                      />
+                    </CrmRetrofitFilterField>
+                    <CrmRetrofitFilterField label="Criado até">
+                      <input
+                        type="date"
+                        value={filtroDataFim}
+                        onChange={(e) => setFiltroDataFim(e.target.value)}
+                        className={crmRetrofitFilterInputClass}
+                      />
+                    </CrmRetrofitFilterField>
+                  </CrmRetrofitAdvancedFiltersGrid>
+                ),
+              }}
+            />
               </div>
             )}
           </div>
-        </div>
-      )}
+
+      <LeadEditSideover
+        open={!!editLead}
+        lead={editLead}
+        estagios={estagiosKanban}
+        isMobile={isMobile}
+        onClose={() => setEditLead(null)}
+        onUpdated={(updated) => {
+          setLeads((prev) =>
+            prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l))
+          );
+          setEditLead((prev) =>
+            prev?.id === updated.id ? { ...prev, ...updated } : prev
+          );
+        }}
+        onNotasChanged={recarregarNotasPreviews}
+        onEncaminhado={(lead) => {
+          void moverEstagio(lead.id, "encaminhado");
+          void carregar();
+        }}
+        onNegocioCreated={(lead, negocioId) => void onNegocioCreated(lead as Lead, negocioId)}
+      />
 
       {leadRapidoOpen && (
         <LeadRapidoSideover
           open={leadRapidoOpen}
+          activePipelineId={pipelineId}
           onClose={() => setLeadRapidoOpen(false)}
           onSaved={(lead) => {
             const cod = lead.codigo ? ` (${lead.codigo})` : "";
@@ -1032,25 +929,15 @@ export default function LeadsPage() {
         />
       )}
 
-      {encaminharLead && (
-        <LeadEncaminharModal
-          open
-          leadId={encaminharLead.id}
-          leadNome={encaminharLead.nome}
-          onClose={() => setEncaminharLead(null)}
-          onSuccess={() => {
-            void moverEstagio(encaminharLead.id, "encaminhado");
-            void carregar();
-            setEncaminharLead(null);
-          }}
-        />
-      )}
-
       <PipelineConfigSideover
         open={pipelineConfigOpen}
-        onClose={() => setPipelineConfigOpen(false)}
+        onClose={() => {
+          setPipelineConfigOpen(false);
+          setPipelineConfigFocusCreate(false);
+        }}
         tipo="lead"
         pipelineId={pipelineId}
+        focusCreate={pipelineConfigFocusCreate}
         onSelectPipeline={(id) => setPipelineId(id)}
         onUpdated={() => {
           void carregarPipeline();

@@ -6,6 +6,13 @@ import {
   modeloCriticoForHubInsert,
   modeloPadraoForHubInsert,
 } from "@/lib/ia/hub-model-defaults";
+import {
+  cargoTituloFromRow,
+  deleteCargoCatalogo,
+  insertCargoCatalogRow,
+  listCargosCatalog,
+  updateCargoCatalogRow,
+} from "@/lib/hub/cargo-catalogo-db";
 
 function db() {
   return createClient(
@@ -153,16 +160,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const all = searchParams.get("all") === "true";
 
-  let query = supabase
-    .from("hub_cargos_catalogo")
-    .select("*")
-    .order("segmento")
-    .order("especialidade")
-    .order("nivel");
-
-  if (!all) query = query.eq("ativo", true);
-
-  const { data, error } = await query;
+  const { data, error } = await listCargosCatalog(supabase, all);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -249,7 +247,7 @@ export async function POST(request: NextRequest) {
     row.limite_autonomia_brl = Math.max(0, lim);
   }
 
-  const { data, error } = await supabase.from("hub_cargos_catalogo").insert(row).select("*").single();
+  const { data, error } = await insertCargoCatalogRow(supabase, row);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -293,7 +291,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Cargo não encontrado." }, { status: 404 });
   }
 
-  const oldTitulo = String(oldRow.titulo ?? "").trim();
+  const oldTitulo = cargoTituloFromRow(oldRow as Record<string, unknown>);
 
   if (novoSlugNorm && novoSlugNorm !== slug) {
     const { data: clash } = await supabase.from("hub_cargos_catalogo").select("slug").eq("slug", novoSlugNorm).maybeSingle();
@@ -367,12 +365,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Nenhum campo para atualizar." }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("hub_cargos_catalogo")
-    .update(patch)
-    .eq("slug", slug)
-    .select("*")
-    .maybeSingle();
+  const { data, error } = await updateCargoCatalogRow(supabase, slug, patch);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -381,7 +374,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Cargo não encontrado após atualização." }, { status: 404 });
   }
 
-  const tituloFinal = String(data.titulo ?? "").trim();
+  const tituloFinal = cargoTituloFromRow(data);
   if (propagarTitulo && tituloFinal && oldTitulo && tituloFinal !== oldTitulo) {
     await supabase.from("hub_agente_identidade").update({ cargo: tituloFinal }).eq("cargo", oldTitulo);
   }
@@ -397,21 +390,9 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Query slug é obrigatória." }, { status: 400 });
   }
 
-  const { data: rpcData, error: rpcErr } = await supabase.rpc("hub_delete_cargo_catalogo", { p_slug: slug });
-
-  if (rpcErr) {
-    return NextResponse.json({ error: rpcErr.message }, { status: 500 });
+  const result = await deleteCargoCatalogo(supabase, slug);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
-
-  const row = rpcData as { ok?: boolean; error?: string; slug?: string } | null;
-  if (!row?.ok) {
-    const msg = typeof row?.error === "string" ? row.error : "Falha ao eliminar.";
-    let st = 500;
-    if (msg.includes("Não é possível eliminar")) st = 409;
-    else if (msg.includes("Cargo não encontrado")) st = 404;
-    else if (msg.includes("inválido")) st = 400;
-    return NextResponse.json({ error: msg }, { status: st });
-  }
-
-  return NextResponse.json({ ok: true, slug: String(row.slug ?? slug) });
+  return NextResponse.json({ ok: true, slug: result.slug });
 }

@@ -2,7 +2,7 @@ import type { PrefixoMercado } from "@/lib/crm/negocio-cadastro";
 import { normalizarTelefone } from "@/lib/crm/pessoa-cadastro";
 
 /** Mercado padrão quando o lead é criado sem seleção (campanhas). */
-export const MERCADO_LEAD_PADRAO: PrefixoMercado = "IMB";
+export const MERCADO_LEAD_PADRAO: PrefixoMercado = "GRL";
 
 export function mercadosLeadComPadrao(mercados: string[]): PrefixoMercado[] {
   if (mercados.length > 0) return mercados as PrefixoMercado[];

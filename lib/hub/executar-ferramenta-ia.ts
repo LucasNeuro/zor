@@ -2,6 +2,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { HubAgenteFerramentaId } from "@/lib/hub/agente-ferramentas-registry";
 import { isHubAgenteFerramentaId } from "@/lib/hub/agente-ferramentas-registry";
 import { fetchFerramentaCustomPorKey } from "@/lib/hub/ferramentas-custom-db";
+import {
+  fetchFerramentaExternaPorKey,
+  fetchIntegracaoComCredenciais,
+} from "@/lib/hub/ferramentas-externas-db";
+import { executarFerramentaHttp } from "@/lib/hub/executar-ferramenta-http";
 import { smartPosProcessarResultadoFerramenta } from "@/lib/hub/smart-pos-ferramenta";
 import { uploadArquivo } from "@/lib/ia/storage";
 import { defaultTenantId } from "@/lib/tenant-default";
@@ -515,6 +520,28 @@ export async function executarFerramentaHub(
   const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
 
   try {
+    if (toolName.startsWith("hub_int_")) {
+      const { executarFerramentaIntegrador } = await import("@/lib/hub/executar-integrador");
+      return executarFerramentaIntegrador(supabase, tenant, toolName, args);
+    }
+
+    if (toolName.startsWith("hub_ext_")) {
+      const row = await fetchFerramentaExternaPorKey(supabase, tenant, toolName);
+      if (!row) {
+        return JSON.stringify({ erro: "ferramenta_externa_nao_encontrada", chave: toolName });
+      }
+      const pack = await fetchIntegracaoComCredenciais(supabase, tenant, row.integracao_id);
+      if (!pack) {
+        return JSON.stringify({ erro: "integracao_nao_encontrada", integracao_id: row.integracao_id });
+      }
+      return await executarFerramentaHttp({
+        ferramenta: row,
+        integracao: pack.integracao,
+        credenciais: pack.credenciais,
+        args,
+      });
+    }
+
     if (toolName.startsWith("hub_custom_")) {
       const row = await fetchFerramentaCustomPorKey(supabase, tenant, toolName);
       if (!row) {

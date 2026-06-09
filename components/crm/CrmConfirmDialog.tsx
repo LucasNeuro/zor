@@ -1,6 +1,13 @@
 ﻿"use client";
 
 import type { ReactNode } from "react";
+import {
+  crmDialogShell,
+  crmDialogVariant,
+  crmFeedbackVariantFromDanger,
+  type CrmFeedbackTheme,
+  type CrmFeedbackVariant,
+} from "@/lib/crm/crm-feedback-theme";
 
 export type CrmConfirmDialogProps = {
   open: boolean;
@@ -10,9 +17,14 @@ export type CrmConfirmDialogProps = {
   cancelLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
-  /** true = botão principal vermelho (exclusão); false = destaque dourado */
+  /** @deprecated Prefer `variant="destructive"`. */
   danger?: boolean;
+  variant?: CrmFeedbackVariant;
+  theme?: CrmFeedbackTheme;
   loading?: boolean;
+  loadingLabel?: string;
+  confirmDisabled?: boolean;
+  zIndex?: number;
 };
 
 export function CrmConfirmDialog({
@@ -23,25 +35,24 @@ export function CrmConfirmDialog({
   cancelLabel = "Cancelar",
   onCancel,
   onConfirm,
-  danger = false,
+  danger,
+  variant,
+  theme = "light",
   loading = false,
+  loadingLabel = "A processar…",
+  confirmDisabled = false,
+  zIndex,
 }: CrmConfirmDialogProps) {
   if (!open) return null;
+
+  const resolvedVariant = variant ?? crmFeedbackVariantFromDanger(danger);
+  const shell = crmDialogShell(theme);
+  const v = crmDialogVariant(resolvedVariant, theme);
 
   return (
     <div
       role="presentation"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 200,
-        background: "rgba(1, 4, 9, 0.72)",
-        backdropFilter: "blur(4px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
+      style={{ ...shell.overlay, ...(zIndex != null ? { zIndex } : {}) }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !loading) onCancel();
       }}
@@ -51,90 +62,40 @@ export function CrmConfirmDialog({
         aria-modal="true"
         aria-labelledby="crm-confirm-title"
         style={{
-          maxWidth: 440,
-          width: "100%",
-          background: "#ffffff",
-          borderWidth: 1,
-          borderStyle: "solid",
-          borderColor: danger ? "rgba(179, 38, 30, 0.45)" : "rgba(201, 162, 74, 0.35)",
-          borderRadius: 12,
-          boxShadow: "0 20px 48px rgba(0, 0, 0, 0.55)",
+          ...shell.panel,
+          border: `1px solid ${v.panelBorder}`,
         }}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2
-          id="crm-confirm-title"
-          style={{
-            margin: 0,
-            padding: "18px 20px 8px",
-            fontSize: 16,
-            fontWeight: 700,
-            color: "#0b2210",
-            letterSpacing: "-0.02em",
-          }}
-        >
+        {v.accentBar ? (
+          <div style={{ height: 3, background: v.accentBar, width: "100%" }} aria-hidden />
+        ) : null}
+        <h2 id="crm-confirm-title" style={shell.title}>
           {title}
         </h2>
-        <div
-          style={{
-            padding: "0 20px 16px",
-            color: "#5d7a67",
-            fontSize: 13,
-            lineHeight: 1.55,
-          }}
-        >
-          {children}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 10,
-            padding: "12px 20px 18px",
-            borderTopWidth: 1,
-            borderTopStyle: "solid",
-            borderTopColor: "#dcebd8",
-          }}
-        >
+        <div style={shell.body}>{children}</div>
+        <div style={shell.footer}>
           <button
             type="button"
             disabled={loading}
             onClick={onCancel}
             style={{
-              padding: "10px 16px",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : 1,
-              borderWidth: 1,
-              borderStyle: "solid",
-              borderColor: "#dcebd8",
-              background: "#eef7eb",
-              color: "#5d7a67",
+              ...shell.cancelBtn,
+              ...(loading ? shell.cancelBtnDisabled : {}),
             }}
           >
             {cancelLabel}
           </button>
           <button
             type="button"
-            disabled={loading}
+            disabled={loading || confirmDisabled}
             onClick={onConfirm}
             style={{
-              padding: "10px 16px",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-              borderWidth: 1,
-              borderStyle: "solid",
-              borderColor: danger ? "rgba(179, 38, 30, 0.55)" : "rgba(15, 81, 50, 0.9)",
-              background: danger ? "rgba(179, 38, 30, 0.18)" : "linear-gradient(180deg, #065535 0%, #003b26 100%)",
-              color: danger ? "#ffb4ab" : "#c9a24a",
+              ...v.confirmBtn,
+              ...(loading || confirmDisabled ? v.confirmBtnDisabled : {}),
             }}
           >
-            {loading ? "A processar…" : confirmLabel}
+            {loading ? loadingLabel : confirmLabel}
           </button>
         </div>
       </div>

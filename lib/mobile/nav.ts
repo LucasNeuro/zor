@@ -55,6 +55,7 @@ const SHEET_PREFIXES = [
   "/crm/pedidos",
   "/crm/projetos",
   "/crm/ciclos",
+  "/crm/conhecimento",
   "/crm/canais",
   "/crm/ferramentas",
   "/crm/contatos",

@@ -4,6 +4,19 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { ExternalLink, MessageCircle, Settings, X } from "lucide-react";
 import { MODO_OPERACAO_LABEL } from "@/lib/hub/agente-modo-operacao";
+import {
+  RF_ACCENT,
+  RF_BORDER,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+  RF_TEXT_SECONDARY,
+  rfAsideBodyStyle,
+  rfAsideHeaderStyle,
+  rfAsideStyle,
+  rfCloseButtonStyle,
+  rfInnerPanelStyle,
+  rfOverlayStyle,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 
 export type CanalAgenteRow = {
   agente_slug: string;
@@ -48,21 +61,21 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
         gap: 12,
         alignItems: "start",
         padding: "10px 0",
-        borderBottom: "1px solid #eef7eb",
+        borderBottom: `1px solid ${RF_BORDER}`,
       }}
     >
       <span
         style={{
           fontSize: 11,
           fontWeight: 700,
-          color: "#5d7a67",
+          color: RF_TEXT_MUTED,
           letterSpacing: 0.4,
           textTransform: "uppercase",
         }}
       >
         {label}
       </span>
-      <span style={{ fontSize: 13, color: "#0b2210", wordBreak: "break-word" }}>{value}</span>
+      <span style={{ fontSize: 13, color: RF_TEXT_PRIMARY, wordBreak: "break-word" }}>{value}</span>
     </div>
   );
 }
@@ -103,80 +116,28 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="Fechar painel do canal"
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 70,
-          background: "rgba(0,0,0,0.55)",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
-        }}
-      />
-      <aside
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "min(520px, 100vw)",
-          zIndex: 80,
-          background: "#0f1620",
-          borderLeft: "1px solid #2d394b",
-          boxShadow: "-12px 0 32px rgba(0,0,0,0.45)",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-        }}
-      >
-        <header
-          style={{
-            borderBottom: "1px solid #2d394b",
-            padding: 16,
-            background: "linear-gradient(180deg,#121a26 0%, #101722 100%)",
-            flexShrink: 0,
-          }}
-        >
+      <button type="button" aria-label="Fechar painel do canal" onClick={onClose} style={rfOverlayStyle(70)} />
+      <aside style={rfAsideStyle("min(520px, 100vw)", 80)}>
+        <header style={rfAsideHeaderStyle()}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ margin: 0, color: "#8ea1ba", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
+              <p style={{ margin: 0, color: RF_ACCENT, fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
                 CANAL WHATSAPP
               </p>
-              <h2 style={{ margin: "4px 0 0", color: "#0b2210", fontSize: 18, fontWeight: 800 }}>{agente.nome}</h2>
-              <p style={{ margin: "6px 0 0", color: "#5d7a67", fontSize: 12 }}>
-                <code style={{ color: "#93c5fd", fontSize: 11 }}>{agente.agente_slug}</code>
+              <h2 style={{ margin: "4px 0 0", color: RF_TEXT_PRIMARY, fontSize: 18, fontWeight: 800 }}>{agente.nome}</h2>
+              <p style={{ margin: "6px 0 0", color: RF_TEXT_SECONDARY, fontSize: 12 }}>
+                <code style={{ color: RF_ACCENT, fontSize: 11 }}>{agente.agente_slug}</code>
                 {" · "}
                 {modoLabel}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fechar"
-              style={{
-                flexShrink: 0,
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                border: "1px solid #dcebd8",
-                background: "#eef7eb",
-                color: "#5d7a67",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+            <button type="button" onClick={onClose} aria-label="Fechar" style={{ ...rfCloseButtonStyle(), width: 36, height: 36 }}>
               <X size={18} />
             </button>
           </div>
         </header>
 
-        <div className="panel-scroll" style={{ flex: 1, overflowY: "auto", padding: 16, minHeight: 0 }}>
+        <div className="panel-scroll" style={rfAsideBodyStyle()}>
           {!modoWhatsapp ? (
             <p
               style={{
@@ -195,18 +156,10 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
             </p>
           ) : null}
 
-          <div
-            style={{
-              borderRadius: 12,
-              border: "1px solid #dcebd8",
-              background: "#ffffff",
-              padding: 16,
-              marginBottom: 16,
-            }}
-          >
+          <div style={{ ...rfInnerPanelStyle(), padding: 16, marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
               <MessageCircle size={20} style={{ color: "#25d366" }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#0b2210" }}>Estado da conexão</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: RF_TEXT_PRIMARY }}>Estado da conexão</span>
             </div>
 
             <div
@@ -225,7 +178,7 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
               <span style={{ fontSize: 11, fontWeight: 800, color: badge.fg, letterSpacing: 0.5 }}>{rotuloEstado}</span>
             </div>
 
-            <p style={{ margin: "0 0 8px", color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 8px", color: RF_TEXT_SECONDARY, fontSize: 12, lineHeight: 1.5 }}>
               Só leitura do estado. Cadastro da instância e QR de ligação ficam na ficha do agente (passos 1 e 2).
             </p>
             {snapshotFmt ? (
@@ -239,9 +192,7 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
 
           <div
             style={{
-              borderRadius: 12,
-              border: "1px solid #dcebd8",
-              background: "#f8fcf6",
+              ...rfInnerPanelStyle(),
               padding: "4px 16px 12px",
               marginBottom: 16,
             }}

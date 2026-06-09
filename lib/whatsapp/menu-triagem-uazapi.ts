@@ -1,12 +1,11 @@
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 
-/** Triagem inicial — Playbook Unificado Maria (5 opções, tipo list). */
+/** Triagem inicial genérica Waje (fallback sem playbook publicado). */
 export const MENU_PLAYBOOK_TRIAGEM_INICIAL = [
-  "[O que você precisa hoje?]",
-  "Projeto arquitetura / design|triagem_arq|Projeto, interiores ou reforma",
-  "Comprar, vender ou alugar imóvel|triagem_imob|Mercado imobiliário",
-  "Arquiteto/corretor homologação|triagem_homolog|Cadastro profissional ou parceria",
-  "Proprietário anunciar imóvel|triagem_prop_anunciar|Quero anunciar meu imóvel",
+  "[Como posso ajudar?]",
+  "Vendas e orçamentos|triagem_vendas|Quero conhecer produtos ou serviços",
+  "Suporte|triagem_suporte|Preciso de ajuda com algo que já contratei",
+  "Falar com atendente|triagem_humano|Quero falar com uma pessoa",
   "Outro|triagem_outro|Outro assunto",
 ] as const;
 
@@ -33,7 +32,7 @@ export const MENU_TRIAGEM_BOTOES_IMOB_ARQ = [
 ] as const;
 
 export const MENU_TRIAGEM_TEXTO_PADRAO =
-  "Olá! Sou a Mari do HUB Obra 10+.\n\nPara te orientar, o que você precisa hoje?";
+  "Olá! Como posso te ajudar hoje?";
 
 export const MENU_PLAYBOOK_TRIAGEM_TEXTO =
   "Para te orientar melhor, escolha uma opção abaixo:";
@@ -79,7 +78,7 @@ export async function enviarMenuUazapi(params: EnviarMenuUazapiParams): Promise<
     type: params.tipo,
     text: params.texto.slice(0, 4000),
     choices: params.choices,
-    footerText: (params.footerText || "HUB Obra 10+").slice(0, 500),
+    footerText: (params.footerText || "Atendimento").slice(0, 500),
   };
   if (params.tipo === "list") {
     body.listButton = (params.listButton || "Ver opções").slice(0, 120);

@@ -22,6 +22,13 @@ import {
   rowParaMistralDef,
   type FerramentaCustomParaMistral,
 } from "@/lib/hub/ferramentas-custom-db";
+import {
+  fetchFerramentasExternasAtivas,
+  rowParaMistralDefExterna,
+  type FerramentaExternaParaMistral,
+} from "@/lib/hub/ferramentas-externas-db";
+import { ferramentasIntegradorAtivasParaTenant } from "@/lib/hub/integradores-runtime";
+import type { FerramentaIntegradorDefMistral } from "@/lib/hub/agente-ferramentas-registry";
 import { defaultTenantId } from "@/lib/tenant-default";
 
 function supabase() {
@@ -291,12 +298,30 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     } catch {
       customDefs = [];
     }
+    let extDefs: FerramentaExternaParaMistral[] = [];
+    try {
+      const extRows = await fetchFerramentasExternasAtivas(db, tenantForTools);
+      extDefs = extRows.map(rowParaMistralDefExterna);
+    } catch {
+      extDefs = [];
+    }
+    let intDefs: FerramentaIntegradorDefMistral[] = [];
+    try {
+      const rows = await ferramentasIntegradorAtivasParaTenant(db, tenantForTools);
+      intDefs = rows.map((r) => ({
+        ferramenta_key: r.ferramenta_key,
+        descricao_modelo: r.descricao_modelo,
+        parametros_schema: r.parametros_schema,
+      }));
+    } catch {
+      intDefs = [];
+    }
     const modoOp = ferrIaRow?.modo_operacao ?? (ctx.canal === "whatsapp" ? "canal_whatsapp" : null);
     const usoMap = mergeUsoFerramentasWhatsappCanal(
       mergeUsoFerramentasComPadraoPreservandoCustom(ferrIaRow?.uso_ferramentas_ia ?? {}),
       modoOp
     );
-    const mistralTools = ferramentasMistralListaParaAgente(usoMap, customDefs);
+    const mistralTools = ferramentasMistralListaParaAgente(usoMap, customDefs, extDefs, intDefs);
     const modeloResolved = resolveInferenceModelId(modelo);
     const temMistralKey = Boolean(process.env.MISTRAL_API_KEY?.trim());
     const podeToolsMistral =

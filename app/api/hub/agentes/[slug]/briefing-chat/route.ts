@@ -8,6 +8,11 @@ import {
   type BriefingModoSessao,
 } from "@/lib/agente-briefing-chat";
 import { extrairESalvarMemoriasAgente, formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
+import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
+
+function erroBriefingJson(message: string, status: number) {
+  return NextResponse.json({ error: mensagemErroBriefingChat(message) }, { status });
+}
 
 function db() {
   return createClient(
@@ -99,7 +104,7 @@ export async function GET(
     .eq("agente_slug", slug)
     .maybeSingle();
 
-  if (agErr) return NextResponse.json({ error: agErr.message }, { status: 500 });
+  if (agErr) return erroBriefingJson(agErr.message, 500);
   if (!agente) return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
 
   const { data: sessoes, error: sErr } = await supabase
@@ -109,7 +114,7 @@ export async function GET(
     .order("atualizado_em", { ascending: false })
     .limit(40);
 
-  if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
+  if (sErr) return erroBriefingJson(sErr.message, 500);
 
   let mensagens: Record<string, unknown>[] = [];
   if (sessaoId) {
@@ -120,7 +125,7 @@ export async function GET(
       .eq("id", sid)
       .eq("agente_slug", slug)
       .maybeSingle();
-    if (se) return NextResponse.json({ error: se.message }, { status: 500 });
+    if (se) return erroBriefingJson(se.message, 500);
     if (!ses) return NextResponse.json({ error: "Sessão não encontrada" }, { status: 404 });
 
     const { data: msgs, error: mErr } = await supabase
@@ -130,7 +135,7 @@ export async function GET(
       .order("criado_em", { ascending: true })
       .limit(500);
 
-    if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
+    if (mErr) return erroBriefingJson(mErr.message, 500);
     mensagens = msgs || [];
   }
 
@@ -186,7 +191,7 @@ export async function POST(
     .eq("agente_slug", slug)
     .maybeSingle();
 
-  if (agErr) return NextResponse.json({ error: agErr.message }, { status: 500 });
+  if (agErr) return erroBriefingJson(agErr.message, 500);
   if (!agente) return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
 
   const modelo =
@@ -202,7 +207,7 @@ export async function POST(
       .select("id")
       .single();
     if (nErr || !nova) {
-      return NextResponse.json({ error: nErr?.message || "Falha ao criar sessão" }, { status: 500 });
+      return erroBriefingJson(nErr?.message || "Falha ao criar sessão", 500);
     }
     sessaoId = nova.id as string;
   } else {
@@ -212,7 +217,7 @@ export async function POST(
       .eq("id", sessaoId)
       .eq("agente_slug", slug)
       .maybeSingle();
-    if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
+    if (vErr) return erroBriefingJson(vErr.message, 500);
     if (!ses) return NextResponse.json({ error: "Sessão inválida" }, { status: 400 });
     const modoSessao = (ses as { modo?: string }).modo ?? "briefing_interno";
     if (modoSessao !== modo) {
@@ -232,7 +237,7 @@ export async function POST(
     conteudo: textoUser,
     metadata: { modo },
   });
-  if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
+  if (uErr) return erroBriefingJson(uErr.message, 500);
 
   const { data: historicoRows, error: hErr } = await supabase
     .from("hub_crm_agente_briefing_mensagem")
@@ -241,7 +246,7 @@ export async function POST(
     .order("criado_em", { ascending: true })
     .limit(MAX_HISTORICO_MENSAGENS);
 
-  if (hErr) return NextResponse.json({ error: hErr.message }, { status: 500 });
+  if (hErr) return erroBriefingJson(hErr.message, 500);
 
   const historico: BriefingMensagemLinha[] = (historicoRows || [])
     .filter(
@@ -304,7 +309,7 @@ export async function POST(
       modo,
     },
   });
-  if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
+  if (aErr) return erroBriefingJson(aErr.message, 500);
 
   try {
     await extrairESalvarMemoriasAgente(supabase, {
@@ -330,7 +335,7 @@ export async function POST(
     .order("criado_em", { ascending: true })
     .limit(500);
 
-  if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
+  if (mErr) return erroBriefingJson(mErr.message, 500);
 
   const payload = {
     sessao_id: sessaoId,

@@ -7,10 +7,15 @@ import {
   syncHubAgenteParaMistral,
 } from "@/lib/mistral/sync-hub-agent";
 import { sanitizarAgenteHubParaCliente } from "@/lib/hub/sanitize-agente-hub-public";
+import { mensagemErroHubAgente } from "@/lib/hub/agente-hub-errors";
 import {
-  isHubAgenteFerramentasColumnsMissing,
-  omitHubAgenteFerramentasMigrationKeys,
-} from "@/lib/hub/hub-agente-ferramentas-columns";
+  selectHubAgenteIdentidadeCompat,
+  updateHubAgenteIdentidadeCompat,
+} from "@/lib/hub/hub-agente-schema-compat";
+
+function erroAgenteJson(message: string, status: number) {
+  return NextResponse.json({ error: mensagemErroHubAgente(message) }, { status });
+}
 
 function parseBoolPatch(v: unknown): boolean | undefined {
   if (v === true || v === "true") return true;
@@ -155,20 +160,20 @@ export async function PATCH(
   }
 
   const supabase = db();
-  const { data: current, error: currentError } = await supabase
-    .from("hub_agente_identidade")
-    .select("agente_slug, ativo, arquivado_em")
-    .eq("agente_slug", slug)
-    .maybeSingle();
+  const { data: current, error: currentError } = await selectHubAgenteIdentidadeCompat(
+    supabase,
+    slug,
+    ["agente_slug", "ativo", "arquivado_em"]
+  );
 
   if (currentError) {
-    return NextResponse.json({ error: currentError.message }, { status: 500 });
+    return erroAgenteJson(currentError.message, 500);
   }
   if (!current) {
     return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
   }
 
-  const arquivado = current.arquivado_em != null;
+  const arquivado = current.arquivado_em != null && current.arquivado_em !== "";
   if ("ativo" in patch) {
     const nextAtivo = patch.ativo === true;
     // Regra única de estado: agente arquivado sempre permanece inativo.
@@ -181,31 +186,10 @@ export async function PATCH(
     if (arquivado) patch.ativo = false;
   }
 
-  let { data, error } = await supabase
-    .from("hub_agente_identidade")
-    .update(patch)
-    .eq("agente_slug", slug)
-    .select()
-    .maybeSingle();
-
-  if (error && isHubAgenteFerramentasColumnsMissing(error.message)) {
-    console.warn(
-      "[hub/agentes/:slug] hub_agente_identidade sem colunas ferramentas/Mistral; aplicar 20260516120000_hub_agente_ferramentas_mistral. Retrying update."
-    );
-    const patchSemFerr = omitHubAgenteFerramentasMigrationKeys(patch);
-    if (Object.keys(patchSemFerr).length === 0) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    ({ data, error } = await supabase
-      .from("hub_agente_identidade")
-      .update(patchSemFerr)
-      .eq("agente_slug", slug)
-      .select()
-      .maybeSingle());
-  }
+  const { data, error } = await updateHubAgenteIdentidadeCompat(supabase, slug, patch);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return erroAgenteJson(error.message, 500);
   }
   if (!data) {
     return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });

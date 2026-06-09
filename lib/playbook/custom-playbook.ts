@@ -1,6 +1,10 @@
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cleanupPlaybookFolderForAgent, PLAYBOOK_BUCKET, playbookObjectPath } from "./persist";
+import {
+  selectHubAgenteIdentidadeCompat,
+  updateHubAgenteIdentidadeCompat,
+} from "@/lib/hub/hub-agente-schema-compat";
 
 export const MAX_PLAYBOOK_UPLOAD_BYTES = 1024 * 1024; // 1 MB
 
@@ -234,11 +238,11 @@ export async function savePlaybookMarkdownForAgent(
     };
   }
 
-  const { data: agent, error: agentErr } = await supabase
-    .from("hub_agente_identidade")
-    .select("agente_slug, tenant_id, playbook_object_path")
-    .eq("agente_slug", agenteSlug)
-    .maybeSingle();
+  const { data: agent, error: agentErr } = await selectHubAgenteIdentidadeCompat(
+    supabase,
+    agenteSlug,
+    ["agente_slug", "tenant_id", "playbook_object_path"]
+  );
 
   if (agentErr) return { ok: false, status: 500, error: agentErr.message };
   if (!agent) return { ok: false, status: 404, error: "Agente não encontrado." };
@@ -265,15 +269,12 @@ export async function savePlaybookMarkdownForAgent(
   const { data: pub } = supabase.storage.from(PLAYBOOK_BUCKET).getPublicUrl(path);
   const generatedAt = new Date().toISOString();
 
-  const { error: dbErr } = await supabase
-    .from("hub_agente_identidade")
-    .update({
-      playbook_object_path: path,
-      playbook_public_url: pub.publicUrl,
-      playbook_generated_at: generatedAt,
-      playbook_source_hash: sourceHash,
-    })
-    .eq("agente_slug", agenteSlug);
+  const { error: dbErr } = await updateHubAgenteIdentidadeCompat(supabase, agenteSlug, {
+    playbook_object_path: path,
+    playbook_public_url: pub.publicUrl,
+    playbook_generated_at: generatedAt,
+    playbook_source_hash: sourceHash,
+  });
 
   if (dbErr) return { ok: false, status: 500, error: dbErr.message };
 
@@ -312,17 +313,26 @@ export async function loadCurrentPlaybookMarkdown(
     objectPath = String(prefetched.objectPath || "").trim();
     publicUrl = String(prefetched.publicUrl || "").trim();
   } else {
-    const { data, error } = await supabase
-      .from("hub_agente_identidade")
-      .select("playbook_object_path, playbook_public_url")
-      .eq("agente_slug", agenteSlug)
-      .maybeSingle();
+    const { data, error } = await selectHubAgenteIdentidadeCompat(supabase, agenteSlug, [
+      "tenant_id",
+      "playbook_object_path",
+      "playbook_public_url",
+    ]);
 
     if (error) return { ok: false, status: 500, error: error.message };
     if (!data) return { ok: false, status: 404, error: "Agente não encontrado." };
 
     objectPath = String(data.playbook_object_path || "").trim();
     publicUrl = String(data.playbook_public_url || "").trim();
+
+    if (!objectPath && !publicUrl) {
+      objectPath = playbookObjectPath(
+        typeof data.tenant_id === "string" ? data.tenant_id : null,
+        agenteSlug
+      );
+      const { data: pub } = supabase.storage.from(PLAYBOOK_BUCKET).getPublicUrl(objectPath);
+      publicUrl = pub?.publicUrl?.trim() || "";
+    }
   }
 
   if (!objectPath && !publicUrl) {

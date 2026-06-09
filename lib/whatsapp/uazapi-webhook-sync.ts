@@ -3,13 +3,24 @@ import { createHubLogger } from "@/lib/observability/hub-log";
 import { buildPublicWebhookUrl } from "@/lib/whatsapp/webhook-auth";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 
-/** Filtros UAZAPI: excluir eco da API e grupos (não usar wasNotSentByApi — bloqueia inbound do lead). */
-export const UAZAPI_WEBHOOK_EXCLUDE_MESSAGES = ["wasSentByApi", "isGroupYes"] as const;
+/** Filtros UAZAPI: excluir eco da API (não usar wasNotSentByApi — bloqueia inbound do lead). */
+export const UAZAPI_WEBHOOK_EXCLUDE_MESSAGES = ["wasSentByApi"] as const;
 
 function webhookSyncMode(): "global_only" | "instance_and_global" {
   const raw = process.env.UAZAPI_WEBHOOK_SYNC_MODE?.trim().toLowerCase();
   if (raw === "instance_and_global") return "instance_and_global";
   return "global_only";
+}
+
+function isLocalhostHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0";
+}
+
+function allowLocalhostWebhookOrigin(): boolean {
+  return (
+    process.env.NODE_ENV === "development" || process.env.UAZAPI_ALLOW_LOCALHOST_WEBHOOK === "1"
+  );
 }
 
 export function pickPublicAppOrigin(request: NextRequest): string | null {
@@ -18,7 +29,7 @@ export function pickPublicAppOrigin(request: NextRequest): string | null {
     try {
       const u = new URL(fromEnv);
       const h = u.hostname.toLowerCase();
-      if (h !== "localhost" && h !== "127.0.0.1" && h !== "0.0.0.0") {
+      if (!isLocalhostHost(h) || allowLocalhostWebhookOrigin()) {
         u.pathname = "";
         u.search = "";
         u.hash = "";
@@ -31,7 +42,7 @@ export function pickPublicAppOrigin(request: NextRequest): string | null {
   try {
     const u = new URL(request.url);
     const h = u.hostname.toLowerCase();
-    if (h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0") return null;
+    if (isLocalhostHost(h) && !allowLocalhostWebhookOrigin()) return null;
     u.pathname = "";
     u.search = "";
     u.hash = "";

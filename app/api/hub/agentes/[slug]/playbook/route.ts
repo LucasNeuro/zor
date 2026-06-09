@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { runPlaybookPipeline } from "@/lib/playbook/orchestrate";
 import { loadAgentPlaybookSnapshot } from "@/lib/playbook/agent-snapshot";
+import { selectHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-compat";
 
 function db() {
   return createClient(
@@ -28,13 +29,14 @@ export async function GET(
   const slug = decodeURIComponent(raw);
   const supabase = db();
 
-  const { data, error } = await supabase
-    .from("hub_agente_identidade")
-    .select(
-      "agente_slug, nome, playbook_object_path, playbook_public_url, playbook_generated_at, playbook_source_hash"
-    )
-    .eq("agente_slug", slug)
-    .maybeSingle();
+  const { data, error } = await selectHubAgenteIdentidadeCompat(supabase, slug, [
+    "agente_slug",
+    "nome",
+    "playbook_object_path",
+    "playbook_public_url",
+    "playbook_generated_at",
+    "playbook_source_hash",
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });

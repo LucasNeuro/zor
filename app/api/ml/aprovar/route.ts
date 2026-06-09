@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { aplicarMudancaConfirmada } from "@/lib/ia/ml";
 import { createClient } from "@supabase/supabase-js";
+import {
+  humanoResponsavelFromActor,
+  resolveActorFromRequest,
+} from "@/lib/crm/resolve-crm-actor";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,10 +18,12 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+    const actor = await resolveActorFromRequest(db, request.headers);
+    const aprovadoPor = humanoResponsavelFromActor(actor);
 
     // PASSO 1 — humano aprova pela primeira vez → retorna preview detalhado
     if (acao === "aprovar_primeira_vez") {
-      const resultado = await aplicarMudancaConfirmada(sugestaoId, "primeira_aprovacao");
+      const resultado = await aplicarMudancaConfirmada(sugestaoId, "primeira_aprovacao", aprovadoPor);
       return NextResponse.json({
         ...resultado,
         instrucao: 'Para confirmar, chame novamente com acao="confirmar_aplicar" e confirmacao="CONFIRMO_A_ALTERACAO"',
@@ -32,7 +38,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      const resultado = await aplicarMudancaConfirmada(sugestaoId, "confirmacao_final");
+      const resultado = await aplicarMudancaConfirmada(sugestaoId, "confirmacao_final", aprovadoPor);
       return NextResponse.json(resultado);
     }
 

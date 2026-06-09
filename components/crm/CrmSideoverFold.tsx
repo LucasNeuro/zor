@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
+import { RF_ACCENT, RF_BORDER_STRONG, RF_TEXT_SECONDARY } from "@/lib/crm/crm-retrofit-dark-theme";
 
 type Props = {
   title: string;
@@ -23,7 +24,7 @@ export function CrmSideoverFold({
   return (
     <div
       style={{
-        borderTop: isFirst ? "none" : "1px solid rgba(37, 48, 66, 0.95)",
+        borderTop: isFirst ? "none" : `1px solid ${RF_BORDER_STRONG}`,
         marginTop: isFirst ? 0 : 6,
         paddingTop: isFirst ? 0 : 6,
       }}
@@ -43,7 +44,7 @@ export function CrmSideoverFold({
             background: "transparent",
             cursor: "pointer",
             padding: "6px 0",
-            color: "#c4d2e5",
+            color: RF_TEXT_SECONDARY,
             fontSize: 12,
             fontWeight: 700,
             textAlign: "left",
@@ -55,7 +56,7 @@ export function CrmSideoverFold({
             aria-hidden
             style={{
               flexShrink: 0,
-              color: "#c9a24a",
+              color: RF_ACCENT,
               transform: open ? "rotate(90deg)" : "rotate(0deg)",
               transition: "transform 0.2s ease",
             }}

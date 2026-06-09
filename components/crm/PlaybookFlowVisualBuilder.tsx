@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -84,7 +84,7 @@ function makeDefaultStep(kind: PlaybookFlowStep["kind"], id: string): PlaybookFl
 
 function buildStarterDefinition(): PlaybookFlowDefinition {
   return {
-    obra10_playbook_flow_schema: 1,
+    waje_playbook_flow_schema: 1,
     id: "flow_mvp",
     version: "1.0.0",
     entry_step_id: "inicio",

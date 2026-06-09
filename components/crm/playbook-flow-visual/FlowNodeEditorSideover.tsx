@@ -280,9 +280,9 @@ const panelStyle: CSSProperties = {
   right: 0,
   bottom: 0,
   width: "min(360px, 42vw)",
-  borderLeft: "1px solid #1e2b3d",
-  background: "#0d1420",
-  boxShadow: "-16px 0 36px #00000066",
+  borderLeft: "1px solid rgba(63, 152, 72, 0.42)",
+  background: "#060d08",
+  boxShadow: "-16px 0 36px rgba(0,0,0,0.55)",
   display: "flex",
   flexDirection: "column",
   zIndex: 8,
@@ -290,7 +290,8 @@ const panelStyle: CSSProperties = {
 
 const headerStyle: CSSProperties = {
   padding: "12px 14px",
-  borderBottom: "1px solid #1e2b3d",
+  borderBottom: "1px solid rgba(146, 255, 0, 0.16)",
+  background: "#0b1f10",
   display: "flex",
   justifyContent: "space-between",
   gap: 10,
@@ -308,8 +309,8 @@ const iconWrapStyle: CSSProperties = {
   width: 24,
   height: 24,
   borderRadius: 999,
-  background: "#161c28",
-  border: "1px solid #dcebd8",
+  background: "rgba(6, 13, 8, 0.85)",
+  border: "1px solid rgba(63, 152, 72, 0.42)",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -319,7 +320,7 @@ const iconWrapStyle: CSSProperties = {
 const headerLabelStyle: CSSProperties = {
   margin: 0,
   fontSize: 12,
-  color: "#0b2210",
+  color: "#92ff00",
   fontWeight: 700,
   lineHeight: 1.2,
 };
@@ -327,7 +328,7 @@ const headerLabelStyle: CSSProperties = {
 const headerIdStyle: CSSProperties = {
   margin: "3px 0 0",
   fontSize: 11,
-  color: "#94a3b8",
+  color: "#7a9a7e",
   fontFamily: "monospace",
 };
 
@@ -351,9 +352,9 @@ const closeButtonStyle: CSSProperties = {
   width: 26,
   height: 26,
   borderRadius: 7,
-  border: "1px solid #dcebd8",
-  background: "#161c28",
-  color: "#94a3b8",
+  border: "1px solid rgba(63, 152, 72, 0.42)",
+  background: "rgba(6, 13, 8, 0.85)",
+  color: "#92ff00",
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
@@ -380,16 +381,16 @@ const fieldRowStyle: CSSProperties = {
 const fieldLabelStyle: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 700,
-  color: "#7a8fa6",
+  color: "#92ff00",
   textTransform: "uppercase",
   letterSpacing: 0.45,
 };
 
 const inputStyle: CSSProperties = {
-  border: "1px solid #2a3545",
+  border: "1px solid rgba(63, 152, 72, 0.42)",
   borderRadius: 9,
-  background: "#111b2f",
-  color: "#e2e8f0",
+  background: "rgba(6, 13, 8, 0.85)",
+  color: "#e8f5e9",
   padding: "8px 10px",
   fontSize: 12.5,
   outline: "none",
@@ -398,10 +399,10 @@ const inputStyle: CSSProperties = {
 };
 
 const textareaStyle: CSSProperties = {
-  border: "1px solid #2a3545",
+  border: "1px solid rgba(63, 152, 72, 0.42)",
   borderRadius: 9,
-  background: "#111b2f",
-  color: "#e2e8f0",
+  background: "rgba(6, 13, 8, 0.85)",
+  color: "#e8f5e9",
   padding: "8px 10px",
   fontSize: 12,
   fontFamily: "inherit",
@@ -424,8 +425,8 @@ const optionRowStyle: CSSProperties = {
   alignItems: "center",
   gap: 6,
   borderRadius: 8,
-  border: "1px solid #2a3545",
-  background: "#111b2f",
+  border: "1px solid rgba(63, 152, 72, 0.42)",
+  background: "rgba(6, 13, 8, 0.85)",
   padding: "6px 8px",
 };
 
@@ -465,10 +466,10 @@ const addOptionButtonStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   gap: 6,
-  border: "1px dashed #334155",
+  border: "1px dashed rgba(63, 152, 72, 0.42)",
   borderRadius: 8,
-  background: "#161c28",
-  color: "#94a3b8",
+  background: "rgba(6, 13, 8, 0.6)",
+  color: "#7a9a7e",
   fontSize: 11,
   fontWeight: 600,
   cursor: "pointer",
@@ -477,7 +478,8 @@ const addOptionButtonStyle: CSSProperties = {
 
 const footerStyle: CSSProperties = {
   padding: 12,
-  borderTop: "1px solid #1e2b3d",
+  borderTop: "1px solid rgba(146, 255, 0, 0.16)",
+  background: "#0b1f10",
 };
 
 const deleteButtonStyle: CSSProperties = {
@@ -497,10 +499,10 @@ const deleteButtonStyle: CSSProperties = {
 };
 
 const entryButtonStyle: CSSProperties = {
-  border: "1px solid #2a3545",
+  border: "1px solid rgba(63, 152, 72, 0.42)",
   borderRadius: 9,
-  background: "#111b2f",
-  color: "#e2e8f0",
+  background: "rgba(6, 13, 8, 0.85)",
+  color: "#e8f5e9",
   padding: "8px 10px",
   fontSize: 12,
   fontWeight: 600,
@@ -515,10 +517,10 @@ const entryButtonActiveStyle: CSSProperties = {
 };
 
 const selectStyle: CSSProperties = {
-  border: "1px solid #2a3545",
+  border: "1px solid rgba(63, 152, 72, 0.42)",
   borderRadius: 9,
-  background: "#111b2f",
-  color: "#e2e8f0",
+  background: "rgba(6, 13, 8, 0.85)",
+  color: "#e8f5e9",
   padding: "8px 10px",
   fontSize: 12.5,
   outline: "none",

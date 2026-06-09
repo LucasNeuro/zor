@@ -383,11 +383,39 @@ export function extrairUsoFerramentasCustomIa(raw: unknown): Record<string, bool
   return out;
 }
 
-/** Mapa estável para builtins + booleans para ferramentas custom preservadas do `raw`. */
+/** Chaves `hub_ext_*` no JSON de uso (activação por agente). */
+export function extrairUsoFerramentasExtIa(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const o = raw as Record<string, unknown>;
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (!k.startsWith("hub_ext_")) continue;
+    const b = coalesceFerramentaBool(v);
+    if (b !== undefined) out[k] = b;
+  }
+  return out;
+}
+
+/** Chaves `hub_int_*` — integradores pré-definidos (Google Calendar, Gmail, Zendesk). */
+export function extrairUsoFerramentasIntIa(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const o = raw as Record<string, unknown>;
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (!k.startsWith("hub_int_")) continue;
+    const b = coalesceFerramentaBool(v);
+    if (b !== undefined) out[k] = b;
+  }
+  return out;
+}
+
+/** Mapa estável para builtins + booleans para ferramentas custom/externas/integradores preservadas do `raw`. */
 export function mergeUsoFerramentasComPadraoPreservandoCustom(raw: unknown): Record<string, boolean> {
   const base = mergeUsoFerramentasComPadrao(normalizarUsoFerramentasIa(raw));
   const custom = extrairUsoFerramentasCustomIa(raw);
-  return { ...base, ...custom };
+  const ext = extrairUsoFerramentasExtIa(raw);
+  const integ = extrairUsoFerramentasIntIa(raw);
+  return { ...base, ...custom, ...ext, ...integ };
 }
 
 export type FerramentaCustomDefMistral = {
@@ -396,10 +424,16 @@ export type FerramentaCustomDefMistral = {
   parametros_schema: Record<string, unknown>;
 };
 
-/** Lista completa para Mistral: catálogo fixo + linhas custom do tenant. */
+export type FerramentaExternaDefMistral = FerramentaCustomDefMistral;
+
+export type FerramentaIntegradorDefMistral = FerramentaCustomDefMistral;
+
+/** Lista completa para Mistral: catálogo fixo + custom + externas + integradores do tenant. */
 export function ferramentasMistralListaParaAgente(
   uso: Record<string, boolean>,
-  customDefs: FerramentaCustomDefMistral[]
+  customDefs: FerramentaCustomDefMistral[],
+  extDefs: FerramentaExternaDefMistral[] = [],
+  intDefs: FerramentaIntegradorDefMistral[] = []
 ): MistralChatToolDefinition[] {
   const out: MistralChatToolDefinition[] = [];
   for (const item of HUB_AGENTE_FERRAMENTAS_CATALOGO) {
@@ -419,7 +453,40 @@ export function ferramentasMistralListaParaAgente(
       });
     }
   }
+  for (const e of extDefs) {
+    if (uso[e.ferramenta_key] === true) {
+      out.push({
+        type: "function",
+        function: {
+          name: e.ferramenta_key,
+          description: e.descricao_modelo,
+          parameters: e.parametros_schema,
+        },
+      });
+    }
+  }
+  for (const i of intDefs) {
+    if (uso[i.ferramenta_key] === true) {
+      out.push({
+        type: "function",
+        function: {
+          name: i.ferramenta_key,
+          description: i.descricao_modelo,
+          parameters: i.parametros_schema,
+        },
+      });
+    }
+  }
   return out;
+}
+
+/** Alias explícito quando só ferramentas externas são relevantes no caller. */
+export function ferramentasMistralListaComExternas(
+  uso: Record<string, boolean>,
+  customDefs: FerramentaCustomDefMistral[],
+  extDefs: FerramentaExternaDefMistral[]
+): MistralChatToolDefinition[] {
+  return ferramentasMistralListaParaAgente(uso, customDefs, extDefs);
 }
 
 export function catalogoBuiltinPorId(id: HubAgenteFerramentaId): HubAgenteFerramentaCatalogo | undefined {

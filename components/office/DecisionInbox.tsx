@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type Decision, sortDecisionsByPriority } from "@/lib/data/decisions-mock";
 import { supabase } from "@/lib/supabase/client";
+import { getCrmSessionActor } from "@/lib/internal-api-headers-client";
 import DecisionCard from "./DecisionCard";
 
 interface DecisionInboxProps {
@@ -23,6 +24,11 @@ export default function DecisionInbox({ onVerAgente, onVerLead, onVerParceiro }:
   const [filter, setFilter] = useState<"todos" | "critical" | "warning">("todos");
   const [decisoes, setDecisoes] = useState<Decision[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sessionActor, setSessionActor] = useState<{ name?: string; email?: string }>({});
+
+  useEffect(() => {
+    void getCrmSessionActor().then(setSessionActor);
+  }, []);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -129,9 +135,10 @@ export default function DecisionInbox({ onVerAgente, onVerLead, onVerParceiro }:
 
     if (source === "aprovacao") {
       const status = actionLabel === "Rejeitar" ? "rejeitado" : "aprovado";
+      const aprovadoPor = sessionActor.name ?? sessionActor.email?.split("@")[0] ?? "operador";
       await supabase
         .from("hub_aprovacoes")
-        .update({ status, aprovado_por: "wendel", aprovado_em: new Date().toISOString() })
+        .update({ status, aprovado_por: aprovadoPor, aprovado_em: new Date().toISOString() })
         .eq("id", id);
     }
 

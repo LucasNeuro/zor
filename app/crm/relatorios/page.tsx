@@ -10,6 +10,10 @@ import {
   type RelatorioEntidade,
 } from "@/lib/crm/relatorios-data";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import {
+  CrmResizableDataTable,
+  type CrmResizableColumn,
+} from "@/components/crm/CrmResizableDataTable";
 import { supabase } from "@/lib/supabase/client";
 
 type LinhaResumo = {
@@ -111,6 +115,28 @@ export default function Relatorios() {
   const entidadeLabel =
     RELATORIO_ENTIDADES_UI.find((e) => e.id === entidadeAtiva)?.label ?? entidadeAtiva;
 
+  const linhasRelatorio = useMemo(
+    () =>
+      (dataset?.rows ?? []).map((row, i) => ({
+        _key: `${entidadeAtiva}-${i}`,
+        data: row,
+      })),
+    [dataset?.rows, entidadeAtiva]
+  );
+
+  const colunasRelatorio = useMemo((): CrmResizableColumn<{ _key: string; data: Record<string, unknown> }>[] => {
+    const headers = dataset?.headers ?? [];
+    return headers.map((h) => ({
+      id: h,
+      label: RELATORIO_HEADER_LABELS[h] ?? h,
+      defaultWidth: 140,
+      minWidth: 90,
+      render: (linha) => (
+        <span title={String(linha.data[h] ?? "")}>{formatarCelulaRelatorio(h, linha.data[h])}</span>
+      ),
+    }));
+  }, [dataset?.headers]);
+
   return (
     <div className="flex min-h-full flex-col bg-[#f8fcf6]">
       <CrmStickyPageHeader
@@ -198,29 +224,17 @@ export default function Relatorios() {
           ) : dataset && dataset.rows.length === 0 && !dataset.aviso ? (
             <p className="py-12 text-center text-sm text-[#5d7a67]">Nenhum registo encontrado.</p>
           ) : dataset && (dataset.rows.length > 0 || dataset.aviso) ? (
-            <div className="max-h-[min(70vh,640px)] overflow-auto rounded-lg border border-[#dcebd8]">
-              <table className="w-full min-w-[640px] text-left text-xs">
-                <thead className="sticky top-0 z-10 bg-[#eef7eb]">
-                  <tr className="border-b border-[#dcebd8] text-[#5d7a67]">
-                    {dataset.headers.map((h) => (
-                      <th key={h} className="whitespace-nowrap px-3 py-2.5 font-bold">
-                        {RELATORIO_HEADER_LABELS[h] ?? h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {dataset.rows.map((row, ri) => (
-                    <tr key={ri} className="border-b border-[#eef7eb] text-[#0b2210] hover:bg-[#eef7eb]/60">
-                      {dataset.headers.map((h) => (
-                        <td key={h} className="max-w-[220px] truncate whitespace-nowrap px-3 py-2" title={String(row[h] ?? "")}>
-                          {formatarCelulaRelatorio(h, row[h])}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="overflow-hidden rounded-lg border border-[#dcebd8]">
+              <CrmResizableDataTable
+                tableId={`crm-relatorios-${entidadeAtiva}`}
+                columns={colunasRelatorio}
+                rows={linhasRelatorio}
+                rowKey={(linha) => linha._key}
+                maxHeight="min(70vh, 640px)"
+                className="border-t-0 text-xs"
+                rowCellClassName="px-3 py-2 align-top text-[#0b2210]"
+                getRowStyle={() => ({ borderBottom: "1px solid #eef7eb" })}
+              />
             </div>
           ) : null}
         </div>

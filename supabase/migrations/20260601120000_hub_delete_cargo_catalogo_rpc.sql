@@ -16,7 +16,7 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'slug inválido');
   END IF;
 
-  SELECT trim(both from COALESCE(titulo::text, ''))
+  SELECT trim(both from COALESCE(titulo::text, nome::text, ''))
   INTO v_titulo
   FROM hub_cargos_catalogo
   WHERE slug = v_slug;

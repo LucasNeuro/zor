@@ -1,5 +1,9 @@
 ﻿"use client";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import {
+  CrmResizableDataTable,
+  type CrmResizableColumn,
+} from "@/components/crm/CrmResizableDataTable";
 import { usePathname } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";

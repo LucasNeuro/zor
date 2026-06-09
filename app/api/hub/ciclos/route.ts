@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { validateAndNormalizeCicloConfiguracoes } from "@/lib/hub-ciclos-configuracoes";
+import { repararCiclosAusentesParaAgentes } from "@/lib/hub/provision-hub-ciclo-padrao";
+import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
 type CicloTipo = "continuo" | "programado" | "gatilho";
 
@@ -33,14 +35,25 @@ export async function GET(request: NextRequest) {
   if (ativo === "false") query = query.eq("ativo", false);
   if (agenteSlug) query = query.eq("agente_slug", agenteSlug);
   if (tipo && isCicloTipo(tipo)) query = query.eq("tipo", tipo);
-  if (q) query = query.or(`nome.ilike.%${q}%,descricao.ilike.%${q}%`);
+  if (q) query = query.or(`nome.ilike.%${q}%,descricao.ilike.%${q}%,agente_slug.ilike.%${q}%`);
 
-  const { data, error } = await query;
+  let { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ciclos: data || [] });
+  const repair = await repararCiclosAusentesParaAgentes(supabase);
+  if (repair.reparados > 0) {
+    ({ data, error } = await query);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({
+    ciclos: data || [],
+    ...(repair.reparados > 0 ? { ciclos_reparados: repair.reparados } : {}),
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -88,7 +101,8 @@ export async function POST(request: NextRequest) {
   }
   const configuracoes = parsedCfg.value;
 
-  const row = {
+  const tenantId = tenantIdFromRequest(request.headers);
+  const row: Record<string, unknown> = {
     agente_slug,
     nome,
     descricao,
@@ -97,10 +111,15 @@ export async function POST(request: NextRequest) {
     intervalo_minutos: intervalo,
     ativo: body.ativo === false ? false : true,
     configuracoes,
+    tenant_id: tenantId || defaultTenantId(),
   };
 
   const supabase = db();
-  const { data, error } = await supabase.from("hub_ciclos_ia").insert(row).select("*").single();
+  let { data, error } = await supabase.from("hub_ciclos_ia").insert(row).select("*").single();
+  if (error && /tenant_id/i.test(error.message) && /column|schema cache|could not find/i.test(error.message)) {
+    const { tenant_id: _omit, ...semTenant } = row;
+    ({ data, error } = await supabase.from("hub_ciclos_ia").insert(semTenant).select("*").single());
+  }
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

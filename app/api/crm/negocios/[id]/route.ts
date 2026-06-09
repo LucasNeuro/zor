@@ -20,22 +20,25 @@ export async function GET(_request: NextRequest, { params }: Params) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!negocio) return NextResponse.json({ error: "Negócio não encontrado" }, { status: 404 });
 
-  const [{ data: atividades }, { data: lead }, { data: pessoa }, { data: propostas }] = await Promise.all([
-    supabase.from("hub_atividades").select("*").eq("negocio_id", id).order("criado_em", { ascending: false }).limit(50),
-    negocio.lead_id
-      ? supabase.from("hub_leads_crm").select("id, nome, telefone, estagio").eq("id", negocio.lead_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    negocio.pessoa_id
-      ? supabase.from("hub_pessoas").select("id, codigo, nome, email, telefone").eq("id", negocio.pessoa_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase.from("hub_propostas").select("*").eq("negocio_id", id).order("criado_em", { ascending: false }),
-  ]);
+  const [{ data: atividades }, { data: notas }, { data: lead }, { data: pessoa }, { data: propostas }] =
+    await Promise.all([
+      supabase.from("hub_atividades").select("*").eq("negocio_id", id).order("criado_em", { ascending: false }).limit(50),
+      supabase.from("hub_notas").select("*").eq("negocio_id", id).order("criado_em", { ascending: false }).limit(30),
+      negocio.lead_id
+        ? supabase.from("hub_leads_crm").select("id, nome, telefone, estagio").eq("id", negocio.lead_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      negocio.pessoa_id
+        ? supabase.from("hub_pessoas").select("id, codigo, nome, email, telefone").eq("id", negocio.pessoa_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from("hub_propostas").select("*").eq("negocio_id", id).order("criado_em", { ascending: false }),
+    ]);
 
   return NextResponse.json({
     data: negocio,
     lead: lead ?? null,
     pessoa: pessoa ?? null,
     timeline: atividades ?? [],
+    notas: notas ?? [],
     propostas: propostas ?? [],
   });
 }

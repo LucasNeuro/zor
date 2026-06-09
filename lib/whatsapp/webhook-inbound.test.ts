@@ -255,4 +255,50 @@ describe("parseWhatsappWebhookBody UAZAPI", () => {
       expect(r.value.mensagemFinal).toContain("assumir");
     }
   });
+
+  it("mensagem inbound em grupo expõe groupJid (não ignora no parse)", () => {
+    const groupJid = "120363012345678901@g.us";
+    const r = parseWhatsappWebhookBody({
+      event: "messages",
+      data: {
+        fromMe: false,
+        isGroup: true,
+        chatid: groupJid,
+        sender: `${PNG}@s.whatsapp.net`,
+        messageid: "grp-in-1",
+        messageTimestamp: 1_700_000_000,
+        messageType: "conversation",
+        text: "Olá equipe",
+      },
+    });
+    expect(r.kind).toBe("ok");
+    if (r.kind === "ok") {
+      expect(r.value.isGroup).toBe(true);
+      expect(r.value.groupJid).toBe(groupJid);
+      expect(r.value.telefone).toBe(PNG);
+      expect(r.value.mensagemFinal).toBe("Olá equipe");
+    }
+  });
+
+  it("fromMe em grupo expõe groupJid como outgoing_human", () => {
+    const groupJid = "120363012345678901@g.us";
+    const r = parseWhatsappWebhookBody({
+      event: "messages",
+      data: {
+        fromMe: true,
+        isGroup: true,
+        chatid: groupJid,
+        sender: `${PNG}@s.whatsapp.net`,
+        messageid: "grp-out-1",
+        messageTimestamp: 1_700_000_000,
+        messageType: "conversation",
+        text: "Resposta do vendedor no grupo",
+      },
+    });
+    expect(r.kind).toBe("outgoing_human");
+    if (r.kind === "outgoing_human") {
+      expect(r.value.groupJid).toBe(groupJid);
+      expect(r.value.isGroup).toBe(true);
+    }
+  });
 });

@@ -3,8 +3,8 @@
  */
 
 import { documentoConceitoTaxonomiaParaIa } from "@/lib/hub/documento-conceito-catalogo";
-
-const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
+import { mistral401UserMessage, mistralApiKey } from "@/lib/ia/mistral-health";
+import { mistralChatCompletion } from "@/lib/ia/mistral-chat";
 
 export type CargoCatalogoContextRow = {
   slug: string;
@@ -103,12 +103,14 @@ function normalizarSugestao(o: Record<string, unknown>): SugestaoCargoCatalogo {
   };
 }
 
-const SYSTEM = `És um arquitecto de agentes de IA no ecossistema **Obra10+** (construção, reformas, CRM multi-mercado no Brasil).
-Recebes o **título desejado** para um novo cargo no catálogo \`hub_cargos_catalogo\`, mais um **contexto JSON** com cargos e mercados já usados no Hub.
+const SYSTEM = `És um arquitecto de agentes de IA no ecossistema **Waje** (plataforma multi-setor, mercado GRL — geral / multi-cliente no Brasil).
+Recebes o **título desejado** para um novo cargo no catálogo \`hub_cargos_catalogo\`, mais **contexto JSON** com cargos, mercados e (quando existir) trechos da base de conhecimento da empresa.
 Devolves **apenas um objeto JSON válido** (sem Markdown à volta, sem comentários, sem texto antes ou depois) com campos para preencher o catálogo.
 
 Regras:
 - Português (Brasil), tom profissional.
+- Alinha segmento, especialidade, saudação e prompt ao **negócio real** descrito nos trechos de conhecimento — não assumas construção/reforma salvo que o contexto o indique.
+- POP, termo de garantia ou protocolo interno NÃO significam que a empresa é de "compliance" — identifica o serviço prestado (ex.: assistência técnica de smartphones, loja, clínica).
 - \`modelo_padrao\`, \`modelo_critico\`, \`modelo_alto_valor\`: preferir o literal **mistral** salvo que haja motivo forte para outro ID de modelo (o runtime resolve via env).
 - \`nivel\`: inteiro de 1 a 5 (5 = maior autonomia relativa no Hub).
 - \`limite_autonomia_brl\`: número >= 0 razoável para operações normais do cargo (ex.: 500–50000); não inventes dados financeiros específicos da empresa — usa valor conservador com breve raciocínio implícito no campo descricao se preciso.
@@ -130,9 +132,9 @@ export async function sugerirCargoCatalogoComMistral(opts: {
   tituloPedido: string;
   cargosExistentes: CargoCatalogoContextRow[];
   mercados?: MercadoContextRow[];
+  conhecimentoEmpresa?: string;
 }): Promise<{ ok: true; sugestao: SugestaoCargoCatalogo } | { ok: false; error: string }> {
-  const key = process.env.MISTRAL_API_KEY?.trim();
-  if (!key) return { ok: false, error: "MISTRAL_API_KEY não configurada." };
+  if (!mistralApiKey()) return { ok: false, error: "MISTRAL_API_KEY não configurada no .env." };
 
   const model =
     process.env.HUB_CARGO_SUGESTAO_MISTRAL_MODEL?.trim() ||
@@ -151,54 +153,48 @@ export async function sugerirCargoCatalogoComMistral(opts: {
     0
   );
 
+  const blocoConhecimento = opts.conhecimentoEmpresa?.trim()
+    ? `## Base de conhecimento da empresa (trechos relevantes)
+${opts.conhecimentoEmpresa.trim()}
+
+`
+    : "";
+
   const user = `## Título pedido para o novo cargo
 ${titulo}
 
 ## Contexto actual do Hub (JSON)
 ${ctx}
 
-## Saída obrigatória
+${blocoConhecimento}## Saída obrigatória
 Um único objeto JSON com estas chaves (todas opcionais excepto convém preencher bem titulo alinhado ao pedido):
 "titulo","segmento","especialidade","descricao_curta","area","nivel","modelo_padrao","modelo_critico","modelo_alto_valor","supervisor_slug","pode_fazer_padrao","nao_pode_fazer_padrao","prompt_template","saudacao_cliente","usar_perguntas_essenciais","ordem_perguntas_essenciais","perguntas_essenciais","comprimento_padrao","descricao","limite_autonomia_brl"`;
 
   try {
-    const res = await fetch(MISTRAL_CHAT_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.25,
-        max_tokens: 2800,
-        messages: [
-          { role: "system", content: SYSTEM },
-          { role: "user", content: user },
-        ],
-      }),
+    const chat = await mistralChatCompletion({
+      model,
+      system: SYSTEM,
+      messages: [{ role: "user", content: user }],
+      maxTokens: 2800,
+      temperature: 0.25,
     });
 
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      return { ok: false, error: `Mistral: ${sanitizarErroApi(t || `HTTP ${res.status}`)}` };
-    }
-
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string | unknown } }>;
-    };
-    const content = data.choices?.[0]?.message?.content;
-    let texto = "";
-    if (typeof content === "string") texto = content;
-    else if (Array.isArray(content)) {
-      for (const part of content as unknown[]) {
-        if (part && typeof part === "object" && "text" in (part as object)) {
-          texto += String((part as { text?: string }).text ?? "");
-        }
+    if (!chat.ok) {
+      const err = chat.error;
+      if (/HTTP 401|401:/i.test(err) || err.toLowerCase().includes("unauthorized")) {
+        return { ok: false, error: mistral401UserMessage() };
       }
+      if (/HTTP 402|HTTP 429|402:|429:/i.test(err)) {
+        return {
+          ok: false,
+          error:
+            "Limite ou créditos Mistral insuficientes. Verifique Billing em console.mistral.ai → Admin.",
+        };
+      }
+      return { ok: false, error: sanitizarErroApi(err) };
     }
 
-    const obj = extrairJsonObjeto(texto);
+    const obj = extrairJsonObjeto(chat.text);
     if (!obj) {
       return { ok: false, error: "Resposta da IA não continha JSON válido." };
     }

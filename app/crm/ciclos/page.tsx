@@ -1,8 +1,35 @@
 ﻿"use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { usePathname } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { usePathname, useSearchParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
+import { invalidateHubCiclosList, useHubCiclosList } from "@/hooks/useCrmDataQueries";
+import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
+import {
+  crmBtnDangerSoft,
+  crmBtnPrimary,
+  crmBtnPrimaryLg,
+  crmBtnSecondary,
+  CRM_ACCENT,
+} from "@/lib/crm/crm-button-styles";
+import {
+  RF_ACCENT,
+  RF_BG_PANEL,
+  RF_BORDER,
+  RF_BORDER_STRONG,
+  RF_TEXT_MUTED,
+  RF_TEXT_PRIMARY,
+  RF_TEXT_SECONDARY,
+  rfAsideBodyStyle,
+  rfAsideFooterStyle,
+  rfAsideHeaderStyle,
+  rfCloseButtonStyle,
+  rfInputStyle,
+  rfLabelStyle,
+  rfOverlayStyle,
+  rfAsideStyle,
+} from "@/lib/crm/crm-retrofit-dark-theme";
 import {
   buildFollowupMergePreview,
   estimarIntervaloMinutosCron,
@@ -16,25 +43,19 @@ import {
   resolveModoOperacaoAgente,
   type ModoOperacaoAgente,
 } from "@/lib/hub/agente-modo-operacao";
-import {
-  CRM_ENTITY_GRID,
-  crmGlassCardSurface,
-} from "@/lib/crm-glass-card";
+import { CRM_ENTITY_GRID } from "@/lib/crm-glass-card";
 import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
-import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
+import { CicloCard, type CicloCardAgente } from "@/components/crm/CicloCard";
+import { CicloTimelinePanel } from "@/components/crm/CicloTimelinePanel";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import {
   Bell,
   ChevronRight,
   Clock,
-  Pencil,
-  Play,
-  Power,
-  RotateCcw,
   ScrollText,
   Sparkles,
-  Trash2,
   Webhook,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -125,17 +146,10 @@ function tempoRelativo(d?: string): string {
 }
 
 const TIPO_COR: Record<string, string> = {
-  /** Verde legível no fundo escuro (antes #003b26 parecia “apagado”). */
-  continuo: "#4ade80",
-  programado: "#c9a24a",
-  gatilho: "#5d7a67",
+  continuo: "#22c55e",
+  programado: BRAND_GREEN_BRIGHT,
+  gatilho: "#6b8a76",
 };
-
-function cicloTipoIcon(tipo: string) {
-  if (tipo === "gatilho") return Webhook;
-  if (tipo === "continuo") return Zap;
-  return Clock;
-}
 
 function slugParaApiCiclos(agenteSlug: string): string {
   if (agenteSlug === "diretor" || agenteSlug === "diretor_geral_ia" || agenteSlug === "diretor_operacoes") return "diretor";
@@ -144,11 +158,11 @@ function slugParaApiCiclos(agenteSlug: string): string {
 }
 
 const STATUS_COR: Record<string, string> = {
-  sucesso: "#4ade80",
-  sem_acao: "#5d7a67",
-  erro: "#b3261e",
-  rodando: "#c9a24a",
-  nunca_executado: "#484f58",
+  sucesso: "#22c55e",
+  sem_acao: "#6b8a76",
+  erro: "#dc2626",
+  rodando: BRAND_GREEN_BRIGHT,
+  nunca_executado: "#94a3b8",
 };
 
 /** Indica se o ciclo provavelmente usa o job de follow-up WhatsApp (nome ou configuracoes.dispatch). */
@@ -166,20 +180,26 @@ function cicloPareceFollowupWhatsApp(nome: string, cfg: Record<string, unknown>)
 
 export default function CiclosPage() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { setSlot } = useCrmHeaderSlot();
-  const [ciclosTodos, setCiclosTodos] = useState<Ciclo[]>([]);
+  const {
+    data: ciclosRaw = [],
+    isLoading: carregandoCiclos,
+    error: ciclosQueryError,
+  } = useHubCiclosList();
+  const ciclosTodos = ciclosRaw as unknown as Ciclo[];
   const [logs, setLogs] = useState<Record<string, unknown>[]>([]);
   const [alertas, setAlertas] = useState<Record<string, unknown>[]>([]);
   const [aba, setAba] = useState<"ciclos" | "logs" | "alertas">("ciclos");
   const [modoLista, setModoLista] = useState<ListMode>("todos");
-  const [busca, setBusca] = useState("");
+  const [busca, setBusca] = useState(() => searchParams.get("q")?.trim() || "");
   const [drawerSubTab, setDrawerSubTab] = useState<DrawerSubTab>("dados");
-  const [timelineLogs, setTimelineLogs] = useState<Record<string, unknown>[]>([]);
-  const [timelineLoading, setTimelineLoading] = useState(false);
   const [executando, setExecutando] = useState<string | null>(null);
   const [alternandoCicloId, setAlternandoCicloId] = useState<string | null>(null);
   const [excluindoCicloId, setExcluindoCicloId] = useState<string | null>(null);
-  const [erroListaCiclos, setErroListaCiclos] = useState<string | null>(null);
+  const [erroListaCiclosLocal, setErroListaCiclos] = useState<string | null>(null);
+  const erroListaCiclos = erroListaCiclosLocal ?? ciclosQueryError?.message ?? null;
   const [dialogExcluirCiclo, setDialogExcluirCiclo] = useState<{ id: string; nome: string } | null>(null);
   const [dialogLimparCiclo, setDialogLimparCiclo] = useState<{ id: string; nome: string } | null>(null);
   const [cicloDialogBusy, setCicloDialogBusy] = useState(false);
@@ -216,9 +236,7 @@ export default function CiclosPage() {
   const [followupHubLoading, setFollowupHubLoading] = useState(false);
   const [followupHubError, setFollowupHubError] = useState<string | null>(null);
   const [previewMercado, setPreviewMercado] = useState("geral");
-  const [agentesHub, setAgentesHub] = useState<
-    Array<{ agente_slug: string; modo_operacao?: unknown; ciclo_execucao_padrao?: unknown }>
-  >([]);
+  const [agentesHub, setAgentesHub] = useState<CicloCardAgente[]>([]);
 
   function aplicarConfigNoForm(cfg: Record<string, unknown> | undefined) {
     const c = cfg && typeof cfg === "object" && !Array.isArray(cfg) ? cfg : {};
@@ -258,6 +276,14 @@ export default function CiclosPage() {
     };
   }, [ciclosTodos]);
 
+  const agentesPorSlug = useMemo(() => {
+    const map = new Map<string, CicloCardAgente>();
+    for (const ag of agentesHub) {
+      if (ag.agente_slug) map.set(ag.agente_slug, ag);
+    }
+    return map;
+  }, [agentesHub]);
+
   const ciclosFiltrados = useMemo(() => {
     let list = ciclosTodos;
     if (modoLista === "ativos") list = list.filter((c) => c.ativo);
@@ -276,23 +302,29 @@ export default function CiclosPage() {
     return list;
   }, [ciclosTodos, modoLista, busca]);
 
-  const carregar = useCallback(async () => {
-    const [cRes, l, a, agRes] = await Promise.all([
-      fetch("/api/hub/ciclos", { headers: internalApiHeaders() }),
+  const carregarAuxiliar = useCallback(async () => {
+    const [l, a, agRes] = await Promise.all([
       fetch("/api/hub/ciclos-log?limit=20", { headers: internalApiHeaders() }),
       fetch("/api/hub/alertas?resolvido=false&limit=30", { headers: internalApiHeaders() }),
       fetch("/api/hub/agentes?todos=true", { headers: internalApiHeaders() }),
     ]);
 
-    if (cRes.ok) {
-      const cJson = await cRes.json() as { ciclos?: Ciclo[] };
-      setCiclosTodos(Array.isArray(cJson.ciclos) ? cJson.ciclos : []);
-    } else {
-      setCiclosTodos([]);
-    }
     if (agRes.ok) {
       const agJson = (await agRes.json()) as unknown;
-      setAgentesHub(Array.isArray(agJson) ? (agJson as typeof agentesHub) : []);
+      const rows = Array.isArray(agJson) ? agJson : [];
+      setAgentesHub(
+        rows.map((row) => {
+          const r = row as Record<string, unknown>;
+          return {
+            agente_slug: String(r.agente_slug ?? ""),
+            nome: typeof r.nome === "string" ? r.nome : undefined,
+            cargo: typeof r.cargo === "string" ? r.cargo : undefined,
+            avatar_url: typeof r.avatar_url === "string" ? r.avatar_url : null,
+            modo_operacao: r.modo_operacao as CicloCardAgente["modo_operacao"],
+            ativo: r.ativo === true,
+          };
+        })
+      );
     } else {
       setAgentesHub([]);
     }
@@ -310,32 +342,22 @@ export default function CiclosPage() {
     }
   }, []);
 
-  useEffect(() => { carregar(); }, [aba, carregar]);
+  const recarregarCiclos = useCallback(async () => {
+    await invalidateHubCiclosList(queryClient);
+  }, [queryClient]);
+
+  const recarregarTudo = useCallback(async () => {
+    await Promise.all([invalidateHubCiclosList(queryClient), carregarAuxiliar()]);
+  }, [queryClient, carregarAuxiliar]);
 
   useEffect(() => {
-    if (!drawerOpen || drawerMode !== "edit" || !selectedCicloId || drawerSubTab !== "timeline") {
-      return;
-    }
-    let cancelled = false;
-    setTimelineLoading(true);
-    fetch(`/api/hub/ciclos-log?ciclo_id=${encodeURIComponent(selectedCicloId)}&limit=50`, {
-      headers: internalApiHeaders(),
-    })
-      .then(async (res) => {
-        const j = (await res.json()) as { logs?: Record<string, unknown>[] };
-        if (!cancelled && res.ok) setTimelineLogs(Array.isArray(j.logs) ? j.logs : []);
-        else if (!cancelled) setTimelineLogs([]);
-      })
-      .catch(() => {
-        if (!cancelled) setTimelineLogs([]);
-      })
-      .finally(() => {
-        if (!cancelled) setTimelineLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [drawerOpen, drawerMode, selectedCicloId, drawerSubTab]);
+    const q = searchParams.get("q")?.trim() || "";
+    if (q) setBusca(q);
+  }, [searchParams]);
+
+  useEffect(() => {
+    void carregarAuxiliar();
+  }, [aba, carregarAuxiliar]);
 
   useEffect(() => {
     if (!drawerOpen || drawerSubTab !== "dados") return;
@@ -476,7 +498,7 @@ export default function CiclosPage() {
         headers: { "Content-Type": "application/json", ...internalApiHeaders() },
         body: JSON.stringify({ ativo }),
       });
-      await carregar();
+      await recarregarTudo();
     } finally {
       setAlternandoCicloId(null);
     }
@@ -510,7 +532,7 @@ export default function CiclosPage() {
         return;
       }
       setDialogLimparCiclo(null);
-      await carregar();
+      await recarregarTudo();
     } finally {
       setCicloDialogBusy(false);
       setLimpandoCicloId(null);
@@ -541,7 +563,7 @@ export default function CiclosPage() {
         setDrawerOpen(false);
         setSelectedCicloId(null);
       }
-      await carregar();
+      await recarregarTudo();
     } finally {
       setCicloDialogBusy(false);
       setExcluindoCicloId(null);
@@ -570,7 +592,7 @@ export default function CiclosPage() {
     } catch (e) { console.error(e); }
 
     await carregarLogsEAlertas();
-    await carregar();
+    await recarregarCiclos();
     setExecutando(null);
   }
 
@@ -580,7 +602,7 @@ export default function CiclosPage() {
       headers: { "Content-Type": "application/json", ...internalApiHeaders() },
       body: JSON.stringify({ resolvido: true, resolvido_em: new Date().toISOString() }),
     });
-    carregar();
+    void carregarAuxiliar();
   }
 
   function toggleCronDia(dow: number) {
@@ -781,7 +803,7 @@ export default function CiclosPage() {
         throw new Error(json.error || "Falha ao salvar ciclo.");
       }
       setDrawerOpen(false);
-      await carregar();
+      await recarregarTudo();
     } catch (e) {
       setErroDrawer(e instanceof Error ? e.message : "Falha ao salvar.");
     } finally {
@@ -799,25 +821,29 @@ export default function CiclosPage() {
       path: pathname,
       actions: (
         <div className="flex items-center gap-2 text-xs">
-          <button
-            onClick={abrirNovoCiclo}
-            className="rounded px-2 py-1 font-semibold"
-            style={{ background: "#eef7eb", color: "#c9a24a", border: "1px solid #dcebd8" }}
+          <span
+            className="rounded-full px-2.5 py-1 font-bold"
+            style={{
+              background: "rgba(146, 255, 0, 0.14)",
+              color: BRAND_TEXT_DARK,
+              border: "1px solid rgba(146, 255, 0, 0.35)",
+            }}
           >
-            Novo ciclo
-          </button>
-          <span className="rounded px-2 py-1" style={{ background: "#003b2630", color: "#c9a24a" }}>
             {contadores.ativos} ativos
           </span>
           <span
-            className="rounded px-2 py-1"
+            className="rounded-full px-2.5 py-1 font-bold"
             style={{
-              background: alertas.length > 0 ? "#b3261e30" : "#eef7eb",
-              color: alertas.length > 0 ? "#b3261e" : "#5d7a67",
+              background: alertas.length > 0 ? "#fff2f1" : "#ffffff",
+              color: alertas.length > 0 ? "#dc2626" : "#5d7a67",
+              border: `1px solid ${alertas.length > 0 ? "#fecaca" : "#d4ecd0"}`,
             }}
           >
             {alertas.length} alertas
           </span>
+          <button type="button" onClick={abrirNovoCiclo} style={crmBtnPrimary()}>
+            + Novo ciclo
+          </button>
         </div>
       ),
     });
@@ -828,6 +854,7 @@ export default function CiclosPage() {
     <>
     <div style={{ background: "#f8fcf6", minHeight: "100vh" }}>
       <CrmStickyTabs
+        variant="light"
         activeId={aba}
         onChange={(id) => setAba(id as typeof aba)}
         tabs={[
@@ -872,9 +899,9 @@ export default function CiclosPage() {
                         fontSize: 12,
                         fontWeight: 700,
                         cursor: "pointer",
-                        border: `1px solid ${sel ? "#c9a24a66" : "#293241"}`,
-                        background: sel ? "#c9a24a1f" : "#121923",
-                        color: sel ? "#d6b976" : "#99a6b8",
+                        border: `1px solid ${sel ? "rgba(146,255,0,0.55)" : "#d4ecd0"}`,
+                        background: sel ? "#ecffd8" : "#ffffff",
+                        color: sel ? BRAND_TEXT_DARK : "#5d7a67",
                       }}
                     >
                       {opt.label} ({opt.count})
@@ -888,17 +915,17 @@ export default function CiclosPage() {
                   placeholder="Buscar nome ou agente…"
                   style={{
                     marginLeft: 8,
-                    minWidth: 200,
+                    minWidth: 220,
                     padding: "8px 12px",
                     borderRadius: 999,
                     fontSize: 12,
-                    background: "#121923",
-                    border: "1px solidrgb(13, 13, 13)",
-                    color: "#0b2210",
+                    background: "#ffffff",
+                    border: "1px solid #d4ecd0",
+                    color: BRAND_TEXT_DARK,
                   }}
                 />
-                {ciclosTodos.length > 0 && (
-                  <span style={{ fontSize: 12, color: "#708096", marginLeft: 6 }}>
+                {!carregandoCiclos && ciclosTodos.length > 0 && (
+                  <span style={{ fontSize: 12, color: "#6b8a76", marginLeft: 6 }}>
                     mostrando: {ciclosFiltrados.length} ciclo{ciclosFiltrados.length === 1 ? "" : "s"}
                   </span>
                 )}
@@ -911,11 +938,9 @@ export default function CiclosPage() {
                   marginBottom: 14,
                   padding: "12px 14px",
                   borderRadius: 10,
-                  borderWidth: 1,
-                  borderStyle: "solid",
-                  borderColor: "rgba(179, 38, 30, 0.45)",
-                  background: "rgba(179, 38, 30, 0.12)",
-                  color: "#ffb4ab",
+                  border: "1px solid #f0c0bd",
+                  background: "#fff2f1",
+                  color: "#c0392b",
                   fontSize: 13,
                   display: "flex",
                   justifyContent: "space-between",
@@ -931,7 +956,7 @@ export default function CiclosPage() {
                     flexShrink: 0,
                     background: "transparent",
                     border: "none",
-                    color: "#ffb4ab",
+                    color: "#c0392b",
                     cursor: "pointer",
                     fontSize: 12,
                     fontWeight: 700,
@@ -942,11 +967,45 @@ export default function CiclosPage() {
               </div>
             )}
 
-            {ciclosTodos.length === 0 && (
-              <p style={{ color: "#5d7a67", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
-                Nenhum ciclo cadastrado
-              </p>
-            )}
+            {carregandoCiclos ? (
+              <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando ciclos…</p>
+            ) : ciclosTodos.length === 0 && !erroListaCiclos ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "48px 24px",
+                  borderRadius: 18,
+                  border: "1px dashed #d4ecd0",
+                  background: "#ffffff",
+                }}
+              >
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    margin: "0 auto 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "rgba(146, 255, 0, 0.14)",
+                    border: "1px solid rgba(146, 255, 0, 0.35)",
+                  }}
+                >
+                  <Zap size={28} color={BRAND_GREEN_BRIGHT} strokeWidth={2} aria-hidden />
+                </div>
+                <h3 style={{ margin: "0 0 8px", color: BRAND_TEXT_DARK, fontSize: 17, fontWeight: 800 }}>
+                  Nenhum ciclo cadastrado
+                </h3>
+                <p style={{ margin: "0 auto 20px", maxWidth: 420, color: "#5d7a67", fontSize: 13, lineHeight: 1.55 }}>
+                  Automações ligam agentes IA a tarefas programadas, follow-up WhatsApp e gatilhos externos.
+                  Crie o primeiro ciclo para o dispatch e o hub começarem a registar execuções.
+                </p>
+                <button type="button" onClick={abrirNovoCiclo} style={crmBtnPrimary()}>
+                  + Novo ciclo
+                </button>
+              </div>
+            ) : null}
             {ciclosTodos.length > 0 && ciclosFiltrados.length === 0 && (
               <p style={{ color: "#5d7a67", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
                 Nenhum ciclo corresponde à busca
@@ -954,286 +1013,25 @@ export default function CiclosPage() {
             )}
             {ciclosFiltrados.length > 0 && (
               <div style={CRM_ENTITY_GRID}>
-                {ciclosFiltrados.map((c) => {
-                  const tipoCor = TIPO_COR[c.tipo] || "#3b82f6";
-                  const st = c.ultimo_status || "nunca_executado";
-                  const stCor = STATUS_COR[st] || "#5d7a67";
-                  const ativo = c.ativo !== false;
-                  const selecionado = drawerOpen && selectedCicloId === c.id;
-                  const execProgress =
-                    c.total_execucoes > 0
-                      ? Math.min(0.92, 0.18 + Math.min(c.total_execucoes, 9) * 0.08)
-                      : null;
-
-                  return (
-                    <div
-                      key={c.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => void abrirEditarCiclo(c.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          void abrirEditarCiclo(c.id);
-                        }
-                      }}
-                      style={{
-                        ...crmGlassCardSurface(selecionado),
-                        opacity: ativo ? 1 : 0.88,
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <CrmBotRingAvatar
-                          pixelSize={44}
-                          accent={tipoCor}
-                          Icon={cicloTipoIcon(c.tipo)}
-                          progress={execProgress}
-                          pulse={!c.ultimo_ciclo}
-                          dim={!ativo}
-                        />
-                        <div style={{ minWidth: 0 }}>
-                          <p
-                            style={{
-                              color: "#f8fafc",
-                              fontWeight: 700,
-                              fontSize: 15,
-                              margin: 0,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {c.nome}
-                          </p>
-                          <p
-                            style={{
-                              color: "#94a3b8",
-                              fontSize: 11,
-                              margin: "4px 0 0",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {c.agente_slug}
-                          </p>
-                        </div>
-                      </div>
-
-                      <p
-                        style={{
-                          fontSize: 12,
-                          color: "#cbd5e1",
-                          margin: 0,
-                          lineHeight: 1.45,
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {c.descricao?.trim() || "—"}
-                      </p>
-
-                      <p style={{ fontSize: 11, color: "#64748b", margin: 0, lineHeight: 1.5 }}>
-                        Última exec.: {tempoRelativo(c.ultimo_ciclo)} · {proximaExecucao(c.cron_expressao)} ·{" "}
-                        {c.total_execucoes} exec.
-                        {c.total_alertas_gerados > 0 ? (
-                          <span style={{ color: "#c9a24a" }}> · {c.total_alertas_gerados} alertas</span>
-                        ) : null}
-                      </p>
-
-                      <div style={{ fontSize: 11, color: "#64748b", margin: 0 }}>
-                        <span style={{ color: tipoCor, fontWeight: 600 }}>{c.tipo}</span>
-                        {" · "}
-                        <span style={{ color: stCor }}>{st.replace(/_/g, " ")}</span>
-                      </div>
-
-                      <div
-                        style={{
-                          marginTop: "auto",
-                          paddingTop: 10,
-                          borderTopWidth: 1,
-                          borderTopStyle: "solid",
-                          borderTopColor: "rgba(44, 56, 75, 0.85)",
-                          display: "flex",
-                          width: "100%",
-                          justifyContent: "flex-end",
-                          alignItems: "center",
-                          minHeight: 0,
-                        }}
-                      >
-                        <div
-                          role="group"
-                          aria-label="Ações do ciclo"
-                          style={{
-                            display: "flex",
-                            borderRadius: 8,
-                            overflow: "hidden",
-                            borderStyle: "solid",
-                            borderWidth: 1,
-                            borderColor: "rgba(44, 56, 75, 0.95)",
-                            background: "#0f1620",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void executarAgora(c);
-                            }}
-                            disabled={executando === c.id || !c.ativo}
-                            title={c.ativo ? "Executar agora" : "Ative o ciclo para executar"}
-                            aria-label="Executar ciclo agora"
-                            style={{
-                              width: 32,
-                              height: 28,
-                              flexShrink: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: 0,
-                              border: 0,
-                              boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
-                              cursor: executando === c.id || !c.ativo ? "not-allowed" : "pointer",
-                              opacity: executando === c.id || !c.ativo ? 0.45 : 1,
-                              background: c.ativo ? "rgba(34, 197, 94, 0.12)" : "rgba(72, 79, 88, 0.2)",
-                              color: c.ativo ? "#4ade80" : "#64748b",
-                            }}
-                          >
-                            {executando === c.id ? (
-                              <span style={{ fontSize: 11, fontWeight: 700 }}>…</span>
-                            ) : (
-                              <Play size={13} strokeWidth={2.25} aria-hidden />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void abrirEditarCiclo(c.id);
-                            }}
-                            disabled={!!excluindoCicloId}
-                            title="Editar ciclo"
-                            aria-label="Editar ciclo"
-                            style={{
-                              width: 32,
-                              height: 28,
-                              flexShrink: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: 0,
-                              border: 0,
-                              boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
-                              cursor: excluindoCicloId ? "not-allowed" : "pointer",
-                              opacity: excluindoCicloId ? 0.45 : 1,
-                              background: "rgba(30, 41, 59, 0.65)",
-                              color: "#c9a24a",
-                            }}
-                          >
-                            <Pencil size={13} strokeWidth={2.25} aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => void limparAgendamentoCiclo(c, e)}
-                            disabled={limpandoCicloId === c.id || excluindoCicloId === c.id}
-                            title="Limpar cron e intervalo"
-                            aria-label="Limpar agendamento do ciclo"
-                            style={{
-                              width: 32,
-                              height: 28,
-                              flexShrink: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: 0,
-                              border: 0,
-                              boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
-                              cursor:
-                                limpandoCicloId === c.id || excluindoCicloId === c.id ? "not-allowed" : "pointer",
-                              opacity: limpandoCicloId === c.id || excluindoCicloId === c.id ? 0.45 : 1,
-                              background: "rgba(201, 162, 74, 0.12)",
-                              color: "#d6b876",
-                            }}
-                          >
-                            {limpandoCicloId === c.id ? (
-                              <span style={{ fontSize: 11, fontWeight: 700 }}>…</span>
-                            ) : (
-                              <RotateCcw size={13} strokeWidth={2.25} aria-hidden />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void toggleCiclo(c.id, !ativo);
-                            }}
-                            disabled={alternandoCicloId === c.id || excluindoCicloId === c.id}
-                            title={ativo ? "Desativar ciclo" : "Ativar ciclo"}
-                            aria-label={ativo ? "Desativar ciclo" : "Ativar ciclo"}
-                            style={{
-                              width: 32,
-                              height: 28,
-                              flexShrink: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: 0,
-                              border: 0,
-                              boxShadow: "inset -1px 0 0 rgba(44, 56, 75, 0.95)",
-                              cursor:
-                                alternandoCicloId === c.id || excluindoCicloId === c.id
-                                  ? "not-allowed"
-                                  : "pointer",
-                              opacity: alternandoCicloId === c.id || excluindoCicloId === c.id ? 0.45 : 1,
-                              background: ativo ? "rgba(34, 197, 94, 0.1)" : "rgba(248, 113, 113, 0.08)",
-                              color: ativo ? "#4ade80" : "#f87171",
-                            }}
-                          >
-                            {alternandoCicloId === c.id ? (
-                              <span style={{ fontSize: 11, fontWeight: 700 }}>…</span>
-                            ) : (
-                              <Power size={13} strokeWidth={2.25} aria-hidden />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => void excluirCicloDoCard(c, e)}
-                            disabled={excluindoCicloId === c.id || alternandoCicloId === c.id}
-                            title="Excluir ciclo"
-                            aria-label="Excluir ciclo"
-                            style={{
-                              width: 32,
-                              height: 28,
-                              flexShrink: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: 0,
-                              border: 0,
-                              boxShadow: "none",
-                              cursor:
-                                excluindoCicloId === c.id || alternandoCicloId === c.id
-                                  ? "not-allowed"
-                                  : "pointer",
-                              opacity: excluindoCicloId === c.id || alternandoCicloId === c.id ? 0.45 : 1,
-                              background: "rgba(127, 29, 29, 0.22)",
-                              color: "#fca5a5",
-                            }}
-                          >
-                            {excluindoCicloId === c.id ? (
-                              <span style={{ fontSize: 11, fontWeight: 700 }}>…</span>
-                            ) : (
-                              <Trash2 size={13} strokeWidth={2.25} aria-hidden />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {ciclosFiltrados.map((c) => (
+                  <CicloCard
+                    key={c.id}
+                    ciclo={c}
+                    agente={agentesPorSlug.get(c.agente_slug) ?? { agente_slug: c.agente_slug }}
+                    selecionado={drawerOpen && selectedCicloId === c.id}
+                    executando={executando === c.id}
+                    alternando={alternandoCicloId === c.id}
+                    excluindo={excluindoCicloId === c.id}
+                    limpando={limpandoCicloId === c.id}
+                    proximaExecucao={proximaExecucao(c.cron_expressao)}
+                    onOpen={() => void abrirEditarCiclo(c.id)}
+                    onExecutar={() => void executarAgora(c)}
+                    onEditar={() => void abrirEditarCiclo(c.id)}
+                    onLimparAgendamento={(e) => limparAgendamentoCiclo(c, e)}
+                    onToggleAtivo={() => void toggleCiclo(c.id, !c.ativo)}
+                    onExcluir={(e) => void excluirCicloDoCard(c, e)}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -1242,22 +1040,22 @@ export default function CiclosPage() {
         {aba === "logs" && (
           <div className="space-y-2">
             {logs.length === 0 ? (
-              <p className="text-center py-8 text-sm" style={{ color: "#484f58" }}>Nenhuma execução registrada ainda</p>
+              <p className="text-center py-8 text-sm" style={{ color: "#5d7a67" }}>Nenhuma execução registrada ainda</p>
             ) : logs.map(l => (
-              <div key={l.id as string} className="rounded-xl p-3" style={{ background: "#ffffff", border: "1px solid #dcebd8" }}>
+              <div key={l.id as string} className="rounded-xl p-3" style={{ background: "#ffffff", border: "1px solid #d4ecd0" }}>
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-white font-bold text-sm">{l.agente_slug as string}</p>
+                  <p className="font-bold text-sm" style={{ color: BRAND_TEXT_DARK }}>{l.agente_slug as string}</p>
                   <span className="text-xs px-2 py-0.5 rounded-full"
                     style={{ background: `${STATUS_COR[l.status as string] || "#5d7a67"}30`, color: STATUS_COR[l.status as string] || "#5d7a67" }}>
                     {l.status as string}
                   </span>
                 </div>
                 <p className="text-xs" style={{ color: "#5d7a67" }}>{tempoRelativo(l.iniciado_em as string)}</p>
-                {typeof l.erro === "string" && <p className="text-xs mt-1" style={{ color: "#b3261e" }}>{l.erro}</p>}
+                {typeof l.erro === "string" && <p className="text-xs mt-1" style={{ color: "#dc2626" }}>{l.erro}</p>}
                 {Array.isArray(l.acoes_tomadas) && (l.acoes_tomadas as string[]).length > 0 && (
                   <div className="mt-1 space-y-0.5">
                     {(l.acoes_tomadas as string[]).slice(0, 3).map((a, i) => (
-                      <p key={i} className="text-xs" style={{ color: "#484f58" }}>• {a}</p>
+                      <p key={i} className="text-xs" style={{ color: "#6b8a76" }}>• {a}</p>
                     ))}
                   </div>
                 )}
@@ -1275,7 +1073,7 @@ export default function CiclosPage() {
                 <p className="text-xs mt-1" style={{ color: "#484f58" }}>Operação saudável</p>
               </div>
             ) : alertas.map(a => {
-              const cor = a.tipo === "critico" ? "#b3261e" : a.tipo === "importante" ? "#c9a24a" : a.tipo === "sugestao" ? "#003b26" : "#5d7a67";
+              const cor = a.tipo === "critico" ? "#dc2626" : a.tipo === "importante" ? CRM_ACCENT : a.tipo === "sugestao" ? BRAND_TEXT_DARK : "#5d7a67";
               return (
                 <div key={a.id as string} className="rounded-xl p-3"
                   style={{
@@ -1290,18 +1088,18 @@ export default function CiclosPage() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                           style={{ background: `${cor}22`, color: cor }}>{a.tipo as string}</span>
-                        <span className="text-xs" style={{ color: "#484f58" }}>{a.agente_slug as string}</span>
+                        <span className="text-xs" style={{ color: "#6b8a76" }}>{a.agente_slug as string}</span>
                       </div>
-                      <p className="text-white font-bold text-sm">{a.titulo as string}</p>
+                      <p className="font-bold text-sm" style={{ color: BRAND_TEXT_DARK }}>{a.titulo as string}</p>
                       <p className="text-xs mt-0.5" style={{ color: "#5d7a67" }}>{a.mensagem as string}</p>
                     </div>
-                    <button onClick={() => resolverAlerta(a.id as string)}
+                    <button type="button" onClick={() => resolverAlerta(a.id as string)}
                       className="ml-2 text-xs px-2 py-1 rounded-lg flex-shrink-0"
-                      style={{ background: "#eef7eb", color: "#c9a24a", border: "none", cursor: "pointer" }}>
+                      style={crmBtnSecondary()}>
                       Resolver
                     </button>
                   </div>
-                  <p className="text-xs" style={{ color: "#484f58" }}>{tempoRelativo(a.criado_em as string)}</p>
+                  <p className="text-xs" style={{ color: "#6b8a76" }}>{tempoRelativo(a.criado_em as string)}</p>
                 </div>
               );
             })}
@@ -1310,171 +1108,109 @@ export default function CiclosPage() {
       </div>
     </div>
       {drawerOpen && (
-        <div
-          className="fixed inset-0 z-50 flex justify-end"
-          style={{ background: "rgba(1,4,9,0.5)", backdropFilter: "blur(2px)" }}
-          onClick={() => setDrawerOpen(false)}
-        >
-          <aside
-            className="h-full w-full max-w-xl border-l p-4 overflow-auto"
-            style={{ background: "#f8fcf6", borderColor: "#dcebd8" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-xs uppercase" style={{ color: "#5d7a67" }}>
-                  {drawerMode === "create" ? "Novo ciclo" : "Editar ciclo"}
-                </p>
-                <h2 className="text-lg font-semibold text-white">
-                  {drawerMode === "create" ? "Criar ciclo IA" : fNome || "Ciclo IA"}
-                </h2>
+        <>
+          <button
+            type="button"
+            aria-label="Fechar painel"
+            onClick={() => setDrawerOpen(false)}
+            style={rfOverlayStyle(50)}
+          />
+          <aside style={rfAsideStyle("min(600px, 100vw)", 51)} onClick={(e) => e.stopPropagation()}>
+            <div style={rfAsideHeaderStyle()}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, color: RF_TEXT_MUTED, fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
+                    {drawerMode === "create" ? "NOVO CICLO" : "EDITAR CICLO"}
+                  </p>
+                  <h2 style={{ margin: "4px 0 0", color: RF_TEXT_PRIMARY, fontSize: 18, fontWeight: 700 }}>
+                    {drawerMode === "create" ? "Criar ciclo IA" : fNome || "Ciclo IA"}
+                  </h2>
+                </div>
+                <button type="button" onClick={() => setDrawerOpen(false)} style={rfCloseButtonStyle()} aria-label="Fechar">
+                  <X size={16} strokeWidth={2} aria-hidden />
+                </button>
               </div>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="text-sm px-2 py-1 rounded"
-                style={{ background: "#eef7eb", color: "#5d7a67", border: "1px solid #dcebd8" }}
-              >
-                Fechar
-              </button>
+              {drawerMode === "edit" && selectedCicloId && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "flex",
+                    width: "100%",
+                    overflow: "hidden",
+                    borderRadius: 8,
+                    border: `1px solid ${RF_BORDER_STRONG}`,
+                  }}
+                >
+                  {(["dados", "timeline"] as const).map((tab, i) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setDrawerSubTab(tab)}
+                      style={{
+                        flex: 1,
+                        minHeight: 36,
+                        margin: 0,
+                        borderRadius: 0,
+                        border: "none",
+                        borderLeft: i > 0 ? `1px solid ${RF_BORDER_STRONG}` : "none",
+                        background: drawerSubTab === tab ? "rgba(146, 255, 0, 0.1)" : "rgba(6, 13, 8, 0.5)",
+                        color: drawerSubTab === tab ? RF_ACCENT : RF_TEXT_MUTED,
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        textTransform: tab === "timeline" ? "none" : "capitalize",
+                      }}
+                    >
+                      {tab === "dados" ? "Dados" : "Timeline"}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
+            <div style={rfAsideBodyStyle()}>
             {formLoading ? (
-              <p className="text-sm" style={{ color: "#5d7a67" }}>Carregando...</p>
+              <p style={{ color: RF_TEXT_MUTED, fontSize: 13, margin: 0 }}>Carregando...</p>
             ) : (
               <>
-                {drawerMode === "edit" && selectedCicloId && (
-                  <div
-                    className="mb-4 flex w-full overflow-hidden rounded-lg"
-                    style={{ border: "1px solid #dcebd8" }}
-                  >
-                    {(["dados", "timeline"] as const).map((tab, i) => (
-                      <button
-                        key={tab}
-                        type="button"
-                        onClick={() => setDrawerSubTab(tab)}
-                        className="min-h-[36px] flex-1 text-xs font-bold px-3 py-2"
-                        style={{
-                          margin: 0,
-                          borderRadius: 0,
-                          border: "none",
-                          borderLeft: i > 0 ? "1px solid #dcebd8" : "none",
-                          background: drawerSubTab === tab ? "#1b2532" : "#ffffff",
-                          color: drawerSubTab === tab ? "#c9a24a" : "#5d7a67",
-                          cursor: "pointer",
-                          textTransform: tab === "timeline" ? "none" : "capitalize",
-                        }}
-                      >
-                        {tab === "dados" ? "Dados" : "Timeline"}
-                      </button>
-                    ))}
-                  </div>
-                )}
 
                 {drawerMode === "edit" && drawerSubTab === "timeline" && selectedCicloId ? (
-                  <div className="space-y-2">
-                    <p className="text-xs" style={{ color: "#5d7a67" }}>
-                      Execuções registradas em <code style={{ color: "#c9a24a" }}>hub_ciclos_log</code> para este ciclo (últimas 50).
-                    </p>
-                    {timelineLoading ? (
-                      <p className="text-sm" style={{ color: "#5d7a67" }}>Carregando histórico…</p>
-                    ) : timelineLogs.length === 0 ? (
-                      <div className="rounded-lg p-4 space-y-2" style={{ background: "#ffffff", border: "1px solid #dcebd8" }}>
-                        <p className="text-sm m-0" style={{ color: "#5d7a67" }}>
-                          Ainda não há linhas em <span style={{ color: "#c9a24a" }}>hub_ciclos_log</span> com o identificador deste ciclo.
-                        </p>
-                        <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.5 }}>
-                          O agendamento da Vercel chama rotas fixas (por exemplo <code style={{ color: "#c9a24a" }}>/api/ciclos/atendente?ciclo=followup</code>).
-                          Só após uma execução que grave <code style={{ color: "#c9a24a" }}>ciclo_id</code> vinculado a esta linha é que a timeline aparece aqui.
-                          Execuções antigas ou sem vínculo podem existir só na aba «Logs» geral.
-                        </p>
-                      </div>
-                    ) : (
-                      <ul className="space-y-2 pl-0 list-none m-0" style={{ borderLeft: "2px solid #dcebd8", marginLeft: 8, paddingLeft: 16 }}>
-                        {timelineLogs.map((log) => {
-                          const st = String(log.status ?? "");
-                          return (
-                            <li
-                              key={String(log.id)}
-                              className="relative pl-0 pb-3"
-                              style={{ borderLeft: "none" }}
-                            >
-                              <span
-                                className="absolute rounded-full"
-                                style={{
-                                  width: 10,
-                                  height: 10,
-                                  left: -21,
-                                  top: 4,
-                                  background: STATUS_COR[st] || "#484f58",
-                                }}
-                              />
-                              <div className="rounded-lg p-3" style={{ background: "#ffffff", border: "1px solid #dcebd8" }}>
-                                <div className="flex items-center justify-between gap-2 flex-wrap">
-                                  <span className="text-xs font-bold" style={{ color: "#0b2210" }}>
-                                    {log.agente_slug as string}
-                                  </span>
-                                  <span
-                                    className="text-xs px-2 py-0.5 rounded-full"
-                                    style={{
-                                      background: `${STATUS_COR[st] || "#5d7a67"}30`,
-                                      color: STATUS_COR[st] || "#5d7a67",
-                                    }}
-                                  >
-                                    {st || "—"}
-                                  </span>
-                                </div>
-                                <p className="text-xs mt-1" style={{ color: "#5d7a67" }}>
-                                  {tempoRelativo(log.iniciado_em as string)}
-                                  {log.finalizado_em ? ` · fim ${tempoRelativo(log.finalizado_em as string)}` : ""}
-                                </p>
-                                {typeof log.erro === "string" && log.erro && (
-                                  <p className="text-xs mt-1" style={{ color: "#b3261e" }}>{log.erro}</p>
-                                )}
-                                {Array.isArray(log.acoes_tomadas) && (log.acoes_tomadas as string[]).length > 0 && (
-                                  <ul className="mt-2 text-xs m-0 pl-4" style={{ color: "#484f58" }}>
-                                    {(log.acoes_tomadas as string[]).slice(0, 5).map((ac, i) => (
-                                      <li key={i}>{ac}</li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
+                  <CicloTimelinePanel
+                    cicloId={selectedCicloId}
+                    theme="dark"
+                    onRefreshRequest={() => void recarregarTudo()}
+                  />
                 ) : (
               <div className="space-y-3">
                 <label className="block">
-                  <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>Agente slug</span>
+                  <span style={rfLabelStyle()}>Agente slug</span>
                   <input
                     value={fAgenteSlug}
                     onChange={(e) => setFAgenteSlug(e.target.value)}
                     className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: "#ffffff", border: "1px solid #dcebd8", color: "#0b2210" }}
+                    style={rfInputStyle()}
                     placeholder="ex.: gerente_atendimento"
                   />
                 </label>
                 {agenteSomenteCanalWa && (
                   <p
                     className="text-xs m-0 rounded-lg p-3 leading-relaxed"
-                    style={{ background: "#1b2532", border: "1px solid #dcebd8", color: "#5d7a67" }}
+                    style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}`, color: RF_TEXT_SECONDARY }}
                   >
-                    Agente <strong style={{ color: "#c9a24a" }}>{MODO_OPERACAO_LABEL.canal_whatsapp}</strong>
+                    Agente <strong style={{ color: RF_ACCENT }}>{MODO_OPERACAO_LABEL.canal_whatsapp}</strong>
                     : a conversa ao vivo é pelo webhook UAZAPI. Use ciclo{" "}
-                    <strong style={{ color: "#0b2210" }}>gatilho</strong> para registo no hub; agendamento cron
-                    só faz sentido para <strong style={{ color: "#c9a24a" }}>follow-up</strong> (nome ou dispatch
+                    <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho</strong> para registo no hub; agendamento cron
+                    só faz sentido para <strong style={{ color: RF_ACCENT }}>follow-up</strong> (nome ou dispatch
                     atendente/followup).
                   </p>
                 )}
                 <label className="block">
-                  <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>Nome</span>
+                  <span style={rfLabelStyle()}>Nome</span>
                   <input
                     value={fNome}
                     onChange={(e) => setFNome(e.target.value)}
                     className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: "#ffffff", border: "1px solid #dcebd8", color: "#0b2210" }}
+                    style={rfInputStyle()}
                   />
                 </label>
                 <label className="block">
@@ -1489,7 +1225,7 @@ export default function CiclosPage() {
                       className="inline-flex items-center gap-1.5 text-xs font-bold rounded-md px-2 py-1"
                       style={{
                         background: "#eef7eb",
-                        color: "#c9a24a",
+                        color: RF_ACCENT,
                         border: "1px solid #dcebd8",
                         cursor:
                           sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()
@@ -1508,20 +1244,20 @@ export default function CiclosPage() {
                     onChange={(e) => setFDescricao(e.target.value)}
                     rows={3}
                     className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: "#ffffff", border: "1px solid #dcebd8", color: "#0b2210" }}
+                    style={rfInputStyle()}
                   />
                 </label>
                 {esconderAgendamentoCron ? (
                   <div
                     className="rounded-lg p-3 space-y-2"
-                    style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
+                    style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
                   >
-                    <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>
+                    <p className="text-xs font-bold m-0" style={{ color: RF_ACCENT }}>
                       Canal WhatsApp — sem agendamento cron
                     </p>
                     <p className="text-xs m-0 leading-relaxed" style={{ color: "#5d7a67" }}>
-                      Este agente atua sob <strong style={{ color: "#0b2210" }}>interação</strong> (mensagens
-                      UAZAPI). O tipo do ciclo fica em <strong style={{ color: "#0b2210" }}>gatilho</strong> para
+                      Este agente atua sob <strong style={{ color: RF_TEXT_PRIMARY }}>interação</strong> (mensagens
+                      UAZAPI). O tipo do ciclo fica em <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho</strong> para
                       documentação no hub. Para cadências de follow-up programadas, use um nome com «follow» ou
                       configure <code style={{ color: "#5d7a67" }}>dispatch.atendente/followup</code> e abra os
                       parâmetros de follow-up abaixo.
@@ -1532,11 +1268,11 @@ export default function CiclosPage() {
                   open={agendaDetailsAberto}
                   onToggle={(e) => setAgendaDetailsAberto(e.currentTarget.open)}
                   className="rounded-lg"
-                  style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
+                  style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
                 >
                   <summary
                     className="cursor-pointer list-none flex items-center gap-2 p-3 select-none outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ffffff] focus-visible:ring-[#c9a24a66]"
-                    style={{ color: "#c9a24a" }}
+                    style={{ color: RF_ACCENT }}
                     aria-expanded={agendaDetailsAberto}
                   >
                     <ChevronRight
@@ -1544,7 +1280,7 @@ export default function CiclosPage() {
                       aria-hidden
                       className="flex-shrink-0 transition-transform duration-200 ease-out"
                       style={{
-                        color: "#c9a24a",
+                        color: RF_ACCENT,
                         transform: agendaDetailsAberto ? "rotate(90deg)" : "rotate(0deg)",
                       }}
                     />
@@ -1596,20 +1332,20 @@ export default function CiclosPage() {
                           }}
                           className="w-full text-left rounded-lg p-3 transition-colors"
                           style={{
-                            border: sel ? "1px solid rgba(201, 162, 74, 0.55)" : "1px solid #dcebd8",
-                            background: sel ? "#1b2532" : "#f8fcf6",
+                            border: sel ? `1px solid ${RF_BORDER_STRONG}` : `1px solid ${RF_BORDER}`,
+                            background: sel ? "rgba(146, 255, 0, 0.1)" : "rgba(6, 13, 8, 0.5)",
                             cursor: "pointer",
                           }}
                         >
                           <div className="flex items-start gap-2">
                             <span
                               className="mt-0.5 inline-flex rounded-md p-1"
-                              style={{ background: sel ? "#c9a24a22" : "#eef7eb", color: sel ? "#c9a24a" : "#5d7a67" }}
+                              style={{ background: sel ? "rgba(146, 255, 0, 0.14)" : "rgba(6, 13, 8, 0.45)", color: sel ? RF_ACCENT : RF_TEXT_MUTED }}
                             >
                               <Icon size={16} aria-hidden />
                             </span>
                             <span>
-                              <span className="block text-sm font-bold" style={{ color: "#0b2210" }}>
+                              <span className="block text-sm font-bold" style={{ color: RF_TEXT_PRIMARY }}>
                                 {opt.title}
                               </span>
                               <span className="block text-xs mt-0.5" style={{ color: "#5d7a67" }}>
@@ -1624,14 +1360,14 @@ export default function CiclosPage() {
 
                 {(fTipo === "continuo" || fTipo === "programado") && (
                   <label className="block">
-                    <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>
+                    <span style={rfLabelStyle()}>
                       Intervalo mínimo (minutos)
                     </span>
                     <input
                       value={fIntervalo}
                       onChange={(e) => setFIntervalo(e.target.value)}
                       className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: "#ffffff", border: "1px solid #dcebd8", color: "#0b2210" }}
+                      style={rfInputStyle()}
                       placeholder={fTipo === "continuo" ? "ex.: 15" : "ex.: 360"}
                     />
                     <p className="text-xs mt-1 m-0" style={{ color: "#484f58" }}>
@@ -1643,10 +1379,10 @@ export default function CiclosPage() {
                 {fTipo === "programado" && (
                   <div
                     className="rounded-lg p-3 space-y-3"
-                    style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
+                    style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>
+                      <p className="text-xs font-bold m-0" style={{ color: RF_ACCENT }}>
                         Horário fixo (UTC) e dias da semana
                       </p>
                       <label className="flex items-center gap-2 text-xs m-0 cursor-pointer" style={{ color: "#5d7a67" }}>
@@ -1685,7 +1421,7 @@ export default function CiclosPage() {
                                 setCronHr(Math.min(23, Math.max(0, Number.parseInt(e.target.value, 10) || 0)))
                               }
                               className="w-24 rounded-lg px-3 py-2 text-sm"
-                              style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
+                              style={rfInputStyle()}
                             />
                           </label>
                           <label className="m-0">
@@ -1701,7 +1437,7 @@ export default function CiclosPage() {
                                 setCronMin(Math.min(59, Math.max(0, Number.parseInt(e.target.value, 10) || 0)))
                               }
                               className="w-24 rounded-lg px-3 py-2 text-sm"
-                              style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
+                              style={rfInputStyle()}
                             />
                           </label>
                         </div>
@@ -1719,9 +1455,9 @@ export default function CiclosPage() {
                                   onClick={() => toggleCronDia(dow)}
                                   className="text-xs font-bold rounded-md px-2.5 py-1.5"
                                   style={{
-                                    border: on ? "1px solid #c9a24a" : "1px solid #dcebd8",
-                                    background: on ? "#c9a24a22" : "#f8fcf6",
-                                    color: on ? "#c9a24a" : "#5d7a67",
+                                    border: on ? `1px solid ${RF_ACCENT}` : `1px solid ${RF_BORDER}`,
+                                    background: on ? "rgba(146, 255, 0, 0.14)" : "rgba(6, 13, 8, 0.45)",
+                                    color: on ? RF_ACCENT : RF_TEXT_MUTED,
                                     cursor: "pointer",
                                   }}
                                 >
@@ -1735,19 +1471,19 @@ export default function CiclosPage() {
                           O dispatch usa <strong style={{ color: "#5d7a67" }}>UTC</strong>. Para 09:00 em Brasília
                           (≈ UTC−3), indique por exemplo <strong style={{ color: "#5d7a67" }}>12</strong> na hora
                           UTC. Expressão gerada:{" "}
-                          <code style={{ color: "#c9a24a" }}>{buildCronUtc(cronMin, cronHr, cronDias)}</code>
+                          <code style={{ color: RF_ACCENT }}>{buildCronUtc(cronMin, cronHr, cronDias)}</code>
                         </p>
                       </>
                     ) : (
                       <label className="block m-0">
-                        <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>
+                        <span style={rfLabelStyle()}>
                           Expressão cron (5 campos, UTC)
                         </span>
                         <input
                           value={fCron}
                           onChange={(e) => setFCron(e.target.value)}
                           className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                          style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
+                          style={rfInputStyle()}
                           placeholder="ex.: 0 12 * * 1-5"
                         />
                       </label>
@@ -1757,7 +1493,7 @@ export default function CiclosPage() {
 
                 {fTipo === "gatilho" && (
                   <p className="text-xs m-0 rounded-lg p-3" style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#5d7a67" }}>
-                    Este modo não agenda sozinho: use <strong style={{ color: "#c9a24a" }}>Executar</strong> no card ou ligue o ciclo a filas/webhooks na sua integração.
+                    Este modo não agenda sozinho: use <strong style={{ color: RF_ACCENT }}>Executar</strong> no card ou ligue o ciclo a filas/webhooks na sua integração.
                   </p>
                 )}
                   </div>
@@ -1766,10 +1502,10 @@ export default function CiclosPage() {
                 {!mostrarBlocoFollowup ? (
                   <div
                     className="rounded-lg p-3 space-y-2"
-                    style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
+                    style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
                   >
                     <p className="text-xs m-0" style={{ color: "#5d7a67", lineHeight: 1.5 }}>
-                      <strong style={{ color: "#c9a24a" }}>Follow-up WhatsApp</strong> — horas por passo e
+                      <strong style={{ color: RF_ACCENT }}>Follow-up WhatsApp</strong> — horas por passo e
                       pré-visualização do hub aplicam-se sobretudo a ciclos de atendimento (ex.: «follow» no nome ou{" "}
                       <code style={{ color: "#5d7a67" }}>dispatch</code>{" "}
                       <code style={{ color: "#5d7a67" }}>atendente</code> /{" "}
@@ -1785,7 +1521,7 @@ export default function CiclosPage() {
                       className="text-xs font-bold px-2.5 py-1.5 rounded-md"
                       style={{
                         background: "#eef7eb",
-                        color: "#c9a24a",
+                        color: RF_ACCENT,
                         border: "1px solid #dcebd8",
                         cursor: "pointer",
                       }}
@@ -1797,13 +1533,13 @@ export default function CiclosPage() {
                 <details
                   key={`adv-followup-${drawerMode}-${selectedCicloId ?? "novo"}`}
                   className="rounded-lg"
-                  style={{ background: "#ffffff", border: "1px solid #dcebd8" }}
+                  style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
                   open={followupDetailsAberto}
                   onToggle={(e) => setFollowupDetailsAberto(e.currentTarget.open)}
                 >
                   <summary
                     className="cursor-pointer list-none flex items-center gap-2 p-3 select-none outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ffffff] focus-visible:ring-[#c9a24a66]"
-                    style={{ color: "#c9a24a" }}
+                    style={{ color: RF_ACCENT }}
                     aria-expanded={followupDetailsAberto}
                   >
                     <ChevronRight
@@ -1811,7 +1547,7 @@ export default function CiclosPage() {
                       aria-hidden
                       className="flex-shrink-0 transition-transform duration-200 ease-out"
                       style={{
-                        color: "#c9a24a",
+                        color: RF_ACCENT,
                         transform: followupDetailsAberto ? "rotate(90deg)" : "rotate(0deg)",
                       }}
                     />
@@ -1838,7 +1574,7 @@ export default function CiclosPage() {
                     Valores gravados em <code style={{ color: "#5d7a67" }}>configuracoes</code> (horas por passo e dias
                     até arquivar); textos das mensagens vêm de <code style={{ color: "#5d7a67" }}>hub_followup_config</code>.
                   </p>
-                  <p className="text-xs font-bold m-0" style={{ color: "#c9a24a" }}>Parâmetros de follow-up</p>
+                  <p className="text-xs font-bold m-0" style={{ color: RF_ACCENT }}>Parâmetros de follow-up</p>
                   <label className="block m-0">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                       <span className="text-xs block" style={{ color: "#5d7a67" }}>
@@ -1851,7 +1587,7 @@ export default function CiclosPage() {
                         className="inline-flex items-center gap-1.5 text-xs font-bold rounded-md px-2 py-1"
                         style={{
                           background: "#eef7eb",
-                          color: "#c9a24a",
+                          color: RF_ACCENT,
                           border: "1px solid #dcebd8",
                           cursor:
                             sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim()
@@ -1893,7 +1629,7 @@ export default function CiclosPage() {
                       value={fHorasFollowup}
                       onChange={(e) => setFHorasFollowup(e.target.value)}
                       className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
+                      style={rfInputStyle()}
                       placeholder="ex.: 2, 24, 48"
                     />
                     <span className="text-xs mt-1 block" style={{ color: "#484f58" }}>
@@ -1901,7 +1637,7 @@ export default function CiclosPage() {
                     </span>
                   </label>
                   <label className="block m-0">
-                    <span className="text-xs mb-1 block" style={{ color: "#5d7a67" }}>Arquivar lead após quantos dias sem resposta</span>
+                    <span style={rfLabelStyle()}>Arquivar lead após quantos dias sem resposta</span>
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {[7, 14, 21, 30].map((d) => (
                         <button
@@ -1926,13 +1662,13 @@ export default function CiclosPage() {
                       value={fArquivarAposDias}
                       onChange={(e) => setFArquivarAposDias(e.target.value)}
                       className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: "#f8fcf6", border: "1px solid #dcebd8", color: "#0b2210" }}
+                      style={rfInputStyle()}
                     />
                   </label>
 
-                  <div className="rounded-lg p-3 space-y-2" style={{ background: "#f8fcf6", border: "1px solid #dcebd8" }}>
+                  <div className="rounded-lg p-3 space-y-2" style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-bold m-0" style={{ color: "#0b2210" }}>Pré-visualizar merge com hub_followup_config</p>
+                      <p className="text-xs font-bold m-0" style={{ color: RF_TEXT_PRIMARY }}>Pré-visualizar merge com hub_followup_config</p>
                       {mercadosPreviewOptions.length > 1 && (
                         <label className="flex items-center gap-2 m-0 text-xs" style={{ color: "#5d7a67" }}>
                           <span>Mercado</span>
@@ -1964,9 +1700,9 @@ export default function CiclosPage() {
                     ) : (
                       <>
                         <div className="overflow-x-auto rounded-md" style={{ border: "1px solid #dcebd8" }}>
-                          <table className="w-full text-xs border-collapse" style={{ color: "#0b2210" }}>
+                          <table className="w-full text-xs border-collapse" style={{ color: RF_TEXT_PRIMARY }}>
                             <thead>
-                              <tr style={{ background: "#ffffff", color: "#5d7a67", textAlign: "left" }}>
+                              <tr style={{ background: "rgba(6, 13, 8, 0.55)", color: RF_TEXT_MUTED, textAlign: "left" }}>
                                 <th className="px-2 py-1.5 font-semibold">Passo</th>
                                 <th className="px-2 py-1.5 font-semibold">Hub (h)</th>
                                 <th className="px-2 py-1.5 font-semibold">Após merge (h)</th>
@@ -1982,7 +1718,7 @@ export default function CiclosPage() {
                                     className="px-2 py-1.5 font-semibold"
                                     style={{
                                       color:
-                                        row.mergeHoras !== row.hubHoras ? "#c9a24a" : "#0b2210",
+                                        row.mergeHoras !== row.hubHoras ? RF_ACCENT : RF_TEXT_PRIMARY,
                                     }}
                                   >
                                     {row.mergeHoras}
@@ -2019,7 +1755,7 @@ export default function CiclosPage() {
                               className="text-xs font-bold px-2 py-1.5 rounded"
                               style={{
                                 background: "#2d2419",
-                                color: "#c9a24a",
+                                color: RF_ACCENT,
                                 border: "1px solid #634419",
                                 cursor: "pointer",
                               }}
@@ -2034,7 +1770,7 @@ export default function CiclosPage() {
                           className="text-xs px-2 py-1.5 rounded"
                           style={{
                             background: "#eef7eb",
-                            color: "#c9a24a",
+                            color: RF_ACCENT,
                             border: "1px solid #dcebd8",
                             cursor: "pointer",
                           }}
@@ -2056,52 +1792,51 @@ export default function CiclosPage() {
                   </div>
                 </details>
                 )}
-                <label className="inline-flex items-center gap-2">
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"
                     checked={fAtivo}
                     onChange={(e) => setFAtivo(e.target.checked)}
                   />
-                  <span className="text-sm" style={{ color: "#0b2210" }}>Ciclo ativo</span>
+                  <span style={{ fontSize: 13, color: RF_TEXT_PRIMARY }}>Ciclo ativo</span>
                 </label>
                 {erroDrawer && (
-                  <p className="text-sm" style={{ color: "#b3261e" }}>{erroDrawer}</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#f85149" }}>{erroDrawer}</p>
                 )}
-                <div className="flex items-center justify-between pt-2">
-                  <div>
-                    {drawerMode === "edit" && (
-                      <button
-                        onClick={() => pedirExcluirCicloNoDrawer()}
-                        disabled={
-                          saving ||
-                          (cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId)
-                        }
-                        className="px-3 py-2 rounded text-sm"
-                        style={{ background: "#2d1517", color: "#ffb4ab", border: "1px solid #b3261e55" }}
-                      >
-                        {cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId
-                          ? "Excluindo..."
-                          : "Excluir ciclo"}
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => void salvarCiclo()}
-                    disabled={
-                      saving || (cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId)
-                    }
-                    className="px-3 py-2 rounded text-sm font-semibold"
-                    style={{ background: "#003b26", color: "#c9a24a", border: "1px solid #0f5132" }}
-                  >
-                    {saving ? "Salvando..." : "Salvar"}
-                  </button>
-                </div>
               </div>
                 )}
               </>
             )}
+            </div>
+
+            {!(formLoading || (drawerMode === "edit" && drawerSubTab === "timeline")) && (
+              <div style={rfAsideFooterStyle()}>
+                {drawerMode === "edit" ? (
+                  <button
+                    type="button"
+                    onClick={() => pedirExcluirCicloNoDrawer()}
+                    disabled={saving || (cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId)}
+                    style={crmBtnDangerSoft(saving || (cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId))}
+                  >
+                    {cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId ? "Excluindo..." : "Excluir ciclo"}
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setDrawerOpen(false)} style={crmBtnSecondary()}>
+                    Cancelar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void salvarCiclo()}
+                  disabled={saving || (cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId)}
+                  style={crmBtnPrimaryLg(saving || (cicloDialogBusy && dialogExcluirCiclo?.id === selectedCicloId))}
+                >
+                  {saving ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            )}
           </aside>
-        </div>
+        </>
       )}
 
       <CrmConfirmDialog
@@ -2116,8 +1851,8 @@ export default function CiclosPage() {
       >
         <p style={{ margin: "0 0 10px" }}>
           O ciclo <strong style={{ color: "#0b2210" }}>«{dialogExcluirCiclo?.nome}»</strong> será removido de{" "}
-          <code style={{ color: "#c9a24a" }}>hub_ciclos_ia</code> juntamente com as linhas de execução associadas em{" "}
-          <code style={{ color: "#c9a24a" }}>hub_ciclos_log</code> (mesma transação no servidor, com autorização de
+          <code style={{ color: CRM_ACCENT }}>hub_ciclos_ia</code> juntamente com as linhas de execução associadas em{" "}
+          <code style={{ color: CRM_ACCENT }}>hub_ciclos_log</code> (mesma transação no servidor, com autorização de
           exclusão).
         </p>
         <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>Não é possível desfazer.</p>
@@ -2135,7 +1870,7 @@ export default function CiclosPage() {
       >
         <p style={{ margin: 0 }}>
           Para <strong style={{ color: "#0b2210" }}>«{dialogLimparCiclo?.nome}»</strong> vamos anular{" "}
-          <code style={{ color: "#c9a24a" }}>cron_expressao</code> e <code style={{ color: "#c9a24a" }}>intervalo_minutos</code>.
+          <code style={{ color: CRM_ACCENT }}>cron_expressao</code> e <code style={{ color: CRM_ACCENT }}>intervalo_minutos</code>.
           O ciclo continua cadastrado; pode voltar a editar o agendamento quando quiser.
         </p>
       </CrmConfirmDialog>

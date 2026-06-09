@@ -281,16 +281,14 @@ export async function processarMensagemInboundWhatsapp(params: {
       ? lead.agente_responsavel.trim()
       : "sdr";
 
-  if (humanoResponsavelAtivo || isGroupTransfer) {
-    const reason = isGroupTransfer ? "grupo_transfer_ativo" : "humano_responsavel_ativo";
-    log.info("wa.processor.ia_skipped", { reason });
+  if (!agente) {
     const motivo = IA_ATIVA ? "agente_nao_encontrado" : "ia_api_key_ausente";
-    log.warn("wa.processor.ia_skipped", { reason: motivo, ia_ativa: IA_ATIVA, tem_agente: Boolean(agente) });
+    log.warn("wa.processor.ia_skipped", { reason: motivo, ia_ativa: IA_ATIVA, tem_agente: false });
     await enviarFallbackIA({
       supabase,
       leadId: lead.id,
       telefone: params.telefone,
-      agenteSlug: agente?.agente_slug as string | undefined,
+      agenteSlug: agenteResponsavelLead,
       motivo,
       mensagemOriginal: params.mensagemFinal,
       waSendOpts: params.waSendOpts,
@@ -299,7 +297,8 @@ export async function processarMensagemInboundWhatsapp(params: {
     return;
   }
 
-  const agenteSlug = typeof agente.agente_slug === "string" ? agente.agente_slug : "sdr";
+  const agenteSlug =
+    typeof agente.agente_slug === "string" ? agente.agente_slug : agenteResponsavelLead;
   const iaStarted = Date.now();
   log.info("wa.processor.ia_start", { agente_slug: agenteSlug, lead_id: lead.id });
 

@@ -44,6 +44,7 @@ function LoginForm() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (process.env.NODE_ENV !== "development") return;
     const host = window.location.hostname;
     if (host !== "localhost" && host !== "127.0.0.1") {
       setDevHostHint(host);

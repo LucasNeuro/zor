@@ -1,5 +1,7 @@
 /** Normaliza colunas de `public.users` entre esquemas (criado_em vs created_at). */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type UserRow = Record<string, unknown>;
 
 export const DB_RECORD_STATUSES = ["Ativo", "Inativo", "Arquivado"] as const;
@@ -49,15 +51,7 @@ export function userUpdateTimestamp(): Record<string, string> {
   return { atualizado_em: now, updated_at: now };
 }
 
-type SupabaseLike = {
-  from: (table: string) => {
-    update: (payload: Record<string, unknown>) => {
-      eq: (col: string, val: string) => {
-        select: (cols: string) => { maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }> };
-      };
-    };
-  };
-};
+type UsersDb = SupabaseClient;
 
 function isMissingPtTimestampColumn(message: string): boolean {
   return /atualizado_em|criado_em/i.test(message);
@@ -77,28 +71,9 @@ function stripEnTimestamps(payload: Record<string, unknown>): Record<string, unk
   return rest;
 }
 
-type UsersDb = {
-  from: (table: string) => {
-    update: (payload: Record<string, unknown>) => {
-      eq: (col: string, val: string) => {
-        is?: (col2: string, val2: null) => {
-          select: (cols: string) => { maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }> };
-        };
-        select: (cols: string) => { maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }> };
-      };
-    };
-    upsert: (
-      payload: Record<string, unknown>,
-      opts: { onConflict: string }
-    ) => {
-      select: (cols: string) => { single: () => Promise<{ data: unknown; error: { message: string } | null }> };
-    };
-  };
-};
-
 /** Aplica update com fallback se a base só tiver created_at/updated_at. */
 export async function updateUserByAuthId(
-  db: SupabaseLike,
+  db: UsersDb,
   authId: string,
   fields: Record<string, unknown>,
 ): Promise<{ data: UserRow | null; error: { message: string } | null }> {
@@ -113,7 +88,12 @@ export async function updateUserByAuthId(
       .maybeSingle();
   }
   if (res.error && isMissingEnTimestampColumn(res.error.message)) {
-    res = await db.from("users").update(stripEnTimestamps(withDbRecordStatus(fields))).eq("auth_id", authId).select("*").maybeSingle();
+    res = await db
+      .from("users")
+      .update(stripEnTimestamps(withDbRecordStatus(fields)))
+      .eq("auth_id", authId)
+      .select("*")
+      .maybeSingle();
   }
   return {
     data: normalizeUserRow(res.data as UserRow | null),
@@ -132,8 +112,8 @@ export async function updateUserById(
 
   const runUpdate = (payload: Record<string, unknown>) => {
     let q = db.from("users").update(payload).eq("id", id);
-    if (opts?.tenantId) q = q.eq("tenant_id", opts.tenantId) as typeof q;
-    if (opts?.onlyOrphan) q = q.is("tenant_id", null) as typeof q;
+    if (opts?.tenantId) q = q.eq("tenant_id", opts.tenantId);
+    if (opts?.onlyOrphan) q = q.is("tenant_id", null);
     return q.select("*").maybeSingle();
   };
 

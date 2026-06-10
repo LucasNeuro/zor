@@ -117,7 +117,7 @@ export default function AnalyticsPanel() {
       <SectionTitle>Central de Comando</SectionTitle>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
         <MetricCard label="Leads hoje" valor={dados.leadsHoje} cor="#c9a24a" onClick={() => router.push("/crm/leads")} />
-        <MetricCard label="Aguardando" valor={dados.aguardando} cor={dados.aguardando > 0 ? "#c9a24a" : "#003b26"} sub="precisam de resposta" onClick={() => router.push("/crm/atendimento")} />
+        <MetricCard label="Aguardando" valor={dados.aguardando} cor={dados.aguardando > 0 ? "#c9a24a" : "#003b26"} sub="precisam de resposta" onClick={() => router.push("/crm/leads")} />
         <MetricCard label="Aprovações" valor={dados.aprovacoes} cor={dados.aprovacoes > 0 ? "#b3261e" : "#003b26"} sub="pendentes" onClick={() => router.push("/crm/aprovacoes")} />
         <MetricCard label="Encaminhados" valor={dados.encaminhamentos} cor="#003b26" sub="hoje" onClick={() => router.push("/crm/leads")} />
       </div>

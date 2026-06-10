@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { buildWajeAccessCopyText } from "@/lib/crm/access-permissions";
 import { ContaSectionTabs } from "@/components/crm/ContaSectionTabs";
+import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
+import { sparklineFromCounts, sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import {
   CrmResizableDataTable,
   type CrmResizableColumn,
@@ -320,19 +322,6 @@ function TableActionBtn({
     >
       {children}
     </button>
-  );
-}
-
-function MetricCard({ title, value, subValue }: { title: string; value: string; subValue?: string }) {
-  return (
-    <div
-      className="rounded-xl px-4 py-3"
-      style={{ background: "#fff", border: "1px solid #dcebd8", boxShadow: "0 2px 6px rgba(11,31,16,0.04)" }}
-    >
-      <p className="text-[11px] font-semibold tracking-wide" style={{ color: "#7f978a" }}>{title}</p>
-      <p className="mt-1 text-[38px] font-black leading-none" style={{ color: "#0b2210" }}>{value}</p>
-      {subValue ? <p className="mt-1 text-xs" style={{ color: "#5d7a67" }}>{subValue}</p> : null}
-    </div>
   );
 }
 
@@ -1442,12 +1431,36 @@ export default function ContaPage() {
           <p className="mb-4 rounded-xl border border-[#f0c0bd] bg-[#fff2f1] px-3 py-2 text-sm text-[#c0392b]">{erro}</p>
         ) : null}
 
-        <div className="mb-4 grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
-          <MetricCard title="Total de usuários" value={String(users.length)} />
-          <MetricCard title="Ativos" value={String(activeUsers.length)} />
-          <MetricCard title="Inativos" value={String(inactiveUsers.length)} />
-          <MetricCard title="Cargos ativos" value={String(rolesActive.length)} />
-        </div>
+        <CrmMetricsGrid cols={4} className="mb-4">
+          <CrmMetricCard
+            label="Total de usuários"
+            valor={users.length}
+            tone="brand"
+            sparkline={sparklineFromCounts([activeUsers.length, inactiveUsers.length, users.length])}
+          />
+          <CrmMetricCard
+            label="Ativos"
+            valor={activeUsers.length}
+            tone="success"
+            sparkline={sparklineFromSeed(activeUsers.length + 1)}
+          />
+          <CrmMetricCard
+            label="Inativos"
+            valor={inactiveUsers.length}
+            tone="muted"
+            sparkline={sparklineFromSeed(inactiveUsers.length + 2)}
+          />
+          <CrmMetricCard
+            label="Cargos ativos"
+            valor={rolesActive.length}
+            tone="success"
+            progress={{
+              value: rolesActive.length,
+              max: Math.max(roles.length, 1),
+              hint: `${rolesActive.length} de ${roles.length}`,
+            }}
+          />
+        </CrmMetricsGrid>
 
         <div className="w-full min-w-0 rounded-2xl border border-[#dcebd8] bg-white shadow-[0_2px_8px_rgba(11,31,16,0.05)]">
           {canAudit ? (

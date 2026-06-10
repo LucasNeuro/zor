@@ -7,7 +7,8 @@ import { BarChart3, UserPlus } from "lucide-react";
 import { CrmAcaoAgora } from "@/components/crm/CrmAcaoAgora";
 import { CrmAlertasStrip } from "@/components/crm/CrmAlertasStrip";
 import { CrmEquipeResumo } from "@/components/crm/CrmEquipeResumo";
-import { CrmMetricCard, CrmSectionTitle } from "@/components/crm/CrmMetricCard";
+import { CrmMetricCard, CrmMetricsGrid, CrmSectionTitle } from "@/components/crm/CrmMetricCard";
+import { sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import { CrmOperacaoResumo } from "@/components/crm/CrmOperacaoResumo";
 import { CrmPipelineResumo } from "@/components/crm/CrmPipelineResumo";
 import { CrmUltimosLeads } from "@/components/crm/CrmUltimosLeads";
@@ -72,14 +73,14 @@ export default function DashboardPage() {
       label: "Encaminhamentos hoje",
       valor: m.encaminhamentosHoje,
       sub: "rede de parceiros",
-      cor: "#a78bfa",
+      tone: "brand" as const,
       rota: "/crm/parceiros",
     },
     {
       label: "Modelos IA ativos",
       valor: m.agentesAtivos,
       sub: "agentes no hub",
-      cor: "#60a5fa",
+      tone: "success" as const,
       rota: "/crm/agentes",
     },
   ];
@@ -89,28 +90,28 @@ export default function DashboardPage() {
       label: "Taxa qualificação",
       valor: `${m.taxaQualificacao}%`,
       sub: "do total de leads",
-      cor: "#34d399",
+      tone: "success" as const,
       rota: "/crm/leads",
     },
     {
       label: "Taxa encaminhamento",
       valor: `${m.taxaEncaminhamento}%`,
       sub: "leads com encaminhamento",
-      cor: "#f59e0b",
+      tone: "brand" as const,
       rota: "/crm/parceiros",
     },
     {
       label: "Parceiros ativos",
       valor: m.parceirosAtivos,
       sub: "homologados",
-      cor: "#60a5fa",
+      tone: "success" as const,
       rota: "/crm/parceiros",
     },
     {
       label: "Receita potencial",
       valor: receita,
       sub: "pipeline em aberto",
-      cor: "#c9a24a",
+      tone: "brand" as const,
       rota: "/crm/leads",
     },
   ];
@@ -169,36 +170,38 @@ export default function DashboardPage() {
 
         <div>
           <CrmSectionTitle>Hoje</CrmSectionTitle>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+          <CrmMetricsGrid cols={2}>
             {hoje.map((c) => (
               <CrmMetricCard
                 key={c.label}
                 label={c.label}
                 valor={c.valor}
                 sub={c.sub}
-                cor={c.cor}
+                tone={c.tone}
+                sparkline={sparklineFromSeed(typeof c.valor === "number" ? c.valor : 1)}
                 loading={m.loading}
                 onClick={() => router.push(c.rota)}
               />
             ))}
-          </div>
+          </CrmMetricsGrid>
         </div>
 
         <div>
           <CrmSectionTitle>Saúde comercial</CrmSectionTitle>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CrmMetricsGrid cols={4}>
             {saude.map((c) => (
               <CrmMetricCard
                 key={c.label}
                 label={c.label}
                 valor={c.valor}
                 sub={c.sub}
-                cor={c.cor}
+                tone={c.tone}
+                sparkline={sparklineFromSeed(typeof c.valor === "number" ? c.valor : 2)}
                 loading={m.loading}
                 onClick={() => router.push(c.rota)}
               />
             ))}
-          </div>
+          </CrmMetricsGrid>
         </div>
 
         <CrmEquipeResumo agentes={agentes} ciclos={dash.ciclos} loading={loadingAgentes || dash.loading} />

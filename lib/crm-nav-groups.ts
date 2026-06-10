@@ -63,10 +63,9 @@ export const CRM_NAV_GROUPS: CrmNavGroup[] = [
   },
   {
     id: "atendimento",
-    label: "Atendimento",
+    label: "Operação",
     sectionIcon: MessageSquare,
     items: [
-      { href: "/crm/atendimento", label: "Atendimento", icon: MessageSquare, permission: "atendimento" },
       { href: "/crm/canais", label: "Canais", icon: MessageCircle, permission: "atendimento" },
       { href: "/crm/atendimento/equipe", label: "Equipe", icon: Users, permission: "atendimento" },
     ],

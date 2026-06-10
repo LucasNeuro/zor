@@ -57,6 +57,7 @@ export type LeadEditData = {
   campanha: string | null;
   estagio: string;
   estagio_funil?: string | null;
+  estagio_atendimento?: string | null;
   score: number;
   valor_estimado: number;
   agente_responsavel: string | null;
@@ -76,6 +77,8 @@ type Props = {
   open: boolean;
   lead: LeadEditData | null;
   estagios: EstagioUi[];
+  /** Estágios do funil de atendimento (status separado do comercial). */
+  estagiosAtendimento?: EstagioUi[];
   isMobile?: boolean;
   onClose: () => void;
   onUpdated?: (lead: LeadEditData) => void;
@@ -83,18 +86,22 @@ type Props = {
   onEncaminhado?: (lead: LeadEditData) => void;
   onNegocioCreated?: (lead: LeadEditData, negocioId: string) => void;
   initialTab?: LeadSideoverNavId | "chat";
+  /** Funil comercial (padrão) ou funil de atendimento (estagio_atendimento). */
+  context?: "vendas" | "atendimento";
 };
 
 export function LeadEditSideover({
   open,
   lead,
   estagios,
+  estagiosAtendimento,
   onClose,
   onUpdated,
   onNotasChanged,
   onEncaminhado,
   onNegocioCreated,
   initialTab = "timeline",
+  context = "vendas",
 }: Props) {
   const [screen, setScreen] = useState<ScreenId>("timeline");
   const [notas, setNotas] = useState<CrmNota[]>([]);
@@ -206,19 +213,42 @@ export function LeadEditSideover({
     onUpdated?.({ ...lead, ...data });
   }
 
-  async function moverEstagio(novoEstagio: string) {
+  async function moverEstagioAtendimento(novoEstagio: string) {
     if (!lead) return;
-    const res = await patchLeadCrm(lead.id, {
-      estagio: novoEstagio,
-      _estagio_anterior: lead.estagio,
-    });
+    const res = await patchLeadCrm(lead.id, { estagio_atendimento: novoEstagio });
     if (!res.ok) {
       setErro(res.error);
       return;
     }
-    const data = res.data as { estagio?: string; estagio_funil?: string };
-    const est = String(data.estagio_funil ?? data.estagio ?? novoEstagio);
-    onUpdated?.({ ...lead, estagio: est, estagio_funil: est });
+    const data = res.data as { estagio_atendimento?: string };
+    const est = String(data.estagio_atendimento ?? novoEstagio);
+    onUpdated?.({ ...lead, estagio_atendimento: est });
+    void carregarDetalhe(lead.id);
+  }
+
+  async function moverEstagio(novoEstagio: string) {
+    if (!lead) return;
+    const patch =
+      context === "atendimento"
+        ? { estagio_atendimento: novoEstagio }
+        : { estagio: novoEstagio, _estagio_anterior: lead.estagio };
+    const res = await patchLeadCrm(lead.id, patch);
+    if (!res.ok) {
+      setErro(res.error);
+      return;
+    }
+    const data = res.data as {
+      estagio?: string;
+      estagio_funil?: string;
+      estagio_atendimento?: string;
+    };
+    if (context === "atendimento") {
+      const est = String(data.estagio_atendimento ?? novoEstagio);
+      onUpdated?.({ ...lead, estagio_atendimento: est });
+    } else {
+      const est = String(data.estagio_funil ?? data.estagio ?? novoEstagio);
+      onUpdated?.({ ...lead, estagio: est, estagio_funil: est });
+    }
     void carregarDetalhe(lead.id);
   }
 
@@ -229,7 +259,10 @@ export function LeadEditSideover({
 
   if (!open || !lead) return null;
 
-  const estagioAtual = estagioParaColunaKanban(lead.estagio);
+  const estagioAtual =
+    context === "atendimento"
+      ? lead.estagio_atendimento || "novo"
+      : estagioParaColunaKanban(lead.estagio);
   const subtitleParts = [
     lead.telefone,
     lead.email,
@@ -269,12 +302,27 @@ export function LeadEditSideover({
             key={e.id}
             active={estagioAtual === e.id}
             onClick={() => void moverEstagio(e.id)}
-            title={`Mover para ${e.label}`}
+            title={`Funil comercial: ${e.label}`}
           >
             {e.label}
           </CrmSideoverActionBtn>
         ))}
       </CrmSideoverActionGroup>
+
+      {context === "vendas" && estagiosAtendimento?.length ? (
+        <CrmSideoverActionGroup className="min-w-max" aria-label="Status de atendimento">
+          {estagiosAtendimento.map((e) => (
+            <CrmSideoverActionBtn
+              key={`at-${e.id}`}
+              active={(lead.estagio_atendimento || "novo") === e.id}
+              onClick={() => void moverEstagioAtendimento(e.id)}
+              title={`Atendimento: ${e.label}`}
+            >
+              {e.label}
+            </CrmSideoverActionBtn>
+          ))}
+        </CrmSideoverActionGroup>
+      ) : null}
     </CrmSideoverToolbarRow>
   );
 
@@ -283,7 +331,7 @@ export function LeadEditSideover({
       open={open}
       onClose={onClose}
       wide
-      kindLabel="Vendas"
+      kindLabel={context === "atendimento" ? "Atendimento" : "Vendas"}
       title={lead.nome}
       subtitle={subtitleParts.join(" · ") || undefined}
       icon={UserRound}

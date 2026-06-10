@@ -27,6 +27,8 @@ import type {
   TenantConhecimentoAnaliseNegocio,
   TenantConhecimentoDocumento,
 } from "@/lib/hub/tenant-conhecimento-rag";
+import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
+import { sparklineFromCounts, sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import { MAX_DOCUMENTOS_CONHECIMENTO_POR_TENANT } from "@/lib/hub/tenant-conhecimento-rag";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 
@@ -64,27 +66,6 @@ function statusLabel(status: string): string {
   if (status === "indexando") return "A processar";
   if (status === "erro") return "Erro";
   return status;
-}
-
-function MetricCard({ title, value, subValue }: { title: string; value: string; subValue?: string }) {
-  return (
-    <div
-      className="rounded-xl px-4 py-3"
-      style={{ background: "#fff", border: "1px solid #dcebd8", boxShadow: "0 2px 6px rgba(11,31,16,0.04)" }}
-    >
-      <p className="text-[11px] font-semibold tracking-wide" style={{ color: "#7f978a" }}>
-        {title}
-      </p>
-      <p className="mt-1 text-[38px] font-black leading-none" style={{ color: "#0b2210" }}>
-        {value}
-      </p>
-      {subValue ? (
-        <p className="mt-1 text-xs" style={{ color: "#5d7a67" }}>
-          {subValue}
-        </p>
-      ) : null}
-    </div>
-  );
 }
 
 function IdBadge({ value, tone = "blue" }: { value?: string | null; tone?: "blue" | "green" | "gray" }) {
@@ -525,12 +506,40 @@ export default function ConhecimentoPage() {
           </p>
         ) : null}
 
-        <div className="mb-4 grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
-          <MetricCard title="Total de documentos" value={String(documentos.length)} subValue={`Limite ${MAX_DOCUMENTOS_CONHECIMENTO_POR_TENANT}`} />
-          <MetricCard title="Indexados" value={String(indexados.length)} subValue="Prontos para RAG" />
-          <MetricCard title="A processar" value={String(processando.length)} />
-          <MetricCard title="Com erro" value={String(comErro.length)} subValue={vagas > 0 ? `${vagas} vaga(s) disponível` : "Limite atingido"} />
-        </div>
+        <CrmMetricsGrid cols={4} className="mb-4">
+          <CrmMetricCard
+            label="Total de documentos"
+            valor={documentos.length}
+            sub={`Limite ${MAX_DOCUMENTOS_CONHECIMENTO_POR_TENANT}`}
+            tone="brand"
+            sparkline={sparklineFromCounts([
+              indexados.length,
+              processando.length,
+              comErro.length,
+              documentos.length,
+            ])}
+          />
+          <CrmMetricCard
+            label="Indexados"
+            valor={indexados.length}
+            sub="Prontos para RAG"
+            tone="success"
+            sparkline={sparklineFromSeed(indexados.length + 1)}
+          />
+          <CrmMetricCard
+            label="A processar"
+            valor={processando.length}
+            tone="brand"
+            sparkline={sparklineFromSeed(processando.length + 2)}
+          />
+          <CrmMetricCard
+            label="Com erro"
+            valor={comErro.length}
+            sub={vagas > 0 ? `${vagas} vaga(s) disponível` : "Limite atingido"}
+            tone={comErro.length > 0 ? "danger" : "muted"}
+            sparkline={sparklineFromSeed(comErro.length + 3)}
+          />
+        </CrmMetricsGrid>
 
         <div className="w-full min-w-0 rounded-2xl border border-[#dcebd8] bg-white shadow-[0_2px_8px_rgba(11,31,16,0.05)]">
           <ContaSectionTabs

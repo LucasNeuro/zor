@@ -19,6 +19,8 @@ import {
   type CrmResizableColumn,
 } from "@/components/crm/CrmResizableDataTable";
 import { ContaSectionTabs } from "@/components/crm/ContaSectionTabs";
+import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
+import { sparklineFromCounts, sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import type { AgenteFerramentaSyncRow } from "@/lib/hub/sync-ferramenta-agentes";
 import type { HubFerramentaCustomRow } from "@/lib/hub/ferramentas-custom-db";
@@ -77,27 +79,6 @@ type AgenteUsoRow = {
   motor: boolean;
   ferramentasCount: number;
 };
-
-function MetricCard({ title, value, subValue }: { title: string; value: string; subValue?: string }) {
-  return (
-    <div
-      className="rounded-xl px-4 py-3"
-      style={{ background: "#fff", border: "1px solid #dcebd8", boxShadow: "0 2px 6px rgba(11,31,16,0.04)" }}
-    >
-      <p className="text-[11px] font-semibold tracking-wide" style={{ color: "#7f978a" }}>
-        {title}
-      </p>
-      <p className="mt-1 text-[38px] font-black leading-none" style={{ color: "#0b2210" }}>
-        {value}
-      </p>
-      {subValue ? (
-        <p className="mt-1 text-xs" style={{ color: "#5d7a67" }}>
-          {subValue}
-        </p>
-      ) : null}
-    </div>
-  );
-}
 
 function TableActionGroup({ children }: { children: ReactNode }) {
   return (
@@ -743,20 +724,36 @@ export default function FerramentasHubPage() {
           <p className="mb-4 rounded-xl border border-[#f0c0bd] bg-[#fff2f1] px-3 py-2 text-sm text-[#c0392b]">{erro}</p>
         ) : null}
 
-        <div className="mb-4 grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
-          <MetricCard title="Builtins" value={String(BUILTIN_COUNT)} subValue="Catálogo fixo do Hub" />
-          <MetricCard
-            title="Custom"
-            value={String(customActivas.length)}
-            subValue={`${customRows.length} no total`}
+        <CrmMetricsGrid cols={4} className="mb-4">
+          <CrmMetricCard
+            label="Builtins"
+            valor={BUILTIN_COUNT}
+            sub="Catálogo fixo do Hub"
+            tone="brand"
+            sparkline={sparklineFromSeed(BUILTIN_COUNT)}
           />
-          <MetricCard
-            title="Agentes com motor IA"
-            value={String(agentesComMotor.length)}
-            subValue={`${agentesProducao.length} agentes activos`}
+          <CrmMetricCard
+            label="Custom"
+            valor={customActivas.length}
+            sub={`${customRows.length} no total`}
+            tone="success"
+            sparkline={sparklineFromCounts([customActivas.length, customRows.length - customActivas.length])}
           />
-          <MetricCard title="Ferramentas em uso" value={String(ferramentasEmUso)} subValue="Chaves activas em modelos" />
-        </div>
+          <CrmMetricCard
+            label="Agentes com motor IA"
+            valor={agentesComMotor.length}
+            sub={`${agentesProducao.length} agentes activos`}
+            tone="success"
+            sparkline={sparklineFromSeed(agentesComMotor.length + 1)}
+          />
+          <CrmMetricCard
+            label="Ferramentas em uso"
+            valor={ferramentasEmUso}
+            sub="Chaves activas em modelos"
+            tone="brand"
+            sparkline={sparklineFromSeed(ferramentasEmUso + 2)}
+          />
+        </CrmMetricsGrid>
 
         <div className="w-full min-w-0 rounded-2xl border border-[#dcebd8] bg-white shadow-[0_2px_8px_rgba(11,31,16,0.05)]">
           <ContaSectionTabs

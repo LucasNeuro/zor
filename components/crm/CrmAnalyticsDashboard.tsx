@@ -435,13 +435,13 @@ export function CrmAnalyticsDashboard() {
                 label="Fila pendente"
                 value={data.atendimento.filaPendente}
                 cor={data.atendimento.filaPendente > 5 ? "#f85149" : "#c9a24a"}
-                href="/crm/atendimento"
+                href="/crm/leads"
               />
               <MetricMini
                 label="Leads aguardando"
                 value={data.atendimento.leadsAguardando}
                 cor={data.atendimento.leadsAguardando > 0 ? "#d29922" : "#3fb950"}
-                href="/crm/atendimento"
+                href="/crm/leads"
               />
               <MetricMini label="Agentes IA ativos" value={data.atendimento.agentesAtivos} cor="#60a5fa" href="/crm/agentes" />
               <MetricMini

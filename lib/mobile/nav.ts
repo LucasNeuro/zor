@@ -14,7 +14,7 @@ export type MobileTabDef = {
 export const MOBILE_TABS: MobileTabDef[] = [
   { id: "pulso", label: "Pulso", icon: Activity, rota: "/crm" },
   { id: "escritorio", label: "CRM", icon: Building2, rota: "/crm" },
-  { id: "atendimento", label: "Atendimento", icon: MessageSquare, rota: "/crm/atendimento" },
+  { id: "atendimento", label: "Leads", icon: MessageSquare, rota: "/crm/leads?tab=chat" },
   { id: "marketing", label: "Marketing", icon: Megaphone, rota: "/crm/trafego" },
   { id: "mais", label: "Mais", icon: MoreHorizontal, opensSheet: true },
 ];
@@ -66,7 +66,8 @@ const SHEET_PREFIXES = [
 
 /** Aba inferior ativa para a rota atual. */
 export function mobileTabIdFromPath(pathname: string): MobileTabId {
-  if (pathname.startsWith("/crm/atendimento")) return "atendimento";
+  if (pathname.startsWith("/crm/atendimento/equipe")) return "atendimento";
+  if (pathname.startsWith("/crm/leads")) return "atendimento";
   if (pathname.startsWith("/crm/trafego")) return "marketing";
   if (pathname === "/crm" || pathname === "/crm/") return "pulso";
   if (SHEET_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) return "mais";
@@ -86,9 +87,8 @@ export function isMobileShellRoute(pathname: string): boolean {
 
 export function mobilePageTitle(pathname: string): string {
   if (pathname === "/crm") return "Pulso";
-  if (pathname === "/crm/leads") return "Leads";
-  if (pathname.startsWith("/crm/leads/")) return "Lead";
-  if (pathname === "/crm/atendimento") return "Atendimento";
+  if (pathname === "/crm/leads" || pathname.startsWith("/crm/leads/")) return "Leads";
+  if (pathname === "/crm/atendimento/equipe") return "Equipe";
   if (pathname === "/crm/aprovacoes") return "Aprovações";
   if (pathname === "/crm/agentes") return "Agentes IA";
   if (pathname.startsWith("/crm/agentes/")) return "Agente IA";

@@ -26,7 +26,9 @@ export async function GET(request: NextRequest) {
     if (isAtendentesCrmMigrationMissing(error.message)) {
       return NextResponse.json({
         atendentes: [],
-        aviso: "Execute supabase/scripts/ensure_hub_atendentes_crm.sql no Supabase.",
+        aviso:
+          "Tabela de equipe ainda não existe no Supabase. Abra SQL Editor e execute o script supabase/scripts/ensure_hub_atendentes_crm.sql (depois recarregue esta página).",
+        migration_hint: "ensure_hub_atendentes_crm.sql",
       });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });

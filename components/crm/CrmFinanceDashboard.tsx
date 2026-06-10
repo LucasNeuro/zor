@@ -154,7 +154,7 @@ export function CrmFinanceDashboard({ dash }: { dash: FinanceDashboardState }) {
           label="A pagar (aberto)"
           valor={moedaFinanceiro(kpis.aPagarAberto)}
           sub="pendentes"
-          cor="#f97316"
+          tone="warning"
           href="/crm/financeiro/pagar?status=pendente"
           loading={dash.loading}
         />
@@ -162,7 +162,7 @@ export function CrmFinanceDashboard({ dash }: { dash: FinanceDashboardState }) {
           label="A receber (aberto)"
           valor={moedaFinanceiro(kpis.aReceberAberto)}
           sub="pendentes"
-          cor="#3fb950"
+          tone="success"
           href="/crm/financeiro/receber?status=pendente"
           loading={dash.loading}
         />
@@ -170,7 +170,7 @@ export function CrmFinanceDashboard({ dash }: { dash: FinanceDashboardState }) {
           label="Vencido"
           valor={moedaFinanceiro(kpis.vencidoTotal)}
           sub={`${moedaFinanceiro(kpis.vencidoPagar)} pagar · ${moedaFinanceiro(kpis.vencidoReceber)} receber`}
-          cor={kpis.vencidoTotal > 0 ? "#f85149" : "#5d7a67"}
+          tone={kpis.vencidoTotal > 0 ? "danger" : "muted"}
           href="/crm/financeiro/pagar?status=pendente&vencido=1"
           loading={dash.loading}
         />
@@ -178,7 +178,7 @@ export function CrmFinanceDashboard({ dash }: { dash: FinanceDashboardState }) {
           label="Saldo projetado"
           valor={moedaFinanceiro(kpis.saldoProjetado)}
           sub="receber − pagar (não é saldo bancário)"
-          cor={saldoPositivo ? "#3fb950" : "#f85149"}
+          tone={saldoPositivo ? "success" : "danger"}
           loading={dash.loading}
         />
       </div>
@@ -189,7 +189,7 @@ export function CrmFinanceDashboard({ dash }: { dash: FinanceDashboardState }) {
           label="Receita potencial (leads)"
           valor={moedaPipeline(pipeline.receitaPotencialLeads)}
           sub="funil em aberto"
-          cor="#60a5fa"
+          tone="success"
           href="/crm/leads"
           loading={dash.loading}
         />
@@ -197,7 +197,7 @@ export function CrmFinanceDashboard({ dash }: { dash: FinanceDashboardState }) {
           label="Receita potencial (negócios)"
           valor={moedaPipeline(pipeline.receitaPotencialNegocios)}
           sub="abertos / em negociação"
-          cor="#a78bfa"
+          tone="brand"
           href="/crm/negocios"
           loading={dash.loading}
         />
@@ -205,7 +205,7 @@ export function CrmFinanceDashboard({ dash }: { dash: FinanceDashboardState }) {
           label="Negócios sit-down"
           valor={pipeline.negociosSitDown}
           sub="etapa pré-conclusão"
-          cor="#c9a24a"
+          tone="brand"
           href="/crm/negocios"
           loading={dash.loading}
         />

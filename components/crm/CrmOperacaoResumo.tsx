@@ -18,7 +18,7 @@ export function CrmOperacaoResumo({
           label="Negócios abertos"
           valor={operacao.negociosAbertos}
           sub="pipeline comercial"
-          cor="#3b82f6"
+          tone="success"
           href="/crm/negocios"
           loading={loading}
         />
@@ -26,7 +26,7 @@ export function CrmOperacaoResumo({
           label="Obras em andamento"
           valor={operacao.obrasEmAndamento}
           sub="execução"
-          cor="#22c55e"
+          tone="brand"
           href="/crm/obras"
           loading={loading}
         />
@@ -34,7 +34,7 @@ export function CrmOperacaoResumo({
           label="Pedidos de material"
           valor={operacao.pedidosAbertos}
           sub="rascunho a aprovado"
-          cor="#eab308"
+          tone="success"
           href="/crm/pedidos"
           loading={loading}
         />

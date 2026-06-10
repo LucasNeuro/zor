@@ -37,6 +37,12 @@ export const MODO_OPERACAO_LABEL: Record<ModoOperacaoAgente, string> = {
   jobs_internos: "Agente interno (ciclos)",
 };
 
+/** Rótulo curto para tabelas (canal via ícone). */
+export const MODO_OPERACAO_LABEL_CURTO: Record<ModoOperacaoAgente, string> = {
+  canal_whatsapp: "Atendimento",
+  jobs_internos: "Agente interno",
+};
+
 export const MODO_OPERACAO_DESCRICAO: Record<ModoOperacaoAgente, string> = {
   canal_whatsapp:
     "Atende clientes e leads no WhatsApp: cada mensagem dispara o agente (cargo + playbook no runtime).",

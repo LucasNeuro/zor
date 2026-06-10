@@ -2,14 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Eye, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import type { CrmResizableColumn } from "@/components/crm/CrmResizableDataTable";
+import {
+  CrmRetrofitTablePanel,
+  crmRetrofitPageXClass,
+  crmTableIdBadge,
+  crmTableStatusPill,
+} from "@/components/crm/CrmRetrofitTablePanel";
+import { CrmCanalModoCell, modoOperacaoExportLabel } from "@/components/crm/CrmCanalModoCell";
+import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
+import { FilterPills } from "@/components/crm/FilterPills";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { CrmCanalSideover, type CanalAgenteRow } from "@/components/crm/CrmCanalSideover";
-import { EmptyState } from "@/components/crm/EmptyState";
-import { FilterPills } from "@/components/crm/FilterPills";
-import { SearchBar } from "@/components/crm/SearchBar";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
-import { MODO_OPERACAO_LABEL, type ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
+import {
+  sparklineFromCounts,
+  sparklineFromSeed,
+  trendLabel,
+  trendPositive,
+} from "@/lib/crm/metric-visuals";
 
 type ListMode = "todos" | "conectados" | "sem_instancia";
 
@@ -18,25 +30,6 @@ const FILTRO_PILLS = [
   { id: "conectados", label: "Conectados" },
   { id: "sem_instancia", label: "Sem instância" },
 ] as const;
-
-const TH: React.CSSProperties = {
-  textAlign: "left",
-  padding: "10px 12px",
-  fontSize: 11,
-  fontWeight: 700,
-  color: "#5d7a67",
-  letterSpacing: 0.5,
-  textTransform: "uppercase",
-  borderBottom: "1px solid #dcebd8",
-  background: "#ffffff",
-};
-
-const TD: React.CSSProperties = {
-  padding: "12px",
-  fontSize: 13,
-  color: "#0b2210",
-  verticalAlign: "middle",
-};
 
 const SLUGS_CANAL_PADRAO = new Set(["atendente", "sdr", "gerente_atendimento", "diretor_geral_ia"]);
 
@@ -47,14 +40,14 @@ function ehCanalRelevante(a: CanalAgenteRow): boolean {
   if (a.modo_operacao === "canal_whatsapp") return true;
   const id = typeof a.uazapi_instance_id === "string" ? a.uazapi_instance_id.trim() : "";
   if (id.length > 0) return true;
-  // Sem coluna modo_operacao no banco: mostrar agentes de atendimento típicos
   if (a.modo_operacao == null || a.modo_operacao === "") {
     return SLUGS_CANAL_PADRAO.has(a.agente_slug);
   }
   return false;
 }
 
-function statusLabel(status?: string | null): string {
+function statusLabel(status?: string | null, temInstancia?: boolean): string {
+  if (!temInstancia) return "Sem instância";
   const s = (status || "").toLowerCase();
   if (s === "connected") return "Conectado";
   if (s === "connecting") return "Conectando";
@@ -62,11 +55,23 @@ function statusLabel(status?: string | null): string {
   return status?.trim() || "—";
 }
 
-function statusCores(status?: string | null): { bg: string; fg: string; border: string } {
+function conexaoTone(status?: string | null, temInstancia?: boolean): "green" | "amber" | "gray" {
+  if (!temInstancia) return "gray";
   const s = (status || "").toLowerCase();
-  if (s === "connected") return { bg: "#23863633", fg: "#3fb950", border: "#3fb95044" };
-  if (s === "connecting") return { bg: "#bb800926", fg: "#e6c06a", border: "#bb800966" };
-  return { bg: "#dcebd8", fg: "#5d7a67", border: "#484f58" };
+  if (s === "connected") return "green";
+  if (s === "connecting") return "amber";
+  return "gray";
+}
+
+function formatData(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function CanaisPage() {
@@ -78,6 +83,7 @@ export default function CanaisPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [modoLista, setModoLista] = useState<ListMode>("todos");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(true);
   const [sideover, setSideover] = useState<CanalAgenteRow | null>(null);
 
   const carregar = useCallback(async (opts?: { silent?: boolean }) => {
@@ -109,29 +115,29 @@ export default function CanaisPage() {
     void carregar();
   }, [carregar]);
 
+  const botaoAtualizar = useMemo(
+    () => (
+      <button
+        type="button"
+        onClick={() => void carregar({ silent: true })}
+        disabled={refreshing || loadingInicial}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-[#d4ecd0] bg-white px-3 py-2 text-xs font-semibold text-[#1e4a24] disabled:opacity-60"
+      >
+        <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} />
+        Atualizar
+      </button>
+    ),
+    [carregar, refreshing, loadingInicial]
+  );
+
   useEffect(() => {
     setSlot({
       path: pathname,
-      actions: (
-        <button
-          type="button"
-          onClick={() => void carregar({ silent: true })}
-          disabled={refreshing || loadingInicial}
-          className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold"
-          style={{
-            background: "#eef7eb",
-            color: "#c9a24a",
-            border: "1px solid #dcebd8",
-            cursor: refreshing || loadingInicial ? "wait" : "pointer",
-          }}
-        >
-          <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} />
-          Atualizar
-        </button>
-      ),
+      subtitle: `${agentes.length} canais · operação WhatsApp`,
+      actions: botaoAtualizar,
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, carregar, refreshing, loadingInicial]);
+  }, [pathname, setSlot, agentes.length, botaoAtualizar]);
 
   const filtrados = useMemo(() => {
     let rows = agentes;
@@ -151,149 +157,265 @@ export default function CanaisPage() {
   }, [agentes, modoLista, busca]);
 
   const kpis = useMemo(() => {
-    const conectados = agentes.filter((a) => (a.uazapi_connection_status || "").toLowerCase() === "connected").length;
+    const conectados = agentes.filter(
+      (a) => (a.uazapi_connection_status || "").toLowerCase() === "connected"
+    ).length;
+    const conectando = agentes.filter(
+      (a) => (a.uazapi_connection_status || "").toLowerCase() === "connecting"
+    ).length;
+    const desconectados = agentes.filter((a) => {
+      const tem = Boolean((a.uazapi_instance_id || "").trim());
+      const st = (a.uazapi_connection_status || "").toLowerCase();
+      return tem && st !== "connected" && st !== "connecting";
+    }).length;
     const comInstancia = agentes.filter((a) => (a.uazapi_instance_id || "").trim()).length;
-    return { total: agentes.length, conectados, comInstancia };
+    const semInstancia = agentes.length - comInstancia;
+    return {
+      total: agentes.length,
+      conectados,
+      conectando,
+      desconectados,
+      comInstancia,
+      semInstancia,
+    };
   }, [agentes]);
 
+  const colunas = useMemo((): CrmResizableColumn<CanalAgenteRow>[] => {
+    return [
+      {
+        id: "nome",
+        label: "Agente",
+        defaultWidth: 160,
+        minWidth: 120,
+        render: (a) => <span className="font-semibold text-[#0b2210]">{a.nome}</span>,
+      },
+      {
+        id: "slug",
+        label: "Slug",
+        defaultWidth: 110,
+        minWidth: 80,
+        render: (a) => crmTableIdBadge(a.agente_slug, "green"),
+      },
+      {
+        id: "instancia",
+        label: "Instância",
+        defaultWidth: 160,
+        minWidth: 120,
+        render: (a) => {
+          const tem = Boolean((a.uazapi_instance_id || "").trim());
+          return tem ? a.uazapi_instance_name || a.uazapi_instance_id || "—" : "—";
+        },
+      },
+      {
+        id: "instancia_id",
+        label: "ID instância",
+        defaultWidth: 140,
+        minWidth: 100,
+        render: (a) => (
+          <span className="truncate font-mono text-[11px] text-[#5d7a67]" title={a.uazapi_instance_id ?? undefined}>
+            {a.uazapi_instance_id || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "conexao",
+        label: "Conexão",
+        defaultWidth: 120,
+        minWidth: 96,
+        render: (a) => {
+          const tem = Boolean((a.uazapi_instance_id || "").trim());
+          const tone = conexaoTone(a.uazapi_connection_status, tem);
+          const label = statusLabel(a.uazapi_connection_status, tem);
+          return crmTableStatusPill(label, tone === "green");
+        },
+      },
+      {
+        id: "token",
+        label: "Token",
+        defaultWidth: 88,
+        minWidth: 72,
+        align: "center",
+        render: (a) =>
+          crmTableStatusPill(a.uazapi_has_instance_token ? "Configurado" : "Ausente", a.uazapi_has_instance_token),
+      },
+      {
+        id: "modo",
+        label: "Modo",
+        defaultWidth: 148,
+        minWidth: 120,
+        render: (a) => (
+          <CrmCanalModoCell
+            modo={a.modo_operacao}
+            legacyCanalWhatsapp={
+              !a.modo_operacao &&
+              (Boolean((a.uazapi_instance_id || "").trim()) ||
+                SLUGS_CANAL_PADRAO.has(a.agente_slug))
+            }
+          />
+        ),
+      },
+      {
+        id: "ativo",
+        label: "Status",
+        defaultWidth: 88,
+        minWidth: 72,
+        align: "center",
+        render: (a) => crmTableStatusPill(a.ativo !== false ? "Ativo" : "Inativo", a.ativo !== false),
+      },
+      {
+        id: "snapshot",
+        label: "Snapshot",
+        defaultWidth: 130,
+        minWidth: 100,
+        render: (a) => formatData(a.uazapi_snapshot_at),
+      },
+    ];
+  }, []);
+
   return (
-    <div style={{ height: "100%", overflowY: "auto", background: "#f8fcf6", padding: 24 }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: 12,
-          marginBottom: 20,
-        }}
-      >
-        {[
-          { label: "Canais ativos", value: kpis.total, color: "#c9a24a" },
-          { label: "Conectados", value: kpis.conectados, color: "#3fb950" },
-          { label: "Com instância UAZAPI", value: kpis.comInstancia, color: "#93c5fd" },
-        ].map((k) => (
-          <div
-            key={k.label}
-            style={{
-              padding: "14px 16px",
-              borderRadius: 12,
-              background: "#ffffff",
-              border: "1px solid #dcebd8",
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f8fcf6]">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className={`flex flex-col gap-3 pb-4 pt-3 ${crmRetrofitPageXClass}`}>
+          <CrmMetricsGrid cols={4}>
+          <CrmMetricCard
+            label="Canais ativos"
+            valor={kpis.total}
+            tone="brand"
+            sub="Agentes em modo WhatsApp"
+            sparkline={sparklineFromCounts([
+              kpis.conectados,
+              kpis.conectando,
+              kpis.desconectados,
+              kpis.semInstancia,
+              kpis.total,
+            ])}
+            trend={
+              kpis.total > 0
+                ? {
+                    label: trendLabel(kpis.conectados, kpis.total) ?? "—",
+                    positive: trendPositive(kpis.conectados, kpis.total),
+                  }
+                : undefined
+            }
+            loading={loadingInicial}
+          />
+          <CrmMetricCard
+            label="Conectados"
+            valor={kpis.conectados}
+            tone="success"
+            sub="WhatsApp online agora"
+            sparkline={sparklineFromSeed(kpis.conectados + 1)}
+            trend={
+              kpis.comInstancia > 0
+                ? {
+                    label: trendLabel(kpis.conectados, kpis.comInstancia) ?? "—",
+                    positive: kpis.conectados > 0,
+                  }
+                : undefined
+            }
+            loading={loadingInicial}
+          />
+          <CrmMetricCard
+            label="Com instância UAZAPI"
+            valor={kpis.comInstancia}
+            tone="success"
+            sub="Token / instância cadastrada"
+            progress={{
+              value: kpis.comInstancia,
+              max: Math.max(kpis.total, 1),
+              hint: `${kpis.comInstancia} de ${kpis.total}`,
             }}
-          >
-            <p style={{ margin: 0, fontSize: 11, color: "#5d7a67", fontWeight: 600 }}>{k.label}</p>
-            <p style={{ margin: "6px 0 0", fontSize: 22, fontWeight: 800, color: k.color }}>{k.value}</p>
-          </div>
-        ))}
-      </div>
+            loading={loadingInicial}
+          />
+          <CrmMetricCard
+            label="Sem instância"
+            valor={kpis.semInstancia}
+            tone="muted"
+            sub="Precisam de configuração"
+            sparkline={sparklineFromSeed(kpis.semInstancia + 3)}
+            trend={
+              kpis.total > 0
+                ? {
+                    label: trendLabel(kpis.semInstancia, kpis.total) ?? "—",
+                    positive: !trendPositive(kpis.semInstancia, kpis.total, true),
+                  }
+                : undefined
+            }
+            loading={loadingInicial}
+          />
+          </CrmMetricsGrid>
 
-      <p style={{ margin: "0 0 16px", color: "#5d7a67", fontSize: 13, lineHeight: 1.5, maxWidth: 720 }}>
-        Visão operacional: só estado da conexão. <strong style={{ color: "#c9a24a" }}>Cadastrar instância</strong> (nome,
-        proxy, token UAZAPI) é na ficha do agente; <strong style={{ color: "#c9a24a" }}>QR / pareamento</strong> é um
-        passo à parte, quando for ligar o WhatsApp ao telefone.
-      </p>
+          <p className="m-0 max-w-3xl text-xs leading-relaxed text-[#5d7a67]">
+            Visão operacional da conexão WhatsApp.{" "}
+            <strong className="text-[#3f9848]">Cadastrar instância</strong> (nome, proxy, token) é na ficha do
+            agente; <strong className="text-[#3f9848]">QR / pareamento</strong> liga o telefone quando for operar.
+          </p>
 
-      <div style={{ marginBottom: 12 }}>
-        <SearchBar value={busca} onChange={setBusca} placeholder="Buscar por nome, slug ou instância…" />
-      </div>
+          {erro ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert">
+              {erro}
+            </div>
+          ) : null}
 
-      <div style={{ marginBottom: 20 }}>
-        <FilterPills
-          pills={FILTRO_PILLS.map((p) => ({ id: p.id, label: p.label }))}
-          active={modoLista}
-          onChange={(id) => setModoLista(id as ListMode)}
-        />
-      </div>
-
-      {erro ? (
-        <p style={{ color: "#f85149", fontSize: 13, marginBottom: 16 }}>{erro}</p>
-      ) : null}
-
-      {loadingInicial ? (
-        <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando canais…</p>
-      ) : filtrados.length === 0 ? (
-        <EmptyState
-          message={
-            modoLista === "sem_instancia"
-              ? "Nenhum agente em modo WhatsApp sem instância."
-              : modoLista === "conectados"
-                ? "Nenhum canal conectado no momento."
-                : "Nenhum canal WhatsApp encontrado para agentes ativos."
-          }
-        />
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
-            <thead>
-              <tr>
-                <th style={TH}>Agente</th>
-                <th style={TH}>Slug</th>
-                <th style={TH}>Instância</th>
-                <th style={TH}>Conexão</th>
-                <th style={TH}>Modo</th>
-                <th style={{ ...TH, width: 72, textAlign: "center" }} aria-label="Ações" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map((a) => {
-                const st = statusCores(a.uazapi_connection_status);
-                const modo =
-                  a.modo_operacao && a.modo_operacao in MODO_OPERACAO_LABEL
-                    ? MODO_OPERACAO_LABEL[a.modo_operacao as ModoOperacaoAgente]
-                    : a.modo_operacao || "—";
-                const temInst = Boolean((a.uazapi_instance_id || "").trim());
-                return (
-                  <tr key={a.agente_slug} style={{ borderBottom: "1px solid #eef7eb" }}>
-                    <td style={{ ...TD, fontWeight: 600 }}>{a.nome}</td>
-                    <td style={{ ...TD, color: "#5d7a67", fontSize: 12 }}>
-                      <code>{a.agente_slug}</code>
-                    </td>
-                    <td style={{ ...TD, color: "#5d7a67", fontSize: 12 }}>
-                      {temInst ? a.uazapi_instance_name || a.uazapi_instance_id : "—"}
-                    </td>
-                    <td style={TD}>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "3px 10px",
-                          borderRadius: 20,
-                          background: st.bg,
-                          color: st.fg,
-                          border: `1px solid ${st.border}`,
-                        }}
-                      >
-                        {temInst ? statusLabel(a.uazapi_connection_status) : "Sem instância"}
-                      </span>
-                    </td>
-                    <td style={{ ...TD, color: "#5d7a67", fontSize: 12, maxWidth: 200 }}>{modo}</td>
-                    <td style={{ ...TD, textAlign: "center" }}>
-                      <button
-                        type="button"
-                        aria-label={`Gerenciar canal de ${a.nome}`}
-                        onClick={() => setSideover(a)}
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 8,
-                          border: "1px solid #dcebd8",
-                          background: "#eef7eb",
-                          color: "#c9a24a",
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Eye size={18} strokeWidth={1.75} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {loadingInicial ? (
+            <p className="py-8 text-center text-sm text-[#5d7a67]">Carregando canais…</p>
+          ) : (
+            <CrmRetrofitTablePanel
+            tableId="crm-canais"
+            columns={colunas}
+            rows={filtrados}
+            rowKey={(a) => a.agente_slug}
+            emptyMessage="Nenhum canal WhatsApp encontrado para agentes ativos."
+            footerSummary={`Exibindo ${filtrados.length} de ${agentes.length} canais`}
+            onRowClick={setSideover}
+            onViewRow={setSideover}
+            toolbar={{
+              searchValue: busca,
+              onSearchChange: setBusca,
+              searchPlaceholder: "Buscar por nome, slug ou instância…",
+              showAdvancedFilters,
+              onToggleAdvancedFilters: () => setShowAdvancedFilters((v) => !v),
+              advancedFilters: (
+                <FilterPills
+                  pills={FILTRO_PILLS.map((p) => ({ id: p.id, label: p.label }))}
+                  active={modoLista}
+                  onChange={(id) => setModoLista(id as ListMode)}
+                />
+              ),
+            }}
+            exportConfig={{
+              filename: "canais-whatsapp.csv",
+              headers: [
+                "Agente",
+                "Slug",
+                "Instância",
+                "ID instância",
+                "Conexão",
+                "Token",
+                "Modo",
+                "Status",
+                "Snapshot",
+              ],
+              rowValues: (a) => {
+                const tem = Boolean((a.uazapi_instance_id || "").trim());
+                return [
+                  a.nome,
+                  a.agente_slug,
+                  tem ? a.uazapi_instance_name || a.uazapi_instance_id || "" : "",
+                  a.uazapi_instance_id || "",
+                  statusLabel(a.uazapi_connection_status, tem),
+                  a.uazapi_has_instance_token ? "Configurado" : "Ausente",
+                  modoOperacaoExportLabel(a.modo_operacao) ||
+                    (SLUGS_CANAL_PADRAO.has(a.agente_slug) ? "Atendimento (WhatsApp)" : ""),
+                  a.ativo !== false ? "Ativo" : "Inativo",
+                  formatData(a.uazapi_snapshot_at),
+                ];
+              },
+            }}
+          />
+          )}
         </div>
-      )}
+      </div>
 
       <CrmCanalSideover agente={sideover} onClose={() => setSideover(null)} />
     </div>

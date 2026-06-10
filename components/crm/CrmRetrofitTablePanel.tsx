@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Eye, Pencil } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import {
   CrmResizableDataTable,
   type CrmResizableColumn,
@@ -42,6 +42,7 @@ type Props<T> = {
   exportConfig?: CrmRetrofitTableExportConfig<T>;
   onEditRow?: (row: T) => void;
   onViewRow?: (row: T) => void;
+  onDeleteRow?: (row: T) => void;
 };
 
 function TableActionGroup({ children }: { children: ReactNode }) {
@@ -88,15 +89,16 @@ function TableActionBtn({
 
 function buildActionsColumn<T>(
   onEditRow?: (row: T) => void,
-  onViewRow?: (row: T) => void
+  onViewRow?: (row: T) => void,
+  onDeleteRow?: (row: T) => void
 ): CrmResizableColumn<T> | null {
-  if (!onEditRow && !onViewRow) return null;
+  if (!onEditRow && !onViewRow && !onDeleteRow) return null;
 
   return {
     id: "acoes",
     label: "Ações",
-    defaultWidth: 100,
-    minWidth: 88,
+    defaultWidth: onDeleteRow ? 132 : 100,
+    minWidth: onDeleteRow ? 112 : 88,
     truncate: false,
     align: "center",
     render: (row) => (
@@ -120,10 +122,22 @@ function buildActionsColumn<T>(
             <Pencil size={15} />
           </TableActionBtn>
         ) : null}
+        {onDeleteRow ? (
+          <TableActionBtn
+            onClick={() => onDeleteRow(row)}
+            ariaLabel="Excluir"
+            title="Desativar atendente"
+          >
+            <Trash2 size={15} className="text-[#b91c1c]" />
+          </TableActionBtn>
+        ) : null}
       </TableActionGroup>
     ),
   };
 }
+
+/** Padding horizontal padrão — alinhar métricas e tabela na mesma coluna. */
+export const crmRetrofitPageXClass = "px-3 sm:px-4 lg:px-5";
 
 /** Tabela redimensionável no padrão retrofit Waje (Conta, Equipe, CRM). */
 export function CrmRetrofitTablePanel<T>({
@@ -140,8 +154,9 @@ export function CrmRetrofitTablePanel<T>({
   exportConfig,
   onEditRow,
   onViewRow,
+  onDeleteRow,
 }: Props<T>) {
-  const actionsCol = buildActionsColumn(onEditRow, onViewRow);
+  const actionsCol = buildActionsColumn(onEditRow, onViewRow, onDeleteRow);
   const tableColumns = actionsCol ? [...columns, actionsCol] : columns;
 
   const handleExport =
@@ -158,7 +173,7 @@ export function CrmRetrofitTablePanel<T>({
 
   return (
     <div
-      className={`mx-4 mb-4 overflow-hidden rounded-2xl bg-white ${className}`.trim()}
+      className={`w-full min-w-0 overflow-hidden rounded-2xl bg-white ${className}`.trim()}
       style={{ border: "1px solid #dcebd8", boxShadow: "0 2px 8px rgba(11,31,16,0.04)" }}
     >
       {toolbar ? (

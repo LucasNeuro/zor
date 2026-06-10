@@ -14,6 +14,7 @@ import {
   CrmRetrofitAdvancedFiltersGrid,
   CrmRetrofitFilterField,
   CrmRetrofitTablePanel,
+  crmRetrofitPageXClass,
   crmRetrofitFilterInputClass,
   crmRetrofitFilterSelectClass,
   crmTableIdBadge,
@@ -26,6 +27,12 @@ import { ESTAGIOS_FALLBACK_NEGOCIO_UI } from "@/lib/crm/pipeline-defaults";
 import { useCrmToast } from "@/lib/crm/crm-feedback";
 import { supabase } from "@/lib/supabase/client";
 import { CrmTableNotesCell } from "@/components/crm/CrmTableNotesCell";
+import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
+import {
+  sparklineFromCounts,
+  sparklineFromSeed,
+  trendLabel,
+} from "@/lib/crm/metric-visuals";
 import {
   loadNotasPreviewMap,
   notasParaNegocio,
@@ -264,6 +271,14 @@ export default function NegociosPage() {
 
   const negociandoCount = negocios.filter((n) => n.etapa === "negociando").length;
   const pipelineTotal = totalAberto(negocios);
+  const ganhosCount = negocios.filter((n) => n.etapa === "ganho").length;
+  const perdidosCount = negocios.filter((n) => n.etapa === "perdido").length;
+  const etapaSparkline = useMemo(() => {
+    const buckets = etapasKanban.slice(0, 5).map(
+      (est) => negocios.filter((n) => n.etapa === est.id).length
+    );
+    return sparklineFromCounts(buckets);
+  }, [etapasKanban, negocios]);
   const temMais = negocios.length < total;
 
   useEffect(() => {
@@ -488,18 +503,46 @@ export default function NegociosPage() {
         </div>
       )}
 
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#dcebd8] bg-[#ffffff] px-4 py-2.5 text-sm">
-        <span className="text-[#5d7a67]">
-          <strong className="text-[#0b2210]">{total}</strong> negócios
-        </span>
-        <span className="text-[#5d7a67]">
-          Pipeline <strong className="text-[#22c55e]">{moeda(pipelineTotal)}</strong>
-        </span>
-        {negociandoCount > 0 ? (
-          <span className="text-[#5d7a67]">
-            Negociando <strong className="text-[#f59e0b]">{negociandoCount}</strong>
-          </span>
-        ) : null}
+      <div className={`shrink-0 border-b border-[#dcebd8] bg-[#f8fcf6] py-3 ${crmRetrofitPageXClass}`}>
+        <CrmMetricsGrid cols={4}>
+          <CrmMetricCard
+            label="Negócios"
+            valor={total}
+            tone="default"
+            sub={`${negocios.length} carregados`}
+            sparkline={etapaSparkline}
+          />
+          <CrmMetricCard
+            label="Pipeline aberto"
+            valor={moeda(pipelineTotal)}
+            tone="success"
+            sub="Fora de ganho/perdido"
+            sparkline={sparklineFromSeed(Math.round(pipelineTotal / 1000) + 2)}
+          />
+          <CrmMetricCard
+            label="Em negociação"
+            valor={negociandoCount}
+            tone="brand"
+            sub="Etapa quente"
+            sparkline={sparklineFromSeed(negociandoCount + 4)}
+            trend={
+              total > 0 && negociandoCount > 0
+                ? { label: trendLabel(negociandoCount, total) ?? "—", positive: true }
+                : undefined
+            }
+          />
+          <CrmMetricCard
+            label="Taxa de fechamento"
+            valor={ganhosCount + perdidosCount > 0 ? `${Math.round((ganhosCount / (ganhosCount + perdidosCount)) * 100)}%` : "—"}
+            tone="success"
+            sub={`${ganhosCount} ganhos · ${perdidosCount} perdidos`}
+            progress={{
+              value: ganhosCount,
+              max: Math.max(ganhosCount + perdidosCount, 1),
+              hint: "Ganhos vs total fechado",
+            }}
+          />
+        </CrmMetricsGrid>
       </div>
 
       <div className="flex-1 overflow-hidden">
@@ -568,7 +611,7 @@ export default function NegociosPage() {
             })}
           </CrmKanbanBoardScroll>
         ) : (
-          <div className="h-full overflow-y-auto pt-4">
+          <div className={`h-full overflow-y-auto pb-4 pt-3 ${crmRetrofitPageXClass}`}>
             <CrmRetrofitTablePanel
               tableId="crm-negocios-lista"
               columns={colunasNegocios}

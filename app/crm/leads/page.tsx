@@ -12,6 +12,7 @@ import {
   CrmRetrofitAdvancedFiltersGrid,
   CrmRetrofitFilterField,
   CrmRetrofitTablePanel,
+  crmRetrofitPageXClass,
   crmRetrofitFilterInputClass,
   crmRetrofitFilterSelectClass,
   crmTableIdBadge,
@@ -23,10 +24,16 @@ import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
 import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
-import { ESTAGIOS_FALLBACK_LEAD_UI } from "@/lib/crm/pipeline-defaults";
+import { ESTAGIOS_FALLBACK_LEAD_UI, ESTAGIOS_FALLBACK_ATENDIMENTO_UI } from "@/lib/crm/pipeline-defaults";
 import { labelPipelineTab } from "@/lib/crm/tenant-pipelines";
 import { useCrmToast } from "@/lib/crm/crm-feedback";
 import { CrmTableNotesCell } from "@/components/crm/CrmTableNotesCell";
+import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
+import {
+  sparklineFromCounts,
+  sparklineFromSeed,
+  trendLabel,
+} from "@/lib/crm/metric-visuals";
 import {
   loadNotasPreviewMap,
   notasParaLead,
@@ -76,6 +83,7 @@ type Lead = {
   campanha: string | null;
   estagio: string;
   estagio_funil?: string | null;
+  estagio_atendimento?: string | null;
   score: number;
   valor_estimado: number;
   agente_responsavel: string | null;
@@ -158,6 +166,12 @@ function isPipelinePrincipal(pipe: PipelineUi | null, pipelines: PipelineUi[]): 
   return first?.id === pipe.id;
 }
 
+const ESTAGIOS_ATENDIMENTO_UI: EstagioUi[] = ESTAGIOS_FALLBACK_ATENDIMENTO_UI.map((e) => ({
+  id: e.id,
+  label: e.label,
+  color: e.color,
+}));
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LeadsPage() {
@@ -188,22 +202,34 @@ export default function LeadsPage() {
   const [pipelines, setPipelines] = useState<PipelineUi[]>([]);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [estagiosKanban, setEstagiosKanban] = useState<EstagioUi[]>(ESTAGIOS_FALLBACK);
+  const [estagiosAtendimento, setEstagiosAtendimento] = useState<EstagioUi[]>(ESTAGIOS_ATENDIMENTO_UI);
+  const [sideoverInitialTab, setSideoverInitialTab] = useState<"chat" | undefined>(undefined);
   const [sucessoLead, setSucessoLead] = useState<string | null>(null);
   const pendingStageMovesRef = useRef(new Set<string>());
 
   const carregarPipeline = useCallback(async () => {
     try {
-      const res = await fetch("/api/crm/pipelines?tipo=lead", {
-        headers: internalApiHeaders(),
-      });
-      const json = await res.json();
-      const list = (json.data || []) as PipelineUi[];
-      if (!list.length) return;
-      setPipelines(list);
-      setPipelineId((prev) => {
-        if (prev && list.some((p) => p.id === prev)) return prev;
-        return list[0]?.id ?? null;
-      });
+      const [resLead, resAt] = await Promise.all([
+        fetch("/api/crm/pipelines?tipo=lead", { headers: internalApiHeaders() }),
+        fetch("/api/crm/pipelines?tipo=atendimento", { headers: internalApiHeaders() }),
+      ]);
+      const jsonLead = await resLead.json();
+      const list = (jsonLead.data || []) as PipelineUi[];
+      if (list.length) {
+        setPipelines(list);
+        setPipelineId((prev) => {
+          if (prev && list.some((p) => p.id === prev)) return prev;
+          return list[0]?.id ?? null;
+        });
+      }
+      const jsonAt = await resAt.json();
+      const pipeAt = ((jsonAt.data || []) as PipelineUi[])[0];
+      const colsAt =
+        pipeAt?.estagios
+          ?.filter((e) => e.ativo !== false)
+          .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+          .map((e) => ({ id: e.slug, label: e.label, color: e.cor || "#6B7280" })) ?? [];
+      setEstagiosAtendimento(colsAt.length ? colsAt : ESTAGIOS_ATENDIMENTO_UI);
     } catch {
       /* fallback ESTAGIOS_FALLBACK */
     }
@@ -294,8 +320,15 @@ export default function LeadsPage() {
   useEffect(() => {
     const est = searchParams.get("estagio");
     const v = searchParams.get("view");
+    const leadId = searchParams.get("lead");
+    const tab = searchParams.get("tab");
     if (est) setFiltroEstagio(est);
     if (v === "kanban" || v === "lista") setView(v);
+    if (tab === "chat") setSideoverInitialTab("chat");
+    if (leadId && leads.length) {
+      const found = leads.find((l) => l.id === leadId);
+      if (found) setEditLead(found);
+    }
     if (searchParams.get("novo") === "1") {
       setLeadRapidoOpen(true);
       const p = new URLSearchParams(searchParams.toString());
@@ -303,7 +336,7 @@ export default function LeadsPage() {
       const q = p.toString();
       router.replace(q ? `/crm/leads?${q}` : "/crm/leads");
     }
-  }, [searchParams, isMobile, router]);
+  }, [searchParams, isMobile, router, leads]);
 
   useEffect(() => {
     void carregarPipeline();
@@ -495,6 +528,15 @@ export default function LeadsPage() {
 
   const semResposta = leadsDoPipeline.filter(l => !["ganho", "perdido"].includes(l.estagio) && Date.now() - new Date(l.atualizado_em).getTime() > 86_400_000).length;
   const pipeline = leadsDoPipeline.filter(l => !["ganho", "perdido"].includes(l.estagio)).reduce((s, l) => s + l.valor_estimado, 0);
+  const atendimentoAberto = leadsDoPipeline.filter(
+    (l) => (l.estagio_atendimento || "novo") !== "fechado"
+  ).length;
+  const stageSparkline = useMemo(() => {
+    const buckets = estagiosKanban.slice(0, 5).map(
+      (est) => leadsDoPipeline.filter((l) => estagioParaColunaKanban(l.estagio) === est.id).length
+    );
+    return sparklineFromCounts(buckets);
+  }, [estagiosKanban, leadsDoPipeline]);
 
   const pipelineCount = useCallback(
     (pid: string) => {
@@ -537,6 +579,8 @@ export default function LeadsPage() {
   const colunasLeads = useMemo((): CrmResizableColumn<Lead>[] => {
     const estagioInfo = (lead: Lead) =>
       estagiosKanban.find((e) => e.id === estagioParaColunaKanban(lead.estagio));
+    const estagioAtendimentoInfo = (lead: Lead) =>
+      estagiosAtendimento.find((e) => e.id === (lead.estagio_atendimento || "novo"));
 
     return [
       {
@@ -569,6 +613,17 @@ export default function LeadsPage() {
         minWidth: 100,
         render: (lead) => {
           const est = estagioInfo(lead);
+          if (!est) return "—";
+          return crmTableStagePill(est.label, est.color);
+        },
+      },
+      {
+        id: "atendimento",
+        label: "Atendimento",
+        defaultWidth: 130,
+        minWidth: 100,
+        render: (lead) => {
+          const est = estagioAtendimentoInfo(lead);
           if (!est) return "—";
           return crmTableStagePill(est.label, est.color);
         },
@@ -643,7 +698,7 @@ export default function LeadsPage() {
         render: (lead) => formatData(lead.criado_em),
       },
     ];
-  }, [estagiosKanban, notasMap]);
+  }, [estagiosKanban, estagiosAtendimento, notasMap]);
 
   const leadsExportConfig = useMemo(
     () => ({
@@ -732,18 +787,49 @@ export default function LeadsPage() {
       )}
 
       {/* ─── METRICS ─── */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#dcebd8] bg-[#ffffff] px-4 py-2.5 text-sm flex-shrink-0">
-        <span className="text-[#5d7a67]">
-          <strong className="text-[#0b2210]">{filtrados.length}</strong> leads
-        </span>
-        <span className="text-[#5d7a67]">
-          Pipeline <strong className="text-[#22c55e]">{moeda(pipeline)}</strong>
-        </span>
-        {semResposta > 0 ? (
-          <span className="text-[#5d7a67]">
-            Sem resposta +24h <strong className="text-[#ef4444]">{semResposta}</strong>
-          </span>
-        ) : null}
+      <div className={`shrink-0 border-b border-[#dcebd8] bg-[#f8fcf6] py-3 ${crmRetrofitPageXClass}`}>
+        <CrmMetricsGrid cols={4}>
+          <CrmMetricCard
+            label="Leads no funil"
+            valor={leadsDoPipeline.length}
+            tone="default"
+            sub={pipelineTitulo}
+            sparkline={stageSparkline}
+          />
+          <CrmMetricCard
+            label="Pipeline"
+            valor={moeda(pipeline)}
+            tone="success"
+            sub="Valor em aberto"
+            sparkline={sparklineFromSeed(Math.round(pipeline / 1000) + 1)}
+          />
+          <CrmMetricCard
+            label="Sem resposta +24h"
+            valor={semResposta}
+            tone={semResposta > 0 ? "danger" : "muted"}
+            sub="Precisam de follow-up"
+            sparkline={sparklineFromSeed(semResposta + 7)}
+            trend={
+              leadsDoPipeline.length > 0 && semResposta > 0
+                ? {
+                    label: trendLabel(semResposta, leadsDoPipeline.length) ?? "—",
+                    positive: false,
+                  }
+                : undefined
+            }
+          />
+          <CrmMetricCard
+            label="Atendimento aberto"
+            valor={atendimentoAberto}
+            tone="success"
+            sub="Fora de Fechado"
+            progress={{
+              value: atendimentoAberto,
+              max: Math.max(leadsDoPipeline.length, 1),
+              hint: `${atendimentoAberto} leads`,
+            }}
+          />
+        </CrmMetricsGrid>
       </div>
 
       {/* ─── MAIN ─── */}
@@ -800,7 +886,7 @@ export default function LeadsPage() {
         ) : (
 
           /* LISTA */
-          <div className="h-full overflow-y-auto pt-4">
+          <div className={`h-full overflow-y-auto pb-4 pt-3 ${crmRetrofitPageXClass}`}>
             <CrmRetrofitTablePanel
               tableId="crm-leads-lista"
               columns={colunasLeads}
@@ -898,8 +984,13 @@ export default function LeadsPage() {
         open={!!editLead}
         lead={editLead}
         estagios={estagiosKanban}
+        estagiosAtendimento={estagiosAtendimento}
+        initialTab={sideoverInitialTab}
         isMobile={isMobile}
-        onClose={() => setEditLead(null)}
+        onClose={() => {
+          setEditLead(null);
+          setSideoverInitialTab(undefined);
+        }}
         onUpdated={(updated) => {
           setLeads((prev) =>
             prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l))

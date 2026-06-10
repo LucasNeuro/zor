@@ -27,7 +27,7 @@ export function CrmAcaoAgora({
     {
       label: "Leads aguardando você",
       valor: m.leadsAguardando,
-      href: "/crm/atendimento",
+      href: "/crm/leads?tab=chat",
       cor: "#c9a24a",
       icon: <User className="h-4 w-4" />,
     },
@@ -41,7 +41,7 @@ export function CrmAcaoAgora({
     {
       label: "Mensagens na fila",
       valor: m.mensagensFilaPendentes,
-      href: "/crm/atendimento",
+      href: "/crm/leads?tab=chat",
       cor: m.mensagensFilaPendentes > 0 ? "#d29922" : "#3fb950",
       icon: <MessageSquare className="h-4 w-4" />,
     },

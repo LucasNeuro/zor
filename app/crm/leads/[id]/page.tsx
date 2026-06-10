@@ -567,7 +567,7 @@ export default function LeadFichaPage() {
             </button>
             <button
               type="button"
-              onClick={() => router.push(`/crm/atendimento?lead=${id}`)}
+              onClick={() => router.push(`/crm/leads?lead=${id}&tab=chat`)}
               style={crmBtnPrimary()}
             >
               <span className="inline-flex items-center gap-2">
@@ -771,7 +771,7 @@ export default function LeadFichaPage() {
           <div className="flex flex-col gap-2 p-4">
             <button
               type="button"
-              onClick={() => router.push(`/crm/atendimento?lead=${id}`)}
+              onClick={() => router.push(`/crm/leads?lead=${id}&tab=chat`)}
               style={{ ...crmBtnPrimary(), width: "100%" }}
             >
               <span className="inline-flex items-center justify-center gap-2">

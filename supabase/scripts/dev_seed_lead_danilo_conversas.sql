@@ -157,13 +157,31 @@ BEGIN
   WHERE f.lead_id = v_lead_id
     AND COALESCE(f.metadata->>'demo', '') = 'chat_preview';
 
-  UPDATE public.hub_leads_crm
-  SET
-    ultimo_contato = t0 + interval '42 minutes',
-    ultima_mensagem = 'Combinado, pode ser às 10h. Obrigado!',
-    humano_responsavel = NULL,
-    atualizado_em = now()
-  WHERE id = v_lead_id;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'hub_leads_crm'
+      AND column_name = 'estagio_atendimento'
+  ) THEN
+    UPDATE public.hub_leads_crm
+    SET
+      ultimo_contato = t0 + interval '42 minutes',
+      ultima_mensagem = 'Combinado, pode ser às 10h. Obrigado!',
+      humano_responsavel = NULL,
+      agente_responsavel = v_agente_ia,
+      estagio_atendimento = COALESCE(NULLIF(TRIM(estagio_atendimento), ''), 'novo'),
+      atualizado_em = now()
+    WHERE id = v_lead_id;
+  ELSE
+    UPDATE public.hub_leads_crm
+    SET
+      ultimo_contato = t0 + interval '42 minutes',
+      ultima_mensagem = 'Combinado, pode ser às 10h. Obrigado!',
+      humano_responsavel = NULL,
+      agente_responsavel = v_agente_ia,
+      atualizado_em = now()
+    WHERE id = v_lead_id;
+  END IF;
 
   UPDATE public.hub_conversas
   SET

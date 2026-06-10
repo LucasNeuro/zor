@@ -48,7 +48,7 @@ export function SidebarPanel({ painel, metricas }: SidebarPanelProps) {
         <Stat label="Fila de mensagens" value={metricas.mensagensFilaPendentes} cor="#22c55e" />
         <Stat label="Aguardando você" value={metricas.leadsAguardando} cor={metricas.leadsAguardando > 0 ? "#c9a24a" : "#34d399"} />
         <Stat label="Aprovações pendentes" value={metricas.aprovacoesPendentes} cor={metricas.aprovacoesPendentes > 0 ? "#ef4444" : "#34d399"} />
-        <NavBtn href="/crm/atendimento" label="Abrir Atendimento" />
+        <NavBtn href="/crm/leads" label="Abrir Leads" />
       </div>
     );
   }
@@ -63,7 +63,7 @@ export function SidebarPanel({ painel, metricas }: SidebarPanelProps) {
             Meta de SLA: responder em até 5 minutos. Leads aguardando são aqueles sem humano responsável.
           </p>
         </div>
-        <NavBtn href="/crm/atendimento" label="Ver Fila de Atendimento" />
+        <NavBtn href="/crm/leads?tab=chat" label="Ver leads com conversa" />
       </div>
     );
   }

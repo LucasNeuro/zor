@@ -26,7 +26,7 @@ export function DynamicKpis({ metricas, onNavegar }: DynamicKpisProps) {
       label: "Conversas ativas",
       value: metricas.loading ? "—" : metricas.mensagensFilaPendentes,
       cor: "#34d399",
-      href: "/crm/atendimento",
+      href: "/crm/leads",
     },
   ];
 

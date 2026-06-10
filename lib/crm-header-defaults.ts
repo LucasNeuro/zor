@@ -31,6 +31,13 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
   const seg = parts[1];
   const third = parts[2];
 
+  if (seg === "atendimento" && third === "equipe") {
+    return {
+      title: "Equipe",
+      subtitle: "Vendedores e atendentes para transferência WhatsApp",
+    };
+  }
+
   if (third && seg === "leads") {
     return { title: "Lead" };
   }

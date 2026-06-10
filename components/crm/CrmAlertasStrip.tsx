@@ -6,7 +6,7 @@ import type { AlertaResumo } from "@/lib/crm/dashboard-aggregate";
 function hrefAlerta(a: AlertaResumo): string {
   const t = a.tipo.toLowerCase();
   if (t.includes("aprov")) return "/crm/aprovacoes";
-  if (t.includes("lead") || t.includes("atend")) return "/crm/atendimento";
+  if (t.includes("lead") || t.includes("atend")) return "/crm/leads";
   return "/crm/aprovacoes";
 }
 

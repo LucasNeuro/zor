@@ -982,7 +982,7 @@ export function LeadChatTab({
                 </select>
                 {atendentes.length === 0 ? (
                   <p className="mt-1 text-[10px]" style={{ color: RF_TEXT_MUTED }}>
-                    Nenhum atendente cadastrado — use manual ou cadastre em Atendimento → Equipe.
+                    Nenhum atendente cadastrado — use manual ou cadastre em Equipe (menu Atendimento).
                   </p>
                 ) : null}
               </div>

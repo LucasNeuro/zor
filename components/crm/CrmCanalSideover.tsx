@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ExternalLink, MessageCircle, Settings, X } from "lucide-react";
-import { MODO_OPERACAO_LABEL } from "@/lib/hub/agente-modo-operacao";
+import { CrmCanalModoCell } from "@/components/crm/CrmCanalModoCell";
 import {
   RF_ACCENT,
   RF_BORDER,
@@ -102,10 +102,6 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
     agente.modo_operacao === "canal_whatsapp" ||
     ((!agente.modo_operacao || agente.modo_operacao === "") &&
       ["atendente", "sdr", "gerente_atendimento"].includes(agente.agente_slug));
-  const modoLabel =
-    agente.modo_operacao && agente.modo_operacao in MODO_OPERACAO_LABEL
-      ? MODO_OPERACAO_LABEL[agente.modo_operacao as keyof typeof MODO_OPERACAO_LABEL]
-      : agente.modo_operacao || "—";
 
   const temInstancia = Boolean((agente.uazapi_instance_id || "").trim());
   const badge = statusCores(agente.uazapi_connection_status, temInstancia);
@@ -125,10 +121,13 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
                 CANAL WHATSAPP
               </p>
               <h2 style={{ margin: "4px 0 0", color: RF_TEXT_PRIMARY, fontSize: 18, fontWeight: 800 }}>{agente.nome}</h2>
-              <p style={{ margin: "6px 0 0", color: RF_TEXT_SECONDARY, fontSize: 12 }}>
+              <p style={{ margin: "6px 0 0", color: RF_TEXT_SECONDARY, fontSize: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <code style={{ color: RF_ACCENT, fontSize: 11 }}>{agente.agente_slug}</code>
-                {" · "}
-                {modoLabel}
+                <CrmCanalModoCell
+                  modo={agente.modo_operacao}
+                  legacyCanalWhatsapp={modoWhatsapp}
+                  variant="dark"
+                />
               </p>
             </div>
             <button type="button" onClick={onClose} aria-label="Fechar" style={{ ...rfCloseButtonStyle(), width: 36, height: 36 }}>
@@ -213,7 +212,16 @@ export function CrmCanalSideover({ agente, onClose }: Props) {
             />
             <InfoRow label="Conexão" value={statusLabel(agente.uazapi_connection_status)} />
             <InfoRow label="Token UAZAPI" value={agente.uazapi_has_instance_token ? "Configurado" : "Ausente"} />
-            <InfoRow label="Modo operação" value={modoLabel} />
+            <InfoRow
+              label="Modo operação"
+              value={
+                <CrmCanalModoCell
+                  modo={agente.modo_operacao}
+                  legacyCanalWhatsapp={modoWhatsapp}
+                  variant="dark"
+                />
+              }
+            />
             <InfoRow label="Agente ativo" value={agente.ativo === false ? "Não" : "Sim"} />
           </div>
 

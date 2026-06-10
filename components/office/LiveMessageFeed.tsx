@@ -78,7 +78,7 @@ export default function LiveMessageFeed() {
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
               <p className="text-white text-xs font-bold">Mensagens ao vivo</p>
             </div>
-            <button onClick={() => router.push("/crm/atendimento")} className="text-xs" style={{ color: "#c9a24a", background: "none", border: "none", cursor: "pointer" }}>
+            <button onClick={() => router.push("/crm/leads?tab=chat")} className="text-xs" style={{ color: "#c9a24a", background: "none", border: "none", cursor: "pointer" }}>
               Ver tudo →
             </button>
           </div>
@@ -111,7 +111,7 @@ export default function LiveMessageFeed() {
 
           <div className="p-2 flex gap-2" style={{ borderTop: "1px solid #30363d", background: "#0d1117" }}>
             <button onClick={() => router.push("/crm/leads")} className="flex-1 py-1.5 rounded-lg text-xs" style={{ background: "#21262d", color: "#8b949e", border: "none", cursor: "pointer" }}>Pipeline</button>
-            <button onClick={() => router.push("/crm/atendimento")} className="flex-1 py-1.5 rounded-lg text-xs font-bold" style={{ background: "#003b26", color: "#c9a24a", border: "none", cursor: "pointer" }}>Atendimento</button>
+            <button onClick={() => router.push("/crm/leads?tab=chat")} className="flex-1 py-1.5 rounded-lg text-xs font-bold" style={{ background: "#003b26", color: "#c9a24a", border: "none", cursor: "pointer" }}>Leads</button>
           </div>
         </div>
       )}

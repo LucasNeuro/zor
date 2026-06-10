@@ -43,7 +43,7 @@ export function ContextMenu({ metricas, onNavegar, onItemClick }: ContextMenuPro
         },
         {
           label: "Inbox",
-          href: "/crm/atendimento",
+          href: "/crm/leads?tab=chat",
           badge: metricas.mensagensFilaPendentes || undefined,
           badgeColor: "#22c55e",
         },

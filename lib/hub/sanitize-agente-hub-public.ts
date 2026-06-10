@@ -8,10 +8,13 @@ export function sanitizarAgenteHubParaCliente(row: Record<string, unknown>): Rec
   const slug = typeof rest.agente_slug === "string" ? rest.agente_slug.trim() : "";
   const nome = typeof rest.nome === "string" ? rest.nome : null;
   const avatarRaw = typeof rest.avatar_url === "string" ? rest.avatar_url : null;
+  const emailFrom = typeof rest.email_from === "string" ? rest.email_from.trim() : "";
+  const emailInbound = typeof rest.email_inbound === "string" ? rest.email_inbound.trim() : "";
   return {
     ...rest,
     avatar_url: slug ? normalizarAvatarUrlAgente(slug, nome, avatarRaw) : avatarRaw,
     uazapi_has_instance_token: typeof tok === "string" && tok.trim().length > 0,
+    email_configured: Boolean(emailFrom && emailInbound),
     modelo_efetivo: resolveInferenceModelId(modeloPadrao),
   };
 }

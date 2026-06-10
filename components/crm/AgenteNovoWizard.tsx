@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, MessageSquare, Webhook, Zap } from "lucide-react";
+import { Clock, Mail, MessageSquare, Webhook, Zap } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
   MODO_OPERACAO_DESCRICAO,
   MODO_OPERACAO_LABEL,
+  agenteEhModoCanal,
   type ModoOperacaoAgente,
 } from "@/lib/hub/agente-modo-operacao";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
@@ -18,6 +19,10 @@ import {
 } from "@/components/crm/AgenteFerramentasIaBlock";
 import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-externas";
 import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
+import {
+  AgenteResendBlock,
+  type AgenteResendSnapshot,
+} from "@/components/crm/AgenteResendBlock";
 import {
   AgenteUazapiBlock,
   type AgenteUazapiSnapshot,
@@ -49,6 +54,7 @@ import { CONHECIMENTO_TITULO_INSERT } from "@/lib/hub/conhecimento-secoes";
 import { prefixoMercadoParaGravacao } from "@/lib/crm/mercado-agente";
 import {
   AGENTE_WIZARD_STEP_INTRO,
+  agenteWizardPasso8Descricao,
   modoInstrucaoWizardResumo,
   modoOperacaoWizardResumo,
 } from "@/lib/hub/agente-wizard-copy";
@@ -366,6 +372,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   /** Preenchido após POST bem-sucedido em `/api/hub/agentes`. */
   const [agenteSlugCriado, setAgenteSlugCriado] = useState<string | null>(null);
   const [uazapiSnap, setUazapiSnap] = useState<AgenteUazapiSnapshot | null>(null);
+  const [emailSnap, setEmailSnap] = useState<AgenteResendSnapshot | null>(null);
   const [playbookMetaLoading, setPlaybookMetaLoading] = useState(false);
   const [playbookGerando, setPlaybookGerando] = useState(false);
   const [playbookErro, setPlaybookErro] = useState("");
@@ -495,14 +502,33 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     }
   }, [agenteSlugCriado]);
 
+  const refreshSnapshotEmail = useCallback(async () => {
+    if (!agenteSlugCriado) return;
+    try {
+      const r = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}/email`, {
+        headers: internalApiHeaders(),
+      });
+      const d = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!r.ok) return;
+      setEmailSnap({
+        email_from: typeof d.email_from === "string" ? d.email_from : null,
+        email_from_name: typeof d.email_from_name === "string" ? d.email_from_name : null,
+        email_inbound: typeof d.email_inbound === "string" ? d.email_inbound : null,
+        email_ativo: d.email_ativo !== false,
+      });
+    } catch {
+      /* ignore */
+    }
+  }, [agenteSlugCriado]);
+
   useEffect(() => {
-    if (passo === 8 && modoOperacao !== "canal_whatsapp") {
+    if (passo === 8 && !agenteEhModoCanal(modoOperacao)) {
       setPasso(7);
     }
   }, [passo, modoOperacao]);
 
   useEffect(() => {
-    if (passo !== 8 || !agenteSlugCriado || modoOperacao !== "canal_whatsapp") {
+    if (passo !== 8 || !agenteSlugCriado || !agenteEhModoCanal(modoOperacao)) {
       setSyncCanalLoading(false);
       return;
     }
@@ -514,11 +540,12 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       setSyncCanalLoading(false);
       if (!ok) return;
       if (modoOperacao === "canal_whatsapp") await refreshSnapshotUazapi();
+      if (modoOperacao === "canal_email") await refreshSnapshotEmail();
     })();
     return () => {
       cancel = true;
     };
-  }, [passo, agenteSlugCriado, modoOperacao, modoExecucao]);
+  }, [passo, agenteSlugCriado, modoOperacao, modoExecucao, refreshSnapshotEmail, refreshSnapshotUazapi]);
 
   useEffect(() => {
     if (passo !== 7 || !agenteSlugCriado) return;
@@ -1085,7 +1112,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   }
 
   const wizardDark = variant === "drawer";
-  const precisaPassoCanal = modoOperacao === "canal_whatsapp";
+  const precisaPassoCanal = agenteEhModoCanal(modoOperacao);
   const wizardStepLabels = precisaPassoCanal
     ? WIZARD_STEP_LABELS
     : WIZARD_STEP_LABELS.filter((label) => label !== "Canal");
@@ -1190,7 +1217,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
   function selecionarModoOperacao(id: ModoOperacaoAgente) {
     setModoOperacao(id);
-    if (id === "canal_whatsapp") setModoExecucao("interacao");
+    if (agenteEhModoCanal(id)) setModoExecucao("interacao");
     else if (modoExecucao === "interacao") setModoExecucao("agenda");
   }
 
@@ -1223,8 +1250,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
   /** Grava no servidor o que o utilizador escolheu no wizard (modo, ciclos, ferramentas). */
   async function sincronizarWizardNoAgente(slug: string): Promise<boolean> {
-    const cicloExecucaoPadrao =
-      modoOperacao === "canal_whatsapp" ? "interacao" : modoExecucao;
+    const cicloExecucaoPadrao = agenteEhModoCanal(modoOperacao) ? "interacao" : modoExecucao;
     const syncRes = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}`, {
       method: "PATCH",
       headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
@@ -1295,15 +1321,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         payload.omit_hub_ciclo_padrao = true;
         payload.ciclos_vincular_ids = hubCiclosVincularIds;
         payload.modo_operacao = modoOperacao;
-        payload.ciclo_execucao =
-          modoOperacao === "canal_whatsapp" ? "interacao" : modoExecucao;
-        if (modoExecucao === "agenda" && modoOperacao !== "canal_whatsapp") {
+        payload.ciclo_execucao = agenteEhModoCanal(modoOperacao) ? "interacao" : modoExecucao;
+        if (modoExecucao === "agenda" && !agenteEhModoCanal(modoOperacao)) {
           payload.ciclo_intervalo_minutos = agendaIntervalMin;
         }
       } else {
         payload.modo_operacao = modoOperacao;
-        payload.ciclo_execucao =
-          modoOperacao === "canal_whatsapp" ? "interacao" : modoExecucao;
+        payload.ciclo_execucao = agenteEhModoCanal(modoOperacao) ? "interacao" : modoExecucao;
         payload.ciclo_intervalo_minutos =
           modoExecucao === "agenda" ? agendaIntervalMin : undefined;
         if (hubCiclosVincularIds.length > 0) {
@@ -1908,8 +1932,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Tipo de agente <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <p style={{ color: wzMuted, fontSize: 12, margin: "0 0 12px", lineHeight: 1.5 }}>
-                  Atendimento fala com clientes no WhatsApp. Interno executa tarefas e ciclos no escritório, sem fila
-                  ao vivo.
+                  Atendimento fala com clientes no WhatsApp ou e-mail. Interno executa tarefas e ciclos no escritório,
+                  sem fila ao vivo.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(
@@ -1919,6 +1943,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         Icon: MessageSquare,
                         titulo: MODO_OPERACAO_LABEL.canal_whatsapp,
                         texto: MODO_OPERACAO_DESCRICAO.canal_whatsapp,
+                        badge: null,
+                      },
+                      {
+                        id: "canal_email" as const,
+                        Icon: Mail,
+                        titulo: MODO_OPERACAO_LABEL.canal_email,
+                        texto: MODO_OPERACAO_DESCRICAO.canal_email,
                         badge: null,
                       },
                       {
@@ -2377,7 +2408,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 customCatalog={catalogoCustomFerramentasWizard}
                 externaCatalog={catalogoExternaFerramentasWizard}
                 integradorCatalog={catalogoIntegradorFerramentasWizard}
-                destacarWhatsApp={modoOperacao === "canal_whatsapp"}
+                destacarWhatsApp={agenteEhModoCanal(modoOperacao)}
               />
               {erro && (
                 <p
@@ -2596,6 +2627,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Próximo</strong>.
                   </div>
                 ) : null}
+                {modoOperacao === "canal_email" ? (
+                  <div style={{ ...wizardInfoBox(), marginBottom: 14 }}>
+                    <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Canal E-mail:</strong> no passo{" "}
+                    <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Canal</strong> configure remetente
+                    Resend e endereço inbound. Recomendamos activar resumo do lead e registo de nota nas ferramentas.
+                  </div>
+                ) : null}
 
                 <p style={{ ...wizardSectionLabel, marginBottom: 8 }}>TIPO DE EXECUÇÃO DO CICLO PADRÃO</p>
                 <p
@@ -2617,16 +2655,16 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       provisiona um ciclo padrão em{" "}
                       <code style={{ color: wzMuted }}>hub_ciclos_ia</code>.
                     </>
-                  ) : (
+                  ) : agenteEhModoCanal(modoOperacao) ? (
                     <>
                       O modelo será salvo como{" "}
-                      <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>canal_whatsapp</strong> — modo{" "}
+                      <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>{modoOperacao}</strong> — modo{" "}
                       <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>atendimento no canal</strong> — e
                       provisiona ciclo de{" "}
                       <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>gatilho por interação</strong>{" "}
                       (cada mensagem no webhook).
                     </>
-                  )}
+                  ) : null}
                 </p>
 
                 <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
@@ -2660,7 +2698,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
                 {hubCicloEstrategia === "provisionar" ? (
                   <>
-                    {modoOperacao === "canal_whatsapp" ? (
+                    {agenteEhModoCanal(modoOperacao) ? (
                       <p
                         style={{
                           color: wzMuted,
@@ -2673,15 +2711,15 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                           background: wizardDark ? "rgba(6, 13, 8, 0.72)" : "#f8fcf6",
                         }}
                       >
-                        Para atendimento no WhatsApp, o ciclo padrão é{" "}
+                        Para atendimento no canal, o ciclo padrão é{" "}
                         <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>sob interação</strong> (gatilho a
-                        cada mensagem no canal).
+                        cada mensagem recebida).
                       </p>
                     ) : null}
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {(
                         [
-                          ...(modoOperacao === "canal_whatsapp"
+                          ...(agenteEhModoCanal(modoOperacao)
                             ? ([
                                 {
                                   id: "interacao" as const,
@@ -3121,10 +3159,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <h2 style={wzH2}>{AGENTE_WIZARD_STEP_INTRO[8].titulo}</h2>
-                <p style={wzP}>
-                  Ligue o WhatsApp da empresa: região UAZAPI, instância e QR/código. O playbook publicado define o
-                  fluxo de atendimento.
-                </p>
+                <p style={wzP}>{agenteWizardPasso8Descricao(modoOperacao)}</p>
               </div>
 
               {ragPosCriacaoAviso ? (
@@ -3162,34 +3197,63 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
               {syncCanalLoading ? (
                 <p style={{ color: wzMuted, fontSize: 12, margin: "0 0 10px", lineHeight: 1.5 }}>
-                  A gravar modo WhatsApp e configuração no agente…
+                  A gravar modo de canal e configuração no agente…
                 </p>
               ) : null}
-              <AgenteUazapiBlock
-                layout="painel"
-                agenteNome={nome.trim() || agenteSlugCriado}
-                agenteSlug={agenteSlugCriado}
-                bloqueado={syncCanalLoading}
-                snapshot={
-                  uazapiSnap ?? {
-                    uazapi_instance_id: null,
-                    uazapi_instance_name: null,
-                    uazapi_connection_status: null,
-                    uazapi_has_instance_token: false,
-                  }
-                }
-                onSnapshotPatch={(patch) =>
-                  setUazapiSnap((prev) => ({
-                    ...(prev ?? {
+              {modoOperacao === "canal_whatsapp" ? (
+                <AgenteUazapiBlock
+                  layout="painel"
+                  agenteNome={nome.trim() || agenteSlugCriado}
+                  agenteSlug={agenteSlugCriado}
+                  bloqueado={syncCanalLoading}
+                  snapshot={
+                    uazapiSnap ?? {
                       uazapi_instance_id: null,
                       uazapi_instance_name: null,
                       uazapi_connection_status: null,
                       uazapi_has_instance_token: false,
-                    }),
-                    ...patch,
-                  }))
-                }
-              />
+                    }
+                  }
+                  onSnapshotPatch={(patch) =>
+                    setUazapiSnap((prev) => ({
+                      ...(prev ?? {
+                        uazapi_instance_id: null,
+                        uazapi_instance_name: null,
+                        uazapi_connection_status: null,
+                        uazapi_has_instance_token: false,
+                      }),
+                      ...patch,
+                    }))
+                  }
+                />
+              ) : null}
+              {modoOperacao === "canal_email" ? (
+                <AgenteResendBlock
+                  layout="painel"
+                  agenteNome={nome.trim() || agenteSlugCriado}
+                  agenteSlug={agenteSlugCriado}
+                  bloqueado={syncCanalLoading}
+                  snapshot={
+                    emailSnap ?? {
+                      email_from: null,
+                      email_from_name: null,
+                      email_inbound: null,
+                      email_ativo: true,
+                    }
+                  }
+                  onSnapshotPatch={(patch) =>
+                    setEmailSnap((prev) => ({
+                      ...(prev ?? {
+                        email_from: null,
+                        email_from_name: null,
+                        email_inbound: null,
+                        email_ativo: true,
+                      }),
+                      ...patch,
+                    }))
+                  }
+                />
+              ) : null}
             </div>
           )}
 
@@ -3260,7 +3324,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       >
         <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
           {precisaPassoCanal
-            ? "O agente já foi criado. Pode ligar o WhatsApp, gerar playbook e ajustar o canal mais tarde na ficha do modelo."
+            ? "O agente já foi criado. Pode configurar o canal (WhatsApp ou e-mail), gerar playbook e ajustar integrações mais tarde na ficha do modelo."
             : "O agente já foi criado. Pode gerar o playbook e ajustar ciclos mais tarde na ficha do modelo."}
         </p>
       </CrmConfirmDialog>

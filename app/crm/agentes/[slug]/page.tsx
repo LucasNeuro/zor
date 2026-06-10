@@ -42,6 +42,7 @@ import {
 } from "@/components/crm/AgenteFerramentasIaBlock";
 import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-externas";
 import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
+import { AgenteResendBlock, type AgenteResendSnapshot } from "@/components/crm/AgenteResendBlock";
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
 import { hubModeloExibicaoProduto } from "@/lib/ia/hub-model-defaults";
 import {
@@ -1007,7 +1008,7 @@ export default function AgentePage() {
                 <div>
                   <h2 style={{ ...sectionHeadingStyle, marginBottom: 8 }}>Integrações</h2>
                   <p style={{ fontSize: 12, color: "#3d5c48", margin: 0, lineHeight: 1.5 }}>
-                    WhatsApp e ferramentas disponíveis para este agente.
+                    Canal de atendimento (WhatsApp ou e-mail) e ferramentas disponíveis para este agente.
                   </p>
                 </div>
                 {agente.modo_operacao === "canal_whatsapp" ? (
@@ -1062,6 +1063,33 @@ export default function AgentePage() {
                     }}
                   />
                 ) : null}
+                {agente.modo_operacao === "canal_email" ? (
+                  <AgenteResendBlock
+                    agenteSlug={slug}
+                    agenteNome={agente.nome}
+                    snapshot={{
+                      email_from: typeof agente.email_from === "string" ? agente.email_from : null,
+                      email_from_name:
+                        typeof agente.email_from_name === "string" ? agente.email_from_name : null,
+                      email_inbound: typeof agente.email_inbound === "string" ? agente.email_inbound : null,
+                      email_ativo: agente.email_ativo !== false,
+                    }}
+                    onSnapshotPatch={(patch: Partial<AgenteResendSnapshot>) => {
+                      setAgente((prev) => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          ...(patch.email_from !== undefined && { email_from: patch.email_from }),
+                          ...(patch.email_from_name !== undefined && {
+                            email_from_name: patch.email_from_name,
+                          }),
+                          ...(patch.email_inbound !== undefined && { email_inbound: patch.email_inbound }),
+                          ...(patch.email_ativo !== undefined && { email_ativo: patch.email_ativo }),
+                        };
+                      });
+                    }}
+                  />
+                ) : null}
                 <AgenteFerramentasIaBlock
                   motorHabilitado={motorFerramentasHub}
                   onMotorChange={setMotorFerramentasHub}
@@ -1082,7 +1110,9 @@ export default function AgentePage() {
                   mistralSyncErro={
                     typeof agente.mistral_agent_sync_erro === "string" ? agente.mistral_agent_sync_erro : null
                   }
-                  destacarWhatsApp={agente.modo_operacao === "canal_whatsapp"}
+                  destacarWhatsApp={
+                    agente.modo_operacao === "canal_whatsapp" || agente.modo_operacao === "canal_email"
+                  }
                 />
                 <button
                   type="button"

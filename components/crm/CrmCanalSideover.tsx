@@ -29,6 +29,9 @@ export type CanalAgenteRow = {
   uazapi_connection_status?: string | null;
   uazapi_has_instance_token?: boolean;
   uazapi_snapshot_at?: string | null;
+  email_from?: string | null;
+  email_inbound?: string | null;
+  email_ativo?: boolean;
 };
 
 type Props = {

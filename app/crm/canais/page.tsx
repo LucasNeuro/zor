@@ -37,7 +37,7 @@ function ehCanalRelevante(a: CanalAgenteRow): boolean {
   if (a.arquivado_em) return false;
   if (a.ativo === false) return false;
   if (a.modo_operacao === "jobs_internos") return false;
-  if (a.modo_operacao === "canal_whatsapp") return true;
+  if (a.modo_operacao === "canal_whatsapp" || a.modo_operacao === "canal_email") return true;
   const id = typeof a.uazapi_instance_id === "string" ? a.uazapi_instance_id.trim() : "";
   if (id.length > 0) return true;
   if (a.modo_operacao == null || a.modo_operacao === "") {
@@ -133,7 +133,7 @@ export default function CanaisPage() {
   useEffect(() => {
     setSlot({
       path: pathname,
-      subtitle: `${agentes.length} canais · operação WhatsApp`,
+      subtitle: `${agentes.length} canais · WhatsApp e e-mail`,
       actions: botaoAtualizar,
     });
     return () => setSlot(null);
@@ -202,6 +202,9 @@ export default function CanaisPage() {
         defaultWidth: 160,
         minWidth: 120,
         render: (a) => {
+          if (a.modo_operacao === "canal_email") {
+            return (a.email_from || a.email_inbound || "—").trim();
+          }
           const tem = Boolean((a.uazapi_instance_id || "").trim());
           return tem ? a.uazapi_instance_name || a.uazapi_instance_id || "—" : "—";
         },
@@ -223,6 +226,13 @@ export default function CanaisPage() {
         defaultWidth: 120,
         minWidth: 96,
         render: (a) => {
+          if (a.modo_operacao === "canal_email") {
+            const configured =
+              Boolean((a.email_from || "").trim()) && Boolean((a.email_inbound || "").trim());
+            const ativo = a.email_ativo !== false;
+            const label = !ativo ? "Inativo" : configured ? "Configurado" : "Incompleto";
+            return crmTableStatusPill(label, ativo && configured);
+          }
           const tem = Boolean((a.uazapi_instance_id || "").trim());
           const tone = conexaoTone(a.uazapi_connection_status, tem);
           const label = statusLabel(a.uazapi_connection_status, tem);
@@ -281,7 +291,7 @@ export default function CanaisPage() {
             label="Canais ativos"
             valor={kpis.total}
             tone="brand"
-            sub="Agentes em modo WhatsApp"
+            sub="Agentes em modo canal"
             sparkline={sparklineFromCounts([
               kpis.conectados,
               kpis.conectando,

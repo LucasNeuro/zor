@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Zap } from "lucide-react";
+import { Bot, Mail, Zap } from "lucide-react";
 import type { ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { MODO_OPERACAO_LABEL, isModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 
@@ -28,6 +28,22 @@ function WhatsAppIcon({ size = 16 }: { size?: number }) {
 
 function ModoIcon({ modo }: { modo: ModoOperacaoAgente }) {
   if (modo === "canal_whatsapp") return <WhatsAppIcon size={15} />;
+  if (modo === "canal_email") {
+    return (
+      <span
+        className="inline-flex shrink-0 items-center justify-center rounded-md"
+        style={{
+          width: 21,
+          height: 21,
+          background: "rgba(63, 152, 72, 0.12)",
+          color: WHATSAPP_GREEN,
+        }}
+        aria-hidden
+      >
+        <Mail size={14} strokeWidth={2.25} />
+      </span>
+    );
+  }
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-md"
@@ -46,7 +62,7 @@ function ModoIcon({ modo }: { modo: ModoOperacaoAgente }) {
 
 /** Rótulo curto sem nome do canal entre parênteses. */
 export function modoOperacaoLabelCurto(modo: ModoOperacaoAgente): string {
-  if (modo === "canal_whatsapp") return "Atendimento";
+  if (modo === "canal_whatsapp" || modo === "canal_email") return "Atendimento";
   return "Agente interno";
 }
 

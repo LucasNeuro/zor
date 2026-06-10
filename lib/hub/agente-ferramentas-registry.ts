@@ -521,11 +521,13 @@ export function mergeUsoFerramentasWhatsappCanal(
   modoOperacao?: string | null
 ): Record<HubAgenteFerramentaId, boolean> {
   const base = mergeUsoFerramentasComPadrao(uso);
-  if (modoOperacao === "canal_whatsapp") {
+  if (modoOperacao === "canal_whatsapp" || modoOperacao === "canal_email") {
     if (coalesceFerramentaBool(uso.hub_atualizar_lead) !== false) base.hub_atualizar_lead = true;
     if (coalesceFerramentaBool(uso.hub_lead_memorias) !== false) base.hub_lead_memorias = true;
     if (coalesceFerramentaBool(uso.hub_lead_resumo) !== false) base.hub_lead_resumo = true;
-    if (coalesceFerramentaBool(uso.hub_whatsapp_menu) !== false) base.hub_whatsapp_menu = true;
+    if (modoOperacao === "canal_whatsapp" && coalesceFerramentaBool(uso.hub_whatsapp_menu) !== false) {
+      base.hub_whatsapp_menu = true;
+    }
     if (coalesceFerramentaBool(uso.hub_registar_nota_lead) !== false) base.hub_registar_nota_lead = true;
   }
   return base;

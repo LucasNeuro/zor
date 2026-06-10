@@ -316,7 +316,9 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     } catch {
       intDefs = [];
     }
-    const modoOp = ferrIaRow?.modo_operacao ?? (ctx.canal === "whatsapp" ? "canal_whatsapp" : null);
+    const modoOp =
+      ferrIaRow?.modo_operacao ??
+      (ctx.canal === "whatsapp" ? "canal_whatsapp" : ctx.canal === "email" ? "canal_email" : null);
     const usoMap = mergeUsoFerramentasWhatsappCanal(
       mergeUsoFerramentasComPadraoPreservandoCustom(ferrIaRow?.uso_ferramentas_ia ?? {}),
       modoOp

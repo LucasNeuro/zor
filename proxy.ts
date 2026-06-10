@@ -10,6 +10,7 @@ import { getSafeReturnPath } from "@/lib/auth/safe-return-path";
 function isPublicApiPath(pathname: string): boolean {
   if (pathname.startsWith("/api/public/")) return true;
   if (pathname.startsWith("/api/whatsapp")) return true;
+  if (pathname.startsWith("/api/email/")) return true;
   if (pathname.startsWith("/api/health")) return true;
   if (pathname === "/api/parceiros/portal/verify") return true;
   if (pathname.startsWith("/api/validar/")) return true;

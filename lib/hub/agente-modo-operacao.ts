@@ -1,11 +1,12 @@
-/** Como o agente opera no hub: legado canal vs jobs internos (cron/ciclos). */
-export type ModoOperacaoAgente = "canal_whatsapp" | "jobs_internos";
+/** Como o agente opera no hub: canal ao vivo vs jobs internos (cron/ciclos). */
+export type ModoOperacaoAgente = "canal_whatsapp" | "canal_email" | "jobs_internos";
 
 /** Escolha no wizard ao criar agente (mapeia para hub_ciclos_ia.tipo). */
 export type CicloExecucaoPadrao = "interacao" | "tempo_real" | "agenda";
 
 export const MODO_OPERACAO_OPCOES: readonly ModoOperacaoAgente[] = [
   "canal_whatsapp",
+  "canal_email",
   "jobs_internos",
 ] as const;
 
@@ -28,24 +29,33 @@ export function modoOperacaoFromCicloExecucao(exec: CicloExecucaoPadrao): ModoOp
 }
 
 export function cicloExecucaoPadraoFromModoOperacao(modo: ModoOperacaoAgente): CicloExecucaoPadrao {
-  return modo === "canal_whatsapp" ? "interacao" : "agenda";
+  return modo === "canal_whatsapp" || modo === "canal_email" ? "interacao" : "agenda";
+}
+
+/** Agentes com passo Canal no wizard (WhatsApp ou e-mail). */
+export function agenteEhModoCanal(modo: ModoOperacaoAgente | null | undefined): boolean {
+  return modo === "canal_whatsapp" || modo === "canal_email";
 }
 
 /** Rótulos para UI (wizard, ciclos, listagens). */
 export const MODO_OPERACAO_LABEL: Record<ModoOperacaoAgente, string> = {
   canal_whatsapp: "Atendimento (WhatsApp)",
+  canal_email: "Atendimento (E-mail)",
   jobs_internos: "Agente interno (ciclos)",
 };
 
 /** Rótulo curto para tabelas (canal via ícone). */
 export const MODO_OPERACAO_LABEL_CURTO: Record<ModoOperacaoAgente, string> = {
   canal_whatsapp: "Atendimento",
+  canal_email: "Atendimento",
   jobs_internos: "Agente interno",
 };
 
 export const MODO_OPERACAO_DESCRICAO: Record<ModoOperacaoAgente, string> = {
   canal_whatsapp:
     "Atende clientes e leads no WhatsApp: cada mensagem dispara o agente (cargo + playbook no runtime).",
+  canal_email:
+    "Atende clientes e leads por e-mail (Resend): cada mensagem recebida dispara o agente no canal.",
   jobs_internos:
     "Copiloto interno: relatórios, análises e tarefas agendadas via ciclos — sem fila de atendimento ao vivo.",
 };

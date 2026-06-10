@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { estagiosPadraoParaTipo, type PipelineTipo as PipelineTipoDefaults } from "@/lib/crm/pipeline-defaults";
 
-export type PipelineTipo = "lead" | "negocio";
+export type PipelineTipo = "lead" | "negocio" | "atendimento";
 
 export type PipelineComEstagios = {
   id: string;
@@ -25,6 +25,7 @@ export type PipelineComEstagios = {
 const BOOTSTRAP_PIPELINES: { slug: string; nome: string; tipo: PipelineTipo; ordem: number }[] = [
   { slug: "leads-principal", nome: "Leads", tipo: "lead", ordem: 0 },
   { slug: "negocios-principal", nome: "Negócios", tipo: "negocio", ordem: 0 },
+  { slug: "atendimento-principal", nome: "Atendimento", tipo: "atendimento", ordem: 0 },
 ];
 
 async function inserirEstagiosPadrao(
@@ -141,10 +142,12 @@ export function labelPipelineTab(pipe: { nome: string }): string {
   const semPrefixo = raw
     .replace(/^Leads\s+[—-]\s+/i, "")
     .replace(/^Negócios\s+[—-]\s+/i, "")
+    .replace(/^Atendimento\s+[—-]\s+/i, "")
     .trim();
   if (!semPrefixo || LEGACY_PIPELINE_LABELS.has(semPrefixo.toLowerCase())) {
     if (/^leads/i.test(raw)) return "Leads";
     if (/^negócios/i.test(raw)) return "Negócios";
+    if (/^atendimento/i.test(raw)) return "Atendimento";
   }
   return semPrefixo || raw;
 }

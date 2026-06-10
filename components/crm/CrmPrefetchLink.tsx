@@ -47,6 +47,9 @@ export function CrmPrefetchLink({ prefetch = true, href, onMouseEnter, ...props 
       void prefetchCrmPipelines(qc, "negocio");
       void prefetchCrmNegociosList(qc, { offset: 0 });
     }
+    if (path.startsWith("/crm/atendimento")) {
+      void prefetchCrmPipelines(qc, "atendimento");
+    }
   }
 
   return (

@@ -28,6 +28,7 @@ export function CrmListPrefetcher() {
     void prefetchHubAgentesList(queryClient, "ativos");
     void prefetchCrmPipelines(queryClient, "lead");
     void prefetchCrmPipelines(queryClient, "negocio");
+    void prefetchCrmPipelines(queryClient, "atendimento");
     void prefetchCrmNegociosList(queryClient, { offset: 0 });
     void prefetchHubCiclosList(queryClient);
   }, [queryClient]);
@@ -46,6 +47,9 @@ export function CrmListPrefetcher() {
     if (pathname.startsWith("/crm/negocios")) {
       void prefetchCrmPipelines(queryClient, "negocio");
       void prefetchCrmNegociosList(queryClient, { offset: 0 });
+    }
+    if (pathname.startsWith("/crm/atendimento")) {
+      void prefetchCrmPipelines(queryClient, "atendimento");
     }
   }, [pathname, queryClient]);
 

@@ -9,7 +9,7 @@ import { tenantIdFromRequest } from "@/lib/tenant-default";
 type Params = { params: Promise<{ id: string }> };
 
 const LEAD_SELECT =
-  "id, nome, telefone, email, origem, campanha, estagio, estagio_funil, score, valor_estimado, agente_responsavel, humano_responsavel, proxima_acao, data_proxima_acao, motivo_perda, tags, metadata, pessoa_id, tenant_id, ultimo_contato, criado_em, atualizado_em";
+  "id, nome, telefone, email, origem, campanha, estagio, estagio_funil, estagio_atendimento, score, valor_estimado, agente_responsavel, humano_responsavel, proxima_acao, data_proxima_acao, motivo_perda, tags, metadata, pessoa_id, tenant_id, ultimo_contato, criado_em, atualizado_em";
 
 export async function GET(_request: NextRequest, { params }: Params) {
   const configErr = crmConfigError();
@@ -163,6 +163,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     "cidade",
     "bairro",
     "canal_origem",
+    "estagio_atendimento",
   ] as const;
 
   const patch: Record<string, unknown> = {
@@ -177,6 +178,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (Object.keys(patch).length <= 1) {
     return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 });
   }
+
+  const estagioAtendimentoAnterior =
+    atual.estagio_atendimento != null ? String(atual.estagio_atendimento) : null;
+  const estagioAtendimentoNovo =
+    body.estagio_atendimento !== undefined ? String(body.estagio_atendimento) : null;
 
   const estagioAnterior = String(atual.estagio_funil ?? atual.estagio ?? "");
 
@@ -202,6 +208,29 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       valor_anterior: estagioAnterior || null,
       valor_novo: estagioNovo,
       motivo: merged.motivo_perda,
+      tenant_id: tenantId,
+    });
+  }
+
+  if (
+    estagioAtendimentoNovo &&
+    estagioAtendimentoNovo !== estagioAtendimentoAnterior
+  ) {
+    await supabase.from("hub_atividades").insert({
+      lead_id: id,
+      tipo: "status_change",
+      descricao: `Atendimento: ${estagioAtendimentoAnterior || "—"} → ${estagioAtendimentoNovo}`,
+      feito_por: "humano",
+      feito_por_tipo: "humano",
+      tenant_id: tenantId,
+    });
+
+    await registrarLogCrm(supabase, {
+      entidade: "lead",
+      entidade_id: id,
+      acao: "estagio_atendimento_alterado",
+      valor_anterior: estagioAtendimentoAnterior,
+      valor_novo: estagioAtendimentoNovo,
       tenant_id: tenantId,
     });
   }

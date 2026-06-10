@@ -4,14 +4,22 @@ import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { ensureTenantPipelines, listTenantPipelines } from "@/lib/crm/tenant-pipelines";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
-function fallbackResponse(tipo: "lead" | "negocio") {
+type PipelineTipoApi = "lead" | "negocio" | "atendimento";
+
+function pipelineFallbackNome(tipo: PipelineTipoApi): string {
+  if (tipo === "lead") return "Leads";
+  if (tipo === "atendimento") return "Atendimento";
+  return "Negócios";
+}
+
+function fallbackResponse(tipo: PipelineTipoApi) {
   const estagios = estagiosPadraoParaTipo(tipo);
   return NextResponse.json({
     data: [
       {
         id: "fallback",
         slug: `${tipo}-principal`,
-        nome: tipo === "lead" ? "Leads" : "Negócios",
+        nome: pipelineFallbackNome(tipo),
         tipo,
         mercado_sigla: null,
         ordem: 0,
@@ -34,7 +42,7 @@ export async function GET(request: NextRequest) {
   const configErr = crmConfigError();
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
 
-  const tipo = (request.nextUrl.searchParams.get("tipo") || "lead").trim() as "lead" | "negocio";
+  const tipo = (request.nextUrl.searchParams.get("tipo") || "lead").trim() as PipelineTipoApi;
   const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
   const supabase = crmDb();
 
@@ -61,7 +69,7 @@ export async function POST(request: NextRequest) {
   }
 
   const nome = String(body.nome || "").trim();
-  const tipo = String(body.tipo || "lead").trim() as "lead" | "negocio";
+  const tipo = String(body.tipo || "lead").trim() as PipelineTipoApi;
   const slugBase = String(body.slug || nome)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")

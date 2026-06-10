@@ -24,7 +24,7 @@ type PipelineComEstagios = {
 type Props = {
   open: boolean;
   onClose: () => void;
-  tipo: "lead" | "negocio";
+  tipo: "lead" | "negocio" | "atendimento";
   pipelineId: string | null;
   onUpdated?: () => void;
   onSelectPipeline?: (pipelineId: string) => void;
@@ -190,6 +190,11 @@ export function PipelineConfigSideover({
     onUpdated?.();
   }
 
+  const tipoLabel =
+    tipo === "lead" ? "Leads" : tipo === "atendimento" ? "Atendimento" : "Negócios";
+  const tipoBadge =
+    tipo === "lead" ? "CRM Leads" : tipo === "atendimento" ? "CRM Atendimento" : "CRM Negócios";
+
   return (
     <CadastroPremiumSideover
       open={open}
@@ -198,16 +203,11 @@ export function PipelineConfigSideover({
       title={showPipelineAdmin ? "Estágios do pipeline" : "Estágios do funil"}
       subtitle={
         showPipelineAdmin
-          ? pipeline?.nome || (tipo === "lead" ? "Leads" : "Negócios")
+          ? pipeline?.nome || tipoLabel
           : "Personalize colunas do kanban para a sua empresa"
       }
       Icon={Settings2}
-      badge={
-        <CadastroTipoBadge
-          label={tipo === "lead" ? "CRM Leads" : "CRM Negócios"}
-          tone="gold"
-        />
-      }
+      badge={<CadastroTipoBadge label={tipoBadge} tone="gold" />}
     >
       <div className="flex flex-col gap-4 p-1">
         {showPipelineAdmin ? (

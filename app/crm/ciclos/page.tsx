@@ -5,6 +5,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { invalidateHubCiclosList, useHubCiclosList } from "@/hooks/useCrmDataQueries";
+import { hubQueryKeys } from "@/lib/hub/hub-query-keys";
+import { supabase } from "@/lib/supabase/client";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import {
   crmBtnDangerSoft,
@@ -359,6 +361,23 @@ export default function CiclosPage() {
     void carregarAuxiliar();
   }, [aba, carregarAuxiliar]);
 
+  /** Tempo real: hub_ciclos_ia + logs — invalida cache TanStack (sem refetch pesado manual). */
+  useEffect(() => {
+    const onDbChange = () => {
+      void invalidateHubCiclosList(queryClient);
+      if (aba === "logs" || aba === "alertas") void carregarAuxiliar();
+    };
+    const channel = supabase
+      .channel("ciclos_page_rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_ciclos_ia" }, onDbChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_ciclos_log" }, onDbChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_alertas" }, onDbChange)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, aba, carregarAuxiliar]);
+
   useEffect(() => {
     if (!drawerOpen || drawerSubTab !== "dados") return;
     let cancelled = false;
@@ -492,13 +511,23 @@ export default function CiclosPage() {
 
   async function toggleCiclo(id: string, ativo: boolean) {
     setAlternandoCicloId(id);
+    queryClient.setQueryData<Record<string, unknown>[]>(hubQueryKeys.ciclos.list(), (prev) => {
+      if (!prev) return prev;
+      return prev.map((row) => (String(row.id) === id ? { ...row, ativo } : row));
+    });
     try {
-      await fetch(`/api/hub/ciclos/${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/hub/ciclos/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...internalApiHeaders() },
         body: JSON.stringify({ ativo }),
       });
-      await recarregarTudo();
+      if (!res.ok) {
+        await invalidateHubCiclosList(queryClient);
+        return;
+      }
+      void carregarAuxiliar();
+    } catch {
+      await invalidateHubCiclosList(queryClient);
     } finally {
       setAlternandoCicloId(null);
     }
@@ -926,11 +955,52 @@ export default function CiclosPage() {
                 />
                 {!carregandoCiclos && ciclosTodos.length > 0 && (
                   <span style={{ fontSize: 12, color: "#6b8a76", marginLeft: 6 }}>
-                    mostrando: {ciclosFiltrados.length} ciclo{ciclosFiltrados.length === 1 ? "" : "s"}
+                    mostrando: {ciclosFiltrados.length} de {ciclosTodos.length} ciclo
+                    {ciclosTodos.length === 1 ? "" : "s"}
                   </span>
                 )}
               </div>
             </div>
+
+            {busca.trim() && ciclosFiltrados.length < ciclosTodos.length && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #e6d9a8",
+                  background: "#fffbeb",
+                  color: "#7a5c00",
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span>
+                  Filtro activo: <strong>&quot;{busca.trim()}&quot;</strong> — {ciclosFiltrados.length} de{" "}
+                  {ciclosTodos.length} ciclos visíveis.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setBusca("")}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: "1px solid #e6d9a8",
+                    background: "#ffffff",
+                    color: "#7a5c00",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Limpar busca
+                </button>
+              </div>
+            )}
 
             {erroListaCiclos && (
               <div

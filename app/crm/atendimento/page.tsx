@@ -1,420 +1,363 @@
 ﻿"use client";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
-import { crmApiHeadersWithActor, getCrmSessionActor } from "@/lib/internal-api-headers-client";
-import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+
+import dynamic from "next/dynamic";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
-import { useNarrowViewport } from "@/hooks/useNarrowViewport";
+import { CrmPipelinePageToolbar } from "@/components/crm/pipelines/CrmPipelinePageToolbar";
+import { CrmKanbanBoardScroll } from "@/components/crm/pipelines/CrmKanbanBoardScroll";
+import { CrmKanbanColumn } from "@/components/crm/pipelines/CrmKanbanColumn";
+import type { CrmResizableColumn } from "@/components/crm/CrmResizableDataTable";
 import {
-  Bot,
-  Brain,
-  Contact,
-  FileText,
-  Info,
-  MessageSquare,
-  Phone,
-  Send,
-  UserCheck,
-  Users,
-  X,
-} from "lucide-react";
-import { AtendentesEquipePanel } from "@/components/crm/atendimento/AtendentesEquipePanel";
-import { effectiveHumanoResponsavel } from "@/lib/crm/resolve-crm-actor";
+  CrmRetrofitAdvancedFiltersGrid,
+  CrmRetrofitFilterField,
+  CrmRetrofitTablePanel,
+  crmRetrofitFilterSelectClass,
+  crmTableIdBadge,
+  crmTableStagePill,
+} from "@/components/crm/CrmRetrofitTablePanel";
+import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
+import { ESTAGIOS_FALLBACK_ATENDIMENTO_UI } from "@/lib/crm/pipeline-defaults";
+import { labelPipelineTab } from "@/lib/crm/tenant-pipelines";
+import { useCrmToast } from "@/lib/crm/crm-feedback";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
+import type { AtendimentoLeadData } from "@/components/crm/atendimento/AtendimentoEditSideover";
 
-interface Lead {
+const LeadKanbanCard = dynamic(
+  () =>
+    import("@/components/crm/leads/LeadKanbanCard").then((m) => ({
+      default: m.LeadKanbanCard,
+    })),
+  { ssr: false }
+);
+
+const PipelineConfigSideover = dynamic(
+  () =>
+    import("@/components/crm/leads/PipelineConfigSideover").then((m) => ({
+      default: m.PipelineConfigSideover,
+    })),
+  { ssr: false }
+);
+
+const AtendimentoEditSideover = dynamic(
+  () =>
+    import("@/components/crm/atendimento/AtendimentoEditSideover").then((m) => ({
+      default: m.AtendimentoEditSideover,
+    })),
+  { ssr: false }
+);
+
+type EstagioUi = { id: string; label: string; color: string };
+
+type PipelineUi = {
   id: string;
+  slug: string;
   nome: string;
-  telefone?: string;
-  email?: string;
-  valor_estimado?: number;
-  estagio: string;
-  origem: string;
-  criado_em: string;
-  agente_responsavel?: string;
-  humano_responsavel?: string;
-  score?: number;
-  ultimo_contato?: string;
-  campanha?: string;
-  proxima_acao?: string;
-  data_proxima_acao?: string;
-  interesse_principal?: string;
-  tags?: string[];
-  observacoes?: unknown;
-  metadata?: Record<string, unknown>;
-}
-
-interface Mensagem {
-  id: string;
-  conteudo: string;
-  direcao: "entrada" | "saida";
-  criado_em: string;
-  agente_id?: string;
-  metadata?: Record<string, unknown>;
-}
-
-const STATUS_COR: Record<string, string> = {
-  novo: "bg-yellow-500", qualificando: "bg-cyan-500", qualificado: "bg-green-500",
-  atendimento: "bg-blue-500", negociando: "bg-purple-500", fechamento: "bg-orange-500",
-  ganho: "bg-emerald-500", perdido: "bg-red-500",
-};
-const STATUS_LABEL: Record<string, string> = {
-  novo: "Novo", qualificando: "Qualificando", qualificado: "Qualificado",
-  atendimento: "Em Atendimento", negociando: "Negociando",
-  fechamento: "Fechamento", ganho: "Ganho", perdido: "Perdido",
+  mercado_sigla: string | null;
+  estagios: { slug: string; label: string; cor: string; ativo: boolean; ordem?: number }[];
 };
 
-/** MANIFEST: verde #003b26, dourado #c9a24a, fundo #f8fcf6 */
-const C = {
-  bg: "bg-[#f8fcf6]",
-  bgAlt: "bg-[#0a0e14]",
-  border: "border-white/[0.08]",
-  gold: "text-[#c9a24a]",
-  green: "bg-[#003b26]",
-} as const;
+const ESTAGIOS_FALLBACK: EstagioUi[] = ESTAGIOS_FALLBACK_ATENDIMENTO_UI.map((e) => ({
+  id: e.id,
+  label: e.label,
+  color: e.color,
+}));
+
+const ORIGENS_LABEL: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  instagram: "Instagram",
+  meta_ads: "Meta Ads",
+  google_ads: "Google Ads",
+  linkedin: "LinkedIn",
+  site: "Site",
+  indicacao: "Indicação",
+  outro: "Outro",
+};
+
+const ORIGENS_COLOR: Record<string, string> = {
+  whatsapp: "#25D366",
+  instagram: "#E1306C",
+  meta_ads: "#1877F2",
+  google_ads: "#EA4335",
+  linkedin: "#0A66C2",
+  site: "#6366F1",
+  indicacao: "#F59E0B",
+  outro: "#6B7280",
+};
+
+function tempo(iso: string) {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "agora";
+  if (m < 60) return `${m}min`;
+  if (m < 1440) return `${Math.floor(m / 60)}h`;
+  return `${Math.floor(m / 1440)}d`;
+}
+
+function formatData(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function linhaUnica(s: string | null | undefined, n: number) {
+  if (!s) return "—";
+  const t = s.trim().replace(/\s+/g, " ");
+  if (t.length <= n) return t;
+  return `${t.slice(0, n)}…`;
+}
+
+function isAtendimentoRelevant(row: Record<string, unknown>): boolean {
+  const humano = row.humano_responsavel != null ? String(row.humano_responsavel).trim() : "";
+  const agente = row.agente_responsavel != null ? String(row.agente_responsavel).trim() : "";
+  const ultimaMsg = row.ultima_mensagem_fila_em;
+  return Boolean(humano || agente || ultimaMsg);
+}
+
+function mapRowToLead(row: Record<string, unknown>): AtendimentoLeadData {
+  const {
+    pessoa_codigo,
+    pessoa_nome_completo: _pn,
+    email_exibicao: _email,
+    ...base
+  } = row;
+  return {
+    ...(base as Omit<AtendimentoLeadData, "_pessoa_codigo" | "estagio_atendimento">),
+    estagio_atendimento:
+      row.estagio_atendimento != null ? String(row.estagio_atendimento) : "novo",
+    _pessoa_codigo: pessoa_codigo != null ? String(pessoa_codigo) : null,
+    ultima_mensagem_fila:
+      row.ultima_mensagem_fila != null ? String(row.ultima_mensagem_fila) : null,
+    ultima_mensagem_fila_em:
+      row.ultima_mensagem_fila_em != null ? String(row.ultima_mensagem_fila_em) : null,
+    score: Number(row.score ?? 0),
+    valor_estimado: Number(row.valor_estimado ?? 0),
+    criado_em: row.criado_em != null ? String(row.criado_em) : undefined,
+    atualizado_em: row.atualizado_em != null ? String(row.atualizado_em) : undefined,
+  };
+}
 
 function AtendimentoContent() {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const { setSlot } = useCrmHeaderSlot();
+  const { error: toastError } = useCrmToast();
   const narrow = useNarrowViewport();
   const isMobile = narrow !== false;
 
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [leadSel, setLeadSel] = useState<Lead | null>(null);
-  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
-  const [filtro, setFiltro] = useState("todos");
+  const [leads, setLeads] = useState<AtendimentoLeadData[]>([]);
+  const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [busca, setBusca] = useState("");
-  const [carregando, setCarregando] = useState(true);
-  const [assumido, setAssumido] = useState(false);
-  const [texto, setTexto] = useState("");
-  const [enviando, setEnviando] = useState(false);
-  const [mensagensLoadError, setMensagensLoadError] = useState<string | null>(null);
-  const [carregandoMensagens, setCarregandoMensagens] = useState(false);
-  const [sendStrip, setSendStrip] = useState<{ kind: "error" | "success" | "info"; text: string } | null>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
-  const [vistaLateral, setVistaLateral] = useState<"conversas" | "equipe">("conversas");
-  const chatRef = useRef<HTMLDivElement>(null);
-  const leadsCarregados = useRef(false);
-  const [sessionActor, setSessionActor] = useState<{ id?: string; email?: string; name?: string }>({});
+  const [filtroEstagio, setFiltroEstagio] = useState("");
+  const [filtroOrigem, setFiltroOrigem] = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [editLead, setEditLead] = useState<AtendimentoLeadData | null>(null);
+  const [leadDragId, setLeadDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
+  const [pipelineConfigFocusCreate, setPipelineConfigFocusCreate] = useState(false);
+  const [pipelines, setPipelines] = useState<PipelineUi[]>([]);
+  const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [estagiosKanban, setEstagiosKanban] = useState<EstagioUi[]>(ESTAGIOS_FALLBACK);
+  const pendingStageMovesRef = useRef(new Set<string>());
 
-  useEffect(() => {
-    let cancelled = false;
-    void getCrmSessionActor().then((actor) => {
-      if (!cancelled) setSessionActor(actor);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      void getCrmSessionActor().then((actor) => {
-        if (!cancelled) setSessionActor(actor);
+  const carregarPipeline = useCallback(async () => {
+    try {
+      const res = await fetch("/api/crm/pipelines?tipo=atendimento", {
+        headers: internalApiHeaders(),
       });
-    });
-    return () => {
-      cancelled = true;
-      subscription.unsubscribe();
-    };
+      const json = await res.json();
+      const list = (json.data || []) as PipelineUi[];
+      if (!list.length) return;
+      setPipelines(list);
+      setPipelineId((prev) => {
+        if (prev && list.some((p) => p.id === prev)) return prev;
+        return list[0]?.id ?? null;
+      });
+    } catch {
+      /* fallback ESTAGIOS_FALLBACK */
+    }
   }, []);
 
-  // Auto-scroll ao fundo quando chegam mensagens
-  useEffect(() => {
-    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
-  }, [mensagens]);
+  const carregar = useCallback(async () => {
+    const vw = await supabase
+      .from("vw_hub_leads_crm_enriquecido")
+      .select("*")
+      .order("atualizado_em", { ascending: false });
 
-  // Deep link: ?lead=<id>
-  useEffect(() => {
-    if (!leadsCarregados.current || leads.length === 0) return;
-    const leadId = searchParams.get("lead");
-    if (leadId) {
-      const found = leads.find(l => l.id === leadId);
-      if (found) selecionarLead(found);
+    if (!vw.error && vw.data) {
+      const merged = (vw.data as Record<string, unknown>[])
+        .filter(isAtendimentoRelevant)
+        .map(mapRowToLead);
+      setLeads(merged);
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    const res = await fetch("/api/crm/atendimento", { headers: internalApiHeaders() });
+    const json = await res.json().catch(() => ({}));
+    const raw = (json.leads ?? []) as Record<string, unknown>[];
+    setLeads(raw.map(mapRowToLead));
+  }, []);
+
+  useEffect(() => {
+    const est = searchParams.get("estagio_atendimento") ?? searchParams.get("estagio");
+    const v = searchParams.get("view");
+    const leadId = searchParams.get("lead");
+    if (est) setFiltroEstagio(est);
+    if (v === "kanban" || v === "lista") setView(v);
+    if (leadId && leads.length) {
+      const found = leads.find((l) => l.id === leadId);
+      if (found) setEditLead(found);
+    }
   }, [searchParams, leads]);
 
   useEffect(() => {
-    setCarregando(true);
-    carregarLeads();
-    const t = setInterval(carregarLeads, 30000);
-    return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro]);
+    void carregarPipeline();
+  }, [carregarPipeline]);
 
-  async function carregarLeads() {
-    const qs = filtro !== "todos" ? `?estagio=${filtro}` : "";
-    const res = await fetch(`/api/crm/atendimento${qs}`, { headers: internalApiHeaders() });
-    const json = await res.json();
-    setLeads((json.leads ?? []).map((d: Record<string, unknown>) => ({
-      id: d.id as string,
-      nome: (d.nome as string) || "Lead",
-      telefone: d.telefone as string,
-      email: d.email as string,
-      estagio: (d.estagio as string) || "novo",
-      origem: (d.origem as string) || "whatsapp",
-      valor_estimado: d.valor_estimado as number,
-      criado_em: d.criado_em as string,
-      agente_responsavel: d.agente_responsavel as string,
-      humano_responsavel: d.humano_responsavel as string,
-      score: d.score as number,
-      ultimo_contato: d.ultimo_contato as string,
-      campanha: d.campanha as string,
-      proxima_acao: d.proxima_acao as string,
-      data_proxima_acao: d.data_proxima_acao as string,
-      interesse_principal: d.interesse_principal as string,
-      tags: Array.isArray(d.tags) ? (d.tags as string[]) : [],
-      observacoes: d.observacoes,
-      metadata: (d.metadata && typeof d.metadata === "object" ? d.metadata : undefined) as Record<string, unknown> | undefined,
-    })));
-    leadsCarregados.current = true;
-    setCarregando(false);
-  }
+  const pipelineAtivo = useMemo(
+    () => pipelines.find((p) => p.id === pipelineId) ?? null,
+    [pipelines, pipelineId]
+  );
 
-  const carregarMensagens = useCallback(async (leadId: string, opts?: { quiet?: boolean }) => {
-    const quiet = opts?.quiet === true;
-    if (!quiet) {
-      setMensagensLoadError(null);
-      setCarregandoMensagens(true);
-    }
-    try {
-      const res = await fetch(
-        `/api/crm/atendimento/mensagens?leadId=${encodeURIComponent(leadId)}`,
-        { credentials: "include", headers: internalApiHeaders() }
+  const pipelineTitulo = useMemo(
+    () => (pipelineAtivo ? labelPipelineTab(pipelineAtivo) : "Atendimento"),
+    [pipelineAtivo]
+  );
+
+  useEffect(() => {
+    const cols =
+      pipelineAtivo?.estagios
+        ?.filter((e) => e.ativo !== false)
+        .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+        .map((e) => ({ id: e.slug, label: e.label, color: e.cor || "#6B7280" })) ?? [];
+    setEstagiosKanban(cols.length ? cols : ESTAGIOS_FALLBACK);
+  }, [pipelineAtivo]);
+
+  useEffect(() => {
+    void carregar();
+    const ch = supabase
+      .channel("atendimento_rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hub_leads_crm" }, (payload) => {
+        const leadId =
+          (payload.new as { id?: string } | null)?.id ??
+          (payload.old as { id?: string } | null)?.id;
+        if (leadId && pendingStageMovesRef.current.has(leadId)) return;
+        void carregar();
+      })
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "hub_fila_mensagens" },
+        () => {
+          void carregar();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [carregar]);
+
+  const abrirEditLead = useCallback(
+    (lead: AtendimentoLeadData) => {
+      setEditLead(lead);
+      const p = new URLSearchParams(searchParams.toString());
+      p.set("lead", lead.id);
+      router.replace(`${pathname}?${p.toString()}`);
+    },
+    [pathname, router, searchParams]
+  );
+
+  const fecharEditLead = useCallback(() => {
+    setEditLead(null);
+    const p = new URLSearchParams(searchParams.toString());
+    p.delete("lead");
+    const q = p.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname);
+  }, [pathname, router, searchParams]);
+
+  async function moverEstagio(
+    leadId: string,
+    novoEstagio: string,
+    options?: { optimistic?: boolean }
+  ) {
+    const leadAtual = leads.find((l) => l.id === leadId);
+    const estagioAnterior = leadAtual?.estagio_atendimento ?? "novo";
+
+    if (options?.optimistic) {
+      if (estagioAnterior === novoEstagio) return true;
+      pendingStageMovesRef.current.add(leadId);
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === leadId ? { ...l, estagio_atendimento: novoEstagio } : l
+        )
       );
-      const json: { mensagens?: unknown; error?: string } = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setMensagens([]);
-        if (!quiet) {
-          setMensagensLoadError(
-            typeof json.error === "string"
-              ? json.error
-              : "Não foi possível carregar as mensagens. Tente novamente."
+      if (editLead?.id === leadId) {
+        setEditLead((d) => (d ? { ...d, estagio_atendimento: novoEstagio } : null));
+      }
+    }
+
+    const res = await patchLeadCrm(leadId, { estagio_atendimento: novoEstagio });
+
+    if (options?.optimistic) {
+      pendingStageMovesRef.current.delete(leadId);
+    }
+
+    if (!res.ok) {
+      if (options?.optimistic) {
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.id === leadId ? { ...l, estagio_atendimento: estagioAnterior } : l
+          )
+        );
+        if (editLead?.id === leadId) {
+          setEditLead((d) =>
+            d ? { ...d, estagio_atendimento: estagioAnterior } : null
           );
         }
-        return;
       }
-      const raw = (json.mensagens ?? []) as Record<string, unknown>[];
-      setMensagens(
-        raw.map((m) => ({
-          id: String(m.id ?? ""),
-          conteudo: String(m.conteudo ?? ""),
-          direcao: (m.direcao === "entrada" || m.direcao === "saida" ? m.direcao : "entrada") as "entrada" | "saida",
-          criado_em: String(m.criado_em ?? ""),
-          agente_id: m.agente_id as string | undefined,
-          metadata: (m.metadata && typeof m.metadata === "object" ? m.metadata : undefined) as Record<string, unknown> | undefined,
-        }))
-      );
-      if (!quiet) setMensagensLoadError(null);
-    } catch {
-      setMensagens([]);
-      if (!quiet) setMensagensLoadError("Erro de rede ao carregar mensagens.");
-    } finally {
-      if (!quiet) setCarregandoMensagens(false);
+      toastError(res.error);
+      return false;
     }
-  }, []);
 
-  function selecionarLead(lead: Lead) {
-    setLeadSel(lead);
-    setAssumido(!!effectiveHumanoResponsavel(lead.humano_responsavel));
-    setTexto("");
-    setSendStrip(null);
-    setMensagensLoadError(null);
-    setInfoOpen(false);
+    const data = res.data as { estagio_atendimento?: string };
+    const est = String(data.estagio_atendimento ?? novoEstagio);
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, estagio_atendimento: est } : l))
+    );
+    if (editLead?.id === leadId) {
+      setEditLead((d) => (d ? { ...d, estagio_atendimento: est } : null));
+    }
+    return true;
   }
 
-  // Ocultar faixa de sucesso / info após envio
-  useEffect(() => {
-    if (!sendStrip || sendStrip.kind === "error") return;
-    const ms = sendStrip.kind === "info" ? 8000 : 4500;
-    const t = window.setTimeout(() => setSendStrip(null), ms);
-    return () => window.clearTimeout(t);
-  }, [sendStrip]);
-
-  useEffect(() => {
-    if (!infoOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setInfoOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [infoOpen]);
-
-  // Sincroniza ficha do lead quando a lista atualiza (polling 30s)
-  useEffect(() => {
-    if (!leadSel) return;
-    const fresh = leads.find((l) => l.id === leadSel.id);
-    if (fresh) {
-      setLeadSel(fresh);
-      setAssumido(!!effectiveHumanoResponsavel(fresh.humano_responsavel));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- apenas id estável + lista nova
-  }, [leads, leadSel?.id]);
-
-  // Realtime por lead selecionado — INSERT refetch via API (quiet = sem piscar loading)
-  useEffect(() => {
-    if (!leadSel) {
-      setMensagens([]);
-      setMensagensLoadError(null);
-      setCarregandoMensagens(false);
-      return;
-    }
-    setMensagens([]);
-    void carregarMensagens(leadSel.id);
-    const channel = supabase
-      .channel(`atend-${leadSel.id}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "hub_fila_mensagens",
-        filter: `lead_id=eq.${leadSel.id}`,
-      }, () => { void carregarMensagens(leadSel.id, { quiet: true }); })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [leadSel?.id, carregarMensagens]);
-
-  async function assumirAtendimento() {
-    if (!leadSel) return;
-    try {
-      const res = await fetch("/api/crm/atendimento/assumir", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(await crmApiHeadersWithActor(sessionActor)),
-        },
-        body: JSON.stringify({ leadId: leadSel.id }),
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        humano_responsavel?: string;
-      };
-      if (!res.ok) {
-        setSendStrip({
-          kind: "error",
-          text: typeof json.error === "string" ? json.error : "Não foi possível assumir o atendimento.",
-        });
-        return;
-      }
-      const humano = json.humano_responsavel ?? sessionActor.name ?? "operador";
-      setAssumido(true);
-      setLeadSel((prev) => (prev ? { ...prev, humano_responsavel: humano } : prev));
-    } catch {
-      setSendStrip({ kind: "error", text: "Erro de rede ao assumir." });
-    }
-  }
-
-  async function devolverIA() {
-    if (!leadSel) return;
-    try {
-      const res = await fetch("/api/crm/atendimento/devolver-ia", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(await crmApiHeadersWithActor(sessionActor)),
-        },
-        body: JSON.stringify({ leadId: leadSel.id }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setSendStrip({
-          kind: "error",
-          text: typeof json.error === "string" ? json.error : "Não foi possível devolver à IA.",
-        });
-        return;
-      }
-      setAssumido(false);
-      setLeadSel((prev) => (prev ? { ...prev, humano_responsavel: undefined } : prev));
-    } catch {
-      setSendStrip({ kind: "error", text: "Erro de rede ao devolver à IA." });
-    }
-  }
-
-  async function enviarMensagem() {
-    if (!leadSel || !texto.trim() || enviando) return;
-    setEnviando(true);
-    setSendStrip(null);
-    const msg = texto.trim();
-    setTexto("");
-    try {
-      const res = await fetch("/api/crm/atendimento/send", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(await crmApiHeadersWithActor(sessionActor)),
-        },
-        body: JSON.stringify({ leadId: leadSel.id, texto: msg }),
-      });
-      const json: { error?: string; whatsappSkipped?: boolean } = await res
-        .json()
-        .catch(() => ({}));
-      if (!res.ok) {
-        const fromBody = typeof json.error === "string" ? json.error : null;
-        const errText =
-          res.status === 502 || res.status === 403
-            ? (fromBody ?? "Operação não permitida ou serviço indisponível.")
-            : (fromBody ?? "Não foi possível enviar a mensagem.");
-        setTexto(msg);
-        setSendStrip({ kind: "error", text: errText });
-        return;
-      }
-      if (json.whatsappSkipped) {
-        setSendStrip({
-          kind: "info",
-          text: "Mensagem registada no CRM e no histórico do chat. Nada foi enviado ao WhatsApp (dry-run ou provedor não configurado). Configure UAZAPI_BASE_URL + UAZAPI_INSTANCE_TOKEN no .env.",
-        });
-      } else {
-        setSendStrip({ kind: "success", text: "Mensagem enviada." });
-      }
-      await carregarMensagens(leadSel.id);
-    } catch {
-      setTexto(msg);
-      setSendStrip({ kind: "error", text: "Erro de rede ao enviar." });
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  const rel = (d: string) => {
-    const m = (Date.now() - new Date(d).getTime()) / 60000;
-    return m < 1 ? "agora" : m < 60 ? `${Math.round(m)}min` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
-  };
-
-  const formatarDataHora = (iso?: string | null) => {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  };
-
-  const textoObservacoes = (v: unknown): string => {
-    if (v == null) return "—";
-    if (typeof v === "string") return v.trim() || "—";
-    if (Array.isArray(v)) {
-      const flat = v.map((x) => String(x ?? "").trim()).filter(Boolean);
-      return flat.length ? flat.join(" · ") : "—";
-    }
-    if (typeof v === "object") {
-      const s = JSON.stringify(v);
-      return s && s !== "{}" && s !== "[]" ? s : "—";
-    }
-    const s = String(v).trim();
-    return s || "—";
-  };
-
-  const filtrosAtendimento = ["todos", "novo", "qualificando", "qualificado", "atendimento", "negociando"] as const;
-
-  const contagemPorFiltro = useMemo(() => {
-    const map: Record<string, number> = { todos: leads.length };
-    for (const f of filtrosAtendimento) {
-      if (f === "todos") continue;
-      map[f] = leads.filter((l) => l.estagio === f).length;
-    }
-    return map;
-  }, [leads]);
-
-  const filtrados = leads.filter(l =>
-    !busca || l.nome.toLowerCase().includes(busca.toLowerCase())
+  const filtrados = useMemo(
+    () =>
+      leads.filter((l) => {
+        if (
+          busca &&
+          !l.nome.toLowerCase().includes(busca.toLowerCase()) &&
+          !(l.telefone || "").includes(busca) &&
+          !(l.codigo || "").toLowerCase().includes(busca.toLowerCase()) &&
+          !(l._pessoa_codigo || "").toLowerCase().includes(busca.toLowerCase())
+        ) {
+          return false;
+        }
+        const est = l.estagio_atendimento || "novo";
+        if (filtroEstagio && est !== filtroEstagio) return false;
+        if (filtroOrigem && l.origem !== filtroOrigem) return false;
+        return true;
+      }),
+    [leads, busca, filtroEstagio, filtroOrigem]
   );
+
+  const comHumano = leads.filter((l) => Boolean(l.humano_responsavel?.trim())).length;
+  const aguardando = leads.filter((l) => (l.estagio_atendimento || "novo") === "aguardando").length;
 
   useEffect(() => {
     if (isMobile) {
@@ -423,502 +366,336 @@ function AtendimentoContent() {
     }
     setSlot({
       path: pathname,
-      subtitle: `${leads.length} conversas ativas`,
-      actions: (
-        <div className={`flex items-center gap-2 rounded-full border ${C.border} bg-[#0a0e14] px-3 py-1.5`}>
-          <div className="h-2 w-2 animate-pulse rounded-full bg-[#22c55e]" />
-          <span className={`text-xs font-semibold ${C.gold}`}>Ariane online</span>
-        </div>
-      ),
+      subtitle: `${pipelineTitulo} · ${leads.length} conversas`,
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, leads.length, isMobile]);
+  }, [pathname, setSlot, pipelineTitulo, leads.length, isMobile]);
+
+  const colunasAtendimento = useMemo((): CrmResizableColumn<AtendimentoLeadData>[] => {
+    const estagioInfo = (lead: AtendimentoLeadData) =>
+      estagiosKanban.find((e) => e.id === (lead.estagio_atendimento || "novo"));
+
+    return [
+      {
+        id: "nome",
+        label: "Nome",
+        defaultWidth: 200,
+        minWidth: 140,
+        render: (lead) => (
+          <span className="font-semibold text-[#0b2210]">{lead.nome}</span>
+        ),
+      },
+      {
+        id: "origem",
+        label: "Origem",
+        defaultWidth: 120,
+        minWidth: 90,
+        render: (lead) => {
+          if (!lead.origem) return "—";
+          const color = ORIGENS_COLOR[lead.origem] || "#6B7280";
+          return crmTableStagePill(
+            ORIGENS_LABEL[lead.origem] || lead.origem,
+            color
+          );
+        },
+      },
+      {
+        id: "estagio",
+        label: "Estágio",
+        defaultWidth: 130,
+        minWidth: 100,
+        render: (lead) => {
+          const est = estagioInfo(lead);
+          if (!est) return "—";
+          return crmTableStagePill(est.label, est.color);
+        },
+      },
+      {
+        id: "agente",
+        label: "Agente",
+        defaultWidth: 140,
+        minWidth: 100,
+        render: (lead) => lead.agente_responsavel || "—",
+      },
+      {
+        id: "humano",
+        label: "Humano responsável",
+        defaultWidth: 150,
+        minWidth: 110,
+        render: (lead) => lead.humano_responsavel || "—",
+      },
+      {
+        id: "ultima_mensagem",
+        label: "Última mensagem",
+        defaultWidth: 200,
+        minWidth: 140,
+        render: (lead) => (
+          <span className="text-[#5d7a67]" title={lead.ultima_mensagem_fila ?? undefined}>
+            {linhaUnica(lead.ultima_mensagem_fila, 48)}
+          </span>
+        ),
+      },
+      {
+        id: "telefone",
+        label: "Telefone",
+        defaultWidth: 130,
+        minWidth: 100,
+        render: (lead) => lead.telefone || "—",
+      },
+      {
+        id: "codigo",
+        label: "Código",
+        defaultWidth: 110,
+        minWidth: 80,
+        render: (lead) => {
+          const cod = lead.codigo || lead._pessoa_codigo;
+          return cod ? crmTableIdBadge(cod, "green") : "—";
+        },
+      },
+      {
+        id: "atualizado",
+        label: "Atualizado",
+        defaultWidth: 110,
+        minWidth: 90,
+        render: (lead) => (
+          <span className="text-[#6b8a76]" title={formatData(lead.atualizado_em)}>
+            {lead.atualizado_em ? tempo(lead.atualizado_em) : "—"}
+          </span>
+        ),
+      },
+    ];
+  }, [estagiosKanban]);
+
+  const exportConfig = useMemo(
+    () => ({
+      filename: `atendimento-${new Date().toISOString().slice(0, 10)}.csv`,
+      headers: [
+        "Nome",
+        "Origem",
+        "Estágio",
+        "Agente",
+        "Humano",
+        "Telefone",
+        "Código",
+        "Atualizado",
+      ],
+      rowValues: (lead: AtendimentoLeadData) => {
+        const est = estagiosKanban.find(
+          (e) => e.id === (lead.estagio_atendimento || "novo")
+        );
+        return [
+          lead.nome,
+          lead.origem ? ORIGENS_LABEL[lead.origem] || lead.origem : "",
+          est?.label || lead.estagio_atendimento,
+          lead.agente_responsavel || "",
+          lead.humano_responsavel || "",
+          lead.telefone || "",
+          lead.codigo || lead._pessoa_codigo || "",
+          formatData(lead.atualizado_em),
+        ];
+      },
+    }),
+    [estagiosKanban]
+  );
+
+  const footerSummary =
+    filtrados.length > 0
+      ? `Exibindo 1-${filtrados.length} de ${leads.length} conversas`
+      : `Exibindo 0 de ${leads.length} conversas`;
+
+  const pipelineToolbar = (
+    <CrmPipelinePageToolbar
+      pipelines={pipelines}
+      activePipelineId={pipelineId}
+      onSelectPipeline={setPipelineId}
+      pipelineCount={() => leads.length}
+      view={view}
+      onViewChange={setView}
+      onCreatePipeline={() => {
+        setPipelineConfigFocusCreate(true);
+        setPipelineConfigOpen(true);
+      }}
+      onOpenStages={() => {
+        setPipelineConfigFocusCreate(false);
+        setPipelineConfigOpen(true);
+      }}
+    />
+  );
 
   return (
-    <div className={`flex flex-1 min-h-0 flex-col overflow-hidden ${C.bg}`}>
-      {isMobile && !leadSel && (
-        <div className={`shrink-0 border-b ${C.border} px-3 py-3`}>
-          <h1 className="text-base font-bold text-[#0b2210]">Atendimento</h1>
-          <p className="text-xs text-zinc-500">{leads.length} conversas</p>
-        </div>
-      )}
-      <div className="flex flex-1 overflow-hidden">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f8fcf6]">
+      {pipelineToolbar}
 
-        {/* LISTA DE LEADS */}
-        <div className={`flex flex-shrink-0 flex-col border-r ${C.border} ${C.bgAlt} ${isMobile ? (leadSel ? "hidden" : "w-full") : "w-80"}`}>
-          <div className={`border-b ${C.border} p-2`}>
-            <div className="mb-2 flex gap-1 rounded-lg border border-white/[0.06] bg-black/20 p-0.5">
-              <button
-                type="button"
-                onClick={() => setVistaLateral("conversas")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-[11px] font-bold transition-colors ${
-                  vistaLateral === "conversas"
-                    ? "bg-[#c9a24a]/20 text-[#c9a24a]"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                <MessageSquare size={14} />
-                Conversas
-              </button>
-              <button
-                type="button"
-                onClick={() => setVistaLateral("equipe")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-[11px] font-bold transition-colors ${
-                  vistaLateral === "equipe"
-                    ? "bg-[#c9a24a]/20 text-[#c9a24a]"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                <Users size={14} />
-                Equipe
-              </button>
-            </div>
-          </div>
-          {vistaLateral === "equipe" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
-              <AtendentesEquipePanel variant="atendimento" />
-            </div>
-          ) : (
-          <>
-          <div className={`p-3 border-b ${C.border} space-y-2`}>
-            <input
-              value={busca} onChange={e => setBusca(e.target.value)}
-              placeholder="Buscar lead…"
-              className={`w-full bg-black/25 text-zinc-100 text-xs rounded-lg px-3 py-2.5 outline-none border ${C.border} focus:ring-1 focus:ring-[#c9a24a]/40 placeholder-zinc-600`}
-            />
-            <div className="flex gap-1 flex-wrap">
-              {filtrosAtendimento.map(f => (
-                <button key={f} onClick={() => setFiltro(f)}
-                  className={`text-[11px] px-2.5 py-1 rounded-full transition-colors border ${
-                    filtro === f
-                      ? "bg-[#c9a24a]/20 text-[#c9a24a] border-[#c9a24a]/35 font-semibold"
-                      : "bg-white/[0.04] text-zinc-500 border-white/[0.06] hover:text-zinc-300"
-                  }`}>
-                  {f === "todos" ? "Todos" : STATUS_LABEL[f]}{" "}
-                  <span className="opacity-70">({contagemPorFiltro[f] ?? 0})</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {carregando ? (
-              <div className="p-4 text-center text-zinc-500 text-xs">A carregar conversas…</div>
-            ) : filtrados.length === 0 ? (
-              <div className="p-4 text-center text-zinc-500 text-xs">Nenhum lead neste filtro</div>
-            ) : filtrados.map(lead => (
-              <button key={lead.id} onClick={() => selecionarLead(lead)}
-                className={`min-h-14 w-full px-3 py-3 border-b border-white/[0.05] text-left transition-colors ${
-                  leadSel?.id === lead.id
-                    ? "bg-[#003b26]/35 border-l-2 border-l-[#c9a24a]"
-                    : "hover:bg-white/[0.04]"
-                }`}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className={`w-2 h-2 flex-shrink-0 rounded-full ring-1 ring-white/10 ${STATUS_COR[lead.estagio] || "bg-gray-500"}`} />
-                    <span className="text-zinc-100 text-xs font-semibold truncate">{lead.nome}</span>
-                  </div>
-                  <span className="text-zinc-600 text-[10px] flex-shrink-0 ml-1 tabular-nums">{rel(lead.criado_em)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-600 text-[10px] uppercase tracking-wide">
-                    {lead.origem}
-                    {lead.ultimo_contato ? ` · contato ${rel(lead.ultimo_contato)}` : ""}
-                  </span>
-                  {lead.humano_responsavel && (
-                    <span className="text-[10px] font-medium text-[#22c55e]/90">Humano</span>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
-          </>
-          )}
-        </div>
-
-        {/* ÁREA DO CHAT */}
-        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden bg-[#0a0e14] ${isMobile && !leadSel ? "hidden" : ""}`}>
-          {!leadSel ? (
-            <div className="flex-1 flex items-center justify-center px-6">
-              <div className="text-center max-w-sm">
-                <div
-                  className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-[#003b26]/30 mb-4 text-[#c9a24a]"
-                  aria-hidden
-                >
-                  <MessageSquare size={28} strokeWidth={1.75} />
-                </div>
-                <p className="text-zinc-300 text-sm font-medium">Selecione um lead para atender</p>
-                <p className="text-zinc-600 text-xs mt-2">{leads.length} conversas nesta vista</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Cabeçalho do chat */}
-              <div className={`flex flex-shrink-0 items-center justify-between border-b ${C.border} bg-black/20 px-4 py-3.5`}>
-                {isMobile && (
-                  <button
-                    type="button"
-                    onClick={() => setLeadSel(null)}
-                    className="mr-2 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300"
-                    aria-label="Voltar à lista"
-                  >
-                    ←
-                  </button>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="text-zinc-50 font-semibold text-sm truncate">{leadSel.nome}</div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_COR[leadSel.estagio] || "bg-gray-500"}`} />
-                    <span className="text-zinc-500 text-[11px]">{STATUS_LABEL[leadSel.estagio] || leadSel.estagio}</span>
-                    {leadSel.telefone && (
-                      <span className="text-zinc-600 text-[11px]">· {leadSel.telefone}</span>
-                    )}
-                  </div>
-                </div>
-                <div
-                  className={`flex items-center rounded-xl border ${C.border} bg-black/30 p-1 gap-0.5 flex-shrink-0 shadow-sm shadow-black/20`}
-                >
-                  {assumido ? (
-                    <span
-                      className={`${C.green} flex items-center gap-1.5 text-white text-[11px] px-3 py-1.5 rounded-lg font-semibold ring-1 ring-white/10`}
-                      title="Atendimento humano ativo"
-                    >
-                      <UserCheck size={14} strokeWidth={2} aria-hidden />
-                      A atender
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={assumirAtendimento}
-                      className="flex items-center gap-1.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-[#c9a24a] text-[11px] px-3 py-1.5 rounded-lg transition-colors font-medium"
-                    >
-                      <UserCheck size={14} strokeWidth={2} className="text-[#c9a24a]" aria-hidden />
-                      Assumir
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/crm/leads/${leadSel.id}`)}
-                    className="flex items-center gap-1.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-[#c9a24a] text-[11px] px-3 py-1.5 rounded-lg transition-colors font-medium"
-                  >
-                    <FileText size={14} strokeWidth={2} className="text-[#c9a24a]" aria-hidden />
-                    Ver ficha
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInfoOpen(true)}
-                    className="flex items-center gap-1.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-[#c9a24a] text-[11px] px-3 py-1.5 rounded-lg transition-colors font-medium"
-                  >
-                    <Info size={14} strokeWidth={2} className="text-[#c9a24a]" aria-hidden />
-                    Info
-                  </button>
-                  {assumido && (
-                    <button
-                      type="button"
-                      onClick={() => void devolverIA()}
-                      className="flex items-center gap-1.5 bg-sky-950/50 hover:bg-sky-950/70 border border-sky-500/35 text-sky-100 text-[11px] px-3 py-1.5 rounded-lg transition-colors font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
-                      title="Encerrar atendimento humano e voltar a respostas da IA"
-                    >
-                      <Bot size={14} strokeWidth={2} className="text-sky-300 shrink-0" aria-hidden />
-                      Devolver à IA
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Mensagens + Realtime */}
-              <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-                {mensagensLoadError && (
-                  <div className="rounded-lg border border-red-500/35 bg-red-950/40 px-3 py-2 text-[12px] text-red-200/95">
-                    {mensagensLoadError}
-                  </div>
-                )}
-                {carregandoMensagens && mensagens.length === 0 && !mensagensLoadError && (
-                  <div className="text-center text-zinc-500 text-xs mt-12">A carregar mensagens…</div>
-                )}
-                {!carregandoMensagens && !mensagensLoadError && mensagens.length === 0 && (
-                  <div className="text-center text-zinc-600 text-xs mt-12">Ainda não há mensagens nesta conversa</div>
-                )}
-                {mensagens.map(msg => {
-                  const entrada = msg.direcao === "entrada";
-                  const meta = msg.metadata && typeof msg.metadata === "object" ? msg.metadata as Record<string, unknown> : {};
-                  const isHumano =
-                    !entrada &&
-                    (meta.feito_por_tipo === "humano" || Boolean(leadSel?.humano_responsavel));
-                  return (
-                    <div key={msg.id} className={`flex ${entrada ? "justify-start" : "justify-end"}`}>
-                      <div className={`max-w-[min(28rem,85vw)] flex flex-col gap-0.5 ${entrada ? "items-start" : "items-end"}`}>
-                        {!entrada && (
-                          <span className="text-zinc-600 text-[10px] mr-1">
-                            {isHumano ? "Você" : `IA · ${msg.agente_id || "agente"}`}
-                          </span>
-                        )}
-                        <div className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm ${
-                          entrada
-                            ? "bg-zinc-800/90 text-zinc-100 rounded-bl-md border border-white/[0.06]"
-                            : isHumano
-                              ? "bg-[#c9a24a]/20 text-[#f4e8c9] rounded-br-md border border-[#c9a24a]/35"
-                              : "bg-[#003b26] text-zinc-50 rounded-br-md border border-white/10"
-                        }`}>
-                          <p className="whitespace-pre-wrap">{msg.conteudo}</p>
-                        </div>
-                        <span className="text-zinc-600 text-[10px] tabular-nums">{rel(msg.criado_em)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Compor + enviar */}
-              <div className={`flex-shrink-0 p-3 border-t ${C.border} bg-black/25`}>
-                {sendStrip && (
-                  <div className={`mb-2 rounded-md px-3 py-2 text-[11px] border ${
-                    sendStrip.kind === "error"
-                      ? "border-red-500/40 bg-red-950/50 text-red-200"
-                      : sendStrip.kind === "info"
-                        ? "border-amber-500/40 bg-amber-950/40 text-amber-100/95"
-                        : "border-[#003b26]/50 bg-[#003b26]/25 text-zinc-200"
-                  }`}>
-                    {sendStrip.text}
-                  </div>
-                )}
-                <div className="flex gap-2 items-stretch">
-                  <textarea
-                    value={texto}
-                    onChange={e => setTexto(e.target.value)}
-                    disabled={!assumido}
-                    placeholder={assumido ? "Escreva a resposta… (Enter envia · Shift+Enter nova linha)" : "Assuma o atendimento para escrever"}
-                    rows={2}
-                    className={`flex-1 bg-black/30 disabled:opacity-45 text-zinc-100 text-xs rounded-xl px-3 py-2.5 outline-none resize-none border ${C.border} focus:ring-1 focus:ring-[#c9a24a]/35 placeholder-zinc-600`}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void enviarMensagem(); }
-                    }}
-                  />
-                  <div
-                    className={`rounded-xl border ${C.border} bg-black/25 p-1 min-w-[7.5rem] sm:min-w-[8.5rem]`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => void enviarMensagem()}
-                      disabled={!assumido || !texto.trim() || enviando}
-                      className={`inline-flex w-full min-h-[2.75rem] items-center justify-center gap-1.5 ${C.green} hover:brightness-110 disabled:opacity-40 text-white px-3 py-2.5 rounded-lg font-semibold text-[12px] transition-all`}
-                    >
-                      {enviando ? (
-                        <span className="tabular-nums">…</span>
-                      ) : (
-                        <>
-                          <Send size={15} strokeWidth={2} aria-hidden />
-                          Enviar
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#dcebd8] bg-[#ffffff] px-4 py-2.5 text-sm">
+        <span className="text-[#5d7a67]">
+          <strong className="text-[#0b2210]">{filtrados.length}</strong> conversas
+        </span>
+        <span className="text-[#5d7a67]">
+          Com humano <strong className="text-[#22c55e]">{comHumano}</strong>
+        </span>
+        {aguardando > 0 ? (
+          <span className="text-[#5d7a67]">
+            Aguardando <strong className="text-[#eab308]">{aguardando}</strong>
+          </span>
+        ) : null}
       </div>
 
-      {/* SIDOVER: Informações + Ações (libera área do atendimento) */}
-      {leadSel && infoOpen && (
-        <>
-          <button
-            type="button"
-            aria-label="Fechar painel de informações"
-            onClick={() => setInfoOpen(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(0,0,0,0.55)", border: "none", padding: 0 }}
-          />
-          <aside
-            style={{
-              position: "fixed",
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: "min(420px, 100vw)",
-              zIndex: 60,
-              background: "#0a0e14",
-              borderLeft: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: "-12px 0 32px rgba(0,0,0,0.45)",
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-            }}
-          >
-            <div
-              style={{
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                padding: 16,
-                background: "linear-gradient(180deg,#121a26 0%, #101722 100%)",
+      <div className="flex-1 overflow-hidden">
+        {view === "kanban" ? (
+          <CrmKanbanBoardScroll isMobile={isMobile}>
+            {estagiosKanban.map((est) => {
+              const col = filtrados.filter(
+                (l) => (l.estagio_atendimento || "novo") === est.id
+              );
+              return (
+                <CrmKanbanColumn
+                  key={est.id}
+                  stageId={est.id}
+                  label={est.label}
+                  color={est.color}
+                  count={col.length}
+                  totalValue={null}
+                  dragOver={dragOver === est.id}
+                  isMobile={isMobile}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOver(est.id);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const lid = e.dataTransfer.getData("leadId");
+                    if (lid) void moverEstagio(lid, est.id, { optimistic: true });
+                    setLeadDragId(null);
+                    setDragOver(null);
+                  }}
+                >
+                  {col.map((lead) => (
+                    <LeadKanbanCard
+                      key={lead.id}
+                      lead={{
+                        ...lead,
+                        estagio: lead.estagio_atendimento || "novo",
+                        email: lead.email ?? null,
+                        score: lead.score ?? 0,
+                        valor_estimado: lead.valor_estimado ?? 0,
+                        criado_em: lead.criado_em ?? lead.atualizado_em ?? new Date().toISOString(),
+                        atualizado_em: lead.atualizado_em ?? new Date().toISOString(),
+                      }}
+                      notas={[]}
+                      stageLabel={est.label}
+                      stageColor={est.color}
+                      dragging={leadDragId === lead.id}
+                      isMobile={isMobile}
+                      draggable={!isMobile}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("leadId", lead.id);
+                        setLeadDragId(lead.id);
+                      }}
+                      onDragEnd={() => {
+                        setLeadDragId(null);
+                        setDragOver(null);
+                      }}
+                      onOpen={() => abrirEditLead(lead)}
+                      onEdit={() => abrirEditLead(lead)}
+                    />
+                  ))}
+                  {col.length === 0 ? (
+                    <p className="py-4 text-center text-xs text-[#484f58]">vazio</p>
+                  ) : null}
+                </CrmKanbanColumn>
+              );
+            })}
+          </CrmKanbanBoardScroll>
+        ) : (
+          <div className="h-full overflow-y-auto pt-4">
+            <CrmRetrofitTablePanel
+              tableId="crm-atendimento-lista"
+              columns={colunasAtendimento}
+              rows={filtrados}
+              rowKey={(lead) => lead.id}
+              emptyMessage="Nenhuma conversa encontrada"
+              footerSummary={footerSummary}
+              onRowClick={abrirEditLead}
+              onEditRow={abrirEditLead}
+              onViewRow={abrirEditLead}
+              exportConfig={exportConfig}
+              toolbar={{
+                searchValue: busca,
+                onSearchChange: setBusca,
+                searchPlaceholder: "Buscar nome, telefone ou código…",
+                showAdvancedFilters,
+                onToggleAdvancedFilters: () => setShowAdvancedFilters((v) => !v),
+                advancedFilters: (
+                  <CrmRetrofitAdvancedFiltersGrid>
+                    <CrmRetrofitFilterField label="Estágio">
+                      <select
+                        value={filtroEstagio}
+                        onChange={(e) => setFiltroEstagio(e.target.value)}
+                        className={crmRetrofitFilterSelectClass}
+                      >
+                        <option value="">Todos os estágios</option>
+                        {estagiosKanban.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.label}
+                          </option>
+                        ))}
+                      </select>
+                    </CrmRetrofitFilterField>
+                    <CrmRetrofitFilterField label="Origem">
+                      <select
+                        value={filtroOrigem}
+                        onChange={(e) => setFiltroOrigem(e.target.value)}
+                        className={crmRetrofitFilterSelectClass}
+                      >
+                        <option value="">Todas as origens</option>
+                        {Object.entries(ORIGENS_LABEL).map(([id, label]) => (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </CrmRetrofitFilterField>
+                  </CrmRetrofitAdvancedFiltersGrid>
+                ),
               }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ margin: 0, color: "#c9a24a", fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
-                    ATENDIMENTO
-                  </p>
-                  <h3 style={{ margin: "3px 0 0", color: "#0b2210", fontSize: 18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    Informações do lead
-                  </h3>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setInfoOpen(false)}
-                    style={{
-                      border: "1px solid #344256",
-                      background: "#1d2633",
-                      color: "#9eb0c8",
-                      borderRadius: 8,
-                      width: 34,
-                      height: 34,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                    aria-label="Fechar"
-                  >
-                    <X size={16} strokeWidth={2} />
-                  </button>
-                </div>
-              </div>
-            </div>
+            />
+          </div>
+        )}
+      </div>
 
-            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-              <div style={{ marginBottom: 18 }} className={`rounded-xl border ${C.border} bg-black/25 p-3`}>
-                <p className={`${C.gold} text-[10px] font-semibold uppercase tracking-[0.12em] mb-3 flex items-center gap-2 [&_svg]:shrink-0`}>
-                  <Contact size={14} strokeWidth={2} className="opacity-95" aria-hidden />
-                  <span>Dados do lead</span>
-                </p>
-                <div className="space-y-2">
-                  {[
-                    { label: "Nome", value: leadSel.nome || "—" },
-                    { label: "Estágio", value: STATUS_LABEL[leadSel.estagio] || leadSel.estagio },
-                    { label: "Interesse", value: leadSel.interesse_principal || "—" },
-                    { label: "Campanha", value: leadSel.campanha || "—" },
-                    { label: "Agente IA", value: leadSel.agente_responsavel || "sdr" },
-                    { label: "Humano", value: leadSel.humano_responsavel || "—" },
-                    { label: "Score", value: `${leadSel.score ?? 0}/100` },
-                    { label: "Valor", value: (leadSel.valor_estimado ?? 0) > 0 ? `R$ ${((leadSel.valor_estimado ?? 0) / 1000).toFixed(0)}k` : "—" },
-                    { label: "Abertura", value: formatarDataHora(leadSel.criado_em) },
-                    { label: "Próxima ação", value: leadSel.proxima_acao || "—" },
-                    { label: "Data próx. ação", value: formatarDataHora(leadSel.data_proxima_acao) },
-                    { label: "Tags", value: leadSel.tags && leadSel.tags.length ? leadSel.tags.join(", ") : "—" },
-                    { label: "Observações", value: textoObservacoes(leadSel.observacoes) },
-                  ].map((i) => (
-                    <div key={i.label} className={`rounded-lg border ${C.border} bg-black/25 px-3 py-2`}>
-                      <p className="text-zinc-500 text-[10px] font-medium uppercase tracking-wide">{i.label}</p>
-                      <p className="text-zinc-100 text-[12px] font-medium mt-0.5 leading-snug break-words">{i.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+      <AtendimentoEditSideover
+        open={!!editLead}
+        lead={editLead}
+        estagios={estagiosKanban}
+        isMobile={isMobile}
+        onClose={fecharEditLead}
+        onUpdated={(updated) => {
+          setLeads((prev) =>
+            prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l))
+          );
+          setEditLead((prev) =>
+            prev?.id === updated.id ? { ...prev, ...updated } : prev
+          );
+        }}
+      />
 
-              <div style={{ marginBottom: 18 }} className={`rounded-xl border ${C.border} bg-black/25 p-3`}>
-                <p className={`${C.gold} text-[10px] font-semibold uppercase tracking-[0.12em] mb-3 flex items-center gap-2 [&_svg]:shrink-0`}>
-                  <Brain size={14} strokeWidth={2} className="opacity-95" aria-hidden />
-                  <span>Qualificação IA</span>
-                </p>
-                <div className="space-y-2">
-                  {[
-                    { label: "Score", value: `${leadSel.score ?? 0}/100` },
-                    { label: "Interesse principal", value: leadSel.interesse_principal || "—" },
-                    {
-                      label: "Mercado (metadata)",
-                      value:
-                        (leadSel.metadata && typeof leadSel.metadata.mercado === "string" && leadSel.metadata.mercado) ||
-                        "—",
-                    },
-                    {
-                      label: "Primeira mensagem (metadata)",
-                      value:
-                        (leadSel.metadata &&
-                          typeof leadSel.metadata.primeira_mensagem === "string" &&
-                          leadSel.metadata.primeira_mensagem) ||
-                        "—",
-                    },
-                  ].map((i) => (
-                    <div key={i.label} className={`rounded-lg border ${C.border} bg-black/25 px-3 py-2`}>
-                      <p className="text-zinc-500 text-[10px] font-medium uppercase tracking-wide">{i.label}</p>
-                      <p className="text-zinc-100 text-[12px] font-medium mt-0.5 leading-snug break-words">{i.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 18 }} className={`rounded-xl border ${C.border} bg-black/25 p-3`}>
-                <p className={`${C.gold} text-[10px] font-semibold uppercase tracking-[0.12em] mb-3 flex items-center gap-2 [&_svg]:shrink-0`}>
-                  <MessageSquare size={14} strokeWidth={2} className="opacity-95" aria-hidden />
-                  <span>Dados de WhatsApp</span>
-                </p>
-                <div className="space-y-2">
-                  {[
-                    { label: "Canal", value: "WhatsApp" },
-                    { label: "Origem", value: leadSel.origem || "—" },
-                    { label: "Últ. contato", value: leadSel.ultimo_contato ? rel(leadSel.ultimo_contato) : "—" },
-                    { label: "Últ. contato (data/hora)", value: formatarDataHora(leadSel.ultimo_contato) },
-                    {
-                      label: "Responsável atual",
-                      value: leadSel.humano_responsavel ? `Humano (${leadSel.humano_responsavel})` : "IA",
-                    },
-                  ].map((i) => (
-                    <div key={i.label} className={`rounded-lg border ${C.border} bg-black/25 px-3 py-2`}>
-                      <p className="text-zinc-500 text-[10px] font-medium uppercase tracking-wide">{i.label}</p>
-                      <p className="text-zinc-100 text-[12px] font-medium mt-0.5 leading-snug break-words">{i.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 18 }} className={`rounded-xl border ${C.border} bg-black/25 p-3`}>
-                <p className={`${C.gold} text-[10px] font-semibold uppercase tracking-[0.12em] mb-3 flex items-center gap-2 [&_svg]:shrink-0`}>
-                  <Phone size={14} strokeWidth={2} className="opacity-95" aria-hidden />
-                  <span>Contato</span>
-                </p>
-                <div className="space-y-2">
-                  {[
-                    { label: "Telefone", value: leadSel.telefone || "—" },
-                    { label: "E-mail", value: leadSel.email || "—" },
-                  ].map((i) => (
-                    <div key={i.label} className={`rounded-lg border ${C.border} bg-black/25 px-3 py-2`}>
-                      <p className="text-zinc-500 text-[10px] font-medium uppercase tracking-wide">{i.label}</p>
-                      <p className="text-zinc-100 text-[12px] font-medium mt-0.5 leading-snug break-words">{i.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`rounded-xl border ${C.border} bg-black/25 p-3`}>
-                <p className={`${C.gold} text-[10px] font-semibold uppercase tracking-[0.12em] mb-3 flex items-center gap-2 [&_svg]:shrink-0`}>
-                  <Info size={14} strokeWidth={2} className="opacity-95" aria-hidden />
-                  <span>Ações</span>
-                </p>
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={assumirAtendimento}
-                    disabled={assumido}
-                    className={`w-full border ${C.border} bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-40 text-zinc-100 text-[12px] py-2.5 rounded-lg text-left px-3 transition-colors font-medium inline-flex items-center gap-2`}
-                  >
-                    <UserCheck size={15} strokeWidth={2} className="text-[#c9a24a]/90 shrink-0" aria-hidden />
-                    Assumir atendimento
-                  </button>
-                  <button
-                    type="button"
-                    onClick={devolverIA}
-                    disabled={!assumido}
-                    className={`w-full border ${C.border} bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-40 text-zinc-100 text-[12px] py-2.5 rounded-lg text-left px-3 transition-colors font-medium inline-flex items-center gap-2`}
-                  >
-                    <Bot size={15} strokeWidth={2} className="text-[#c9a24a]/90 shrink-0" aria-hidden />
-                    Devolver à IA
-                  </button>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </>
-      )}
+      <PipelineConfigSideover
+        open={pipelineConfigOpen}
+        onClose={() => {
+          setPipelineConfigOpen(false);
+          setPipelineConfigFocusCreate(false);
+        }}
+        tipo="atendimento"
+        pipelineId={pipelineId}
+        focusCreate={pipelineConfigFocusCreate}
+        onSelectPipeline={(id) => setPipelineId(id)}
+        onUpdated={() => {
+          void carregarPipeline();
+        }}
+      />
     </div>
   );
 }

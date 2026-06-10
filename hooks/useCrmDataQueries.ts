@@ -4,7 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { crmQueryKeys, type CrmNegociosFiltros } from "@/lib/crm/crm-query-keys";
-import { listQueryDefaults } from "@/lib/crm/query-config";
+import { listQueryDefaults, ciclosListQueryDefaults } from "@/lib/crm/query-config";
 import { hubQueryKeys } from "@/lib/hub/hub-query-keys";
 
 export type CrmPipelineRow = {
@@ -28,7 +28,9 @@ export type CrmNegociosPage = {
   total: number;
 };
 
-async function fetchCrmPipelines(tipo: "lead" | "negocio"): Promise<CrmPipelineRow[]> {
+export type CrmPipelineTipo = "lead" | "negocio" | "atendimento";
+
+async function fetchCrmPipelines(tipo: CrmPipelineTipo): Promise<CrmPipelineRow[]> {
   const res = await fetch(`/api/crm/pipelines?tipo=${tipo}`, { headers: internalApiHeaders() });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error("Falha ao carregar pipelines.");
@@ -53,7 +55,7 @@ async function fetchHubCiclosList(): Promise<Record<string, unknown>[]> {
   return Array.isArray(json?.ciclos) ? json.ciclos : [];
 }
 
-export function prefetchCrmPipelines(qc: QueryClient, tipo: "lead" | "negocio") {
+export function prefetchCrmPipelines(qc: QueryClient, tipo: CrmPipelineTipo) {
   return qc.prefetchQuery({
     queryKey: crmQueryKeys.pipelines(tipo),
     queryFn: () => fetchCrmPipelines(tipo),
@@ -73,11 +75,11 @@ export function prefetchHubCiclosList(qc: QueryClient) {
   return qc.prefetchQuery({
     queryKey: hubQueryKeys.ciclos.list(),
     queryFn: fetchHubCiclosList,
-    ...listQueryDefaults,
+    ...ciclosListQueryDefaults,
   });
 }
 
-export function useCrmPipelines(tipo: "lead" | "negocio", enabled = true) {
+export function useCrmPipelines(tipo: CrmPipelineTipo, enabled = true) {
   return useQuery({
     queryKey: crmQueryKeys.pipelines(tipo),
     queryFn: () => fetchCrmPipelines(tipo),
@@ -102,7 +104,7 @@ export function useHubCiclosList(enabled = true) {
     queryKey: hubQueryKeys.ciclos.list(),
     queryFn: fetchHubCiclosList,
     enabled,
-    ...listQueryDefaults,
+    ...ciclosListQueryDefaults,
     placeholderData: (prev) => prev,
   });
 }

@@ -257,8 +257,12 @@ export function AtendenteEditSideover({ open, onClose, onSaved, atendente }: Pro
             </select>
           </div>
           <div className="flex items-center gap-3 sm:col-span-2">
-            <CrmToggleSwitch checked={ativo} onChange={setAtivo} aria-label="Atendente ativo" />
-            <span className="text-sm" style={{ color: RF_TEXT_MUTED }}>
+            <CrmToggleSwitch
+              checked={ativo}
+              onCheckedChange={setAtivo}
+              labelledBy="atendente-ativo-label"
+            />
+            <span id="atendente-ativo-label" className="text-sm" style={{ color: RF_TEXT_MUTED }}>
               {ativo ? "Ativo na equipe" : "Inativo (não aparece nas transferências)"}
             </span>
           </div>

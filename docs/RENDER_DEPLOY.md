@@ -42,7 +42,7 @@ No Render → serviço `escritorio-virtual` → **Environment**:
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://xxx.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | chave anon |
 | `SUPABASE_SERVICE_ROLE_KEY` | service role (segredo) |
-| `NEXT_PUBLIC_APP_URL` | `https://seu-app.onrender.com` **sem barra final** |
+| `NEXT_PUBLIC_APP_URL` | `https://zor-cd9k.onrender.com` **sem barra final** (exemplo produção atual) |
 | `WEBHOOK_SECRET` | string longa aleatória (mesmo valor na URL UAZAPI) |
 | `WEBHOOK_SECRET_HEADER` | `x-webhook-secret` |
 | `UAZAPI_BASE_URL` | `https://fitbot.uazapi.com` |
@@ -75,8 +75,10 @@ Repetir: Supabase, `UAZAPI_BASE_URL`, `UAZAPI_INSTANCE_TOKEN`, `MISTRAL_API_KEY`
 A app recebe mensagens em:
 
 ```
-https://seu-app.onrender.com/api/whatsapp/webhook?wh=SEU_WEBHOOK_SECRET
+https://zor-cd9k.onrender.com/api/whatsapp/webhook?wh=SEU_WEBHOOK_SECRET
 ```
+
+(Substitua `SEU_WEBHOOK_SECRET` pelo valor de `WEBHOOK_SECRET` no Render — **um único segredo**, sem duplicar no `.env`.)
 
 **Não usar** `/webhook/uazapi` — essa rota não existe neste app.
 

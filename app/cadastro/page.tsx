@@ -302,23 +302,21 @@ export default function CadastroPage() {
   }
 
   return (
-    <div className="waje-auth-bg min-h-screen text-[#1c2a1c]">
-      <div className="flex min-h-screen">
-        <aside className="min-h-screen w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[560px] md:min-w-[500px]">
-          <div className="mx-auto w-full max-w-[540px] p-6 md:p-8">
-            <div className="mb-6 flex items-center justify-between">
+    <div className="waje-auth-bg h-[100dvh] overflow-hidden text-[#1c2a1c]">
+      <div className="flex h-full">
+        <aside className="flex h-full w-full flex-col overflow-hidden border-r border-[#d7e5d3] bg-white/95 md:w-[560px] md:min-w-[500px]">
+          <div className="shrink-0 border-b border-[#e8f0e6] px-6 pb-4 pt-6 md:px-8 md:pt-8">
+            <div className="mx-auto flex w-full max-w-[540px] items-center justify-between">
               <WajeBrand layout="horizontal" tone="brand" className="items-start text-left" />
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-[#3f5b44] hover:text-[#1f3a24]">
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
               </Link>
             </div>
+          </div>
 
-            <h1 className="mb-2 text-3xl font-bold text-[#132a17]">Criar conta</h1>
-            <p className="mb-8 text-sm text-[#58745d]">
-              Cadastre sua operação, defina a senha e acesse o Waje.
-            </p>
-
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="mx-auto w-full max-w-[540px] px-6 pb-8 pt-5 md:px-8">
             <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <fieldset className="space-y-1.5 md:col-span-2">
                 <span className="text-xs text-[#5a745d]">Tipo de cadastro</span>
@@ -571,11 +569,19 @@ export default function CadastroPage() {
                   {submitting ? "Criando conta..." : "Criar conta Waje"}
                 </button>
               </div>
+
+              <p className="text-center text-sm text-[#5f745f] md:col-span-2">
+                Já tem conta?{" "}
+                <Link href="/login" className="font-semibold text-[#1f3a24] underline-offset-2 hover:underline">
+                  Entrar
+                </Link>
+              </p>
             </form>
+            </div>
           </div>
         </aside>
 
-        <section className="relative hidden h-[100dvh] flex-1 overflow-hidden md:block bg-[radial-gradient(ellipse_at_22%_15%,rgba(146,255,0,0.16),transparent_52%),radial-gradient(ellipse_at_80%_85%,rgba(63,152,72,0.13),transparent_50%),linear-gradient(148deg,#f6fdf4,#ecf8e8_45%,#f2faf0)]">
+        <section className="relative hidden h-full flex-1 overflow-hidden md:block bg-[radial-gradient(ellipse_at_22%_15%,rgba(146,255,0,0.16),transparent_52%),radial-gradient(ellipse_at_80%_85%,rgba(63,152,72,0.13),transparent_50%),linear-gradient(148deg,#f6fdf4,#ecf8e8_45%,#f2faf0)]">
           {/* decorative orbs */}
           <div className="waje-deco-float pointer-events-none absolute left-[12%] top-[20%] h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.17),transparent_65%)]" />
           <div className="waje-deco-float pointer-events-none absolute bottom-[22%] right-[15%] h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(63,152,72,0.14),transparent_68%)] [animation-delay:1.6s]" />

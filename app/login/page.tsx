@@ -130,7 +130,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="waje-auth-bg min-h-screen">
+    <div className="waje-auth-bg h-[100dvh] overflow-hidden">
       <style jsx global>{`
         #login-email:-webkit-autofill,
         #login-email:-webkit-autofill:hover,
@@ -147,58 +147,40 @@ function LoginForm() {
           transition: background-color 9999s ease-out 0s;
         }
       `}</style>
-      <div className="flex min-h-screen">
-        <aside className="min-h-screen w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[460px] md:min-w-[420px]">
-          <div className="mx-auto w-full max-w-[430px] p-6 text-[#1c2a1c] md:p-8">
-            <div className="mb-8 flex items-center justify-between">
+      <div className="flex h-full">
+        <aside className="flex h-full w-full flex-col border-r border-[#d7e5d3] bg-white/95 md:w-[460px] md:min-w-[420px]">
+          <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col justify-center p-6 text-[#1c2a1c] md:p-8">
+            <div className="mb-10 flex items-center justify-between">
               <WajeBrand layout="horizontal" tone="brand" />
               <Link href="/" className="text-xs font-medium text-[#3f5b44] hover:text-[#1f3a24]">
                 Voltar
               </Link>
             </div>
 
-            <h1 className="mb-2 text-3xl font-bold text-[#132a17]">Entrar</h1>
-            <p className="mb-8 text-sm text-[#58745d]">
-              Faça login com e-mail e senha para abrir seu CRM.
-            </p>
-
-            <form onSubmit={onSubmit} className="flex flex-col gap-5">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="login-email"
-                  className="text-xs font-medium uppercase tracking-wide text-[#5a745d]"
-                >
-                  E-mail de acesso
-                </label>
+            <form onSubmit={onSubmit} className="flex flex-col gap-4">
+              <input
+                id="login-email"
+                type="email"
+                autoComplete="email"
+                required
+                aria-label="E-mail de acesso"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="E-mail de acesso"
+                className="w-full rounded-xl border border-[#d5e2d2] bg-white px-4 py-3.5 text-[15px] text-[#1e3a23] transition-[border-color,box-shadow] placeholder:text-[#7f9481] focus:border-[#92ff00]/55 focus:outline-none focus:ring-2 focus:ring-[#92ff00]/20"
+              />
+              <div className="relative">
                 <input
-                  id="login-email"
-                  type="email"
-                  autoComplete="email"
+                  id="login-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="operador@empresa.com"
-                  className="w-full rounded-xl border border-[#d5e2d2] bg-white px-4 py-3 text-[15px] text-[#1e3a23] transition-[border-color,box-shadow] placeholder:text-[#7f9481] focus:border-[#92ff00]/55 focus:outline-none focus:ring-2 focus:ring-[#92ff00]/20"
+                  aria-label="Senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Senha"
+                  className="w-full rounded-xl border border-[#d5e2d2] bg-white py-3.5 pl-4 pr-12 text-[15px] text-[#1e3a23] transition-[border-color,box-shadow] placeholder:text-[#7f9481] focus:border-[#92ff00]/55 focus:outline-none focus:ring-2 focus:ring-[#92ff00]/20"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="login-password"
-                  className="text-xs font-medium uppercase tracking-wide text-[#5a745d]"
-                >
-                  Senha
-                </label>
-                <div className="relative">
-                  <input
-                    id="login-password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full rounded-xl border border-[#d5e2d2] bg-white py-3 pl-4 pr-12 text-[15px] text-[#1e3a23] transition-[border-color,box-shadow] placeholder:text-[#7f9481] focus:border-[#92ff00]/55 focus:outline-none focus:ring-2 focus:ring-[#92ff00]/20"
-                  />
                   <button
                     type="button"
                     aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
@@ -211,7 +193,6 @@ function LoginForm() {
                       <Eye className="h-[18px] w-[18px]" aria-hidden />
                     )}
                   </button>
-                </div>
               </div>
 
               {msg && (
@@ -237,13 +218,16 @@ function LoginForm() {
               </button>
             </form>
 
-            <p className="mt-10 text-center text-[11px] leading-relaxed text-[#5f745f]">
-              Atendimento com IA e supervisão humana.
+            <p className="mt-8 text-center text-sm text-[#5f745f]">
+              Ainda não tem conta?{" "}
+              <Link href="/cadastro" className="font-semibold text-[#1f3a24] underline-offset-2 hover:underline">
+                Criar conta
+              </Link>
             </p>
           </div>
         </aside>
 
-        <section className="relative hidden h-[100dvh] flex-1 overflow-hidden md:block bg-[radial-gradient(ellipse_at_25%_18%,rgba(146,255,0,0.16),transparent_52%),radial-gradient(ellipse_at_78%_82%,rgba(63,152,72,0.13),transparent_50%),linear-gradient(145deg,#f6fdf4,#ecf8e8_45%,#f2faf0)]">
+        <section className="relative hidden h-full flex-1 overflow-hidden md:block bg-[radial-gradient(ellipse_at_25%_18%,rgba(146,255,0,0.16),transparent_52%),radial-gradient(ellipse_at_78%_82%,rgba(63,152,72,0.13),transparent_50%),linear-gradient(145deg,#f6fdf4,#ecf8e8_45%,#f2faf0)]">
           {/* decorative floating orbs */}
           <div className="waje-deco-float pointer-events-none absolute left-[10%] top-[15%] h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.18),transparent_65%)]" />
           <div className="waje-deco-float pointer-events-none absolute bottom-[18%] right-[12%] h-28 w-28 rounded-full bg-[radial-gradient(circle,rgba(63,152,72,0.15),transparent_68%)] [animation-delay:1.5s]" />
@@ -278,7 +262,7 @@ function LoginForm() {
 function LoginFallback() {
   return (
     <div
-      className="waje-auth-bg flex min-h-screen items-center justify-center text-sm text-[#527055]"
+      className="waje-auth-bg flex h-[100dvh] items-center justify-center text-sm text-[#527055]"
     >
       Carregando…
     </div>

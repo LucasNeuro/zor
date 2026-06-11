@@ -26,10 +26,10 @@ export default function IOSInstallBanner() {
       <button onClick={fechar} className="absolute top-3 right-3"
         style={{ color: "#484f58", background: "none", border: "none", cursor: "pointer" }}>✕</button>
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black"
-          style={{ background: "#003b26", color: "#c9a24a" }}>O+</div>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm"
+          style={{ background: "#0b1f10", color: "#92ff00" }}>W</div>
         <div>
-          <p className="text-white font-bold text-sm">Instalar Obra10+</p>
+          <p className="text-white font-bold text-sm">Instalar Waje</p>
           <p className="text-xs" style={{ color: "#8b949e" }}>Adicione à tela inicial</p>
         </div>
       </div>

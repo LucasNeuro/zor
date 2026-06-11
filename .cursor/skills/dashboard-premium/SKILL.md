@@ -2,7 +2,7 @@
 name: dashboard-premium
 description: >
   Premium dashboard patterns—layout, KPI cards, charts, tables, dark mode—for professional analytics UX.
-  Use for /crm screens, /office panels, real-time metrics, Recharts/Chart.js, and Obra10+ internal tools.
+  Use for /crm screens, real-time metrics, Recharts/Chart.js, and Waje internal tools.
 ---
 
 ## Padrões de Dashboard Premium

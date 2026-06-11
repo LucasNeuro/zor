@@ -206,7 +206,7 @@ export async function POST(
         );
       }
 
-      const name = `obra10-${slug}`.slice(0, 80);
+      const name = `waje-${slug}`.slice(0, 80);
       const out = await uazapiFetchJson<Record<string, unknown>>("/instance/create", {
         method: "POST",
         admin: true,

@@ -1,34 +1,10 @@
 ﻿"use client";
-import { Suspense } from "react";
-import dynamic from "next/dynamic";
-import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 
-const MobileShell = dynamic(() => import("./MobileShell"), { ssr: false });
-
-interface Props { children: React.ReactNode; }
-
-function mobileFallback(children: React.ReactNode) {
-  return (
-    <div className="min-h-[100dvh]" style={{ background: "#f8fcf6" }}>
-      {children}
-    </div>
-  );
+/** Shell mobile Obra10 desativado — Waje usa layout responsivo normal (sem nav inferior fixa). */
+interface Props {
+  children: React.ReactNode;
 }
 
 export default function MobileDetector({ children }: Props) {
-  const narrow = useNarrowViewport();
-
-  if (narrow === null) {
-    return mobileFallback(children);
-  }
-
-  if (narrow) {
-    return (
-      <Suspense fallback={mobileFallback(children)}>
-        <MobileShell>{children}</MobileShell>
-      </Suspense>
-    );
-  }
-
   return <>{children}</>;
 }

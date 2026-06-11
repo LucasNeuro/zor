@@ -815,7 +815,7 @@ export async function POST(request: NextRequest) {
             dados: { telefone: telLimpo, pushName, mensagem: mensagemFinal.slice(0, 200) },
           });
 
-          const boas_vindas = `Olá${pushName ? `, ${pushName.split(" ")[0]}` : ""}! 👋\n\nQue ótimo que você tem interesse em ser parceiro da Obra10+!\n\nVou te enviar o link de cadastro em instantes. Um de nossos consultores também vai entrar em contato para explicar como funciona o programa.\n\nAté já! 🏆`;
+          const boas_vindas = `Olá${pushName ? `, ${pushName.split(" ")[0]}` : ""}! 👋\n\nQue ótimo que você tem interesse em ser parceiro da Waje!\n\nVou te enviar o link de cadastro em instantes. Um de nossos consultores também vai entrar em contato para explicar como funciona o programa.\n\nAté já! 🏆`;
           await enviarMensagemWhatsApp(telefone, boas_vindas, waSendOpts);
         }
       }

@@ -130,7 +130,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="tivia-landing-bg min-h-[100dvh] overflow-hidden">
+    <div className="waje-auth-bg min-h-screen">
       <style jsx global>{`
         #login-email:-webkit-autofill,
         #login-email:-webkit-autofill:hover,
@@ -147,8 +147,8 @@ function LoginForm() {
           transition: background-color 9999s ease-out 0s;
         }
       `}</style>
-      <div className="flex min-h-[100dvh]">
-        <aside className="h-[100dvh] w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[460px] md:min-w-[420px]">
+      <div className="flex min-h-screen">
+        <aside className="min-h-screen w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[460px] md:min-w-[420px]">
           <div className="mx-auto w-full max-w-[430px] p-6 text-[#1c2a1c] md:p-8">
             <div className="mb-8 flex items-center justify-between">
               <WajeBrand layout="horizontal" tone="brand" />
@@ -245,9 +245,9 @@ function LoginForm() {
 
         <section className="relative hidden h-[100dvh] flex-1 overflow-hidden md:block bg-[radial-gradient(ellipse_at_25%_18%,rgba(146,255,0,0.16),transparent_52%),radial-gradient(ellipse_at_78%_82%,rgba(63,152,72,0.13),transparent_50%),linear-gradient(145deg,#f6fdf4,#ecf8e8_45%,#f2faf0)]">
           {/* decorative floating orbs */}
-          <div className="tivia-float pointer-events-none absolute left-[10%] top-[15%] h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.18),transparent_65%)]" />
-          <div className="tivia-float pointer-events-none absolute bottom-[18%] right-[12%] h-28 w-28 rounded-full bg-[radial-gradient(circle,rgba(63,152,72,0.15),transparent_68%)] [animation-delay:1.5s]" />
-          <div className="tivia-float pointer-events-none absolute right-[30%] top-[40%] h-20 w-20 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.12),transparent_70%)] [animation-delay:0.8s]" />
+          <div className="waje-deco-float pointer-events-none absolute left-[10%] top-[15%] h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.18),transparent_65%)]" />
+          <div className="waje-deco-float pointer-events-none absolute bottom-[18%] right-[12%] h-28 w-28 rounded-full bg-[radial-gradient(circle,rgba(63,152,72,0.15),transparent_68%)] [animation-delay:1.5s]" />
+          <div className="waje-deco-float pointer-events-none absolute right-[30%] top-[40%] h-20 w-20 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.12),transparent_70%)] [animation-delay:0.8s]" />
           {/* tagline */}
           <div className="absolute right-10 top-10 max-w-sm text-right">
             <p className="text-2xl font-extrabold leading-snug text-[#0b1f10]">
@@ -278,7 +278,7 @@ function LoginForm() {
 function LoginFallback() {
   return (
     <div
-      className="tivia-landing-bg flex min-h-[100dvh] items-center justify-center text-sm text-[#527055]"
+      className="waje-auth-bg flex min-h-screen items-center justify-center text-sm text-[#527055]"
     >
       Carregando…
     </div>

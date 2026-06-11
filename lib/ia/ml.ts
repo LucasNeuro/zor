@@ -589,7 +589,7 @@ export async function cobrarSubordinados(supervisorSlug: string): Promise<void> 
     const foraDaMeta = resultados.filter(r => r.resultado?.nivel_alerta !== "ok");
     if (foraDaMeta.length === 0) continue;
 
-    const prompt = `Você é o supervisor ${supervisorSlug} do Escritório Virtual Obra10+.
+    const prompt = `Você é o supervisor ${supervisorSlug} do Escritório Virtual Waje.
 Analise a performance do subordinado ${subordinadoSlug}.
 
 KPIs FORA DA META:
@@ -700,7 +700,7 @@ async function analisarComClaude(slug: string, nome: string, dados: Record<strin
   const agora = new Date().toISOString();
   const h72 = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
 
-  const prompt = `Você é o sistema de observação de ML do Escritório Virtual Obra10+.
+  const prompt = `Você é o sistema de observação de ML do Escritório Virtual Waje.
 Analise os dados de performance do agente "${nome}" (${slug}) e identifique padrões.
 
 DADOS:
@@ -744,7 +744,7 @@ async function gerarSugestaoComClaude(
 ): Promise<Record<string, unknown> | null> {
   const client = anthropic();
 
-  const prompt = `Você é o sistema de ML do Escritório Virtual Obra10+.
+  const prompt = `Você é o sistema de ML do Escritório Virtual Waje.
 Com base nesta observação, gere uma SUGESTÃO para análise humana.
 
 OBSERVAÇÃO:

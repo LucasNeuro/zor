@@ -302,9 +302,9 @@ export default function CadastroPage() {
   }
 
   return (
-    <div className="tivia-landing-bg min-h-[100dvh] overflow-hidden text-[#1c2a1c]">
-      <div className="flex min-h-[100dvh]">
-        <aside className="h-[100dvh] w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[560px] md:min-w-[500px]">
+    <div className="waje-auth-bg min-h-screen text-[#1c2a1c]">
+      <div className="flex min-h-screen">
+        <aside className="min-h-screen w-full overflow-y-auto border-r border-[#d7e5d3] bg-white/95 md:w-[560px] md:min-w-[500px]">
           <div className="mx-auto w-full max-w-[540px] p-6 md:p-8">
             <div className="mb-6 flex items-center justify-between">
               <WajeBrand layout="horizontal" tone="brand" className="items-start text-left" />
@@ -577,9 +577,9 @@ export default function CadastroPage() {
 
         <section className="relative hidden h-[100dvh] flex-1 overflow-hidden md:block bg-[radial-gradient(ellipse_at_22%_15%,rgba(146,255,0,0.16),transparent_52%),radial-gradient(ellipse_at_80%_85%,rgba(63,152,72,0.13),transparent_50%),linear-gradient(148deg,#f6fdf4,#ecf8e8_45%,#f2faf0)]">
           {/* decorative orbs */}
-          <div className="tivia-float pointer-events-none absolute left-[12%] top-[20%] h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.17),transparent_65%)]" />
-          <div className="tivia-float pointer-events-none absolute bottom-[22%] right-[15%] h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(63,152,72,0.14),transparent_68%)] [animation-delay:1.6s]" />
-          <div className="tivia-float pointer-events-none absolute left-[35%] top-[55%] h-16 w-16 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.11),transparent_70%)] [animation-delay:0.9s]" />
+          <div className="waje-deco-float pointer-events-none absolute left-[12%] top-[20%] h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.17),transparent_65%)]" />
+          <div className="waje-deco-float pointer-events-none absolute bottom-[22%] right-[15%] h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(63,152,72,0.14),transparent_68%)] [animation-delay:1.6s]" />
+          <div className="waje-deco-float pointer-events-none absolute left-[35%] top-[55%] h-16 w-16 rounded-full bg-[radial-gradient(circle,rgba(146,255,0,0.11),transparent_70%)] [animation-delay:0.9s]" />
           {/* tagline */}
           <div className="absolute right-10 top-10 max-w-sm text-right">
             <p className="text-2xl font-extrabold leading-snug text-[#0b1f10]">

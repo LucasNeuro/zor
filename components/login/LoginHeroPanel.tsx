@@ -150,10 +150,10 @@ export function LoginHeroPanel() {
       />
       <div className="pointer-events-none relative z-10 flex h-full min-h-0 flex-col items-end justify-start p-6 text-right sm:p-8 md:p-10 lg:p-12">
         <p className="ml-auto max-w-lg text-base font-medium leading-snug tracking-tight text-white/95 drop-shadow-md sm:text-lg md:text-xl lg:text-2xl">
-          Operações, leads e equipe — seu escritório digital Obra10+.
+          Operações, leads e equipe — seu escritório digital Waje.
         </p>
         <p className="mt-2 ml-auto max-w-md text-xs font-medium text-[var(--obra-dourado-light,#e0b86a)] drop-shadow sm:text-sm">
-          Imobiliário · Obras · Parceiros
+          Atendimento · CRM · Agentes IA
         </p>
       </div>
     </div>

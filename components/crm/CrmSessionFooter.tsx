@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
-import { getInitials } from "@/lib/data/office-map";
+import { getInitials } from "@/lib/utils/initials";
 
 /* ── Shared auth listener ───────────────────────────────────────────── */
 type AuthProfileListener = (user: User | null) => void;

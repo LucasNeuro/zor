@@ -69,7 +69,7 @@ function exportarCsv(entidade: string) {
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `obra10-${entidade}-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `waje-${entidade}-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(a.href);
     })

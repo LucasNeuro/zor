@@ -103,7 +103,7 @@ HTTP **401** da UAZAPI indica token inválido ou `UAZAPI_BASE_URL` errado:
 curl -X POST "https://SUBDOMINIO.uazapi.com/send/text" \
   -H "Content-Type: application/json" \
   -H "token: SEU_INSTANCE_TOKEN" \
-  -d '{"number":"5511999990000","text":"Teste Obra10+"}'
+  -d '{"number":"5511999990000","text":"Teste Waje"}'
 ```
 
 Testar criação de grupo:

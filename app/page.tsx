@@ -78,7 +78,7 @@ const jsonLd = {
 
 export default function HomePage() {
   return (
-    <main className="waje-landing-bg fixed inset-0 overflow-x-hidden overflow-y-auto">
+    <main className="waje-landing-bg min-h-screen overflow-x-hidden">
       <script
         type="application/ld+json"
         suppressHydrationWarning

@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { Poppins, Playfair_Display, Space_Mono } from "next/font/google";
 import "./globals.css";
 
-/** Fora do chunk crítico app/layout.js — evita ChunkLoadError por bundle pesado (MobileShell/Supabase). */
+/** Reservado — shell mobile Obra10 desativado; componente repassa children. */
 const MobileDetector = dynamic(() => import("@/components/mobile/MobileDetector"));
 
 const IOSInstallBanner = dynamic(() => import("@/components/IOSInstallBanner"));
@@ -87,8 +87,6 @@ export const viewport: Viewport = {
   themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 

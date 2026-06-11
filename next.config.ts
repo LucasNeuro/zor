@@ -46,6 +46,16 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/office",
+        destination: "/crm",
+        permanent: true,
+      },
+      {
+        source: "/office/:path*",
+        destination: "/crm",
+        permanent: true,
+      },
+      {
         source: "/crm/kpis",
         destination: "/crm/analytics",
         permanent: true,

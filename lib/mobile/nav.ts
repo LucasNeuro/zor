@@ -76,13 +76,13 @@ export function mobileTabIdFromPath(pathname: string): MobileTabId {
 }
 
 export function isMobileShellRoute(pathname: string): boolean {
+  if (pathname === "/" || pathname.startsWith("/cadastro")) return false;
   if (pathname.startsWith("/parceiro/")) return false;
   if (pathname.startsWith("/fornecedor/")) return false;
-  if (pathname.startsWith("/office/") || pathname === "/office") return false;
   if (pathname.startsWith("/agentes/") || pathname === "/agentes") return false;
   if (pathname.startsWith("/comando/") || pathname === "/comando") return false;
   if (pathname === "/login" || pathname.startsWith("/login/")) return false;
-  return true;
+  return pathname.startsWith("/crm");
 }
 
 export function mobilePageTitle(pathname: string): string {

@@ -318,7 +318,7 @@ export function UazapiProxyCityPicker({
                 paddingLeft: 34,
               }}
               aria-autocomplete="list"
-              aria-expanded={showResults}
+              aria-expanded={Boolean(showResults)}
             />
             {loading ? (
               <Loader2

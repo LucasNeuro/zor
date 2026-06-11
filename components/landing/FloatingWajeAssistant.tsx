@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Loader2, RotateCcw, Send, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Loader2, RotateCcw, Send, Sparkles, X } from "lucide-react";
+import { WajeLogoMark } from "@/components/brand/WajeLogoMark";
 import {
   labelOpcao,
   WAJE_MINI_BOT_INTRO,
@@ -9,12 +11,16 @@ import {
   type WajeMiniBotResposta,
 } from "@/lib/landing/waje-mini-bot-flow";
 
+const TEASER_DISMISS_KEY = "waje_mini_bot_teaser_dismissed";
+
 type ChatMsg = { role: "bot" | "user"; text: string };
 
 type Fase = "perguntas" | "formulario" | "sucesso";
 
 export function FloatingWajeAssistant() {
+  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
+  const [showTeaser, setShowTeaser] = useState(false);
   const [fase, setFase] = useState<Fase>("perguntas");
   const [perguntaIdx, setPerguntaIdx] = useState(0);
   const [respostas, setRespostas] = useState<WajeMiniBotResposta[]>([]);
@@ -38,8 +44,34 @@ export function FloatingWajeAssistant() {
   }, []);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || open) return;
+    try {
+      if (sessionStorage.getItem(TEASER_DISMISS_KEY) === "1") return;
+    } catch {
+      /* ignore */
+    }
+    const t = window.setTimeout(() => setShowTeaser(true), 1800);
+    return () => window.clearTimeout(t);
+  }, [mounted, open]);
+
+  useEffect(() => {
     scrollFim();
   }, [mensagens, fase, scrollFim]);
+
+  const dismissTeaser = useCallback((persist = true) => {
+    setShowTeaser(false);
+    if (persist) {
+      try {
+        sessionStorage.setItem(TEASER_DISMISS_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
 
   const reiniciar = useCallback(() => {
     setFase("perguntas");
@@ -56,6 +88,7 @@ export function FloatingWajeAssistant() {
   }, []);
 
   const abrir = useCallback(() => {
+    dismissTeaser(false);
     setOpen(true);
     if (!iniciadoRef.current && WAJE_MINI_BOT_PERGUNTAS[0]) {
       iniciadoRef.current = true;
@@ -64,7 +97,7 @@ export function FloatingWajeAssistant() {
         setMensagens((m) => [...m, { role: "bot", text: p.pergunta }]);
       }, 400);
     }
-  }, []);
+  }, [dismissTeaser]);
 
   const fechar = useCallback(() => {
     setOpen(false);
@@ -156,14 +189,22 @@ export function FloatingWajeAssistant() {
     }
   };
 
-  return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+  if (!mounted) return null;
+
+  const ui = (
+    <div className="waje-float-root flex flex-col items-end gap-3">
       {open ? (
-        <div className="waje-mini-bot-panel flex max-h-[min(520px,78dvh)] w-[min(320px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-[#92ff00]/25 bg-[#0b1f10] shadow-[0_24px_64px_rgba(0,0,0,0.35)]">
-          <div className="flex shrink-0 items-center justify-between border-b border-[#92ff00]/15 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-[#92ff00]" />
-              <span className="text-sm font-bold text-white">Assistente Waje</span>
+        <div className="waje-mini-bot-panel flex max-h-[min(520px,78dvh)] w-[min(340px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-[#92ff00]/25 bg-[#0b1f10] shadow-[0_24px_64px_rgba(0,0,0,0.35)]">
+          <div className="flex shrink-0 items-center justify-between border-b border-[#92ff00]/15 bg-[#071209] px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[#92ff00]/30 bg-[#0b1f10]">
+                <WajeLogoMark size={22} />
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#071209] bg-[#92ff00]" />
+              </div>
+              <div className="text-left">
+                <span className="block text-sm font-bold leading-tight text-white">Assistente Waje</span>
+                <span className="text-[11px] font-medium text-[#92ff00]">Online · resposta rápida</span>
+              </div>
             </div>
             <div className="flex items-center gap-1">
               {fase === "sucesso" ? (
@@ -256,7 +297,6 @@ export function FloatingWajeAssistant() {
                   placeholder="Mensagem (opcional)"
                   value={mensagem}
                   onChange={(e) => setMensagem(e.target.value)}
-                  rows={2}
                   className="waje-mini-bot-input resize-none"
                 />
                 {erro ? <p className="text-xs text-red-400">{erro}</p> : null}
@@ -274,19 +314,50 @@ export function FloatingWajeAssistant() {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => (open ? fechar() : abrir())}
-        className="waje-float-btn group relative flex h-16 w-16 items-center justify-center rounded-full transition hover:scale-105"
-        aria-label={open ? "Fechar assistente" : "Abrir assistente Waje"}
-      >
-        {!open ? (
-          <span className="absolute -left-36 top-1/2 hidden -translate-y-1/2 whitespace-nowrap rounded-xl border border-[#dce7d8] bg-white px-3 py-2 text-xs font-semibold text-[#0b1f10] shadow-lg md:block">
-            Oi, 👋 Conheça a Waje!
-          </span>
-        ) : null}
-        <Bot className="h-7 w-7 text-[#92ff00] transition group-hover:scale-110" />
-      </button>
+      {!open && showTeaser ? (
+        <div className="waje-float-teaser relative mb-1 w-[min(260px,calc(100vw-5rem))] rounded-2xl p-3.5 pr-9">
+          <button
+            type="button"
+            onClick={() => dismissTeaser()}
+            className="waje-float-teaser-dismiss absolute right-2 top-2 rounded-md p-1 text-[#6b8570] hover:bg-[#eef7eb] hover:text-[#0b1f10]"
+            aria-label="Fechar convite"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+          <div className="mb-2 flex items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#92ff00]/35 bg-[#0b1f10]">
+              <WajeLogoMark size={18} />
+            </div>
+            <p className="text-sm font-bold leading-tight text-[#0b1f10]">Olá! 👋 Precisa de ajuda?</p>
+          </div>
+          <p className="mb-3 text-xs leading-relaxed text-[#506a54]">
+            Responda 3 perguntas rápidas e deixe seu contato — a equipe Waje retorna em breve.
+          </p>
+          <button
+            type="button"
+            onClick={abrir}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-[#92ff00] py-2 text-xs font-bold text-[#061008] transition hover:brightness-110"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Iniciar conversa
+          </button>
+        </div>
+      ) : null}
+
+      <div className="relative">
+        <span className="waje-float-btn-ring" aria-hidden />
+        <button
+          type="button"
+          onClick={() => (open ? fechar() : abrir())}
+          className="waje-float-btn relative flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full"
+          aria-label={open ? "Fechar assistente" : "Abrir assistente Waje"}
+          aria-expanded={open}
+        >
+          <WajeLogoMark size={30} />
+        </button>
+      </div>
     </div>
   );
+
+  return createPortal(ui, document.body);
 }

@@ -5,17 +5,6 @@ html, body {
   max-width: 100vw;
 }
 
-/* Mobile: evita “faixa” extra abaixo da nav (100vh + scroll fantasma) */
-@media (max-width: 767px) {
-  html,
-  body {
-    height: 100dvh;
-    max-height: 100dvh;
-    overflow: hidden;
-    background-color: #f8fcf6;
-  }
-}
-
 .scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -90,8 +79,9 @@ body {
 .rounded-xl { border-radius: var(--tivia-radius-xl) !important; }
 .rounded-2xl { border-radius: var(--tivia-radius-2xl) !important; }
 
-/* Landing TIVIA */
-.tivia-landing-bg {
+/* Landing Waje (alias legado: .tivia-landing-bg) */
+.tivia-landing-bg,
+.waje-auth-bg {
   background:
     radial-gradient(circle at 10% 0%, rgba(146, 255, 0, 0.18), transparent 26%),
     radial-gradient(circle at 100% 100%, rgba(0, 128, 90, 0.10), transparent 24%),
@@ -155,7 +145,8 @@ body {
   100% { transform: translateX(160%); }
 }
 
-.tivia-float {
+.tivia-float,
+.waje-deco-float {
   animation: tivia-float-kf 4.6s ease-in-out infinite;
 }
 
@@ -447,8 +438,83 @@ body {
 .waje-float-btn {
   animation: waje-float-bounce 3s ease-in-out infinite;
   border: 2px solid rgba(146, 255, 0, 0.55);
-  background: #0b1f10;
-  box-shadow: 0 0 32px rgba(146, 255, 0, 0.3);
+  background: linear-gradient(145deg, #0b1f10 0%, #162c1c 100%);
+  box-shadow:
+    0 0 0 0 rgba(146, 255, 0, 0.35),
+    0 8px 28px rgba(11, 31, 16, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.waje-float-btn:hover {
+  transform: scale(1.05);
+  box-shadow:
+    0 0 0 6px rgba(146, 255, 0, 0.12),
+    0 12px 32px rgba(11, 31, 16, 0.4);
+}
+
+.waje-float-btn-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 2px solid rgba(146, 255, 0, 0.35);
+  animation: waje-float-ring-pulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes waje-float-ring-pulse {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.85;
+  }
+  70% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+
+.waje-float-teaser {
+  animation: waje-teaser-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  border: 1px solid rgba(63, 152, 72, 0.22);
+  background: linear-gradient(135deg, #ffffff 0%, #f4faf1 100%);
+  box-shadow:
+    0 12px 40px rgba(20, 48, 28, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+
+.waje-float-teaser::after {
+  content: "";
+  position: absolute;
+  right: 1.35rem;
+  bottom: -8px;
+  width: 14px;
+  height: 14px;
+  background: #f4faf1;
+  border-right: 1px solid rgba(63, 152, 72, 0.22);
+  border-bottom: 1px solid rgba(63, 152, 72, 0.22);
+  transform: rotate(45deg);
+  box-shadow: 4px 4px 8px rgba(20, 48, 28, 0.06);
+}
+
+@keyframes waje-teaser-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.waje-float-teaser-dismiss {
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+.waje-float-teaser:hover .waje-float-teaser-dismiss {
+  opacity: 0.85;
 }
 
 .waje-mini-bot-panel {
@@ -495,15 +561,12 @@ body {
   .waje-chat-window,
   .waje-orbit-avatar,
   .waje-float-btn,
+  .waje-float-btn-ring,
+  .waje-float-teaser,
   .waje-btn-glow,
   .waje-stat-pulse {
     animation: none !important;
   }
-}
-
-.office-desktop-bg {
-  /* Substituído por <img> com aspectRatio 1672/941 em app/office/page.tsx */
-  background-color: #0a0a0a;
 }
 
 :focus-visible {
@@ -867,4 +930,17 @@ body {
 .canvas-vignette {
   background: radial-gradient(ellipse at center, transparent 50%, rgba(248,252,246,0.85) 100%);
   pointer-events: none;
+}
+
+/* Mini-bot Waje — sempre acima da nav/scroll containers */
+.waje-float-root {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.waje-float-root > * {
+  pointer-events: auto;
 }

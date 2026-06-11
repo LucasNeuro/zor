@@ -40,7 +40,7 @@ export const RAG_ACCEPT_INPUT_ATTR = [
 ].join(",");
 
 /** Exemplo público para download quando PDF/imagem falha. */
-export const RAG_EXEMPLO_MD_URL = "/rag-exemplos/exemplo-rag-sdr-obra10-plus.md";
+export const RAG_EXEMPLO_MD_URL = "/rag-exemplos/exemplo-rag-sdr-waje.md";
 
 export const RAG_FORMATOS_RESUMO =
   ".txt, .md, .csv, .json, .xml, .pdf, .docx, .odt, .rtf, .html, .xlsx, .pptx";

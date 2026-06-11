@@ -1,4 +1,4 @@
-# Escritório Virtual — Obra10+
+# Waje — Escritório Virtual
 
 Plataforma Next.js (App Router) + Supabase para CRM, agentes IA, parceiros e automações WhatsApp.
 
@@ -41,18 +41,18 @@ Abra [http://localhost:3001](http://localhost:3001).
 | `LOGIN_REQUIRE_PUBLIC_USERS_ROW` | `true` — exige `public.users` com `auth_id`, `status = Ativo` (`record_status`) e e-mail igual ao Auth |
 | `LOGIN_ENFORCE_APP_USERS` | Alias do anterior (mesmo efeito); use o nome que preferir na equipe |
 | `LOGIN_ALLOWED_APP_ROLES` | (Opcional) Papéis permitidos no login (vírgula), p.ex. `owner,admin`; compara com `public.users.role` (valores do enum `app_role` no Postgres, case-insensitive) |
-| `DEFAULT_TENANT_ID` | UUID do tenant padrão nas escritas server-side (padrão: Obra10 fixo da migração) |
+| `DEFAULT_TENANT_ID` | UUID do tenant padrão nas escritas server-side |
 | `PORTAL_VERIFY_RATE_MAX` / `PORTAL_VERIFY_RATE_WINDOW_MS` | Rate limit do POST `/api/parceiros/portal/verify` |
 
 Modelo de variáveis (sem segredos): copie [`.env.example`](.env.example) para `.env.local`.
 
 ## Login e logout (plataforma)
 
-Fluxo em produção e em local (`/office`, `/crm`, `/login`):
+Fluxo em produção e em local (`/crm`, `/login`):
 
 1. **Utilizador** acede a `/login`, faz login com **email + senha** (Supabase Auth — provider Email).
 2. O browser chama `POST /api/auth/crm-session` com o `access_token` da sessão Supabase. A rota valida o token em `/auth/v1/user` (mesma identidade que o Supabase Auth) e grava o cookie **httpOnly** `obra10_crm_access`. Controlo adicional de acesso é opcional via `public.users` (variáveis `LOGIN_*` abaixo), não via lista de e-mails em ambiente.
-3. O **`proxy.ts`** (Next.js 16) corre antes das rotas: para **`/office/*`** e **`/crm/*`** exige esse cookie válido; caso contrário redireciona para `/login?next=…`. Para rotas `/api/*` protegidas, aceita **ou** o cookie de sessão **ou** o header `x-api-key` (= `INTERNAL_API_KEY`) — útil para crons e integrações sem “login humano”.
+3. O **`proxy.ts`** (Next.js 16) corre antes das rotas: para **`/crm/*`** exige esse cookie válido; caso contrário redireciona para `/login?next=…`. Rotas legadas **`/office/*`** redirecionam para `/crm`. Para rotas `/api/*` protegidas, aceita **ou** o cookie de sessão **ou** o header `x-api-key` (= `INTERNAL_API_KEY`) — útil para crons e integrações sem “login humano”.
 4. **Logout:** o botão “Sair” no layout do CRM chama `DELETE /api/auth/crm-session` (limpa o cookie) e `supabase.auth.signOut()` (limpa a sessão no cliente).
 
 **Tabela `public.users` (app):** o `POST /api/auth/crm-session` valida alinhamento com o schema (`auth_id` → `auth.users`, `email`, `role` → `app_role`, `status` → `record_status`):
@@ -61,11 +61,11 @@ Fluxo em produção e em local (`/office`, `/crm`, `/login`):
 - Com **`LOGIN_ALLOWED_APP_ROLES=owner,admin`** (exemplo): além disso, `role` tem de estar na lista (valores do enum `app_role` no Postgres).
 
 **Recomendação:** defina **owner/admin** (e outros papéis) na coluna **`role`** quando usar `LOGIN_ENFORCE_APP_USERS` / `LOGIN_ALLOWED_APP_ROLES`; acrescente novos valores ao enum com `ALTER TYPE public.app_role ADD VALUE ...` quando necessário. Cada utilizador: **Auth** (e-mail/senha) e, se a verificação estiver ligada, linha em **`public.users`** com o mesmo **e-mail** e **`auth_id`** coerente.
- [http://localhost:3001/login](http://localhost:3001/login) → após sucesso, [http://localhost:3001/office](http://localhost:3001/office) (ou `?next=` para outra rota interna).
+ [http://localhost:3001/login](http://localhost:3001/login) → após sucesso, [http://localhost:3001/crm](http://localhost:3001/crm) (ou `?next=` para outra rota interna).
 
 ## Proxy (`proxy.ts`)
 
-Rotas **`/office/*`** e **`/crm/*`** exigem cookie de sessão válido (mesma regra que acima). Rotas `/api/*` exigem header `x-api-key` igual a `INTERNAL_API_KEY` **ou** esse cookie. Sem sessão e sem `INTERNAL_API_KEY` no servidor, o proxy responde **401** JSON com `error` / `detail` (em vez de erro genérico de servidor). Rotas públicas listadas em [`proxy.ts`](proxy.ts): WhatsApp webhook, health, verificação do portal parceiro, validação CPF/CNPJ, ciclos agendados, `GET /api/ml/ciclo`, `POST`/`DELETE /api/auth/crm-session` (auth própria nas handlers ou rota pública controlada).
+Rotas **`/crm/*`** exigem cookie de sessão válido (mesma regra que acima). **`/office/*`** redireciona para `/crm` via `next.config.ts`. Rotas `/api/*` exigem header `x-api-key` igual a `INTERNAL_API_KEY` **ou** esse cookie. Sem sessão e sem `INTERNAL_API_KEY` no servidor, o proxy responde **401** JSON com `error` / `detail` (em vez de erro genérico de servidor). Rotas públicas listadas em [`proxy.ts`](proxy.ts): WhatsApp webhook, health, verificação do portal parceiro, validação CPF/CNPJ, ciclos agendados, `GET /api/ml/ciclo`, `POST`/`DELETE /api/auth/crm-session` (auth própria nas handlers ou rota pública controlada).
 
 ## RLS multi-tenant (Supabase)
 
@@ -74,7 +74,7 @@ Após aplicar `20260509120000_*.sql`, rode em ordem:
 - `20260510130000_rls_tenant_pilot.sql` — funções `app_tenant_id()` (claim JWT `tenant_id`) e políticas em `hub_leads_crm`, `hub_parceiros`, `hub_agente_identidade`, `hub_fila_mensagens`, `hub_tenants`.
 - `20260510140000_hub_cotacoes.sql` — tabelas `hub_cotacoes_*` + RLS.
 
-**Claim JWT:** no Supabase Auth, inclua `tenant_id` no JWT (template de claims) para utilizadores `authenticated` de tenants não padrão. O papel `anon` continua restrito ao tenant Obra10 legado nas políticas piloto.
+**Claim JWT:** no Supabase Auth, inclua `tenant_id` no JWT (template de claims) para utilizadores `authenticated` de tenants não padrão. O papel `anon` continua restrito ao tenant legado nas políticas piloto.
 
 ## Agendamento dos ciclos IA (qualquer hospedeiro)
 

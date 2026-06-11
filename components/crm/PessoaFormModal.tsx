@@ -606,7 +606,7 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
               onChange={(e) => campo("nome", e.target.value)}
 
-              placeholder={tipo === "PJ" ? "Obra10 Materiais Ltda" : "Maria da Silva"}
+              placeholder={tipo === "PJ" ? "Empresa Exemplo Ltda" : "Maria da Silva"}
 
               style={INPUT}
 
@@ -630,7 +630,7 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
                 onChange={(e) => campo("empresa", e.target.value)}
 
-                placeholder="Obra10+"
+                placeholder="Waje"
 
                 style={INPUT}
 

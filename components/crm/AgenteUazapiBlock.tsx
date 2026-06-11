@@ -28,6 +28,15 @@ import {
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { normalizarSrcImagemQrUazapi } from "@/lib/whatsapp/qr-uazapi";
+import {
+  formatUazapiDisconnectReasonForUi,
+  isBenignUazapiDisconnectReason,
+} from "@/lib/whatsapp/uazapi-connect-hints";
+import {
+  formatProxyCityDisplay,
+  formatProxyCityLabel,
+} from "@/lib/whatsapp/uazapi-proxy-city-label";
+import { UazapiProxyCityPicker } from "@/components/crm/UazapiProxyCityPicker";
 
 /** UAZAPI: QR expira em ~2 min (doc OpenAPI). */
 const UAZAPI_QR_VALID_MS = 120_000;
@@ -46,12 +55,6 @@ export type AgenteUazapiSnapshot = {
   uazapi_proxy_country?: string | null;
   uazapi_proxy_state?: string | null;
   uazapi_proxy_city?: string | null;
-};
-
-type CidadeProxyUazapi = {
-  value: string;
-  label: string;
-  state?: string;
 };
 
 export type AgenteUazapiBlockProps = {
@@ -346,7 +349,6 @@ export function AgenteUazapiBlock({
   const [sideoverOpen, setSideoverOpen] = useState(false);
   const [proxyCity, setProxyCity] = useState("");
   const [proxyState, setProxyState] = useState("");
-  const [cidadesProxy, setCidadesProxy] = useState<CidadeProxyUazapi[]>([]);
   const [cidadesProxyErro, setCidadesProxyErro] = useState<string | null>(null);
   const [proxyAviso, setProxyAviso] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
@@ -382,9 +384,9 @@ export function AgenteUazapiBlock({
   const regiaoGuardada = (snapshot.uazapi_proxy_city?.trim() || proxyCity.trim()).toLowerCase();
   const regiaoLabel = useMemo(() => {
     if (!regiaoGuardada) return null;
-    const found = cidadesProxy.find((c) => c.value.toLowerCase() === regiaoGuardada);
-    return found?.label || regiaoGuardada;
-  }, [regiaoGuardada, cidadesProxy]);
+    const st = (snapshot.uazapi_proxy_state?.trim() || proxyState.trim()).toUpperCase();
+    return formatProxyCityDisplay(formatProxyCityLabel(regiaoGuardada), st);
+  }, [regiaoGuardada, snapshot.uazapi_proxy_state, proxyState]);
 
   useEffect(() => {
     setStatusTempoReal(null);
@@ -396,63 +398,6 @@ export function AgenteUazapiBlock({
     setProxyCity(snapshot.uazapi_proxy_city?.trim() || "");
     setProxyState(snapshot.uazapi_proxy_state?.trim() || "");
   }, [snapshot.uazapi_proxy_city, snapshot.uazapi_proxy_state]);
-
-  const carregarCidadesProxy = useCallback(async () => {
-    setCidadesProxyErro(null);
-    try {
-      const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
-        body: JSON.stringify({ action: "list_proxy_cities", proxy_managed_country: "br" }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          typeof data.error === "string"
-            ? data.error
-            : typeof data.detail === "string"
-              ? data.detail
-              : "Não foi possível carregar cidades.";
-        setCidadesProxyErro(msg);
-        setCidadesProxy([]);
-        return;
-      }
-      const raw = Array.isArray(data.cities) ? data.cities : [];
-      const parsed: CidadeProxyUazapi[] = [];
-      for (const c of raw) {
-        if (!c || typeof c !== "object") continue;
-        const o = c as Record<string, unknown>;
-        const value = typeof o.value === "string" ? o.value.trim() : "";
-        const label = typeof o.label === "string" ? o.label.trim() : value;
-        if (!value) continue;
-        parsed.push({
-          value,
-          label: label || value,
-          state: typeof o.state === "string" ? o.state.trim() : undefined,
-        });
-      }
-      parsed.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
-      setCidadesProxy(parsed);
-      if (parsed.length === 0) {
-        setCidadesProxyErro("Não foi possível carregar as cidades. Tente de novo.");
-      } else {
-        setCidadesProxyErro(null);
-      }
-    } catch {
-      setCidadesProxyErro("Falha de rede ao carregar cidades.");
-      setCidadesProxy([]);
-    }
-  }, [agenteSlug]);
-
-  useEffect(() => {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
-    void carregarCidadesProxy();
-  }, [carregarCidadesProxy, snapshot.uazapi_instance_id, snapshot.uazapi_has_instance_token]);
-
-  useEffect(() => {
-    if (!sideoverOpen) return;
-    void carregarCidadesProxy();
-  }, [sideoverOpen, carregarCidadesProxy]);
 
   const proxyConnectExtra = useCallback((): Record<string, unknown> => {
     const extra: Record<string, unknown> = { proxy_managed_country: "br" };
@@ -470,9 +415,6 @@ export function AgenteUazapiBlock({
 
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
-
-  const carregarCidadesProxyRef = useRef(carregarCidadesProxy);
-  carregarCidadesProxyRef.current = carregarCidadesProxy;
 
   const postAction = useCallback(
     async (
@@ -570,11 +512,31 @@ export function AgenteUazapiBlock({
           typeof data.lastDisconnectReason === "string" ? data.lastDisconnectReason.trim() : "";
         const connectHint =
           typeof data.connect_hint === "string" ? data.connect_hint.trim() : "";
+
+        const qrAcabouDeSerGerado =
+          action === "connect" && typeof data.qrcode === "string" && data.qrcode.trim();
+
         if (lastReason || connectHint) {
-          setUazapiDiag({
-            ...(lastReason ? { lastDisconnectReason: lastReason } : {}),
-            ...(connectHint ? { connectHint } : {}),
-          });
+          const benign = isBenignUazapiDisconnectReason(lastReason);
+          if (opts?.silent && benign) {
+            /* não sobrescrever diag durante poll com motivo stale */
+          } else if (qrAcabouDeSerGerado && benign) {
+            setUazapiDiag(
+              connectHint
+                ? { connectHint }
+                : {
+                    connectHint:
+                      "QR gerado. Abra WhatsApp → Aparelhos ligados → Ligar com QR e escaneie antes do tempo expirar.",
+                  }
+            );
+          } else {
+            setUazapiDiag({
+              ...(lastReason && !(qrAcabouDeSerGerado && benign)
+                ? { lastDisconnectReason: lastReason }
+                : {}),
+              ...(connectHint ? { connectHint } : {}),
+            });
+          }
         } else if (action === "connect" && !opts?.silent) {
           setUazapiDiag(null);
         }
@@ -634,7 +596,7 @@ export function AgenteUazapiBlock({
           }
         }
         if (action === "create") {
-          void carregarCidadesProxyRef.current();
+          setCidadesProxyErro(null);
         }
         return data;
       } catch {
@@ -822,19 +784,21 @@ export function AgenteUazapiBlock({
     String(statusExibido).toLowerCase() !== "connected" &&
     (qrExpirado || (String(statusExibido).toLowerCase() === "connecting" && !mostrarQrAtivo && !paircodeAtivo));
   const conectarBloqueado =
-    acoesOff || !temInstancia || !regiaoGuardada || (pairingMode === "code" && !podeConectarPorCodigo);
+    acoesOff ||
+    loading === "connect" ||
+    !temInstancia ||
+    !regiaoGuardada ||
+    (pairingMode === "code" && !podeConectarPorCodigo);
 
   const conectado = String(statusExibido).toLowerCase() === "connected";
 
   const reconectarWhatsApp = useCallback(() => {
-    const statusLower = String(statusExibido).toLowerCase();
-    const resetSession = statusLower === "connecting" || qrExpirado;
     void postAction("connect", {
       ...proxyConnectExtra(),
-      ...(resetSession ? { reset_session: true } : {}),
+      reset_session: true,
       ...(pairingMode === "code" && podeConectarPorCodigo ? { phone: pairingPhoneDigits } : {}),
     });
-  }, [postAction, proxyConnectExtra, statusExibido, qrExpirado, pairingMode, pairingPhoneDigits, podeConectarPorCodigo]);
+  }, [postAction, proxyConnectExtra, pairingMode, pairingPhoneDigits, podeConectarPorCodigo]);
 
   const botoesFooter = (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1145,99 +1109,29 @@ export function AgenteUazapiBlock({
             <p style={{ margin: "0 0 12px", color: CRM_ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
               PASSO 1 — REGIÃO E INSTÂNCIA
             </p>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
-                marginBottom: 12,
+            <p style={{ margin: "0 0 12px", color: "#5d7a67", fontSize: 11, fontWeight: 700, letterSpacing: 0.06 }}>
+              REGIÃO DO NÚMERO
+            </p>
+            <UazapiProxyCityPicker
+              agenteSlug={agenteSlug}
+              cityValue={proxyCity}
+              stateValue={proxyState}
+              disabled={acoesOff}
+              saving={loading === "save_proxy"}
+              dark={darkSideover}
+              temInstancia={temInstancia}
+              externalError={cidadesProxyErro}
+              onSelect={(c) => {
+                setProxyCity(c.value);
+                if (c.state) setProxyState(c.state.toUpperCase());
+                setCidadesProxyErro(null);
               }}
-            >
-              <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, fontWeight: 700, letterSpacing: 0.06 }}>
-                REGIÃO DO NÚMERO
-              </p>
-              <button
-                type="button"
-                onClick={() => void carregarCidadesProxy()}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: CRM_ACCENT,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <RefreshCw size={12} aria-hidden />
-                Actualizar lista
-              </button>
-            </div>
-            <label style={{ display: "block", color: "#5d7a67", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
-              Cidade
-            </label>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) auto",
-                gap: 10,
-                alignItems: "start",
-              }}
-            >
-              <select
-                  value={proxyCity}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setProxyCity(v);
-                    const found = cidadesProxy.find((c) => c.value === v);
-                    if (found?.state) setProxyState(found.state);
-                  }}
-                  style={fieldStyle}
-                >
-                  <option value="">— Selecione a cidade —</option>
-                  {cidadesProxy.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                      {c.state ? ` (${c.state.toUpperCase()})` : ""}
-                    </option>
-                  ))}
-                </select>
-              <button
-                type="button"
-                disabled={acoesOff || !proxyCity.trim()}
-                style={{
-                  ...btnBase(acoesOff || !proxyCity.trim(), "primary"),
-                  whiteSpace: "nowrap",
-                  minHeight: 42,
-                  alignSelf: "start",
-                }}
-                onClick={() => postAction("save_proxy", proxyConnectExtra())}
-              >
-                {loading === "save_proxy" ? (
-                  <Loader2 size={15} className="animate-spin" />
-                ) : (
-                  <RefreshCw size={15} />
-                )}
-                Guardar região
-              </button>
-            </div>
-            {cidadesProxyErro ? (
-              <p style={{ margin: "8px 0 0", color: "#f85149", fontSize: 11 }}>
-                {!temInstancia && /invalid token/i.test(cidadesProxyErro)
-                  ? "A lista de cidades fica disponível depois de criar a ligação WhatsApp."
-                  : cidadesProxyErro.replace(/UAZAPI/gi, "WhatsApp")}
-              </p>
-            ) : !temInstancia && cidadesProxy.length === 0 && !cidadesProxyErro ? (
-              <p style={{ margin: "8px 0 0", color: "#5d7a67", fontSize: 11 }}>
-                Cidades aparecem após criar a ligação WhatsApp.
-              </p>
-            ) : null}
-            {proxyState ? (
-              <p style={{ margin: "6px 0 0", color: "#6e7781", fontSize: 11 }}>
-                Estado: <strong style={{ color: "#5d7a67" }}>{proxyState.toUpperCase()}</strong>
+              onSave={() => void postAction("save_proxy", proxyConnectExtra())}
+            />
+            {snapshot.uazapi_proxy_city?.trim() &&
+            proxyCity.trim().toLowerCase() === snapshot.uazapi_proxy_city.trim().toLowerCase() ? (
+              <p style={{ margin: "8px 0 0", color: "#3fb950", fontSize: 11, fontWeight: 600 }}>
+                Região guardada no agente.
               </p>
             ) : null}
           </div>
@@ -1451,8 +1345,23 @@ export function AgenteUazapiBlock({
           ) : null}
 
           {uazapiDiag?.lastDisconnectReason ? (
-            <p style={{ margin: 0, color: "#f85149", fontSize: 11, lineHeight: 1.5 }}>
-              Última desconexão WhatsApp: <strong>{uazapiDiag.lastDisconnectReason}</strong>
+            <p
+              style={{
+                margin: 0,
+                color: isBenignUazapiDisconnectReason(uazapiDiag.lastDisconnectReason)
+                  ? "#e6c06a"
+                  : "#f85149",
+                fontSize: 11,
+                lineHeight: 1.5,
+              }}
+            >
+              {isBenignUazapiDisconnectReason(uazapiDiag.lastDisconnectReason) ? (
+                formatUazapiDisconnectReasonForUi(uazapiDiag.lastDisconnectReason)
+              ) : (
+                <>
+                  Última desconexão WhatsApp: <strong>{uazapiDiag.lastDisconnectReason}</strong>
+                </>
+              )}
             </p>
           ) : null}
           {uazapiDiag?.connectHint ? (

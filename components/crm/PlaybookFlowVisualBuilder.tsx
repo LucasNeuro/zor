@@ -18,6 +18,7 @@ import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
 import { upsertPlaybookFlowBlockInMarkdown } from "@/lib/playbook/playbook-flow-markdown";
 import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
+import { PLAYBOOK_FLOW_FENCE_TAG } from "@/lib/playbook/flow-schema";
 
 type Props = {
   markdown: string;
@@ -208,7 +209,7 @@ export function PlaybookFlowVisualBuilder({
           Fluxo visual indisponível para este markdown
         </p>
         <p style={hintStyle}>
-          O bloco `obra10_playbook_flow` não foi carregado com JSON válido. Use “Adaptar motor WA” ou ajuste o bloco no
+          O bloco `{PLAYBOOK_FLOW_FENCE_TAG}` não foi carregado com JSON válido. Use “Adaptar motor WA” ou ajuste o bloco no
           modo textual.
         </p>
         <button

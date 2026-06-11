@@ -1215,6 +1215,9 @@ export default function AgentePage() {
           onClose={() => setCalibracaoOpen(false)}
           agenteSlug={slug}
           agenteNome={agente.nome}
+          modoOperacao={
+            typeof agente.modo_operacao === "string" ? agente.modo_operacao : null
+          }
         />
       ) : null}
 

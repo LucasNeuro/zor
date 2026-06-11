@@ -25,7 +25,11 @@ import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import { CRM_ACCENT, crmBtnPrimary } from "@/lib/crm/crm-button-styles";
 import { normalizarAnalisePlaybook } from "@/lib/playbook/playbook-analise-ui";
 import { MAX_PLAYBOOK_UPLOAD_BYTES } from "@/lib/playbook/custom-playbook";
-import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
+import {
+  agenteUsaFluxoWhatsappPlaybook,
+  assessPlaybookFlowInMarkdown,
+} from "@/lib/playbook/playbook-flow-ui";
+import { PLAYBOOK_FLOW_FENCE_TAG } from "@/lib/playbook/flow-schema";
 import { adaptarMarkdownParaMotorWhatsapp } from "@/lib/playbook/playbook-flow-markdown";
 import { PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
 import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
@@ -59,6 +63,8 @@ export type AgentePlaybookCalibracaoDrawerProps = {
   onClose: () => void;
   agenteSlug: string;
   agenteNome: string;
+  /** Só `canal_whatsapp` usa editor visual e bloco JSON de fluxo dinâmico. */
+  modoOperacao?: string | null;
 };
 
 function formatBytes(n: number): string {
@@ -72,6 +78,7 @@ export function AgentePlaybookCalibracaoDrawer({
   onClose,
   agenteSlug,
   agenteNome,
+  modoOperacao = null,
 }: AgentePlaybookCalibracaoDrawerProps) {
   const { confirmDialog, closeConfirmDialog, setConfirmLoading } = useCrmConfirm();
   const { success: toastSuccess, info: toastInfo } = useCrmToast();
@@ -118,7 +125,15 @@ export function AgentePlaybookCalibracaoDrawer({
     () => assessPlaybookFlowInMarkdown(markdownPublicado),
     [markdownPublicado]
   );
-  const visualBuilderEnabled = crmFeatureFlags.playbookFlowVisualSideover();
+  const whatsappFlowAgent = agenteUsaFluxoWhatsappPlaybook(modoOperacao);
+  const visualBuilderEnabled =
+    whatsappFlowAgent && crmFeatureFlags.playbookFlowVisualSideover();
+  const publishRequiresWhatsappFlow = whatsappFlowAgent;
+  const canPublishPlaybook =
+    dirty &&
+    temConteudo &&
+    !publicando &&
+    (!publishRequiresWhatsappFlow || flowStatus.kind === "ready");
 
   const dropzoneBorder =
     uploadHover || uploadStatus === "hover"
@@ -223,7 +238,7 @@ export function AgentePlaybookCalibracaoDrawer({
       typeof markdownOverride === "string" ? markdownOverride : markdown;
     if (!markdownToPublish.trim() || publicando) return;
     const statusToPublish = assessPlaybookFlowInMarkdown(markdownToPublish);
-    if (statusToPublish.kind !== "ready") {
+    if (publishRequiresWhatsappFlow && statusToPublish.kind !== "ready") {
       if (statusToPublish.kind === "invalid") {
         if (markdownOrigem === "visual") {
           void emitFlowVisualTelemetry({
@@ -242,10 +257,12 @@ export function AgentePlaybookCalibracaoDrawer({
           }`
         );
       } else if (statusToPublish.kind === "no_flow_block") {
-        setErro("Antes de publicar, gere/edite o bloco `obra10_playbook_flow` no modo visual ou textual.");
+        setErro(
+          `Antes de publicar, gere/edite o bloco \`json ${PLAYBOOK_FLOW_FENCE_TAG}\` no modo visual ou use «Adaptar motor WA».`
+        );
       } else {
         setErro(
-          "Antes de publicar, use «Adaptar motor WA» até o banner verde confirmar o fluxo WhatsApp (obra10_playbook_flow)."
+          `Antes de publicar, use «Adaptar motor WA» até o banner verde confirmar o fluxo WhatsApp (\`${PLAYBOOK_FLOW_FENCE_TAG}\`).`
         );
       }
       return;
@@ -648,26 +665,28 @@ export function AgentePlaybookCalibracaoDrawer({
               >
                 <RefreshCw size={14} /> Recarregar
               </button>
-              <button
-                type="button"
-                onClick={() => void adaptarTextoAoMotorWhatsapp()}
-                disabled={
-                  carregando ||
-                  publicando ||
-                  uploadStatus === "enviando" ||
-                  adaptandoMotor ||
-                  !temConteudo
-                }
-                style={{
-                  ...btnToolbar,
-                  background: flowStatus.kind === "ready" ? "rgba(6, 13, 8, 0.72)" : "rgba(146, 255, 0, 0.12)",
-                  color: flowStatus.kind === "ready" ? "#7a9a7e" : CRM_ACCENT,
-                }}
-                title="Mantém o texto actual e acrescenta o bloco json obra10_playbook_flow (template v1) para o WhatsApp"
-              >
-                <GitBranch size={14} />{" "}
-                {adaptandoMotor ? "A adaptar…" : "Adaptar motor WA"}
-              </button>
+              {whatsappFlowAgent ? (
+                <button
+                  type="button"
+                  onClick={() => void adaptarTextoAoMotorWhatsapp()}
+                  disabled={
+                    carregando ||
+                    publicando ||
+                    uploadStatus === "enviando" ||
+                    adaptandoMotor ||
+                    !temConteudo
+                  }
+                  style={{
+                    ...btnToolbar,
+                    background: flowStatus.kind === "ready" ? "rgba(6, 13, 8, 0.72)" : "rgba(146, 255, 0, 0.12)",
+                    color: flowStatus.kind === "ready" ? "#7a9a7e" : CRM_ACCENT,
+                  }}
+                  title={`Mantém o texto actual e acrescenta o bloco json ${PLAYBOOK_FLOW_FENCE_TAG} (template v1) para o WhatsApp`}
+                >
+                  <GitBranch size={14} />{" "}
+                  {adaptandoMotor ? "A adaptar…" : "Adaptar motor WA"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void regenerarDoAgente()}
@@ -681,15 +700,15 @@ export function AgentePlaybookCalibracaoDrawer({
               <button
                 type="button"
                 onClick={() => void publicarMarkdown()}
-                disabled={!dirty || !temConteudo || publicando || flowStatus.kind !== "ready"}
+                disabled={!canPublishPlaybook}
                 style={{
                   ...btnToolbarPublish,
-                  ...(!dirty || !temConteudo || publicando || flowStatus.kind !== "ready"
+                  ...(!canPublishPlaybook
                     ? { background: "#4a6356", color: "#c8dcc8", cursor: "not-allowed" }
                     : {}),
                 }}
                 title={
-                  flowStatus.kind !== "ready"
+                  publishRequiresWhatsappFlow && flowStatus.kind !== "ready"
                     ? "Use «Adaptar motor WA» até o banner verde antes de publicar"
                     : "Grava o rascunho no bucket e substitui playbook.md"
                 }
@@ -719,12 +738,30 @@ export function AgentePlaybookCalibracaoDrawer({
         </div>
 
         <div style={{ flexShrink: 0, margin: "10px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-          <PlaybookFlowStatusBanner
-            status={flowStatus}
-            published={!dirty && flowStatusPublicado.kind === "ready"}
-            theme="dark"
-          />
-          {dirty && flowStatusPublicado.kind === "ready" ? (
+          {whatsappFlowAgent ? (
+            <PlaybookFlowStatusBanner
+              status={flowStatus}
+              published={!dirty && flowStatusPublicado.kind === "ready"}
+              theme="dark"
+            />
+          ) : (
+            <p
+              style={{
+                margin: 0,
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid rgba(63, 152, 72, 0.35)",
+                background: "rgba(6, 13, 8, 0.72)",
+                color: "#7a9a7e",
+                fontSize: 11,
+                lineHeight: 1.45,
+              }}
+            >
+              Este agente não usa fluxo dinâmico WhatsApp — edite o playbook como texto/instruções para a IA. O
+              editor visual de menus e perguntas pré-prontas fica disponível só em agentes «Atendimento (WhatsApp)».
+            </p>
+          )}
+          {whatsappFlowAgent && dirty && flowStatusPublicado.kind === "ready" ? (
             <p style={{ margin: 0, color: "#7a9a7e", fontSize: 10, lineHeight: 1.45 }}>
               Versão publicada ainda válida para motor dinâmico. Publique o rascunho para substituir no bucket (
               <code style={{ fontSize: 10 }}>tenant/slug/playbook.md</code>, arquivo único).

@@ -5,7 +5,13 @@ import {
   selectHubAgenteIdentidadeCompat,
   updateHubAgenteIdentidadeCompat,
 } from "@/lib/hub/hub-agente-schema-compat";
-import { resendConfigured } from "@/lib/email/resend-config";
+import {
+  emailFromPermitidoParaResend,
+  resendConfigured,
+  resendDefaultFromAddress,
+  resendDefaultFromEmail,
+  resendDomainHint,
+} from "@/lib/email/resend-config";
 import { buildPublicEmailInboundWebhookUrl } from "@/lib/email/webhook-auth";
 import { normalizarEnderecoEmail } from "@/lib/email/inbound-parser";
 
@@ -58,6 +64,12 @@ function serializarEmailConfig(row: Record<string, unknown>, request: NextReques
     email_ativo: row.email_ativo !== false,
     email_configured_at: row.email_configured_at ?? null,
     resend_configured: resendConfigured(),
+    default_from_email: resendDefaultFromAddress(),
+    default_from_label: resendDefaultFromEmail(),
+    domain_hint: resendDomainHint(),
+    resend_setup_hint: resendConfigured()
+      ? null
+      : "Defina RESEND_API_KEY no .env (local) ou no Render → Environment, guarde o ficheiro e reinicie o servidor (npm run dev).",
     inbound_webhook_url: buildPublicEmailInboundWebhookUrl(origin, webhookSecret || null),
   };
 }
@@ -165,6 +177,10 @@ export async function PATCH(
       const addr = normalizarEnderecoEmail(v);
       if (!addr) {
         return NextResponse.json({ error: "email_from inválido" }, { status: 400 });
+      }
+      const fromCheck = emailFromPermitidoParaResend(addr);
+      if (!fromCheck.ok) {
+        return NextResponse.json({ error: fromCheck.error }, { status: 400 });
       }
       patch.email_from = addr;
     } else {

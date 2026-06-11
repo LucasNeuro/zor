@@ -56,6 +56,16 @@ function loadDotEnvOnly() {
 loadDotEnvOnly();
 mergeDevAllowedOrigins();
 
+const resendKey = (process.env.RESEND_API_KEY || "").replace(/\r/g, "").trim();
+if (resendKey) {
+  const fp = `${resendKey.slice(0, 4)}…${resendKey.slice(-4)}`;
+  console.warn(`[dev] Resend OK — RESEND_API_KEY carregada (${fp}).\n`);
+} else {
+  console.warn(
+    "[dev] AVISO: RESEND_API_KEY ausente no .env — canal e-mail / «Enviar teste» falhará até definir e reiniciar.\n"
+  );
+}
+
 const port = process.env.PORT || "3001";
 const devHost = process.env.HOST || "0.0.0.0";
 const lanIps = listLanIpv4();

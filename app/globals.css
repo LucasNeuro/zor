@@ -176,6 +176,331 @@ body {
   animation: tivia-shimmer-kf 3.4s linear infinite;
 }
 
+/* ── Waje landing (tema claro, motion — insp. InBot, cores Waje) ── */
+.waje-landing-bg {
+  --waje-text: #0b1f10;
+  --waje-text-muted: #4f6853;
+  --waje-text-soft: #6b8570;
+  --waje-surface: #ffffff;
+  --waje-surface-soft: #f4faf1;
+  --waje-border: rgba(11, 31, 16, 0.1);
+  --waje-border-accent: rgba(146, 255, 0, 0.35);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(146, 255, 0, 0.14), transparent 28%),
+    radial-gradient(circle at 92% 20%, rgba(63, 152, 72, 0.1), transparent 26%),
+    radial-gradient(circle at 50% 100%, rgba(146, 255, 0, 0.06), transparent 40%),
+    linear-gradient(180deg, #f8fcf6 0%, #eef7eb 45%, #f4faf1 100%);
+  color: var(--waje-text);
+}
+
+.waje-glass-nav {
+  border: 1px solid var(--waje-border);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(20, 48, 28, 0.08);
+}
+
+.waje-nav-link {
+  color: var(--waje-text-muted);
+  transition: color 0.2s ease;
+}
+.waje-nav-link:hover {
+  color: #3f9848;
+}
+
+.waje-btn-glow {
+  background: linear-gradient(135deg, #92ff00 0%, #7ae600 50%, #92ff00 100%);
+  background-size: 200% 200%;
+  color: #061008;
+  animation: waje-btn-shimmer 4s ease infinite;
+  box-shadow: 0 4px 24px rgba(146, 255, 0, 0.35), 0 2px 12px rgba(11, 31, 16, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.waje-btn-glow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(146, 255, 0, 0.45), 0 4px 16px rgba(11, 31, 16, 0.1);
+}
+
+.waje-btn-ghost {
+  border: 1px solid var(--waje-border);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--waje-text);
+  backdrop-filter: blur(8px);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.waje-btn-ghost:hover {
+  background: #fff;
+  border-color: var(--waje-border-accent);
+}
+
+.waje-hero-badge {
+  border: 1px solid rgba(146, 255, 0, 0.45);
+  background: rgba(146, 255, 0, 0.14);
+  color: #2d5a32;
+}
+
+.waje-section-label {
+  color: #3f9848;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.waje-heading {
+  color: var(--waje-text);
+}
+
+.waje-subheading {
+  color: var(--waje-text-muted);
+}
+
+@keyframes waje-btn-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.waje-starfield-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+}
+.waje-starfield-glow-a {
+  width: 420px;
+  height: 420px;
+  left: -8%;
+  top: 10%;
+  background: radial-gradient(circle, rgba(146, 255, 0, 0.22), transparent 70%);
+  animation: waje-glow-drift 12s ease-in-out infinite;
+}
+.waje-starfield-glow-b {
+  width: 360px;
+  height: 360px;
+  right: -5%;
+  bottom: 15%;
+  background: radial-gradient(circle, rgba(63, 152, 72, 0.14), transparent 70%);
+  animation: waje-glow-drift 14s ease-in-out infinite reverse;
+}
+
+@keyframes waje-glow-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(20px, -15px) scale(1.08); }
+}
+
+.waje-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(63, 152, 72, 0.45);
+  animation: waje-star-twinkle 3s ease-in-out infinite;
+}
+
+@keyframes waje-star-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+
+.waje-orbit-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  border: 1px solid rgba(63, 152, 72, 0.12);
+  pointer-events: none;
+}
+.waje-orbit-ring-1 {
+  width: min(90vw, 680px);
+  height: min(90vw, 680px);
+  animation: waje-orbit-spin 40s linear infinite;
+}
+.waje-orbit-ring-2 {
+  width: min(70vw, 520px);
+  height: min(70vw, 520px);
+  border-color: rgba(146, 255, 0, 0.15);
+  animation: waje-orbit-spin 28s linear infinite reverse;
+}
+.waje-orbit-ring-3 {
+  width: min(50vw, 360px);
+  height: min(50vw, 360px);
+  animation: waje-orbit-spin 20s linear infinite;
+}
+
+@keyframes waje-orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.waje-marquee-band {
+  background: linear-gradient(90deg, #e8f5e4 0%, #d4ecd0 35%, #c8e6c0 65%, #e8f5e4 100%);
+  border-block: 1px solid rgba(63, 152, 72, 0.15);
+}
+
+.waje-marquee-text {
+  color: #1f3822;
+}
+
+.waje-marquee-track {
+  animation: waje-marquee 28s linear infinite;
+}
+
+@keyframes waje-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.waje-faq-item {
+  border: 1px solid var(--waje-border);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+}
+.waje-faq-item[open] {
+  border-color: var(--waje-border-accent);
+  background: rgba(146, 255, 0, 0.08);
+}
+
+.waje-stats-block {
+  border: 1px solid rgba(63, 152, 72, 0.2);
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ec 50%, #e8f5e4 100%);
+  box-shadow: 0 8px 40px rgba(20, 48, 28, 0.06);
+}
+
+.waje-cta-block {
+  border: 1px solid rgba(146, 255, 0, 0.35);
+  background: linear-gradient(135deg, #ffffff 0%, #f4faf1 55%, #eef7eb 100%);
+  box-shadow: 0 12px 48px rgba(20, 48, 28, 0.08);
+}
+
+.waje-chat-window {
+  animation: waje-chat-float 5s ease-in-out infinite;
+  border: 1px solid rgba(63, 152, 72, 0.2);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 24px 64px rgba(20, 48, 28, 0.12);
+  backdrop-filter: blur(12px);
+}
+
+@keyframes waje-chat-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.waje-orbit-avatar {
+  animation: waje-orbit-float 4.5s ease-in-out infinite;
+}
+.waje-orbit-avatar-delay {
+  animation-delay: 1.2s;
+}
+
+@keyframes waje-orbit-float {
+  0%, 100% { transform: translateY(-50%) translateX(0); }
+  50% { transform: translateY(calc(-50% - 10px)) translateX(4px); }
+}
+
+.waje-feature-card {
+  border: 1px solid var(--waje-border);
+  background: linear-gradient(145deg, #ffffff 0%, #f8fcf6 100%);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(20, 48, 28, 0.05);
+}
+.waje-feature-card:hover {
+  border-color: var(--waje-border-accent);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(20, 48, 28, 0.1);
+}
+
+.waje-agent-slide {
+  animation: waje-fade-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes waje-fade-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.waje-eco-pill {
+  animation: waje-pill-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes waje-pill-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.waje-stat-pulse {
+  animation: waje-stat-glow 3s ease-in-out infinite;
+}
+
+@keyframes waje-stat-glow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.waje-float-panel {
+  animation: waje-panel-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  border: 1px solid rgba(63, 152, 72, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 20px 60px rgba(20, 48, 28, 0.15);
+}
+
+.waje-float-btn {
+  animation: waje-float-bounce 3s ease-in-out infinite;
+  border: 2px solid rgba(146, 255, 0, 0.55);
+  background: #0b1f10;
+  box-shadow: 0 0 32px rgba(146, 255, 0, 0.3);
+}
+
+.waje-mini-bot-panel {
+  animation: waje-panel-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.waje-mini-bot-input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.55rem 0.75rem;
+  font-size: 13px;
+  color: #f8fcf6;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.waje-mini-bot-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+.waje-mini-bot-input:focus {
+  border-color: rgba(146, 255, 0, 0.45);
+}
+
+@keyframes waje-float-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes waje-panel-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.waje-landing-bg .reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waje-marquee-track,
+  .waje-orbit-ring,
+  .waje-star,
+  .waje-chat-window,
+  .waje-orbit-avatar,
+  .waje-float-btn,
+  .waje-btn-glow,
+  .waje-stat-pulse {
+    animation: none !important;
+  }
+}
+
 .office-desktop-bg {
   /* Substituído por <img> com aspectRatio 1672/941 em app/office/page.tsx */
   background-color: #0a0a0a;

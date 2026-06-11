@@ -40,6 +40,7 @@ import {
 import { PlaybookFlowStatusBanner } from "@/components/crm/PlaybookFlowStatusBanner";
 import {
   assessPlaybookFlowInMarkdown,
+  agenteUsaFluxoWhatsappPlaybook,
   playbookFlowReady,
 } from "@/lib/playbook/playbook-flow-ui";
 import { PLAYBOOK_EXEMPLO_ARQUIVO, PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
@@ -391,6 +392,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const playbookAnaliseAbortRef = useRef<AbortController | null>(null);
   const playbookAnaliseTickRef = useRef<number | null>(null);
   const playbookFlowStatus = assessPlaybookFlowInMarkdown(playbookConteudoAnalise);
+  const whatsappFlowAgent = agenteUsaFluxoWhatsappPlaybook(modoOperacao);
   const [conhecimentoSecoes, setConhecimentoSecoes] = useState<
     Record<WizardConhecimentoSecaoId, string>
   >({
@@ -1146,7 +1148,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const playbookPanelTheme = wizardDark ? ("dark" as const) : ("light" as const);
 
   const passo1AvancarBloqueado = somentePlaybook
-    ? !playbookConteudoAnalise.trim() || !playbookAnaliseResultado || !playbookFlowReady(playbookFlowStatus)
+    ? !playbookConteudoAnalise.trim() ||
+      !playbookAnaliseResultado ||
+      (whatsappFlowAgent && !playbookFlowReady(playbookFlowStatus))
     : !cargoSelecionado;
 
   useEffect(() => {
@@ -1651,7 +1655,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   />
                 </div>
               ) : null}
-              {somentePlaybook && playbookConteudoAnalise.trim() ? (
+              {somentePlaybook && playbookConteudoAnalise.trim() && whatsappFlowAgent ? (
                 <PlaybookFlowStatusBanner status={playbookFlowStatus} compact />
               ) : null}
 
@@ -1852,7 +1856,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         onCancelarAnalise={cancelarAnalisePlaybook}
                         onLimparArquivo={limparPlaybookCarregado}
                       />
-                      {playbookConteudoAnalise.trim() ? (
+                      {playbookConteudoAnalise.trim() && whatsappFlowAgent ? (
                         <PlaybookFlowStatusBanner status={playbookFlowStatus} compact />
                       ) : null}
                     </div>
@@ -3052,7 +3056,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Playbook publicado no Storage. Pode reenviar outro arquivo abaixo para substituir.
                 </p>
               ) : null}
-              {playbookConteudoAnalise.trim() ? (
+              {playbookConteudoAnalise.trim() && whatsappFlowAgent ? (
                 <PlaybookFlowStatusBanner status={playbookFlowStatus} compact />
               ) : null}
 

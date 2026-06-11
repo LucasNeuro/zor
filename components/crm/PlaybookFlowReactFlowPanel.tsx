@@ -8,6 +8,7 @@ import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
 import { upsertPlaybookFlowBlockInMarkdown } from "@/lib/playbook/playbook-flow-markdown";
 import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
+import { PLAYBOOK_FLOW_FENCE_TAG } from "@/lib/playbook/flow-schema";
 import type { FlowCanvasSnapshot } from "@/components/crm/playbook-flow-visual/types";
 
 const FlowCanvas = dynamic(
@@ -90,20 +91,41 @@ export function PlaybookFlowReactFlowPanel({
 
   // ── No flow block found ──
   if (!parsed.ok) {
+    const isMissingBlock = parsed.reason === "not_found";
     return (
       <div style={emptyState}>
-        <AlertTriangle size={26} style={{ color: "#d29922" }} />
-        <p style={{ ...emptyText, color: "#d29922" }}>
-          Bloco <code>obra10_playbook_flow</code> não encontrado ou inválido.
+        {isMissingBlock ? (
+          <Workflow size={32} style={{ opacity: 0.35, color: "#94a3b8" }} />
+        ) : (
+          <AlertTriangle size={26} style={{ color: "#d29922" }} />
+        )}
+        <p style={{ ...emptyText, color: isMissingBlock ? "#94a3b8" : "#d29922" }}>
+          {isMissingBlock ? (
+            <>
+              Ainda não há bloco <code>{PLAYBOOK_FLOW_FENCE_TAG}</code> neste playbook.
+            </>
+          ) : (
+            <>
+              Bloco <code>{PLAYBOOK_FLOW_FENCE_TAG}</code> encontrado, mas inválido.
+            </>
+          )}
         </p>
         <p style={hintText}>
-          Clique em <strong>Adaptar motor WA</strong> na calibração para gerar o bloco JSON automaticamente.
-          Depois volte aqui.
+          {isMissingBlock ? (
+            <>
+              Feche este editor, volte à calibração e clique em <strong>Adaptar motor WA</strong> para gerar o JSON
+              automaticamente. Depois reabra «Editar fluxo visual».
+            </>
+          ) : (
+            <>Corrija o JSON no editor textual ou regenere com «Adaptar motor WA».</>
+          )}
         </p>
-        {parsed.errors.length > 0 && (
+        {!isMissingBlock && parsed.errors.length > 0 && (
           <ul style={errorList}>
             {parsed.errors.slice(0, 3).map((e, i) => (
-              <li key={i} style={errorItem}>{e}</li>
+              <li key={i} style={errorItem}>
+                {e}
+              </li>
             ))}
           </ul>
         )}

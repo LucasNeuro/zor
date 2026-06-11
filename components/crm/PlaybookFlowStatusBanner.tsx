@@ -78,7 +78,7 @@ export function PlaybookFlowStatusBanner({
             ) : null}
           </ul>
         ) : (
-          "Corrija o JSON do bloco `obra10_playbook_flow` antes de publicar."
+          "Corrija o JSON do bloco `waje_playbook_flow` antes de publicar."
         )
       }
     />

@@ -1,5 +1,11 @@
 import { parsePlaybookFlowFromMarkdown } from "./flow-parse";
 import { validatePlaybookFlowDefinition } from "./flow-validate";
+import { PLAYBOOK_FLOW_FENCE_TAG } from "./flow-schema";
+
+/** Fluxo dinâmico (menus/perguntas) aplica-se só a agentes WhatsApp. */
+export function agenteUsaFluxoWhatsappPlaybook(modoOperacao: string | null | undefined): boolean {
+  return modoOperacao === "canal_whatsapp";
+}
 
 export type PlaybookFlowUiStatus =
   | { kind: "empty" }
@@ -17,7 +23,7 @@ export function assessPlaybookFlowInMarkdown(markdown: string): PlaybookFlowUiSt
       return {
         kind: "no_flow_block",
         message:
-          "Este playbook ainda não tem bloco de fluxo dinâmico. Adicione no final um bloco fenced `json waje_playbook_flow` com `waje_playbook_flow_schema: 1` para menus e passos no WhatsApp.",
+          `Este playbook ainda não tem bloco de fluxo dinâmico. Use «Adaptar motor WA» ou adicione \`json ${PLAYBOOK_FLOW_FENCE_TAG}\` com \`waje_playbook_flow_schema: 1\` para menus e passos no WhatsApp.`,
       };
     }
     return { kind: "invalid", errors: parsed.errors, reason: parsed.reason };

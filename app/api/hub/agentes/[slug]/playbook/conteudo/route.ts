@@ -4,8 +4,9 @@ import {
   loadCurrentPlaybookMarkdown,
   savePlaybookMarkdownForAgent,
 } from "@/lib/playbook/custom-playbook";
-import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
+import { assessPlaybookFlowInMarkdown, agenteUsaFluxoWhatsappPlaybook } from "@/lib/playbook/playbook-flow-ui";
 import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
+import { PLAYBOOK_FLOW_FENCE_TAG } from "@/lib/playbook/flow-schema";
 import { selectHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-compat";
 import { PLAYBOOK_BUCKET, playbookObjectPath } from "@/lib/playbook/persist";
 
@@ -15,6 +16,7 @@ const PLAYBOOK_META_COLS = [
   "cargo",
   "area",
   "instrucao_modo",
+  "modo_operacao",
   "tenant_id",
   "playbook_object_path",
   "playbook_public_url",
@@ -146,19 +148,41 @@ export async function PUT(
         ? body.content
         : "";
 
-  const ensured = await ensureMarkdownWithWhatsappFlow(markdown);
-  if (!ensured.ok) {
-    return NextResponse.json(
-      {
-        error:
-          "Publicação exige bloco de fluxo WhatsApp válido (`obra10_playbook_flow`). Use «Adaptar motor WA» na calibração.",
-        errors: ensured.errors,
-      },
-      { status: 400 }
-    );
+  const trimmed = markdown.trim();
+  if (!trimmed) {
+    return NextResponse.json({ error: "Playbook vazio." }, { status: 400 });
   }
 
-  const result = await savePlaybookMarkdownForAgent(supabase, slug, ensured.markdown);
+  const { data: meta, error: metaErr } = await selectHubAgenteIdentidadeCompat(supabase, slug, [
+    "agente_slug",
+    "modo_operacao",
+  ]);
+  if (metaErr) return NextResponse.json({ error: metaErr.message }, { status: 500 });
+  if (!meta) return NextResponse.json({ error: "Agente não encontrado." }, { status: 404 });
+
+  const modoOperacao =
+    typeof meta.modo_operacao === "string" ? meta.modo_operacao.trim() : null;
+  const exigeFluxoWhatsapp = agenteUsaFluxoWhatsappPlaybook(modoOperacao);
+
+  let markdownFinal = trimmed;
+  let autoAppendedFlow = false;
+
+  if (exigeFluxoWhatsapp) {
+    const ensured = await ensureMarkdownWithWhatsappFlow(trimmed);
+    if (!ensured.ok) {
+      return NextResponse.json(
+        {
+          error: `Publicação exige bloco de fluxo WhatsApp válido (\`${PLAYBOOK_FLOW_FENCE_TAG}\`). Use «Adaptar motor WA» na calibração.`,
+          errors: ensured.errors,
+        },
+        { status: 400 }
+      );
+    }
+    markdownFinal = ensured.markdown;
+    autoAppendedFlow = ensured.auto_appended_flow;
+  }
+
+  const result = await savePlaybookMarkdownForAgent(supabase, slug, markdownFinal);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
@@ -166,7 +190,7 @@ export async function PUT(
   return NextResponse.json({
     sucesso: true,
     ...result,
-    auto_appended_flow: ensured.auto_appended_flow,
-    fluxo_whatsapp: assessPlaybookFlowInMarkdown(ensured.markdown),
+    auto_appended_flow: autoAppendedFlow,
+    fluxo_whatsapp: assessPlaybookFlowInMarkdown(markdownFinal),
   });
 }

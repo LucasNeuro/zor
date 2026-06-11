@@ -29,7 +29,10 @@ export async function POST(
 
   if (!resendConfigured()) {
     return NextResponse.json(
-      { error: "Resend não configurado: defina RESEND_API_KEY no servidor." },
+      {
+        error:
+          "Resend não configurado: defina RESEND_API_KEY no .env (local) ou no Render → Environment e reinicie o servidor.",
+      },
       { status: 503 }
     );
   }

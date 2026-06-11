@@ -338,12 +338,16 @@ export async function POST(
         instanceToken: tokenInst,
       });
       const stPre = statusPre.ok ? statusFromPayloadUazapi(statusPre.data) : "disconnected";
-      if (resetSession) {
+
+      // Sessão pendente ou novo QR: desligar antes de connect evita QR inválido
+      // ("connection attempt canceled by API" quando connect corre sem reset).
+      const precisaLimparSessao = resetSession || stPre === "connecting" || stPre !== "connected";
+      if (precisaLimparSessao) {
         await uazapiFetchJson<Record<string, unknown>>("/instance/disconnect", {
           method: "POST",
           instanceToken: tokenInst,
         });
-        await new Promise((r) => setTimeout(r, 900));
+        await new Promise((r) => setTimeout(r, 1200));
       }
 
       const payload = buildUazapiInstanceConnectBody({
@@ -379,7 +383,7 @@ export async function POST(
         action: "connect",
         uazapi_connection_status: st,
         proxy_applied: merged,
-        session_reset: resetSession,
+        session_reset: precisaLimparSessao,
         qr_valid_seconds: 120,
         ...(qrPack.qrcode ? { qrcode: qrPack.qrcode } : {}),
         ...(qrPack.qr_invalid ? { qr_invalid: true } : {}),

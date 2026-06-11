@@ -44,6 +44,8 @@ type ErroCtx = { titulo: string; detalhes: string[] };
 type ResendStatus = {
   resend_configured?: boolean;
   domain_hint?: string | null;
+  default_from_email?: string | null;
+  resend_setup_hint?: string | null;
   inbound_webhook_url?: string | null;
 };
 
@@ -276,6 +278,14 @@ export function AgenteResendBlock({
         resend_configured: data.resend_configured === true,
         domain_hint:
           typeof data.domain_hint === "string" && data.domain_hint.trim() ? data.domain_hint.trim() : null,
+        default_from_email:
+          typeof data.default_from_email === "string" && data.default_from_email.trim()
+            ? data.default_from_email.trim()
+            : null,
+        resend_setup_hint:
+          typeof data.resend_setup_hint === "string" && data.resend_setup_hint.trim()
+            ? data.resend_setup_hint.trim()
+            : null,
         inbound_webhook_url:
           typeof data.inbound_webhook_url === "string" && data.inbound_webhook_url.trim()
             ? data.inbound_webhook_url.trim()
@@ -479,7 +489,7 @@ export function AgenteResendBlock({
   );
 
   const painelSubtitle =
-    "Configure remetente, endereço de entrada e active o canal. Use «Enviar teste» para validar o Resend.";
+    "Remetente = de quem sai o e-mail (domínio verificado no Resend). Entrada = endereço que recebe respostas dos clientes.";
 
   const formulario = (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -541,8 +551,27 @@ export function AgenteResendBlock({
         </div>
         {resendStatus?.domain_hint ? (
           <p style={{ margin: "10px 0 0", paddingLeft: 12, fontSize: 11, color: "#5d7a67", lineHeight: 1.5 }}>
-            <strong style={{ color: darkSideover ? RF_TEXT_SECONDARY : BRAND_TEXT_DARK }}>Domínio:</strong>{" "}
+            <strong style={{ color: darkSideover ? RF_TEXT_SECONDARY : BRAND_TEXT_DARK }}>Domínio Resend:</strong>{" "}
             {resendStatus.domain_hint}
+            {resendStatus.default_from_email ? (
+              <>
+                {" "}
+                · sugerido: <code style={{ fontSize: 10 }}>{resendStatus.default_from_email}</code>
+              </>
+            ) : null}
+          </p>
+        ) : null}
+        {resendStatus?.resend_configured === false && resendStatus.resend_setup_hint ? (
+          <p
+            style={{
+              margin: "10px 0 0",
+              paddingLeft: 12,
+              fontSize: 11,
+              color: "#e6c06a",
+              lineHeight: 1.55,
+            }}
+          >
+            {resendStatus.resend_setup_hint}
           </p>
         ) : null}
       </div>
@@ -567,9 +596,15 @@ export function AgenteResendBlock({
           type="email"
           value={fromEmail}
           onChange={(e) => setFromEmail(e.target.value)}
-          placeholder="atendimento@empresa.com"
+          placeholder={
+            resendStatus?.default_from_email?.trim() || "atendimento@empresa.com (domínio verificado no Resend)"
+          }
           style={fieldStyle}
         />
+        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#5d7a67", lineHeight: 1.45 }}>
+          Não use Gmail/Outlook pessoal — o Resend só envia de domínios verificados (ex.{" "}
+          <strong>@clicvendy.com.br</strong>).
+        </p>
       </div>
 
       <div style={{ padding: "14px 16px", ...cardSurface }}>
@@ -584,8 +619,12 @@ export function AgenteResendBlock({
           value={inbound}
           onChange={(e) => setInbound(e.target.value)}
           placeholder="respostas@inbound.empresa.com"
-          style={{ ...fieldStyle, marginBottom: 12 }}
+          style={{ ...fieldStyle, marginBottom: 8 }}
         />
+        <p style={{ margin: "0 0 12px", fontSize: 11, color: "#5d7a67", lineHeight: 1.45 }}>
+          E-mails que clientes enviam para este endereço entram no CRM e disparam a IA Mario. Pode ser o mesmo
+          endereço do remetente se o domínio tiver Receiving no Resend.
+        </p>
         <label
           style={{
             display: "flex",

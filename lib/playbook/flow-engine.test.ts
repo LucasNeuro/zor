@@ -48,6 +48,48 @@ describe("normMenuChoiceText", () => {
   });
 });
 
+describe("executeFlowEngine stateOnly", () => {
+  const definition: FlowEngineDefinition = {
+    start_step: "saudacao",
+    steps: {
+      saudacao: {
+        id: "saudacao",
+        type: "send_text",
+        text: "Olá fixo",
+        next_step: "pergunta",
+      },
+      pergunta: {
+        id: "pergunta",
+        type: "ask_text",
+        prompt: "Qual seu nome?",
+        answer_key: "nome",
+        next_step: "concluido",
+      },
+      concluido: { id: "concluido", type: "complete", text: "Obrigado fixo" },
+    },
+  };
+
+  it("não envia texto fixo e retorna skipIa=false", async () => {
+    const sendText = vi.fn().mockResolvedValue(undefined);
+    const persistState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await executeFlowEngine(
+      definition,
+      { step: null, answers: {}, mensagem: "oi", tipoMidia: "texto" },
+      {
+        sendText,
+        sendMenu: vi.fn().mockResolvedValue({ ok: true }),
+        resolveChoiceId: () => null,
+        persistState,
+        stateOnly: true,
+      }
+    );
+
+    expect(result).toEqual({ handled: true, skipIa: false, step: "pergunta" });
+    expect(sendText).not.toHaveBeenCalled();
+  });
+});
+
 describe("executeFlowEngine menu", () => {
   const definition: FlowEngineDefinition = {
     start_step: "arq_tamanho",

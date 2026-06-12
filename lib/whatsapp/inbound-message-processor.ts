@@ -303,6 +303,11 @@ export async function processarMensagemInboundWhatsapp(params: {
   log.info("wa.processor.ia_start", { agente_slug: agenteSlug, lead_id: lead.id });
 
   let menuEnviadoDeterministico = false;
+  let playbookFlowContext: string | undefined;
+  let playbookMotor: "playbook_ia" | "playbook_flow" | undefined;
+  let playbookPendingMenu:
+    | import("@/lib/playbook/flow-engine").FlowPendingMenu
+    | undefined;
 
   try {
     const { mensagemEhSaudacaoSimples, mensagemPedeMenuOuOpcoes, leadJaRecebeuMenuTriagem } =
@@ -362,9 +367,17 @@ export async function processarMensagemInboundWhatsapp(params: {
           skip_ia: playbookOut.skipIa,
           bloquear_ia: playbookOut.bloquearIa ?? playbookRouting.bloquearIa,
           motivo: playbookOut.motivo ?? playbookRouting.motivo ?? null,
+          motor: playbookOut.motor ?? null,
         });
         if (playbookOut.skipIa || playbookOut.bloquearIa || playbookRouting.bloquearIa) {
           return;
+        }
+        if (playbookOut.flowContext?.trim()) {
+          playbookFlowContext = playbookOut.flowContext.trim();
+          playbookMotor = playbookOut.motor === "playbook_flow" ? "playbook_flow" : "playbook_ia";
+        }
+        if (playbookOut.pendingMenu) {
+          playbookPendingMenu = playbookOut.pendingMenu;
         }
       } else if (playbookRouting.bloquearIa) {
         log.warn("wa.processor.playbook_unhandled_blocked_ia", {
@@ -451,6 +464,8 @@ export async function processarMensagemInboundWhatsapp(params: {
         instance: params.instanceKey,
         isNovo: params.isNovo,
         tipoMidia: params.tipoMidia,
+        blocoContextoFluxoPlaybook: playbookFlowContext,
+        motorPlaybook: playbookMotor,
       },
     });
 
@@ -478,6 +493,7 @@ export async function processarMensagemInboundWhatsapp(params: {
     log.info("wa.processor.ia_ok", {
       agente_slug: resultado.agenteSlug || agenteSlug,
       modelo: resultado.modelo || null,
+      motor: resultado.motor ?? playbookMotor ?? null,
       ia_duration_ms: Date.now() - iaStarted,
       precisa_aprovacao: Boolean(resultado.precisaAprovacao),
       resposta_chars: resultado.resposta.length,
@@ -560,6 +576,41 @@ export async function processarMensagemInboundWhatsapp(params: {
         send_body_preview: sendBodyPreview,
         telefone: trace.maskTelefone(params.telefone),
       });
+      }
+
+      if (playbookPendingMenu && !menuJaEnviado) {
+        let tokenMenuPlaybook = String(params.waSendOpts?.instanceToken || "").trim();
+        if (!tokenMenuPlaybook) {
+          tokenMenuPlaybook =
+            typeof agente.uazapi_instance_token === "string" ? agente.uazapi_instance_token.trim() : "";
+        }
+        if (tokenMenuPlaybook) {
+          const { enviarMenuUazapi, marcarMenuTriagemEnviado } = await import(
+            "@/lib/whatsapp/menu-triagem-uazapi"
+          );
+          const menuPlaybook = await enviarMenuUazapi({
+            telefone: params.telefone,
+            instanceToken: tokenMenuPlaybook,
+            texto: playbookPendingMenu.text,
+            tipo: playbookPendingMenu.menuType,
+            choices: playbookPendingMenu.choices,
+            listButton: playbookPendingMenu.listButton,
+            footerText: "HUB Obra 10+",
+          });
+          if (menuPlaybook.ok) {
+            await marcarMenuTriagemEnviado(supabase, lead.id);
+            menuEnviadoDeterministico = true;
+            log.info("wa.processor.playbook_menu_uazapi_enhance", {
+              telefone: trace.maskTelefone(params.telefone),
+              agente_slug: agenteSlug,
+              menu_type: playbookPendingMenu.menuType,
+            });
+          } else {
+            log.warn("wa.processor.playbook_menu_uazapi_enhance_failed", {
+              erro: "erro" in menuPlaybook ? menuPlaybook.erro : "falha_menu",
+            });
+          }
+        }
       }
     } else {
       log.info("wa.processor.send_text_skip", {

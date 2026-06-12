@@ -3,7 +3,13 @@
  * O texto ao cliente é SEMPRE gerado pelo Mistral com cargo + conhecimento + RAG.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { executeFlowEngine, type FlowEngineDefinition } from "@/lib/playbook/flow-engine";
+import {
+  executeFlowEngine,
+  type FlowEngineDefinition,
+  type FlowEngineInput,
+  type FlowEnginePersistPatch,
+  type FlowPendingMenu,
+} from "@/lib/playbook/flow-engine";
 import {
   carregarDynamicPlaybookRuntime,
   resolverChoiceId,
@@ -133,6 +139,72 @@ export function buildBlocoContextoFluxoParaLlm(
 }
 
 /** Avança passo/respostas no motor silenciosamente (sem texto fixo ao cliente). */
+async function executarFluxoStateOnly(
+  definition: FlowEngineDefinition,
+  input: FlowEngineInput,
+  callbacks: {
+    resolveChoiceId: (mensagem: string, menuChoiceId?: string | null) => string | null;
+    persistState: (patch: FlowEnginePersistPatch) => Promise<void>;
+    onNameCaptured?: (name: string) => Promise<void>;
+    onStepComplete?: (stepId: string, answers: Record<string, string>) => Promise<void>;
+  }
+): Promise<{
+  flowState: SimFlowState;
+  pendingMenu?: FlowPendingMenu;
+}> {
+  let persisted: SimFlowState = {
+    step: input.step,
+    answers: { ...input.answers },
+    active: true,
+    complete: false,
+  };
+
+  const result = await executeFlowEngine(
+    definition,
+    input,
+    {
+      sendText: async () => undefined,
+      sendMenu: async () => ({ ok: true }),
+      resolveChoiceId: callbacks.resolveChoiceId,
+      persistState: async (patch) => {
+        persisted = {
+          step: patch.step !== undefined ? patch.step : persisted.step,
+          answers: patch.answers ? { ...patch.answers } : persisted.answers,
+          active: patch.active ?? persisted.active,
+          complete: patch.complete ?? persisted.complete,
+        };
+        await callbacks.persistState(patch);
+      },
+      onNameCaptured: callbacks.onNameCaptured,
+      onStepComplete: callbacks.onStepComplete,
+      stateOnly: true,
+    }
+  );
+
+  const flowState: SimFlowState = {
+    ...persisted,
+    step: result.handled ? (result.step ?? persisted.step) : persisted.step,
+    complete: persisted.complete,
+  };
+
+  return { flowState, pendingMenu: result.handled ? result.pendingMenu : undefined };
+}
+
+export function simFlowStateFromPlaybookLead(params: {
+  step: string | null;
+  answers: Record<string, string>;
+  active: boolean;
+  complete: boolean;
+}): SimFlowState {
+  return {
+    step: params.step,
+    answers: { ...params.answers },
+    active: params.active,
+    complete: params.complete,
+  };
+}
+
+/** Avança passo/respostas no motor silenciosamente (simulação CRM). */
 export async function avancarEstadoFluxoSimulacao(params: {
   supabase: SupabaseClient;
   agenteSlug: string;
@@ -148,9 +220,7 @@ export async function avancarEstadoFluxoSimulacao(params: {
     state = { ...EMPTY_FLOW_STATE };
   }
 
-  let persisted: SimFlowState = { ...state };
-
-  const result = await executeFlowEngine(
+  const { flowState } = await executarFluxoStateOnly(
     runtime.definition,
     {
       step: state.step,
@@ -159,24 +229,62 @@ export async function avancarEstadoFluxoSimulacao(params: {
       tipoMidia: "texto",
     },
     {
-      sendText: async () => undefined,
-      sendMenu: async () => ({ ok: true }),
       resolveChoiceId: resolverChoiceId,
-      persistState: async (patch) => {
-        persisted = {
-          step: patch.step !== undefined ? patch.step : persisted.step,
-          answers: patch.answers ? { ...patch.answers } : persisted.answers,
-          active: patch.active ?? persisted.active,
-          complete: patch.complete ?? persisted.complete,
-        };
-      },
+      persistState: async () => undefined,
     }
   );
 
-  const flowState: SimFlowState = {
-    ...persisted,
-    step: result.handled ? (result.step ?? persisted.step) : persisted.step,
-  };
-
   return { flowState, definition: runtime.definition };
+}
+
+/** Avança fluxo publicado em produção WhatsApp (estado no lead metadata). */
+export async function avancarEstadoFluxoPlaybookWhatsapp(params: {
+  supabase: SupabaseClient;
+  agenteSlug: string;
+  mensagemUsuario: string;
+  menuChoiceId?: string | null;
+  tipoMidia: string;
+  flowState: SimFlowState;
+  persistState: (patch: FlowEnginePersistPatch) => Promise<void>;
+  onNameCaptured?: (name: string) => Promise<void>;
+  onStepComplete?: (stepId: string, answers: Record<string, string>) => Promise<void>;
+}): Promise<{
+  flowState: SimFlowState;
+  definition: FlowEngineDefinition;
+  pendingMenu?: FlowPendingMenu;
+} | null> {
+  const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
+  if (!runtime) return null;
+
+  let state: SimFlowState = { ...params.flowState, answers: { ...params.flowState.answers } };
+
+  if (state.complete && mensagemEhSaudacaoSimples(params.mensagemUsuario)) {
+    state = { ...EMPTY_FLOW_STATE };
+    await params.persistState({
+      step: null,
+      answers: {},
+      active: true,
+      complete: false,
+      resetAnswers: true,
+    });
+  }
+
+  const { flowState, pendingMenu } = await executarFluxoStateOnly(
+    runtime.definition,
+    {
+      step: state.step,
+      answers: { ...state.answers },
+      mensagem: params.mensagemUsuario,
+      menuChoiceId: params.menuChoiceId,
+      tipoMidia: params.tipoMidia,
+    },
+    {
+      resolveChoiceId: resolverChoiceId,
+      persistState: params.persistState,
+      onNameCaptured: params.onNameCaptured,
+      onStepComplete: params.onStepComplete,
+    }
+  );
+
+  return { flowState, definition: runtime.definition, pendingMenu };
 }

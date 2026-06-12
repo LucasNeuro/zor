@@ -1,8 +1,15 @@
 import { mensagemEhSaudacaoSimples } from "@/lib/whatsapp/menu-triagem-uazapi";
 
+export type FlowPendingMenu = {
+  text: string;
+  menuType: "list" | "button";
+  choices: string[];
+  listButton?: string;
+};
+
 export type FlowEngineResult =
   | { handled: false }
-  | { handled: true; skipIa: boolean; step?: string };
+  | { handled: true; skipIa: boolean; step?: string; pendingMenu?: FlowPendingMenu };
 
 export type FlowEngineStepType =
   | "await_name"
@@ -101,6 +108,7 @@ export type FlowEnginePersistPatch = {
   answers?: Record<string, string>;
   active?: boolean;
   complete?: boolean;
+  resetAnswers?: boolean;
 };
 
 export type FlowEngineAdapter = {
@@ -115,7 +123,13 @@ export type FlowEngineAdapter = {
   persistState: (patch: FlowEnginePersistPatch) => Promise<void>;
   onNameCaptured?: (name: string) => Promise<void>;
   onStepComplete?: (stepId: string, answers: Record<string, string>) => Promise<void>;
+  /** Quando true: só avança estado/CRM; texto ao cliente vem da IA (skipIa=false). */
+  stateOnly?: boolean;
 };
+
+function skipIaForAdapter(adapter: FlowEngineAdapter): boolean {
+  return !adapter.stateOnly;
+}
 
 function mensagemPareceNome(mensagem: string): boolean {
   const t = mensagem.trim();
@@ -252,7 +266,7 @@ export async function executeFlowEngine(
 
     switch (step.type) {
       case "send_text": {
-        if (step.text.trim()) {
+        if (!adapter.stateOnly && step.text.trim()) {
           await adapter.sendText(step.text.trim());
         }
         if (!step.next_step) {
@@ -262,7 +276,7 @@ export async function executeFlowEngine(
             active: true,
             complete: false,
           });
-          return { handled: true, skipIa: true, step: currentStepId };
+          return { handled: true, skipIa: skipIaForAdapter(adapter), step: currentStepId };
         }
         currentStepId = step.next_step;
         continue;
@@ -284,14 +298,16 @@ export async function executeFlowEngine(
           currentStepId = step.next_step;
           continue;
         }
-        await adapter.sendText(step.invalid_prompt || step.prompt);
+        if (!adapter.stateOnly) {
+          await adapter.sendText(step.invalid_prompt || step.prompt);
+        }
         await adapter.persistState({
           step: currentStepId,
           answers,
           active: true,
           complete: false,
         });
-        return { handled: true, skipIa: true, step: currentStepId };
+        return { handled: true, skipIa: skipIaForAdapter(adapter), step: currentStepId };
       }
 
       case "menu": {
@@ -308,7 +324,7 @@ export async function executeFlowEngine(
               active: true,
               complete: false,
             });
-            return { handled: true, skipIa: true, step: currentStepId };
+            return { handled: true, skipIa: skipIaForAdapter(adapter), step: currentStepId };
           }
           await adapter.persistState({
             step: nextStep,
@@ -320,10 +336,32 @@ export async function executeFlowEngine(
           continue;
         }
 
+        const menuChoices = step.choices.map((c) => `${c.label}|${c.id}`);
+        const pendingMenu: FlowPendingMenu = {
+          text: step.text,
+          menuType: step.menu_type || "list",
+          listButton: step.list_button,
+          choices: menuChoices,
+        };
+
+        if (adapter.stateOnly) {
+          await adapter.persistState({
+            step: currentStepId,
+            answers,
+            active: true,
+            complete: false,
+          });
+          return {
+            handled: true,
+            skipIa: false,
+            step: currentStepId,
+            pendingMenu,
+          };
+        }
+
         if (choiceId && step.invalid_prompt) {
           await adapter.sendText(step.invalid_prompt);
         }
-        const menuChoices = step.choices.map((c) => `${c.label}|${c.id}`);
         const menu = await adapter.sendMenu({
           text: step.text,
           menuType: step.menu_type || "list",
@@ -339,7 +377,7 @@ export async function executeFlowEngine(
           active: true,
           complete: false,
         });
-        return { handled: true, skipIa: true, step: currentStepId };
+        return { handled: true, skipIa: skipIaForAdapter(adapter), step: currentStepId };
       }
 
       case "ask_text": {
@@ -359,14 +397,16 @@ export async function executeFlowEngine(
           currentStepId = step.next_step;
           continue;
         }
-        await adapter.sendText(step.invalid_prompt || step.prompt);
+        if (!adapter.stateOnly) {
+          await adapter.sendText(step.invalid_prompt || step.prompt);
+        }
         await adapter.persistState({
           step: currentStepId,
           answers,
           active: true,
           complete: false,
         });
-        return { handled: true, skipIa: true, step: currentStepId };
+        return { handled: true, skipIa: skipIaForAdapter(adapter), step: currentStepId };
       }
 
       case "branch_imob_sub": {
@@ -375,14 +415,16 @@ export async function executeFlowEngine(
         if (incoming) answers[key] = incoming;
         const nextStep = step.routes[incoming] || step.default_step;
         if (!nextStep) {
-          await adapter.sendText(step.invalid_prompt || "Escolha uma opção do menu para continuarmos.");
+          if (!adapter.stateOnly) {
+            await adapter.sendText(step.invalid_prompt || "Escolha uma opção do menu para continuarmos.");
+          }
           await adapter.persistState({
             step: currentStepId,
             answers,
             active: true,
             complete: false,
           });
-          return { handled: true, skipIa: true, step: currentStepId };
+          return { handled: true, skipIa: skipIaForAdapter(adapter), step: currentStepId };
         }
         await adapter.persistState({
           step: nextStep,
@@ -395,7 +437,7 @@ export async function executeFlowEngine(
       }
 
       case "complete": {
-        if (step.text?.trim()) {
+        if (!adapter.stateOnly && step.text?.trim()) {
           await adapter.sendText(step.text.trim());
         }
         if (adapter.onStepComplete) {
@@ -407,7 +449,7 @@ export async function executeFlowEngine(
           active: false,
           complete: true,
         });
-        return { handled: true, skipIa: true, step: "concluido" };
+        return { handled: true, skipIa: skipIaForAdapter(adapter), step: "concluido" };
       }
     }
   }
@@ -418,5 +460,5 @@ export async function executeFlowEngine(
     active: true,
     complete: false,
   });
-  return { handled: true, skipIa: true, step: currentStepId };
+  return { handled: true, skipIa: skipIaForAdapter(adapter), step: currentStepId };
 }

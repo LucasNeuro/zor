@@ -60,6 +60,8 @@ export interface PromptParams {
   turnosConversa?: TurnoMinimo[];
   /** Sessão reiniciada após TTL — tratar como primeiro contacto (Mari: nome + menu). */
   sessaoReiniciada?: boolean;
+  /** Contexto do roteiro WhatsApp (motor híbrido: passo + respostas, sem texto fixo). */
+  blocoContextoFluxoPlaybook?: string;
 }
 
 export interface PromptCompleto {
@@ -229,6 +231,10 @@ ${personalidade?.descricao_comportamento || ""}`);
 Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta conversa:
 - Não retome assuntos antigos (imóveis, orçamentos ou fluxos anteriores) salvo se o cliente mencionar agora.
 - Siga o POP: saudação, pedir nome se faltar, menu de triagem quando aplicável.`);
+  }
+
+  if (params.blocoContextoFluxoPlaybook?.trim()) {
+    secoes.push(params.blocoContextoFluxoPlaybook.trim());
   }
 
   // CAMADA 2 — EXECUÇÃO DESTE TURNO (só com catálogo de cargo, sem playbook publicado)

@@ -83,6 +83,7 @@ export interface ResultadoEngine {
   aprovacaoId?: string;
   erro?: string;
   logId?: string;
+  motor?: "playbook_ia" | "playbook_flow" | "llm_prompt";
 }
 
 // ── PROCESSAMENTO PRINCIPAL ───────────────────────────────────
@@ -214,6 +215,17 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         ? turnosCrm.map((t) => ({ role: t.role, content: t.content }))
         : historicoCtx.linhas.map((l) => ({ role: l.role, content: l.content }));
 
+    const blocoContextoFluxoPlaybook =
+      typeof ctx.metadata?.blocoContextoFluxoPlaybook === "string"
+        ? ctx.metadata.blocoContextoFluxoPlaybook.trim()
+        : undefined;
+    const motorPlaybook =
+      ctx.metadata?.motorPlaybook === "playbook_ia" ||
+      ctx.metadata?.motorPlaybook === "playbook_flow" ||
+      ctx.metadata?.motorPlaybook === "llm_prompt"
+        ? ctx.metadata.motorPlaybook
+        : undefined;
+
     const promptData = await construirPrompt({
       agenteSlug: agente.slug,
       leadId: ctx.leadId,
@@ -224,6 +236,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       turnosAnteriores,
       turnosConversa: turnosParaPrompt,
       sessaoReiniciada: historicoCtx.sessaoReiniciada,
+      blocoContextoFluxoPlaybook,
     });
 
     if (!promptData) {
@@ -399,7 +412,10 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         tokens_output: tokensSaida,
         custo_estimado_brl: custo.brl,
         foi_escalado: false,
-        metadata: { tool_calls_executadas: toolCallsExecutadas.slice(0, 12) },
+        metadata: {
+          tool_calls_executadas: toolCallsExecutadas.slice(0, 12),
+          motor: motorPlaybook ?? (blocoContextoFluxoPlaybook ? "playbook_ia" : "llm_prompt"),
+        },
       })
       .select("id")
       .maybeSingle();
@@ -452,7 +468,13 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       direcao: "saida",
       conteudo: textoResposta,
       status: statusSaida,
-      metadata: { logId: logData?.id, modelo: modeloLog, latencia, feito_por: "engine" },
+      metadata: {
+        logId: logData?.id,
+        modelo: modeloLog,
+        latencia,
+        feito_por: "engine",
+        motor: motorPlaybook ?? (blocoContextoFluxoPlaybook ? "playbook_ia" : "llm_prompt"),
+      },
     };
     if (ctx.tenantId) filaSaida.tenant_id = ctx.tenantId;
 
@@ -496,6 +518,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       custo,
       latencia,
       logId: logData?.id,
+      motor: motorPlaybook ?? (blocoContextoFluxoPlaybook ? "playbook_ia" : "llm_prompt"),
     };
 
   } catch (erro) {

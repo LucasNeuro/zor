@@ -23,6 +23,11 @@ import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-tem
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
 import {
+  avancarEstadoFluxoPlaybookWhatsapp,
+  buildBlocoContextoFluxoParaLlm,
+  simFlowStateFromPlaybookLead,
+} from "@/lib/playbook/simulacao-canal-flow";
+import {
   AGENTE_IDENTIDADE_PLAYBOOK_SELECT,
   MSG_PLAYBOOK_FLUXO_INDISPONIVEL,
   MSG_PLAYBOOK_POS_CONCLUSAO,
@@ -82,7 +87,17 @@ function isHardcodedStep(step: string): step is PlaybookStep {
 
 export type PlaybookProcessResult =
   | { handled: false; bloquearIa?: boolean; motivo?: string }
-  | { handled: true; skipIa: boolean; step?: PlaybookStep; bloquearIa?: boolean; motivo?: string };
+  | {
+      handled: true;
+      skipIa: boolean;
+      step?: PlaybookStep;
+      bloquearIa?: boolean;
+      motivo?: string;
+      /** Bloco de contexto do roteiro para injetar no prompt da IA. */
+      flowContext?: string;
+      motor?: "playbook_ia" | "playbook_flow";
+      pendingMenu?: import("@/lib/playbook/flow-engine").FlowPendingMenu;
+    };
 
 type PlaybookAnswers = Record<string, string>;
 
@@ -153,6 +168,16 @@ function parseBoolEnvOnByDefault(value: string | undefined): boolean {
 
 function dynamicFlowEnabled(): boolean {
   return parseBoolEnvOnByDefault(process.env.PLAYBOOK_DYNAMIC_FLOW);
+}
+
+function playbookHybridIaEnabled(): boolean {
+  const raw = String(process.env.PLAYBOOK_HYBRID_IA ?? "1").trim().toLowerCase();
+  return !(raw === "0" || raw === "false" || raw === "off");
+}
+
+function playbookMenuUazapiEnhancementEnabled(): boolean {
+  const raw = String(process.env.PLAYBOOK_MENU_UAZAPI_ENHANCE ?? "1").trim().toLowerCase();
+  return !(raw === "0" || raw === "false" || raw === "off");
 }
 
 function normalizeDynamicId(raw: string, fallback: string): string {
@@ -1385,6 +1410,167 @@ async function processarPlaybookMariaInboundDynamic(params: {
     return { handled: false, motivo: "playbook_concluido_permitir_ia" };
   }
 
+  const hybridIa = playbookHybridIaEnabled();
+
+  if (!hybridIa) {
+    return processarPlaybookMariaInboundDynamicLegacy(params);
+  }
+
+  const flowStateInicial = simFlowStateFromPlaybookLead(state);
+
+  const persistState = async (patch: {
+    step?: string | null;
+    answers?: Record<string, string>;
+    active?: boolean;
+    complete?: boolean;
+    resetAnswers?: boolean;
+  }) => {
+    const persisted = await persistirEstado(params.supabase, params.leadId, meta, {
+      step: patch.step ? (patch.step as PlaybookStep) : patch.step === null ? null : undefined,
+      answers: patch.answers,
+      active: patch.active,
+      complete: patch.complete,
+      resetAnswers: patch.resetAnswers,
+    });
+    meta = persisted;
+  };
+
+  const onStepComplete = async (stepId: string, answers: Record<string, string>) => {
+    switch (stepId) {
+      case "complete_arquitetura":
+        await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+          estagio: "qualificado",
+          metadata: {
+            fluxo_ativo: "fluxo_arquitetura",
+            lead_kind: "cliente_projetos",
+            potencial: "MEDIO",
+            cidade_bairro_projeto: answers.arq_localizacao || null,
+            wa_playbook_complete: true,
+          },
+        });
+        break;
+      case "complete_corretor_cliente":
+        await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+          estagio: "qualificado",
+          metadata: {
+            fluxo_ativo: "fluxo1",
+            lead_kind: "cliente_imobiliario",
+            potencial: "ALTO",
+            wa_playbook_complete: true,
+          },
+        });
+        break;
+      case "complete_proprietario":
+        await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+          estagio: "qualificado",
+          metadata: {
+            fluxo_ativo: "fluxo2",
+            lead_kind: "cliente_imobiliario",
+            potencial: "MEDIO",
+            cidade_bairro_imovel: answers.prop_localizacao || null,
+            valor_imovel: answers.prop_valor || null,
+            wa_playbook_complete: true,
+          },
+        });
+        break;
+      case "complete_parceria":
+        if (answers.parc_email) {
+          await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+            email: answers.parc_email,
+          });
+        }
+        await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+          estagio: "qualificado",
+          metadata: {
+            fluxo_ativo: "fluxo3",
+            lead_kind: "imobiliaria_corretor",
+            potencial: "MEDIO",
+            wa_playbook_complete: true,
+          },
+        });
+        break;
+      case "complete_outro":
+        await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+          metadata: {
+            fluxo_ativo: "outro",
+            caracteristicas_adicionais: answers.outro_descricao || null,
+            wa_playbook_complete: true,
+          },
+        });
+        break;
+      default:
+        await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
+          metadata: { wa_playbook_complete: true },
+        });
+        break;
+    }
+  };
+
+  const avancado = await avancarEstadoFluxoPlaybookWhatsapp({
+    supabase: params.supabase,
+    agenteSlug: params.agenteSlug,
+    mensagemUsuario: params.mensagem,
+    menuChoiceId: params.menuChoiceId,
+    tipoMidia: params.tipoMidia,
+    flowState: flowStateInicial,
+    persistState,
+    onNameCaptured: async (name) => {
+      await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, { nome: name });
+    },
+    onStepComplete,
+  });
+
+  if (!avancado) return { handled: false, motivo: "runtime_indisponivel" };
+
+  const flowContext = buildBlocoContextoFluxoParaLlm(
+    avancado.definition,
+    avancado.flowState,
+    params.mensagem
+  );
+
+  const pendingMenu =
+    playbookMenuUazapiEnhancementEnabled() && avancado.pendingMenu
+      ? avancado.pendingMenu
+      : undefined;
+
+  return {
+    handled: true,
+    skipIa: false,
+    step: mapDynamicStepToContract(avancado.flowState.step ?? undefined),
+    motivo: "dynamic_flow_hybrid_ia",
+    flowContext,
+    motor: "playbook_ia",
+    pendingMenu,
+  };
+}
+
+/** Modo legado: motor envia texto/menus fixos (skipIa=true). */
+async function processarPlaybookMariaInboundDynamicLegacy(params: {
+  supabase: SupabaseClient;
+  leadId: string;
+  telefone: string;
+  mensagem: string;
+  menuChoiceId?: string | null;
+  tipoMidia: string;
+  agenteSlug: string;
+  instanceToken: string;
+  leadNome?: string | null;
+  metadata: unknown;
+  bloquearIaPosConclusao?: boolean;
+}): Promise<PlaybookProcessResult> {
+  const state = lerEstadoPlaybook(params.metadata);
+  let meta = lerMetadata(params.metadata);
+
+  if (state.complete && !mensagemEhSaudacaoSimples(params.mensagem)) {
+    if (params.bloquearIaPosConclusao) {
+      return responderPosConclusaoPlaybook({
+        telefone: params.telefone,
+        instanceToken: params.instanceToken,
+      });
+    }
+    return { handled: false, motivo: "playbook_concluido_permitir_ia" };
+  }
+
   const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
   if (!runtime) return { handled: false, motivo: "runtime_indisponivel" };
 
@@ -1542,6 +1728,7 @@ async function processarPlaybookMariaInboundDynamic(params: {
     skipIa: result.skipIa,
     step: mapDynamicStepToContract(result.step),
     motivo: "dynamic_flow",
+    motor: "playbook_flow",
   };
 }
 

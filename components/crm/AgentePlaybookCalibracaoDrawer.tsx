@@ -433,7 +433,7 @@ export function AgentePlaybookCalibracaoDrawer({
         ? "Isto substitui o playbook pelo template Waje v1, actualiza ferramentas, conhecimento e ciclos. Continuar?"
         : "Aplica cargo, ferramentas, conhecimento, ciclos e publica playbook só se ainda não existir. Continuar?",
       confirmLabel: "Aplicar preset",
-      variant: forcarPlaybook ? "destructive" : "default",
+      variant: forcarPlaybook ? "destructive" : "info",
     });
     if (!ok) return;
 

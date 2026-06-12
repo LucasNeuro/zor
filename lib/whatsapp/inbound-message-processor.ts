@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { humanoBloqueiaRespostaIa } from "@/lib/crm/resolve-crm-actor";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { respostaIaJaEnviadaRecente } from "@/lib/whatsapp/anti-duplicata-resposta";
 import {
@@ -74,7 +75,7 @@ async function enviarFallbackIA(params: {
       canal: "whatsapp",
       direcao: "saida",
       conteudo: mensagem,
-      status: "fallback_enviado",
+      status: "enviado",
       tenant_id: defaultTenantId(),
       metadata: { feito_por: "fallback_ia", motivo: params.motivo },
     };
@@ -168,7 +169,7 @@ async function gravarMensagemInboundSemIa(params: {
     canal: "whatsapp",
     direcao,
     conteudo: params.mensagemFinal,
-    status: "processado",
+    status: "pendente",
     remetente_numero: remetenteNumero,
     whatsapp_message_id: params.messageId,
     tenant_id: defaultTenantId(),
@@ -227,10 +228,10 @@ export async function processarMensagemInboundWhatsapp(params: {
     pessoa_id?: string | null;
     humano_responsavel?: string | null;
     agente_responsavel?: string | null;
+    metadata?: unknown;
   };
   const agente = params.agente;
-  const humanoResponsavelAtivo =
-    typeof lead.humano_responsavel === "string" && lead.humano_responsavel.trim().length > 0;
+  const humanoResponsavelAtivo = humanoBloqueiaRespostaIa(lead);
   const isGroupTransfer = params.isGroupTransfer === true;
 
   if (humanoResponsavelAtivo || isGroupTransfer) {

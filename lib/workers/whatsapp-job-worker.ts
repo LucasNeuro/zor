@@ -126,6 +126,7 @@ type ReconstructedContext = {
     pessoa_id?: string | null;
     humano_responsavel?: string | null;
     agente_responsavel?: string | null;
+    metadata?: unknown;
   };
   agente: { agente_slug: string } | null;
   waSendOpts?: { instanceToken?: string | null };
@@ -390,7 +391,7 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
 
   const { data: leadRow } = await supabase
     .from("hub_leads_crm")
-    .select("pessoa_id, telefone, humano_responsavel, agente_responsavel")
+    .select("pessoa_id, telefone, humano_responsavel, agente_responsavel, metadata")
     .eq("id", contexto.lead.id)
     .maybeSingle();
   if (leadRow?.pessoa_id) contexto.lead.pessoa_id = String(leadRow.pessoa_id);
@@ -400,6 +401,9 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
   }
   if (leadRow?.agente_responsavel && !contexto.lead.agente_responsavel) {
     contexto.lead.agente_responsavel = String(leadRow.agente_responsavel);
+  }
+  if (leadRow?.metadata != null) {
+    (contexto.lead as { metadata?: unknown }).metadata = leadRow.metadata;
   }
 
   const { validarLeadTelefoneSessao } = await import("@/lib/crm/isolamento-conversa-lead");

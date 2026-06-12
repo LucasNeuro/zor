@@ -460,7 +460,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       /* hub_memorias_agente opcional até migração aplicada */
     }
 
-    const statusSaida = ctx.statusFilaSaida ?? "pendente";
+    const statusSaida = ctx.statusFilaSaida ?? "enviado";
     const filaSaida: Record<string, unknown> = {
       lead_id: ctx.leadId,
       agente_id: agente.slug,
@@ -485,7 +485,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       canal: ctx.canal,
       direcao: "entrada",
       conteudo: ctx.mensagem,
-      status: "processado",
+      status: "pendente",
       metadata: { feito_por: "engine", messageId: ctx.metadata?.messageId ?? null },
     };
     if (ctx.tenantId) filaEntrada.tenant_id = ctx.tenantId;

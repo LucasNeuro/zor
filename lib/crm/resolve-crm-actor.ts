@@ -59,6 +59,33 @@ export function formatHumanoDisplayName(slugOrName: string): string {
     .join(" ");
 }
 
+function leadMetadataRecord(metadata: unknown): Record<string, unknown> {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+  return metadata as Record<string, unknown>;
+}
+
+/**
+ * IA do agente só fica suspensa em atendimento humano explícito.
+ * `humano_responsavel` sozinho (legado/assumir antigo) não bloqueia se a fase é conversa_ia.
+ */
+export function humanoBloqueiaRespostaIa(lead: {
+  humano_responsavel?: string | null;
+  metadata?: unknown;
+}): boolean {
+  const humano = effectiveHumanoResponsavel(lead.humano_responsavel);
+  if (!humano) return false;
+
+  const meta = leadMetadataRecord(lead.metadata);
+  const fase = String(meta.fase_atendimento ?? "").trim().toLowerCase();
+
+  if (fase === "conversa_ia" || fase === "dados_sincronizados") return false;
+  if (fase === "atendimento_humano") return true;
+  if (meta.humano_assumiu_via === "whatsapp_from_me") return true;
+
+  // Assumir no CRM sem fase explícita (legado): ainda bloqueia
+  return true;
+}
+
 /** Value stored in `hub_leads_crm.humano_responsavel` and `feito_por`. */
 export function humanoResponsavelFromActor(actor: ActorCrm): string {
   const nome = actor.nome?.trim();

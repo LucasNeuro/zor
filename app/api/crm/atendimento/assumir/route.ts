@@ -28,18 +28,29 @@ export async function POST(request: NextRequest) {
 
   const { data: lead, error: leadErr } = await supabase
     .from("hub_leads_crm")
-    .select("id, humano_responsavel")
+    .select("id, humano_responsavel, metadata")
     .eq("id", leadId)
     .maybeSingle();
 
   if (leadErr) return NextResponse.json({ error: leadErr.message }, { status: 500 });
   if (!lead) return NextResponse.json({ error: "Lead não encontrado" }, { status: 404 });
 
+  const metaBase =
+    lead?.metadata && typeof lead.metadata === "object" && !Array.isArray(lead.metadata)
+      ? (lead.metadata as Record<string, unknown>)
+      : {};
+
   const { error: updErr } = await supabase
     .from("hub_leads_crm")
     .update({
       humano_responsavel: humanoSlug,
       atualizado_em: agora,
+      metadata: {
+        ...metaBase,
+        fase_atendimento: "atendimento_humano",
+        humano_assumiu_em: agora,
+        humano_assumiu_via: "crm_assumir",
+      },
     })
     .eq("id", leadId);
 

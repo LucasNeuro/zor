@@ -194,6 +194,77 @@ async function updateJobStatus(
   if (error) throw new Error(`falha update job ${job.id}: ${error.message}`);
 }
 
+function isMissingClaimBatchRpc(errorMessage: string): boolean {
+  const m = errorMessage.toLowerCase();
+  return (
+    m.includes("hub_msg_jobs_claim_batch") &&
+    (m.includes("could not find the function") ||
+      m.includes("does not exist") ||
+      m.includes("schema cache"))
+  );
+}
+
+/** Fallback quando a RPC ainda não foi aplicada no Supabase de produção. */
+async function claimBatchJsFallback(
+  supabase: SupabaseClient,
+  worker: string,
+  batchSize: number
+): Promise<HubMsgJob[]> {
+  const { data: candidates, error } = await supabase
+    .from("hub_msg_jobs")
+    .select("*")
+    .in("status", ["pending", "retry"])
+    .lte("available_at", new Date().toISOString())
+    .order("available_at", { ascending: true })
+    .order("created_at", { ascending: true })
+    .limit(Math.max(batchSize * 4, 8));
+
+  if (error || !Array.isArray(candidates) || candidates.length === 0) {
+    if (error) console.warn("[WORKER] claim JS fallback select:", error.message);
+    return [];
+  }
+
+  const claimed: HubMsgJob[] = [];
+  for (const job of candidates as HubMsgJob[]) {
+    if (claimed.length >= batchSize) break;
+
+    const { data: processing } = await supabase
+      .from("hub_msg_jobs")
+      .select("id")
+      .eq("telefone", job.telefone)
+      .eq("status", "processing")
+      .neq("id", job.id)
+      .limit(1);
+    if (Array.isArray(processing) && processing.length > 0) continue;
+
+    const attempts = typeof job.attempts === "number" ? job.attempts : 0;
+    const { data: updated, error: updErr } = await supabase
+      .from("hub_msg_jobs")
+      .update({
+        status: "processing",
+        attempts: attempts + 1,
+        locked_at: new Date().toISOString(),
+        locked_by: worker,
+        last_error: null,
+      })
+      .eq("id", job.id)
+      .in("status", ["pending", "retry"])
+      .select("*")
+      .maybeSingle();
+
+    if (!updErr && updated) {
+      claimed.push(updated as HubMsgJob);
+    }
+  }
+
+  if (claimed.length > 0) {
+    console.warn(
+      `[WORKER] claim via JS fallback (${claimed.length}) — aplique hub_msg_jobs_repair_schema.sql no Supabase.`
+    );
+  }
+  return claimed;
+}
+
 async function claimBatch(
   supabase: SupabaseClient,
   worker: string,
@@ -203,8 +274,13 @@ async function claimBatch(
     p_worker_id: worker,
     p_limit: batchSize,
   });
-  if (error) throw new Error(`falha claim batch: ${error.message}`);
-  return (Array.isArray(data) ? data : []) as HubMsgJob[];
+  if (!error) {
+    return (Array.isArray(data) ? data : []) as HubMsgJob[];
+  }
+  if (isMissingClaimBatchRpc(error.message)) {
+    return claimBatchJsFallback(supabase, worker, batchSize);
+  }
+  throw new Error(`falha claim batch: ${error.message}`);
 }
 
 /** Jobs presos em processing (ex.: crash) voltam a retry para não bloquear o telefone no claim. */

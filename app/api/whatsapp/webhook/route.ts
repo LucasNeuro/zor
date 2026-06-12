@@ -464,16 +464,54 @@ async function despacharJobWhatsappAposEnqueue(
       dispararProcessamentoJobsWhatsapp(log);
     } else {
       void runWhatsappWorkerTick()
-        .then((result) => {
+        .then(async (result) => {
           log.info("wa.webhook.job_processor_inline", {
             claimed: result.claimed,
             ok: !result.error,
             error: result.error ?? null,
           });
+          if (result.error && result.claimed === 0) {
+            log.warn("wa.webhook.job_processor_inline_fallback", {
+              error: result.error.slice(0, 240),
+              telefone: trace.maskTelefone(ctx.telefone),
+            });
+            try {
+              await processarWhatsappInlineSeFilaIndisponivel(
+                supabase,
+                trace,
+                ctx.payload,
+                ctx.lead,
+                ctx.agenteSlug
+              );
+              log.info("wa.webhook.job_inline_fallback_ok", {
+                telefone: trace.maskTelefone(ctx.telefone),
+                message_id: ctx.messageId,
+              });
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              log.error("wa.webhook.job_inline_fallback_failed", { error: msg.slice(0, 300) });
+            }
+          }
         })
-        .catch((e) => {
+        .catch(async (e) => {
           const msg = e instanceof Error ? e.message : String(e);
           log.warn("wa.webhook.job_processor_inline_failed", { error: msg.slice(0, 200) });
+          try {
+            await processarWhatsappInlineSeFilaIndisponivel(
+              supabase,
+              trace,
+              ctx.payload,
+              ctx.lead,
+              ctx.agenteSlug
+            );
+            log.info("wa.webhook.job_inline_fallback_ok", {
+              telefone: trace.maskTelefone(ctx.telefone),
+              message_id: ctx.messageId,
+            });
+          } catch (inlineErr) {
+            const inlineMsg = inlineErr instanceof Error ? inlineErr.message : String(inlineErr);
+            log.error("wa.webhook.job_inline_fallback_failed", { error: inlineMsg.slice(0, 300) });
+          }
           dispararProcessamentoJobsWhatsapp(log);
         });
     }

@@ -1,0 +1,3 @@
+-- Cole no SQL Editor do Supabase (produção) se o WhatsApp enfileira mas não responde.
+-- Erro típico: hub_msg_jobs_claim_batch ... does not exist
+-- Fonte canônica: supabase/migrations/20260612110000_hub_msg_jobs_repair_schema.sql

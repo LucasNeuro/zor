@@ -224,7 +224,7 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
             <p style={{ fontSize: 10, color: "#6e7681", margin: "8px 0 0", lineHeight: 1.45 }}>
               {modoChat === "briefing_interno"
                 ? "Visão de operação: ciclos, logs e acções reais do agente. Sem ferramentas — isso só na conversa ao vivo com o cliente."
-                : "Simulação de texto com o mesmo prompt de produção; sem cliente nem integrações. Teste de tom antes do WhatsApp."}
+                : "Mesmo fluxo determinístico do WhatsApp (playbook publicado + cargo + conhecimento). Sem UAZAPI nem CRM real — responda como o cliente (número ou texto no menu)."}
             </p>
           </div>
           <button
@@ -267,7 +267,7 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
                   </>
                 ) : (
                   <>
-                    Simule conversa com cliente usando identity + conhecimento + regras. É <strong style={{ color: "#aebccf" }}>só texto</strong> — sem ferramentas nem gravações reais; valide tom e limites antes de ligar o WhatsApp.
+                    Simule o <strong style={{ color: "#aebccf" }}>mesmo fluxo do WhatsApp</strong> (saudação, menus e perguntas do playbook). Publique o playbook com fluxo válido antes. Sem envio real nem gravação no CRM.
                   </>
                 )}
               </p>

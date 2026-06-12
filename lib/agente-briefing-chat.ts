@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { completarChatPreferindoMistral } from "@/lib/ia/llm-completion";
 import { construirPrompt } from "@/lib/ia/prompt-builder";
+import {
+  executarSimulacaoCanalFluxoPlaybook,
+  loadSimFlowStateFromSessao,
+  type SimFlowState,
+} from "@/lib/playbook/simulacao-canal-flow";
 
 const MAX_SNAPSHOT_ACOES = 35;
 const MAX_SNAPSHOT_CICLO_LOG = 60;
@@ -18,9 +23,9 @@ Regras absolutas:
 
 /** Pré-texto para o modo que espelha o system prompt de produção (prompt-builder), sem snapshot operacional. */
 export const SIMULACAO_CANAL_PREAMBLE = `### MODO SIMULAÇÃO DE CANAL (teste no CRM Waje)
-Responda como faria ao **cliente ou lead** no canal ao vivo, seguindo **estritamente** as camadas de identidade, conhecimento e regras que vêm abaixo (equivalente ao que a engine usa).
+Responda como faria ao **cliente ou lead** no canal ao vivo, seguindo **estritamente** as camadas de identidade, conhecimento e regras que vêm abaixo.
 - Não diga que está em briefing interno, revisão operacional ou "somente leitura de logs".
-- **Neste painel não há sessão de lead nem chamadas reais a ferramentas Hub** (Mistral function calls). É só texto: não afirme ter gravado no CRM, enviado WhatsApp ou executado ferramentas. Para ver ferramentas a actuar, use uma **conversa real** com lead em sessão (canal configurado).
+- **Neste painel não há sessão de lead nem chamadas reais a ferramentas Hub** (Mistral function calls). É só texto: não afirme ter gravado no CRM, enviado WhatsApp ou executado ferramentas.
 - Mantenha tom, limites e playbook como em produção.`;
 
 export type BriefingModoSessao = "briefing_interno" | "simulacao_canal";
@@ -210,15 +215,54 @@ export async function executarBriefingReply(params: {
     tokens_input: out.tokensEntrada,
     tokens_output: out.tokensSaida,
     custo_brl: brl,
+    motor: "llm_prompt",
   };
 }
 
-/** Mesma pilha textual que produção (`construirPrompt`), sem dados de hub_ciclos_log / ações. */
+export type SimulacaoCanalReplyResult = {
+  texto: string;
+  modelo: string;
+  tokens_input: number;
+  tokens_output: number;
+  custo_brl: number;
+  motor?: "playbook_flow" | "llm_prompt";
+  flow_state?: SimFlowState;
+};
+
+/** Simulação de canal: motor de fluxo WA (determinístico) quando há playbook publicado; senão LLM com prompt de produção. */
 export async function executarSimulacaoCanalReply(params: {
   agenteSlug: string;
   historico: BriefingMensagemLinha[];
   mensagemUsuario: string;
-}): Promise<{ texto: string; modelo: string; tokens_input: number; tokens_output: number; custo_brl: number }> {
+  supabase?: SupabaseClient;
+  sessaoId?: string;
+  modoOperacao?: string | null;
+}): Promise<SimulacaoCanalReplyResult> {
+  if (
+    params.supabase &&
+    params.sessaoId &&
+    params.modoOperacao === "canal_whatsapp"
+  ) {
+    const flowState = await loadSimFlowStateFromSessao(params.supabase, params.sessaoId);
+    const flowOut = await executarSimulacaoCanalFluxoPlaybook({
+      supabase: params.supabase,
+      agenteSlug: params.agenteSlug,
+      mensagemUsuario: params.mensagemUsuario,
+      flowState,
+    });
+    if (flowOut.ok) {
+      return {
+        texto: flowOut.texto,
+        modelo: "playbook-flow",
+        tokens_input: 0,
+        tokens_output: 0,
+        custo_brl: 0,
+        motor: "playbook_flow",
+        flow_state: flowOut.flowState,
+      };
+    }
+  }
+
   const turnosConversa = params.historico.map((m) => ({
     role: (m.papel === "user" ? "user" : "assistant") as "user" | "assistant",
     content: m.conteudo,
@@ -261,5 +305,6 @@ export async function executarSimulacaoCanalReply(params: {
     tokens_input: out.tokensEntrada,
     tokens_output: out.tokensSaida,
     custo_brl: brl,
+    motor: "llm_prompt",
   };
 }

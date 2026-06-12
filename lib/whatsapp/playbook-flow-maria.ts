@@ -181,7 +181,7 @@ function textFromCompleteAction(
   return fallback;
 }
 
-function convertStructuredFlowToEngine(definition: PlaybookFlowDefinition): FlowEngineDefinition {
+export function convertStructuredFlowToEngine(definition: PlaybookFlowDefinition): FlowEngineDefinition {
   const steps: Record<string, FlowEngineStep> = {};
   const syntheticCompleteSteps: Record<string, FlowEngineStep> = {};
 
@@ -1275,7 +1275,7 @@ async function responderFluxoPlaybookIndisponivel(params: {
   };
 }
 
-async function carregarDynamicPlaybookRuntime(
+export async function carregarDynamicPlaybookRuntime(
   supabase: SupabaseClient,
   agenteSlug: string
 ): Promise<DynamicPlaybookRuntime | null> {

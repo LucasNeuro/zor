@@ -187,7 +187,7 @@ export async function POST(
 
   const { data: agente, error: agErr } = await supabase
     .from("hub_agente_identidade")
-    .select("agente_slug, nome, cargo, modelo_padrao, system_prompt_base")
+    .select("agente_slug, nome, cargo, modelo_padrao, system_prompt_base, modo_operacao")
     .eq("agente_slug", slug)
     .maybeSingle();
 
@@ -272,6 +272,10 @@ export async function POST(
         agenteSlug: slug,
         historico: historicoParaModelo,
         mensagemUsuario: textoUser,
+        supabase,
+        sessaoId,
+        modoOperacao:
+          typeof agente.modo_operacao === "string" ? agente.modo_operacao : null,
       });
     } else {
       const snapshot = await montarSnapshotOperacionalReadOnly(
@@ -307,6 +311,8 @@ export async function POST(
       tokens_output: resultado.tokens_output,
       custo_brl: resultado.custo_brl,
       modo,
+      motor: resultado.motor ?? "llm_prompt",
+      ...(resultado.flow_state ? { flow_state: resultado.flow_state } : {}),
     },
   });
   if (aErr) return erroBriefingJson(aErr.message, 500);

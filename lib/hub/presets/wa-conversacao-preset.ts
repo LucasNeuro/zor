@@ -11,7 +11,11 @@ import {
 } from "@/lib/hub/provision-hub-ciclo-padrao";
 import { serializarUsoFerramentasParaDb } from "@/lib/mistral/sync-hub-agent";
 import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
-import { savePlaybookMarkdownForAgent } from "@/lib/playbook/custom-playbook";
+import {
+  loadCurrentPlaybookMarkdown,
+  savePlaybookMarkdownForAgent,
+} from "@/lib/playbook/custom-playbook";
+import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
 import { loadPlaybookFlowTemplateMarkdown } from "@/lib/playbook/playbook-flow-template";
 import { updateHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-compat";
 import { defaultTenantId } from "@/lib/tenant-default";
@@ -246,11 +250,46 @@ export async function applyWaConversacaoPreset(
       return { ok: false, error: msg, passos };
     }
   } else {
-    passos.push({
-      passo: "playbook",
-      ok: true,
-      detalhe: "Playbook existente preservado (use forcar_playbook para substituir).",
-    });
+    const loaded = await loadCurrentPlaybookMarkdown(supabase, agenteSlug);
+    if (!loaded.ok) {
+      passos.push({
+        passo: "playbook",
+        ok: true,
+        detalhe: "Playbook referenciado mas não legível — use «Adaptar motor WA» no CRM.",
+      });
+    } else {
+      const fluxoAtual = assessPlaybookFlowInMarkdown(loaded.markdown);
+      if (fluxoAtual.kind === "ready") {
+        passos.push({
+          passo: "playbook",
+          ok: true,
+          detalhe: "Texto narrativo preservado — fluxo WA já válido.",
+        });
+      } else {
+        const ensured = await ensureMarkdownWithWhatsappFlow(loaded.markdown);
+        if (!ensured.ok) {
+          passos.push({
+            passo: "playbook",
+            ok: false,
+            detalhe: ensured.errors.join("; "),
+          });
+          return { ok: false, error: "Não foi possível acrescentar fluxo WA ao playbook existente.", passos };
+        }
+        const saved = await savePlaybookMarkdownForAgent(supabase, agenteSlug, ensured.markdown);
+        if (!saved.ok) {
+          passos.push({ passo: "playbook", ok: false, detalhe: saved.error });
+          return { ok: false, error: saved.error, passos };
+        }
+        playbookPublicado = true;
+        passos.push({
+          passo: "playbook",
+          ok: true,
+          detalhe: ensured.auto_appended_flow
+            ? "Bloco waje_playbook_flow acrescentado ao playbook existente (texto mantido)."
+            : "Playbook existente validado e republicado com fluxo WA.",
+        });
+      }
+    }
   }
 
   const cicloGatilho = await ensureHubCicloPadraoParaAgente(supabase, agenteSlug);

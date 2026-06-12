@@ -459,7 +459,15 @@ export function AgentePlaybookCalibracaoDrawer({
         setErro(extractApiError(data, `Erro HTTP ${res.status}`));
         return;
       }
-      toastSuccess("Preset conversação WA aplicado com sucesso.");
+      const passos = Array.isArray(data.passos)
+        ? (data.passos as Array<{ passo?: string; detalhe?: string }>)
+        : [];
+      const detalhePlaybook = passos.find((p) => p.passo === "playbook")?.detalhe;
+      toastSuccess(
+        detalhePlaybook
+          ? `Preset WA aplicado. ${detalhePlaybook}`
+          : "Preset conversação WA aplicado com sucesso."
+      );
       await carregarConteudo();
     } catch {
       setErro("Falha de rede ao aplicar preset WA.");

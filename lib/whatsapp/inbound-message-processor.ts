@@ -361,16 +361,25 @@ export async function processarMensagemInboundWhatsapp(params: {
         metadata: leadMetaRow?.metadata,
       });
       if (playbookOut.handled) {
+        const playbookHybridIaTurno =
+          playbookOut.skipIa === false &&
+          Boolean(playbookOut.flowContext?.trim() || playbookOut.motor === "playbook_ia");
         log.info("wa.processor.playbook_dynamic_or_fallback", {
           telefone: trace.maskTelefone(params.telefone),
           agente_slug: agenteSlug,
           step: playbookOut.step ?? null,
           skip_ia: playbookOut.skipIa,
-          bloquear_ia: playbookOut.bloquearIa ?? playbookRouting.bloquearIa,
+          bloquear_ia: playbookHybridIaTurno
+            ? false
+            : (playbookOut.bloquearIa ?? playbookRouting.bloquearIa),
+          hybrid_ia: playbookHybridIaTurno,
           motivo: playbookOut.motivo ?? playbookRouting.motivo ?? null,
           motor: playbookOut.motor ?? null,
         });
-        if (playbookOut.skipIa || playbookOut.bloquearIa || playbookRouting.bloquearIa) {
+        if (playbookOut.skipIa) {
+          return;
+        }
+        if (!playbookHybridIaTurno && (playbookOut.bloquearIa || playbookRouting.bloquearIa)) {
           return;
         }
         if (playbookOut.flowContext?.trim()) {

@@ -1791,7 +1791,10 @@ export async function processarPlaybookMariaInbound(params: {
         });
         return {
           ...dynamicOut,
-          bloquearIa: routing.bloquearIa || dynamicOut.bloquearIa,
+          bloquearIa:
+            dynamicOut.skipIa === false && dynamicOut.flowContext?.trim()
+              ? false
+              : routing.bloquearIa || dynamicOut.bloquearIa,
         };
       }
       console.info("[playbook-flow] dynamic flow unavailable, fallback evaluation", {

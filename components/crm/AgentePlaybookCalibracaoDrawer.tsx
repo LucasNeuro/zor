@@ -1,9 +1,9 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, GitBranch, RefreshCw, Save, Send, User, X } from "lucide-react";
+import { Bot, GitBranch, LayoutGrid, RefreshCw, Save, Send, User, Wand2, X } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
   PlaybookUploadAnalisePanel,
@@ -19,7 +19,6 @@ const PlaybookFlowVisualSideover = dynamic(
     })),
   { ssr: false, loading: () => null }
 );
-import { CrmHeaderActionsRow } from "@/components/crm/CrmHeaderActionsRow";
 import { crmFeatureFlags } from "@/lib/crm/feature-flags";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import { CRM_ACCENT, crmBtnPrimary } from "@/lib/crm/crm-button-styles";
@@ -69,6 +68,128 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+const CALIB_GROUP_BORDER = "1px solid rgba(63, 152, 72, 0.38)";
+
+function CalibToolbarGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
+      <span
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "#5a7a62",
+          paddingLeft: 2,
+        }}
+      >
+        {label}
+      </span>
+      <div
+        role="group"
+        aria-label={label}
+        style={{
+          display: "inline-flex",
+          alignItems: "stretch",
+          flexWrap: "nowrap",
+          borderRadius: 10,
+          border: CALIB_GROUP_BORDER,
+          overflow: "hidden",
+          background: "rgba(6, 13, 8, 0.82)",
+          boxShadow: "inset 0 1px 0 rgba(146, 255, 0, 0.06)",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function calibToolbarBtn(
+  variant: "ghost" | "accent" | "primary",
+  opts?: { disabled?: boolean; isLast?: boolean }
+): CSSProperties {
+  const disabled = opts?.disabled ?? false;
+  const base: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 12px",
+    border: "none",
+    borderRight: opts?.isLast ? undefined : CALIB_GROUP_BORDER,
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+    whiteSpace: "nowrap",
+    opacity: disabled ? 0.45 : 1,
+    transition: "background 0.15s ease, color 0.15s ease",
+  };
+
+  if (variant === "primary") {
+    return {
+      ...base,
+      padding: "9px 16px",
+      borderRadius: 10,
+      border: "none",
+      background: disabled ? "#4a6356" : BRAND_TEXT_DARK,
+      color: disabled ? "#c8dcc8" : BRAND_GREEN_BRIGHT,
+      boxShadow: disabled ? "none" : "0 2px 10px rgba(0, 0, 0, 0.28)",
+    };
+  }
+
+  if (variant === "accent") {
+    return {
+      ...base,
+      background: disabled ? "rgba(6, 13, 8, 0.5)" : "rgba(146, 255, 0, 0.14)",
+      color: disabled ? "#6e7681" : CRM_ACCENT,
+    };
+  }
+
+  return {
+    ...base,
+    background: "transparent",
+    color: disabled ? "#6e7681" : "#d4e8d6",
+  };
+}
+
+function CalibStatusBadge({ dirty }: { dirty: boolean }) {
+  if (dirty) {
+    return (
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          padding: "3px 9px",
+          borderRadius: 999,
+          border: "1px solid rgba(210, 153, 34, 0.45)",
+          background: "rgba(210, 153, 34, 0.12)",
+          color: "#e3b341",
+          flexShrink: 0,
+        }}
+      >
+        Rascunho
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        padding: "3px 9px",
+        borderRadius: 999,
+        border: "1px solid rgba(63, 185, 80, 0.4)",
+        background: "rgba(63, 185, 80, 0.12)",
+        color: "#3fb950",
+        flexShrink: 0,
+      }}
+    >
+      Publicado
+    </span>
+  );
 }
 
 export function AgentePlaybookCalibracaoDrawer({
@@ -642,31 +763,61 @@ export function AgentePlaybookCalibracaoDrawer({
         <div
           style={{
             flexShrink: 0,
-            padding: "14px 16px",
-            borderBottom: "1px solid rgba(146, 255, 0, 0.16)",
+            padding: "16px 18px 14px",
+            borderBottom: "1px solid rgba(146, 255, 0, 0.14)",
             display: "flex",
             flexDirection: "column",
-            gap: 10,
-            background: "#0b1f10",
+            gap: 12,
+            background: "linear-gradient(180deg, #0d2214 0%, #0b1f10 100%)",
           }}
         >
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <h2 style={{ color: "#e8f5e9", fontSize: 15, fontWeight: 700, margin: 0 }}>
-                Playbook — Calibração
-              </h2>
-              <p style={{ color: "#7a9a7e", fontSize: 12, fontWeight: 600, margin: "4px 0 0" }}>
-                {agenteNome}
-              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <h2 style={{ color: "#e8f5e9", fontSize: 16, fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>
+                  Playbook — Calibração
+                </h2>
+                <CalibStatusBadge dirty={dirty} />
+              </div>
+              <p style={{ color: "#92ff00", fontSize: 12, fontWeight: 600, margin: "5px 0 0" }}>{agenteNome}</p>
               {meta.generatedAt ? (
-                <p style={{ color: "#6e7681", fontSize: 10, margin: "6px 0 0" }}>
-                  Publicado: {new Date(meta.generatedAt).toLocaleString("pt-BR")}
-                  {meta.hash ? ` · hash ${meta.hash.slice(0, 10)}…` : ""}
-                  {temConteudo ? ` · ${formatBytes(new TextEncoder().encode(markdown).length)}` : ""}
+                <p
+                  style={{
+                    color: "#6e7681",
+                    fontSize: 11,
+                    margin: "6px 0 0",
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "4px 10px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <span>
+                    Última publicação:{" "}
+                    <span style={{ color: "#8b949e" }}>
+                      {new Date(meta.generatedAt).toLocaleString("pt-BR")}
+                    </span>
+                  </span>
+                  {meta.hash ? (
+                    <span>
+                      Hash{" "}
+                      <code style={{ color: "#7a9a7e", fontSize: 10 }}>{meta.hash.slice(0, 10)}…</code>
+                    </span>
+                  ) : null}
+                  {temConteudo ? (
+                    <span>
+                      Tamanho{" "}
+                      <span style={{ color: "#8b949e" }}>
+                        {formatBytes(new TextEncoder().encode(markdown).length)}
+                      </span>
+                    </span>
+                  ) : null}
                 </p>
-              ) : null}
+              ) : (
+                <p style={{ color: "#6e7681", fontSize: 11, margin: "6px 0 0" }}>Nenhuma publicação no bucket ainda.</p>
+              )}
               {erro ? (
-                <p style={{ color: "#f85149", fontSize: 11, margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{erro}</p>
+                <p style={{ color: "#f85149", fontSize: 11, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{erro}</p>
               ) : null}
             </div>
             <button
@@ -675,11 +826,11 @@ export function AgentePlaybookCalibracaoDrawer({
               aria-label="Fechar"
               style={{
                 flexShrink: 0,
-                width: 40,
-                height: 40,
+                width: 36,
+                height: 36,
                 borderRadius: 10,
-                border: "1px solid rgba(63, 152, 72, 0.42)",
-                background: "rgba(6, 13, 8, 0.6)",
+                border: "1px solid rgba(63, 152, 72, 0.35)",
+                background: "rgba(6, 13, 8, 0.55)",
                 color: "#92ff00",
                 cursor: "pointer",
                 display: "flex",
@@ -687,127 +838,116 @@ export function AgentePlaybookCalibracaoDrawer({
                 justifyContent: "center",
               }}
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
-            <CrmHeaderActionsRow align="start" overflowBehavior="scroll">
-              {visualBuilderEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void emitFlowVisualTelemetry({
-                      event: "playbook.flow_visual.sideover_opened",
-                      agente_slug: agenteSlug,
-                      metadata: {
-                        source: "visual_button",
-                      },
-                    });
-                    setVisualSideoverOpen(true);
-                  }}
-                  style={{
-                    ...btnToolbar,
-                    background: "rgba(146, 255, 0, 0.12)",
-                    color: CRM_ACCENT,
-                  }}
-                  title="Abrir editor visual React Flow em sideover dedicado"
-                >
-                  Editar fluxo visual
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void carregarConteudo()}
-                disabled={carregando}
-                style={btnToolbar}
-                title="Recarrega o playbook publicado do bucket"
-              >
-                <RefreshCw size={14} /> Recarregar
-              </button>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              gap: "12px 16px",
+            }}
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, minWidth: 0, flex: 1 }}>
               {whatsappFlowAgent ? (
+                <CalibToolbarGroup label="Fluxo WhatsApp">
+                  {visualBuilderEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void emitFlowVisualTelemetry({
+                          event: "playbook.flow_visual.sideover_opened",
+                          agente_slug: agenteSlug,
+                          metadata: { source: "visual_button" },
+                        });
+                        setVisualSideoverOpen(true);
+                      }}
+                      style={calibToolbarBtn("accent")}
+                      title="Abrir editor visual React Flow"
+                    >
+                      <LayoutGrid size={14} /> Editor visual
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void gerarFluxoDaEmpresa(flowStatus.kind === "ready")}
+                    disabled={
+                      carregando ||
+                      publicando ||
+                      uploadStatus === "enviando" ||
+                      adaptandoMotor ||
+                      !temConteudo
+                    }
+                    style={calibToolbarBtn(
+                      flowStatus.kind === "ready" ? "ghost" : "accent",
+                      { disabled: carregando || publicando || uploadStatus === "enviando" || adaptandoMotor || !temConteudo, isLast: true }
+                    )}
+                    title={`Gera o bloco json ${PLAYBOOK_FLOW_FENCE_TAG} a partir do cargo, conhecimento e docs da empresa`}
+                  >
+                    <GitBranch size={14} />
+                    {adaptandoMotor ? "A gerar…" : "Gerar fluxo"}
+                  </button>
+                </CalibToolbarGroup>
+              ) : null}
+
+              <CalibToolbarGroup label="Conteúdo">
                 <button
                   type="button"
-                  onClick={() => void aplicarPresetConversacaoWa(false)}
-                  disabled={carregando || publicando || aplicandoPresetWa}
-                  style={{
-                    ...btnToolbar,
-                    background: "rgba(146, 255, 0, 0.18)",
-                    color: CRM_ACCENT,
-                  }}
-                  title="Playbook + cargo + ferramentas + ciclos (preserva playbook existente)"
+                  onClick={() => void carregarConteudo()}
+                  disabled={carregando}
+                  style={calibToolbarBtn("ghost", { disabled: carregando })}
+                  title="Recarrega o playbook publicado do bucket"
                 >
-                  {aplicandoPresetWa ? "A aplicar…" : "Preset conversação WA"}
+                  <RefreshCw size={14} className={carregando ? "animate-spin" : undefined} />
+                  Recarregar
                 </button>
-              ) : null}
-              {whatsappFlowAgent ? (
                 <button
                   type="button"
-                  onClick={() => void gerarFluxoDaEmpresa(flowStatus.kind === "ready")}
-                  disabled={
-                    carregando ||
-                    publicando ||
-                    uploadStatus === "enviando" ||
-                    adaptandoMotor ||
-                    !temConteudo
-                  }
-                  style={{
-                    ...btnToolbar,
-                    background: flowStatus.kind === "ready" ? "rgba(6, 13, 8, 0.72)" : "rgba(146, 255, 0, 0.12)",
-                    color: flowStatus.kind === "ready" ? "#7a9a7e" : CRM_ACCENT,
-                  }}
-                  title={`Gera o bloco json ${PLAYBOOK_FLOW_FENCE_TAG} a partir do cargo, conhecimento e base documental da empresa`}
+                  onClick={() => void regenerarDoAgente()}
+                  disabled={regenerando || carregando}
+                  style={calibToolbarBtn("ghost", {
+                    disabled: regenerando || carregando,
+                    isLast: !whatsappFlowAgent,
+                  })}
+                  title="Gera playbook a partir do cargo/conhecimento do agente (pode remover o fluxo WA)"
                 >
-                  <GitBranch size={14} />{" "}
-                  {adaptandoMotor ? "A gerar…" : "Gerar fluxo da empresa"}
+                  <Wand2 size={14} />
+                  {regenerando ? "A gerar…" : "Regenerar"}
                 </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void regenerarDoAgente()}
-                disabled={regenerando || carregando}
-                style={btnToolbar}
-                title="Gera playbook a partir do cargo/conhecimento do agente (pode remover o fluxo WA)"
-              >
-                <RefreshCw size={14} className={regenerando ? "animate-spin" : undefined} />
-                {regenerando ? "A gerar…" : "Regenerar"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void publicarMarkdown()}
-                disabled={!canPublishPlaybook}
-                style={{
-                  ...btnToolbarPublish,
-                  ...(!canPublishPlaybook
-                    ? { background: "#4a6356", color: "#c8dcc8", cursor: "not-allowed" }
-                    : {}),
-                }}
-                title={
-                  publishRequiresWhatsappFlow && flowStatus.kind !== "ready"
-                    ? "Use «Gerar fluxo da empresa» até o banner verde antes de publicar"
-                    : "Grava o rascunho no bucket e substitui playbook.md"
-                }
-              >
-                <Save size={14} /> {publicando ? "A publicar…" : "Publicar alterações"}
-              </button>
-            </CrmHeaderActionsRow>
-            {dirty ? (
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "#d29922",
-                  fontWeight: 700,
-                  padding: "4px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #d2992244",
-                  background: "#d2992211",
-                  flexShrink: 0,
-                }}
-              >
-                Rascunho não publicado
-              </span>
-            ) : (
-              <span style={{ fontSize: 10, color: "#3fb950", fontWeight: 600, flexShrink: 0 }}>Publicado</span>
-            )}
+                {whatsappFlowAgent ? (
+                  <button
+                    type="button"
+                    onClick={() => void aplicarPresetConversacaoWa(false)}
+                    disabled={carregando || publicando || aplicandoPresetWa}
+                    style={calibToolbarBtn("ghost", {
+                      disabled: carregando || publicando || aplicandoPresetWa,
+                      isLast: true,
+                    })}
+                    title="Playbook + cargo + ferramentas + ciclos (preserva playbook existente)"
+                  >
+                    {aplicandoPresetWa ? "A aplicar…" : "Preset WA"}
+                  </button>
+                ) : null}
+              </CalibToolbarGroup>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void publicarMarkdown()}
+              disabled={!canPublishPlaybook}
+              style={calibToolbarBtn("primary", { disabled: !canPublishPlaybook })}
+              title={
+                publishRequiresWhatsappFlow && flowStatus.kind !== "ready"
+                  ? "Use «Gerar fluxo» até o banner verde antes de publicar"
+                  : "Grava o rascunho no bucket e substitui playbook.md"
+              }
+            >
+              <Save size={14} />
+              {publicando ? "A publicar…" : "Publicar"}
+            </button>
           </div>
         </div>
 
@@ -1126,28 +1266,6 @@ export function AgentePlaybookCalibracaoDrawer({
     </>
   );
 }
-
-/** Base para botões dentro de `CrmHeaderActionsRow` (borda/radius vêm do grupo). */
-const btnToolbar: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "8px 12px",
-  borderRadius: 0,
-  border: "none",
-  background: "rgba(6, 13, 8, 0.72)",
-  color: "#e8f5e9",
-  fontSize: 11,
-  fontWeight: 700,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};
-
-const btnToolbarPublish: CSSProperties = {
-  ...btnToolbar,
-  background: BRAND_TEXT_DARK,
-  color: BRAND_GREEN_BRIGHT,
-};
 
 const btnPrimario: CSSProperties = {
   ...crmBtnPrimary(),

@@ -23,7 +23,7 @@ export function assessPlaybookFlowInMarkdown(markdown: string): PlaybookFlowUiSt
       return {
         kind: "no_flow_block",
         message:
-          `Este playbook ainda não tem bloco de fluxo dinâmico. Use «Adaptar motor WA» ou adicione \`json ${PLAYBOOK_FLOW_FENCE_TAG}\` com \`waje_playbook_flow_schema: 1\` para menus e passos no WhatsApp.`,
+          `Este playbook ainda não tem bloco de fluxo dinâmico. Use «Gerar fluxo da empresa» ou adicione \`json ${PLAYBOOK_FLOW_FENCE_TAG}\` com \`waje_playbook_flow_schema: 1\` para menus e passos no WhatsApp.`,
       };
     }
     return { kind: "invalid", errors: parsed.errors, reason: parsed.reason };

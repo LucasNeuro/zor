@@ -30,8 +30,6 @@ import {
   assessPlaybookFlowInMarkdown,
 } from "@/lib/playbook/playbook-flow-ui";
 import { PLAYBOOK_FLOW_FENCE_TAG } from "@/lib/playbook/flow-schema";
-import { adaptarMarkdownParaMotorWhatsapp } from "@/lib/playbook/playbook-flow-markdown";
-import { PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
 import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
 import {
   useCrmConfirm,
@@ -259,11 +257,11 @@ export function AgentePlaybookCalibracaoDrawer({
         );
       } else if (statusToPublish.kind === "no_flow_block") {
         setErro(
-          `Antes de publicar, gere/edite o bloco \`json ${PLAYBOOK_FLOW_FENCE_TAG}\` no modo visual ou use «Adaptar motor WA».`
+          `Antes de publicar, gere/edite o bloco \`json ${PLAYBOOK_FLOW_FENCE_TAG}\` no modo visual ou use «Gerar fluxo da empresa».`
         );
       } else {
         setErro(
-          `Antes de publicar, use «Adaptar motor WA» até o banner verde confirmar o fluxo WhatsApp (\`${PLAYBOOK_FLOW_FENCE_TAG}\`).`
+          `Antes de publicar, use «Gerar fluxo da empresa» até o banner verde confirmar o fluxo WhatsApp (\`${PLAYBOOK_FLOW_FENCE_TAG}\`).`
         );
       }
       return;
@@ -476,14 +474,14 @@ export function AgentePlaybookCalibracaoDrawer({
     }
   }
 
-  async function adaptarTextoAoMotorWhatsapp() {
+  async function gerarFluxoDaEmpresa(forcarSubstituir = false) {
     if (carregando || publicando || uploadStatus === "enviando" || adaptandoMotor) return;
     if (!temConteudo) {
-      setErro("Cole ou carregue o playbook no editor antes de adaptar ao motor.");
+      setErro("Cole ou carregue o playbook no editor antes de gerar o fluxo.");
       return;
     }
-    if (flowStatus.kind === "ready") {
-      toastInfo("O rascunho já tem fluxo WhatsApp válido. Pode publicar.");
+    if (flowStatus.kind === "ready" && !forcarSubstituir) {
+      toastInfo("O rascunho já tem fluxo WhatsApp válido. Pode publicar ou regenerar o fluxo da empresa.");
       if (dirty) {
         await confirmarEPublicar(markdown, {
           title: "Publicar rascunho agora?",
@@ -497,39 +495,50 @@ export function AgentePlaybookCalibracaoDrawer({
     setAdaptandoMotor(true);
     setErro("");
     try {
-      const res = await fetch(PLAYBOOK_EXEMPLO_MD_URL, { headers: internalApiHeaders() });
+      const res = await fetch(
+        `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/fluxo-empresa`,
+        {
+          method: "POST",
+          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ content: markdown }),
+        }
+      );
+      const data = (await res.json()) as {
+        error?: string;
+        markdown?: string;
+        message?: string;
+        resumo_contexto?: { empresa_label?: string; nicho?: string | null; opcoes_triagem?: string[] };
+      };
       if (!res.ok) {
-        setErro(`Falha ao carregar template de fluxo (HTTP ${res.status}).`);
+        setErro(data.error ?? `Falha ao gerar fluxo (HTTP ${res.status}).`);
         return;
       }
-      const template = (await res.text()).trim();
-      const out = adaptarMarkdownParaMotorWhatsapp(markdown, template);
-      if (!out.ok) {
-        setErro(out.error);
+      const outMarkdown = typeof data.markdown === "string" ? data.markdown : "";
+      if (!outMarkdown.trim()) {
+        setErro("Resposta sem markdown do fluxo.");
         return;
-      }
-      if (out.action === "appended_flow") {
-        setMarkdown(out.markdown);
-        setAnaliseResultado(null);
-        setAnaliseErro("");
-      }
-      if (out.action === "replaced_flow") {
-        setMarkdown(out.markdown);
-        setAnaliseResultado(null);
-        setAnaliseErro("");
-        toastSuccess("Fluxo substituído com template WA atual. Rascunho pronto para publicar.");
-      } else {
-        toastInfo(out.message);
       }
 
-      await confirmarEPublicar(out.markdown, {
-        title: "Publicar playbook adaptado?",
-        message: "Playbook adaptado para o motor WA. Deseja publicar agora (modo 1-clique)?",
+      setMarkdown(outMarkdown);
+      setAnaliseResultado(null);
+      setAnaliseErro("");
+
+      const empresa = data.resumo_contexto?.empresa_label ?? "empresa";
+      const nicho = data.resumo_contexto?.nicho;
+      toastSuccess(
+        nicho
+          ? `Fluxo gerado para ${empresa} (${nicho}). Revise no editor visual e publique.`
+          : `Fluxo gerado para ${empresa}. Revise no editor visual e publique.`
+      );
+
+      await confirmarEPublicar(outMarkdown, {
+        title: "Publicar playbook com fluxo da empresa?",
+        message: data.message ?? "Fluxo contextual pronto. Deseja publicar agora?",
         confirmLabel: "Publicar agora",
         variant: "success",
       });
     } catch {
-      setErro("Falha de rede ao adaptar ao motor WhatsApp.");
+      setErro("Falha de rede ao gerar fluxo da empresa.");
     } finally {
       setAdaptandoMotor(false);
     }
@@ -733,7 +742,7 @@ export function AgentePlaybookCalibracaoDrawer({
               {whatsappFlowAgent ? (
                 <button
                   type="button"
-                  onClick={() => void adaptarTextoAoMotorWhatsapp()}
+                  onClick={() => void gerarFluxoDaEmpresa(flowStatus.kind === "ready")}
                   disabled={
                     carregando ||
                     publicando ||
@@ -746,10 +755,10 @@ export function AgentePlaybookCalibracaoDrawer({
                     background: flowStatus.kind === "ready" ? "rgba(6, 13, 8, 0.72)" : "rgba(146, 255, 0, 0.12)",
                     color: flowStatus.kind === "ready" ? "#7a9a7e" : CRM_ACCENT,
                   }}
-                  title={`Mantém o texto actual e acrescenta o bloco json ${PLAYBOOK_FLOW_FENCE_TAG} (template v1) para o WhatsApp`}
+                  title={`Gera o bloco json ${PLAYBOOK_FLOW_FENCE_TAG} a partir do cargo, conhecimento e base documental da empresa`}
                 >
                   <GitBranch size={14} />{" "}
-                  {adaptandoMotor ? "A adaptar…" : "Adaptar motor WA"}
+                  {adaptandoMotor ? "A gerar…" : "Gerar fluxo da empresa"}
                 </button>
               ) : null}
               <button
@@ -774,7 +783,7 @@ export function AgentePlaybookCalibracaoDrawer({
                 }}
                 title={
                   publishRequiresWhatsappFlow && flowStatus.kind !== "ready"
-                    ? "Use «Adaptar motor WA» até o banner verde antes de publicar"
+                    ? "Use «Gerar fluxo da empresa» até o banner verde antes de publicar"
                     : "Grava o rascunho no bucket e substitui playbook.md"
                 }
               >

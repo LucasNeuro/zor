@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { uploadCustomPlaybookForAgent } from "@/lib/playbook/custom-playbook";
 import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
+import { aplicarFluxoEmpresaAoMarkdown } from "@/lib/playbook/playbook-flow-from-context";
 import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 
@@ -56,15 +57,21 @@ export async function POST(
   let flowAutoAppended = false;
 
   if (agenteModo?.modo_operacao === "canal_whatsapp") {
-    const ensured = await ensureMarkdownWithWhatsappFlow(markdown);
-    if (!ensured.ok) {
-      return NextResponse.json(
-        { error: "Fluxo WhatsApp inválido ou ausente.", errors: ensured.errors },
-        { status: 400 }
-      );
+    const fluxoEmpresa = await aplicarFluxoEmpresaAoMarkdown(supabase, slug, markdown);
+    if (fluxoEmpresa.ok) {
+      markdown = fluxoEmpresa.markdown;
+      flowAutoAppended = fluxoEmpresa.action === "appended_flow";
+    } else {
+      const ensured = await ensureMarkdownWithWhatsappFlow(markdown);
+      if (!ensured.ok) {
+        return NextResponse.json(
+          { error: "Fluxo WhatsApp inválido ou ausente.", errors: ensured.errors },
+          { status: 400 }
+        );
+      }
+      markdown = ensured.markdown;
+      flowAutoAppended = ensured.auto_appended_flow;
     }
-    markdown = ensured.markdown;
-    flowAutoAppended = ensured.auto_appended_flow;
   }
 
   const parsed = parsePlaybookFlowFromMarkdown(markdown);

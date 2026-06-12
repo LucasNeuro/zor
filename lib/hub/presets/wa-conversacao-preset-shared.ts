@@ -24,10 +24,10 @@ export const WA_PRESETS_META: Record<WaPresetId, WaPresetMeta> = {
     id: "conversacao_universal",
     titulo: "Conversação WhatsApp Waje",
     descricao:
-      "Playbook Waje v1 com fluxo dinâmico, cargo de atendimento, ferramentas CRM, ciclo sob interação e follow-up proativo.",
+      "Playbook Waje com fluxo dinâmico contextual (cargo + base de conhecimento da empresa), ferramentas CRM, ciclo sob interação e follow-up.",
     cargo_slug: WA_PRESET_CARGO_SLUG,
     inclui: [
-      "Playbook publicado com bloco waje_playbook_flow",
+      "Playbook com fluxo waje_playbook_flow gerado no contexto da empresa",
       "Cargo com perguntas essenciais sequenciais",
       "Motor de ferramentas (menu WA, CRM, notas)",
       "Ciclo gatilho (sob interação)",

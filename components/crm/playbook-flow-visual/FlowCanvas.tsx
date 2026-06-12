@@ -912,11 +912,11 @@ const canvasStyle: CSSProperties = {
   inset: 0,
   width: "100%",
   height: "100%",
-  border: "1px solid #25344d",
+  border: "1px solid rgba(146, 255, 0, 0.18)",
   borderRadius: 14,
   overflow: "hidden",
-  background: "#060c18",
-  boxShadow: "0 14px 36px #0206178a",
+  background: "#060d08",
+  boxShadow: "0 14px 36px rgba(6, 13, 8, 0.65)",
 };
 
 const canvasToolbarStyle: CSSProperties = {
@@ -928,11 +928,11 @@ const canvasToolbarStyle: CSSProperties = {
   gap: 7,
   flexWrap: "wrap",
   maxWidth: "calc(100% - 24px)",
-  background: "#0b1425dc",
-  border: "1px solid #23314a",
+  background: "rgba(11, 31, 16, 0.92)",
+  border: "1px solid rgba(146, 255, 0, 0.2)",
   borderRadius: 11,
   padding: 7,
-  boxShadow: "0 8px 20px #02061799",
+  boxShadow: "0 8px 20px rgba(6, 13, 8, 0.55)",
   backdropFilter: "blur(4px)",
 };
 
@@ -940,9 +940,9 @@ const toolbarButtonStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 5,
-  background: "#101b30",
-  color: "#dbe7ff",
-  border: "1px solid #2a3a57",
+  background: "rgba(146, 255, 0, 0.1)",
+  color: "#e8f5e9",
+  border: "1px solid rgba(63, 152, 72, 0.45)",
   borderRadius: 8,
   padding: "6px 10px",
   fontSize: 12,

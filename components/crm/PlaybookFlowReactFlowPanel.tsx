@@ -113,11 +113,11 @@ export function PlaybookFlowReactFlowPanel({
         <p style={hintText}>
           {isMissingBlock ? (
             <>
-              Feche este editor, volte à calibração e clique em <strong>Adaptar motor WA</strong> para gerar o JSON
+              Feche este editor, volte à calibração e clique em <strong>Gerar fluxo da empresa</strong> para gerar o JSON
               automaticamente. Depois reabra «Editar fluxo visual».
             </>
           ) : (
-            <>Corrija o JSON no editor textual ou regenere com «Adaptar motor WA».</>
+            <>Corrija o JSON no editor textual ou regenere com «Gerar fluxo da empresa».</>
           )}
         </p>
         {!isMissingBlock && parsed.errors.length > 0 && (

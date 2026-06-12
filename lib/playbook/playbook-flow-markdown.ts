@@ -41,6 +41,50 @@ ${body}
  * Mantém o corpo narrativo (prompt/cargo) e acrescenta ou preserva o bloco
  * `obra10_playbook_flow` exigido pelo motor determinístico do WhatsApp.
  */
+/**
+ * Anexa ou substitui o bloco de fluxo a partir de uma definição já validada
+ * (ex.: fluxo gerado a partir do cargo e da base de conhecimento da empresa).
+ */
+export function anexarFluxoDefinitionAoMarkdown(
+  narrativeMarkdown: string,
+  definition: PlaybookFlowDefinition,
+  messageContextual?: string
+): AdaptarMarkdownMotorWhatsappResult {
+  const current = String(narrativeMarkdown ?? "").trim();
+  if (!current) {
+    return { ok: false, error: "O editor está vazio. Cole ou carregue o playbook antes de gerar o fluxo." };
+  }
+
+  const validated = validatePlaybookFlowDefinition(definition);
+  if (!validated.ok) {
+    return { ok: false, error: validated.errors[0] ?? "Fluxo contextual inválido." };
+  }
+
+  const narrativeBase = looksLikeStructuredMarkdown(current)
+    ? current
+    : buildMarkdownFromPlainText(current);
+
+  const hadValidFlow = (() => {
+    const parsed = parsePlaybookFlowFromMarkdown(narrativeBase);
+    if (!parsed.ok) return false;
+    return validatePlaybookFlowDefinition(parsed.definition).ok;
+  })();
+
+  const base = narrativeBase.replace(FLOW_SECTION_RE, "").trimEnd();
+  const markdown = base + renderPlaybookFlowBlockToMarkdown(validated.definition);
+
+  return {
+    ok: true,
+    markdown,
+    action: hadValidFlow ? "replaced_flow" : "appended_flow",
+    message:
+      messageContextual ??
+      (hadValidFlow
+        ? "Bloco de fluxo WhatsApp substituído pelo fluxo da empresa. Revise e publique."
+        : "Bloco de fluxo WhatsApp gerado a partir do cargo e da base de conhecimento. Revise e publique."),
+  };
+}
+
 export function adaptarMarkdownParaMotorWhatsapp(
   narrativeMarkdown: string,
   templateMarkdownComFluxo: string

@@ -17,6 +17,7 @@ import {
 } from "@/lib/playbook/custom-playbook";
 import { assessPlaybookFlowInMarkdown } from "@/lib/playbook/playbook-flow-ui";
 import { loadPlaybookFlowTemplateMarkdown } from "@/lib/playbook/playbook-flow-template";
+import { aplicarFluxoEmpresaAoMarkdown } from "@/lib/playbook/playbook-flow-from-context";
 import { updateHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-compat";
 import { defaultTenantId } from "@/lib/tenant-default";
 import {
@@ -220,17 +221,40 @@ export async function applyWaConversacaoPreset(
     try {
       const template = await loadPlaybookFlowTemplateMarkdown();
       const personalizado = personalizarPlaybookTemplate(template, nomeAgente);
-      const ensured = await ensureMarkdownWithWhatsappFlow(personalizado);
-      if (!ensured.ok) {
-        passos.push({
-          passo: "playbook",
-          ok: false,
-          detalhe: ensured.errors.join("; "),
-        });
-        return { ok: false, error: "Falha ao validar playbook do preset.", passos };
+      const narrativeSemFluxo = personalizado.replace(
+        /\n---\n\n## Bloco de fluxo din[aá]mico[\s\S]*$/i,
+        ""
+      ).trimEnd();
+
+      const fluxoEmpresa = await aplicarFluxoEmpresaAoMarkdown(
+        supabase,
+        agenteSlug,
+        narrativeSemFluxo
+      );
+
+      let markdownFinal: string;
+      let detalheFluxo: string;
+
+      if (fluxoEmpresa.ok) {
+        markdownFinal = fluxoEmpresa.markdown;
+        detalheFluxo = `Playbook com fluxo contextual (${fluxoEmpresa.resumo.empresa_label}; triagem: ${fluxoEmpresa.resumo.opcoes_triagem.slice(0, 3).join(", ")}).`;
+      } else {
+        const ensured = await ensureMarkdownWithWhatsappFlow(personalizado);
+        if (!ensured.ok) {
+          passos.push({
+            passo: "playbook",
+            ok: false,
+            detalhe: ensured.errors.join("; "),
+          });
+          return { ok: false, error: "Falha ao validar playbook do preset.", passos };
+        }
+        markdownFinal = ensured.markdown;
+        detalheFluxo = ensured.auto_appended_flow
+          ? "Template publicado (fluxo genérico — cadastre conhecimento para fluxo da empresa)."
+          : "Template Waje v1 publicado com fluxo WA.";
       }
 
-      const saved = await savePlaybookMarkdownForAgent(supabase, agenteSlug, ensured.markdown);
+      const saved = await savePlaybookMarkdownForAgent(supabase, agenteSlug, markdownFinal);
       if (!saved.ok) {
         passos.push({ passo: "playbook", ok: false, detalhe: saved.error });
         return { ok: false, error: saved.error, passos };
@@ -240,9 +264,7 @@ export async function applyWaConversacaoPreset(
       passos.push({
         passo: "playbook",
         ok: true,
-        detalhe: ensured.auto_appended_flow
-          ? "Template publicado (fluxo WA anexado automaticamente)."
-          : "Template Waje v1 publicado com fluxo WA.",
+        detalhe: detalheFluxo,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -255,7 +277,7 @@ export async function applyWaConversacaoPreset(
       passos.push({
         passo: "playbook",
         ok: true,
-        detalhe: "Playbook referenciado mas não legível — use «Adaptar motor WA» no CRM.",
+        detalhe: "Playbook referenciado mas não legível — use «Gerar fluxo da empresa» no CRM.",
       });
     } else {
       const fluxoAtual = assessPlaybookFlowInMarkdown(loaded.markdown);
@@ -266,28 +288,47 @@ export async function applyWaConversacaoPreset(
           detalhe: "Texto narrativo preservado — fluxo WA já válido.",
         });
       } else {
-        const ensured = await ensureMarkdownWithWhatsappFlow(loaded.markdown);
-        if (!ensured.ok) {
+        const fluxoEmpresa = await aplicarFluxoEmpresaAoMarkdown(supabase, agenteSlug, loaded.markdown);
+        if (!fluxoEmpresa.ok) {
+          const ensured = await ensureMarkdownWithWhatsappFlow(loaded.markdown);
+          if (!ensured.ok) {
+            passos.push({
+              passo: "playbook",
+              ok: false,
+              detalhe: ensured.errors.join("; "),
+            });
+            return {
+              ok: false,
+              error: "Não foi possível acrescentar fluxo WA ao playbook existente.",
+              passos,
+            };
+          }
+          const saved = await savePlaybookMarkdownForAgent(supabase, agenteSlug, ensured.markdown);
+          if (!saved.ok) {
+            passos.push({ passo: "playbook", ok: false, detalhe: saved.error });
+            return { ok: false, error: saved.error, passos };
+          }
+          playbookPublicado = true;
           passos.push({
             passo: "playbook",
-            ok: false,
-            detalhe: ensured.errors.join("; "),
+            ok: true,
+            detalhe: ensured.auto_appended_flow
+              ? "Bloco waje_playbook_flow acrescentado (template genérico — enriqueça a base de conhecimento)."
+              : "Playbook existente validado e republicado com fluxo WA.",
           });
-          return { ok: false, error: "Não foi possível acrescentar fluxo WA ao playbook existente.", passos };
+        } else {
+          const saved = await savePlaybookMarkdownForAgent(supabase, agenteSlug, fluxoEmpresa.markdown);
+          if (!saved.ok) {
+            passos.push({ passo: "playbook", ok: false, detalhe: saved.error });
+            return { ok: false, error: saved.error, passos };
+          }
+          playbookPublicado = true;
+          passos.push({
+            passo: "playbook",
+            ok: true,
+            detalhe: `Fluxo contextual da empresa anexado (${fluxoEmpresa.resumo.opcoes_triagem.slice(0, 2).join(", ")}…).`,
+          });
         }
-        const saved = await savePlaybookMarkdownForAgent(supabase, agenteSlug, ensured.markdown);
-        if (!saved.ok) {
-          passos.push({ passo: "playbook", ok: false, detalhe: saved.error });
-          return { ok: false, error: saved.error, passos };
-        }
-        playbookPublicado = true;
-        passos.push({
-          passo: "playbook",
-          ok: true,
-          detalhe: ensured.auto_appended_flow
-            ? "Bloco waje_playbook_flow acrescentado ao playbook existente (texto mantido)."
-            : "Playbook existente validado e republicado com fluxo WA.",
-        });
       }
     }
   }

@@ -172,7 +172,7 @@ export async function PUT(
     if (!ensured.ok) {
       return NextResponse.json(
         {
-          error: `Publicação exige bloco de fluxo WhatsApp válido (\`${PLAYBOOK_FLOW_FENCE_TAG}\`). Use «Adaptar motor WA» na calibração.`,
+          error: `Publicação exige bloco de fluxo WhatsApp válido (\`${PLAYBOOK_FLOW_FENCE_TAG}\`). Use «Gerar fluxo da empresa» na calibração.`,
           errors: ensured.errors,
         },
         { status: 400 }

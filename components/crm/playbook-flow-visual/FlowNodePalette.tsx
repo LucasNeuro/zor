@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { CheckCircle, ClipboardList, MessageSquare, Pencil } from "lucide-react";
+import { FLOW_NODE_PALETTE_COLORS } from "@/lib/crm/playbook-flow-waje-theme";
 import type { FlowNodeKind } from "./types";
 
 type FlowNodePaletteProps = {
@@ -19,28 +20,28 @@ const NODE_OPTIONS: Array<{
     kind: "message",
     label: "Mensagem",
     description: "Envia texto fixo ao lead.",
-    color: "#388bfd",
+    color: FLOW_NODE_PALETTE_COLORS.message,
     Icon: MessageSquare,
   },
   {
     kind: "input",
     label: "Coleta",
     description: "Captura resposta do lead.",
-    color: "#e08a14",
+    color: FLOW_NODE_PALETTE_COLORS.input,
     Icon: Pencil,
   },
   {
     kind: "menu",
     label: "Menu",
     description: "Exibe opções de escolha.",
-    color: "#9254de",
+    color: FLOW_NODE_PALETTE_COLORS.menu,
     Icon: ClipboardList,
   },
   {
     kind: "complete",
     label: "Conclusão",
     description: "Finaliza e encaminha.",
-    color: "#2ea043",
+    color: FLOW_NODE_PALETTE_COLORS.complete,
     Icon: CheckCircle,
   },
 ];

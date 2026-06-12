@@ -209,7 +209,7 @@ export function PlaybookFlowVisualBuilder({
           Fluxo visual indisponível para este markdown
         </p>
         <p style={hintStyle}>
-          O bloco `{PLAYBOOK_FLOW_FENCE_TAG}` não foi carregado com JSON válido. Use “Adaptar motor WA” ou ajuste o bloco no
+          O bloco `{PLAYBOOK_FLOW_FENCE_TAG}` não foi carregado com JSON válido. Use “Gerar fluxo da empresa” ou ajuste o bloco no
           modo textual.
         </p>
         <button

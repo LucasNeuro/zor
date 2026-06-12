@@ -42,7 +42,13 @@ class BuilderErrorBoundary extends Component<BuilderErrorBoundaryProps, BuilderE
   }
 
   render() {
-    if (this.state.hasError) return null;
+    if (this.state.hasError) {
+      return (
+        <p style={{ margin: 0, color: "#ff7b72", fontSize: 12, lineHeight: 1.5 }}>
+          O editor visual falhou ao renderizar. Use o editor textual ou regenere o fluxo da empresa.
+        </p>
+      );
+    }
     return this.props.children;
   }
 }
@@ -143,10 +149,12 @@ export function PlaybookFlowVisualSideover({
 }
 
 const rootStyle: CSSProperties = {
-  display: "grid",
+  display: "flex",
+  flexDirection: "column",
   gap: 12,
-  height: "100%",
+  flex: 1,
   minHeight: 0,
+  height: "100%",
 };
 
 const hintStyle: CSSProperties = {

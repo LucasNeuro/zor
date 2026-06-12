@@ -216,6 +216,8 @@ const panelStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
+  flex: 1,
+  minHeight: 0,
 };
 
 const metaBar: CSSProperties = {
@@ -278,8 +280,9 @@ const saveAndCloseButtonStyle: CSSProperties = {
 };
 
 const canvasWrapper: CSSProperties = {
-  /* FlowCanvas sets its own explicit pixel height (680px) — just contain it */
   width: "100%",
+  flex: 1,
+  minHeight: 520,
 };
 
 const emptyState: CSSProperties = {

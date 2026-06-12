@@ -60,7 +60,16 @@ export function CrmSideoverShell({
           </div>
         </div>
 
-        <div style={{ ...rfAsideBodyStyle(), padding: "16px 20px" }}>{children}</div>
+        <div
+          style={{
+            ...rfAsideBodyStyle(),
+            padding: "16px 20px",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {children}
+        </div>
 
         {footer && <div style={rfAsideFooterStyle()}>{footer}</div>}
       </aside>

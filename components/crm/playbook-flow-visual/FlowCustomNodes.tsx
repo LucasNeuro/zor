@@ -388,7 +388,7 @@ const cardBase: CSSProperties = {
   width: 300,
   minWidth: 300,
   maxWidth: 300,
-  background: "#0b1220",
+  background: "#101f14",
   borderRadius: 14,
   overflow: "visible",
   cursor: "default",

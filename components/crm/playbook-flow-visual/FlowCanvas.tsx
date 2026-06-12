@@ -47,6 +47,39 @@ import {
 import { FlowNodeEditorSideover } from "./FlowNodeEditorSideover";
 
 const NODE_TYPES: NodeTypes = FLOW_NODE_TYPES as NodeTypes;
+
+function scheduleViewportFit(
+  instance: {
+    fitView: (opts?: {
+      padding?: number;
+      duration?: number;
+      minZoom?: number;
+      maxZoom?: number;
+    }) => Promise<boolean> | boolean;
+    getZoom?: () => number;
+    zoomTo?: (zoom: number, opts?: { duration?: number }) => void;
+  },
+  host: HTMLElement | null,
+  attempt = 0
+) {
+  const rect = host?.getBoundingClientRect();
+  if (!rect || rect.width < 40 || rect.height < 80) {
+    if (attempt < 24) {
+      requestAnimationFrame(() => scheduleViewportFit(instance, host, attempt + 1));
+    }
+    return;
+  }
+  void instance.fitView({
+    padding: 0.2,
+    duration: attempt > 0 ? 200 : 0,
+    minZoom: READABLE_MIN_ZOOM,
+    maxZoom: 1.15,
+  });
+  const zoom = instance.getZoom?.() ?? 1;
+  if (zoom < READABLE_MIN_ZOOM) {
+    instance.zoomTo?.(READABLE_MIN_ZOOM, { duration: 0 });
+  }
+}
 const CANVAS_MIN_H = 520;
 const CANVAS_MAX_H = 860;
 
@@ -486,7 +519,7 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const emitTimerRef = useRef<number | null>(null);
   const lastSnapshotRef = useRef<string>("");
-  const hasSemanticChangesRef = useRef(true);
+  const hasSemanticChangesRef = useRef(false);
 
   const seedNodes = useMemo(() => {
     const raw = initialNodes?.length ? initialNodes : buildInitialNodes(initialDefinition);
@@ -534,12 +567,33 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
       if (!entryNode) return;
       instance.setCenter(
         entryNode.position.x + NODE_W / 2,
-        entryNode.position.y + NODE_H_EST / 2,
+        entryNode.position.y + estimateNodeHeight(entryNode) / 2,
         { zoom: ENTRY_FOCUS_ZOOM, duration: animated ? 280 : 0 }
       );
     },
     [entryStepId, nodes]
   );
+
+  const initialFitDoneRef = useRef(false);
+
+  useEffect(() => {
+    const host = canvasHostRef.current;
+    if (!host) return;
+
+    const tryInitialFit = () => {
+      if (initialFitDoneRef.current) return;
+      const instance = rfInstance.current;
+      const rect = host.getBoundingClientRect();
+      if (!instance || nodes.length === 0 || rect.width < 40 || rect.height < 80) return;
+      scheduleViewportFit(instance, host);
+      initialFitDoneRef.current = true;
+    };
+
+    const observer = new ResizeObserver(() => tryInitialFit());
+    observer.observe(host);
+    tryInitialFit();
+    return () => observer.disconnect();
+  }, [nodes.length]);
 
 
   const onNodesChange = useCallback(
@@ -807,17 +861,16 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
               }}
               onInit={(instance) => {
                 rfInstance.current = instance;
-                // Em fluxos grandes, fitView deixa tudo minúsculo; abrimos focando na entrada.
-                requestAnimationFrame(() => {
-                  focusEntryNode(false);
-                });
+                scheduleViewportFit(instance, canvasHostRef.current);
               }}
+              nodeOrigin={[0, 0]}
+              onlyRenderVisibleElements={false}
               minZoom={READABLE_MIN_ZOOM}
               maxZoom={1.6}
               snapToGrid
               snapGrid={[16, 16]}
               style={{
-                background: "linear-gradient(180deg, #050913 0%, #0b1220 100%)",
+                background: "linear-gradient(180deg, #060d08 0%, #0b1f10 100%)",
                 width: "100%",
                 height: "100%",
               }}
@@ -829,22 +882,22 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
               deleteKeyCode="Delete"
               proOptions={{ hideAttribution: true }}
             >
-              <Background color="#1f2c44" gap={26} size={1.2} variant={"dots" as never} />
+              <Background color="#3f9848" gap={26} size={1.2} variant={"dots" as never} />
               <MiniMap
                 pannable
                 zoomable
                 nodeColor={(node) => {
                   const colors: Record<string, string> = {
-                    message: "#388bfd",
-                    input: "#e08a14",
-                    menu: "#9254de",
-                    complete: "#2ea043",
+                    message: "#92ff00",
+                    input: "#d4a017",
+                    menu: "#3f9848",
+                    complete: "#92ff00",
                   };
-                  return colors[(node.data as FlowVisualNodeData).kind] ?? "#484f58";
+                  return colors[(node.data as FlowVisualNodeData).kind] ?? "#5d7a67";
                 }}
                 style={{
-                  background: "#0c1423",
-                  border: "1px solid #22314a",
+                  background: "#0b1f10",
+                  border: "1px solid rgba(146, 255, 0, 0.2)",
                   borderRadius: 10,
                   width: 190,
                   height: 120,

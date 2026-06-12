@@ -224,7 +224,7 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
             <p style={{ fontSize: 10, color: "#6e7681", margin: "8px 0 0", lineHeight: 1.45 }}>
               {modoChat === "briefing_interno"
                 ? "Visão de operação: ciclos, logs e acções reais do agente. Sem ferramentas — isso só na conversa ao vivo com o cliente."
-                : "Fluxo do playbook + Mistral (cargo, conhecimento, RAG). Menus seguem o roteiro; respostas livres usam IA. Sem UAZAPI/CRM real. Novos fluxos: editor visual na calibração."}
+                : "Sempre Mistral + base do negócio. O fluxo WhatsApp só guia passos; a IA redige cada resposta. Sem UAZAPI/CRM real."}
             </p>
           </div>
           <button
@@ -267,7 +267,7 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
                   </>
                 ) : (
                   <>
-                    Simule como no WhatsApp: <strong style={{ color: "#aebccf" }}>menus e passos do playbook</strong> quando a resposta é estruturada; <strong style={{ color: "#aebccf" }}>Mistral</strong> quando você sair do roteiro. Edite ou acrescente fluxos no editor visual (calibração do playbook).
+                    Simule o WhatsApp com <strong style={{ color: "#aebccf" }}>IA inteligente</strong>: cada resposta vem do Mistral usando conhecimento da empresa; o fluxo visual só define ordem e perguntas. Feche e reabra para conversa nova.
                   </>
                 )}
               </p>

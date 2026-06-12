@@ -2,12 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { completarChatPreferindoMistral } from "@/lib/ia/llm-completion";
 import { construirPrompt } from "@/lib/ia/prompt-builder";
 import {
+  avancarEstadoFluxoSimulacao,
   buildBlocoContextoFluxoParaLlm,
-  executarSimulacaoCanalFluxoPlaybook,
   loadSimFlowStateFromSessao,
   type SimFlowState,
 } from "@/lib/playbook/simulacao-canal-flow";
-import { carregarDynamicPlaybookRuntime } from "@/lib/whatsapp/playbook-flow-maria";
 
 const MAX_SNAPSHOT_ACOES = 35;
 const MAX_SNAPSHOT_CICLO_LOG = 60;
@@ -25,10 +24,11 @@ Regras absolutas:
 
 /** Pré-texto para o modo que espelha o system prompt de produção (prompt-builder), sem snapshot operacional. */
 export const SIMULACAO_CANAL_PREAMBLE = `### MODO SIMULAÇÃO DE CANAL (teste no CRM Waje)
-Responda como faria ao **cliente ou lead** no canal ao vivo, seguindo **estritamente** as camadas de identidade, conhecimento e regras que vêm abaixo.
-- Não diga que está em briefing interno, revisão operacional ou "somente leitura de logs".
-- **Neste painel não há sessão de lead nem chamadas reais a ferramentas Hub** (Mistral function calls). É só texto: não afirme ter gravado no CRM, enviado WhatsApp ou executado ferramentas.
-- Mantenha tom, limites e playbook como em produção.`;
+Você é o **atendente IA da empresa** falando com um cliente/lead — sempre com inteligência (Mistral), nunca como bot de frases fixas.
+- Use **base de conhecimento do negócio**, **conhecimento do agente**, **cargo** e **playbook** publicados; o roteiro WhatsApp (se houver) é só guia de ordem e temas.
+- Não diga que está em briefing interno, simulação ou revisão de logs.
+- **Sem ferramentas reais** neste painel: não afirme ter gravado no CRM nem enviado WhatsApp.
+- Respostas naturais, curtas (2–4 linhas no WhatsApp), uma pergunta por vez quando estiver coletando dados.`;
 
 export type BriefingModoSessao = "briefing_interno" | "simulacao_canal";
 
@@ -172,7 +172,7 @@ export type BriefingChatReplyResult = {
   tokens_input: number;
   tokens_output: number;
   custo_brl: number;
-  motor?: "briefing_interno" | "playbook_flow" | "playbook_hibrido" | "llm_prompt";
+  motor?: "briefing_interno" | "playbook_ia" | "llm_prompt";
   flow_state?: SimFlowState;
 };
 
@@ -238,7 +238,7 @@ async function executarSimulacaoCanalLlm(params: {
   historico: BriefingMensagemLinha[];
   mensagemUsuario: string;
   blocoFluxoExtra?: string;
-  motor: "playbook_hibrido" | "llm_prompt";
+  motor: "playbook_ia" | "llm_prompt";
   flowState?: SimFlowState;
 }): Promise<SimulacaoCanalReplyResult> {
   const turnosConversa = params.historico.map((m) => ({
@@ -295,8 +295,8 @@ async function executarSimulacaoCanalLlm(params: {
 }
 
 /**
- * Simulação de canal: fluxo determinístico em passos estruturais (menu/número);
- * Mistral + cargo + conhecimento + RAG quando o cliente sai do roteiro.
+ * Simulação de canal: **sempre Mistral** (cargo + conhecimento + RAG).
+ * O fluxo WhatsApp publicado só orienta passo e coleta — não substitui a IA.
  */
 export async function executarSimulacaoCanalReply(params: {
   agenteSlug: string;
@@ -310,36 +310,20 @@ export async function executarSimulacaoCanalReply(params: {
   let blocoFluxoExtra = "";
 
   if (params.supabase && params.sessaoId && params.modoOperacao === "canal_whatsapp") {
-    flowState = await loadSimFlowStateFromSessao(params.supabase, params.sessaoId);
-    const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
-    if (runtime) {
-      blocoFluxoExtra = buildBlocoContextoFluxoParaLlm(runtime.definition, flowState);
-    }
-
-    const flowOut = await executarSimulacaoCanalFluxoPlaybook({
+    const estadoInicial = await loadSimFlowStateFromSessao(params.supabase, params.sessaoId);
+    const avancado = await avancarEstadoFluxoSimulacao({
       supabase: params.supabase,
       agenteSlug: params.agenteSlug,
       mensagemUsuario: params.mensagemUsuario,
-      flowState,
+      flowState: estadoInicial,
     });
-
-    if (flowOut.ok) {
-      return {
-        texto: flowOut.texto,
-        modelo: "playbook-flow",
-        tokens_input: 0,
-        tokens_output: 0,
-        custo_brl: 0,
-        motor: "playbook_flow",
-        flow_state: flowOut.flowState,
-      };
-    }
-
-    if (flowOut.flowState) {
-      flowState = flowOut.flowState;
-      if (runtime) {
-        blocoFluxoExtra = buildBlocoContextoFluxoParaLlm(runtime.definition, flowState);
-      }
+    if (avancado) {
+      flowState = avancado.flowState;
+      blocoFluxoExtra = buildBlocoContextoFluxoParaLlm(
+        avancado.definition,
+        flowState,
+        params.mensagemUsuario
+      );
     }
   }
 
@@ -348,7 +332,7 @@ export async function executarSimulacaoCanalReply(params: {
     historico: params.historico,
     mensagemUsuario: params.mensagemUsuario,
     blocoFluxoExtra,
-    motor: blocoFluxoExtra ? "playbook_hibrido" : "llm_prompt",
+    motor: blocoFluxoExtra ? "playbook_ia" : "llm_prompt",
     flowState,
   });
 }

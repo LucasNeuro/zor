@@ -14,6 +14,8 @@ import {
 } from "@/lib/email/resend-config";
 import { buildPublicEmailInboundWebhookUrl } from "@/lib/email/webhook-auth";
 import { normalizarEnderecoEmail } from "@/lib/email/inbound-parser";
+import { carregarEmailOAuthStatus } from "@/lib/email/email-oauth-status";
+import { resolveEmailProviderForAgente } from "@/lib/email/resolve-email-provider";
 
 const EMAIL_SELECT_COLS = [
   "agente_slug",
@@ -25,6 +27,8 @@ const EMAIL_SELECT_COLS = [
   "email_inbound",
   "email_ativo",
   "email_configured_at",
+  "email_provider",
+  "email_integracao_id",
   "ativo",
   "arquivado_em",
 ] as const;
@@ -51,9 +55,14 @@ function agentePertenceAoTenant(
   return rowTenant === tenantId;
 }
 
-function serializarEmailConfig(row: Record<string, unknown>, request: NextRequest) {
+async function serializarEmailConfig(
+  supabase: ReturnType<typeof db>,
+  row: Record<string, unknown>,
+  request: NextRequest
+) {
   const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
   const webhookSecret = process.env.EMAIL_INBOUND_WEBHOOK_SECRET?.trim();
+  const oauth = await carregarEmailOAuthStatus(supabase, row);
 
   return {
     agente_slug: row.agente_slug,
@@ -63,6 +72,15 @@ function serializarEmailConfig(row: Record<string, unknown>, request: NextReques
     email_inbound: row.email_inbound ?? null,
     email_ativo: row.email_ativo !== false,
     email_configured_at: row.email_configured_at ?? null,
+    email_provider: row.email_provider ?? oauth.email_provider,
+    email_integracao_id: row.email_integracao_id ?? oauth.email_integracao_id,
+    email_mode: oauth.email_mode,
+    oauth_connected: oauth.oauth_connected,
+    oauth_provider: oauth.oauth_provider,
+    oauth_email: oauth.oauth_email,
+    oauth_display_name: oauth.oauth_display_name,
+    oauth_connected_at: oauth.oauth_connected_at,
+    oauth_last_sync_at: oauth.oauth_last_sync_at,
     resend_configured: resendConfigured(),
     default_from_email: resendDefaultFromAddress(),
     default_from_label: resendDefaultFromEmail(),
@@ -110,7 +128,7 @@ export async function GET(
     return NextResponse.json({ error: loaded.error }, { status: loaded.status });
   }
 
-  return NextResponse.json(serializarEmailConfig(loaded.data!, request));
+  return NextResponse.json(await serializarEmailConfig(supabase, loaded.data!, request));
 }
 
 export async function PATCH(
@@ -142,6 +160,26 @@ export async function PATCH(
   const arquivado = current.arquivado_em != null && current.arquivado_em !== "";
   if (arquivado) {
     return NextResponse.json({ error: "Agente arquivado não pode alterar canal e-mail." }, { status: 409 });
+  }
+
+  const providerAtual = resolveEmailProviderForAgente({
+    email_provider: typeof current.email_provider === "string" ? current.email_provider : null,
+    email_integracao_id:
+      typeof current.email_integracao_id === "string" ? current.email_integracao_id : null,
+  });
+
+  if (providerAtual === "oauth_google") {
+    const wantsResendFields =
+      "email_from" in body || "email_inbound" in body || body.email_provider === "resend";
+    if (wantsResendFields) {
+      return NextResponse.json(
+        {
+          error:
+            "Este agente usa Gmail (OAuth). Desligue a conta Google antes de alterar remetente/entrada ou use a aba Resend após desligar.",
+        },
+        { status: 409 }
+      );
+    }
   }
 
   const patch: Record<string, unknown> = {};
@@ -178,9 +216,18 @@ export async function PATCH(
       if (!addr) {
         return NextResponse.json({ error: "email_from inválido" }, { status: 400 });
       }
-      const fromCheck = emailFromPermitidoParaResend(addr);
-      if (!fromCheck.ok) {
-        return NextResponse.json({ error: fromCheck.error }, { status: 400 });
+      const providerDepois =
+        body.email_provider === "oauth_google"
+          ? "oauth_google"
+          : providerAtual === "oauth_google"
+            ? "oauth_google"
+            : "resend";
+
+      if (providerDepois !== "oauth_google") {
+        const fromCheck = emailFromPermitidoParaResend(addr);
+        if (!fromCheck.ok) {
+          return NextResponse.json({ error: fromCheck.error }, { status: 400 });
+        }
       }
       patch.email_from = addr;
     } else {
@@ -209,18 +256,25 @@ export async function PATCH(
         return NextResponse.json({ error: "email_inbound inválido" }, { status: 400 });
       }
 
-      const { data: dup } = await supabase
-        .from("hub_agente_identidade")
-        .select("agente_slug")
-        .ilike("email_inbound", addr)
-        .neq("agente_slug", slug)
-        .maybeSingle();
+      const providerInbound =
+        providerAtual === "oauth_google" || body.email_provider === "oauth_google"
+          ? "oauth_google"
+          : "resend";
 
-      if (dup) {
-        return NextResponse.json(
-          { error: "Este endereço inbound já está associado a outro agente." },
-          { status: 409 }
-        );
+      if (providerInbound !== "oauth_google") {
+        const { data: dup } = await supabase
+          .from("hub_agente_identidade")
+          .select("agente_slug")
+          .ilike("email_inbound", addr)
+          .neq("agente_slug", slug)
+          .maybeSingle();
+
+        if (dup) {
+          return NextResponse.json(
+            { error: "Este endereço inbound já está associado a outro agente." },
+            { status: 409 }
+          );
+        }
       }
 
       patch.email_inbound = addr;
@@ -259,5 +313,5 @@ export async function PATCH(
     return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(serializarEmailConfig(data, request));
+  return NextResponse.json(await serializarEmailConfig(supabase, data, request));
 }

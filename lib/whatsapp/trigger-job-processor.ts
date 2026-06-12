@@ -6,10 +6,6 @@ export function dispararProcessamentoJobsWhatsapp(log?: {
   info: (event: string, fields?: Record<string, unknown>) => void;
   warn: (event: string, fields?: Record<string, unknown>) => void;
 }): void {
-  if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
-    return;
-  }
-
   const secret = process.env.CRON_SECRET?.trim();
   const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "").replace(/\/+$/, "");
   if (!secret || !base) {

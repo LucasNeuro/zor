@@ -68,7 +68,12 @@ export async function POST(request: NextRequest) {
     }));
   }
 
-  const [analiseCache, trechosCargo, trechosNegocio] = await Promise.all([
+  const [docsProntosQuery, analiseCache, trechosCargo, trechosNegocio] = await Promise.all([
+    supabase
+      .from("hub_tenant_conhecimento_documento")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("status", "pronto"),
     lerAnaliseNegocioTenant(supabase, tenantId),
     buscarTrechosConhecimentoTenant(
       supabase,
@@ -79,11 +84,15 @@ export async function POST(request: NextRequest) {
     buscarTrechosAnaliseNegocio(supabase, tenantId),
   ]);
 
+  const temDocsConhecimento = (docsProntosQuery.count ?? 0) > 0;
+  const analiseValida = temDocsConhecimento ? analiseCache : null;
+  const trechosNegocioValidos = temDocsConhecimento ? trechosNegocio : [];
+
   const blocos: string[] = [];
-  if (analiseCache?.analise) {
-    blocos.push(`## Perfil consolidado do negócio\n${formatarAnaliseNegocioParaPrompt(analiseCache.analise)}`);
+  if (analiseValida?.analise) {
+    blocos.push(`## Perfil consolidado do negócio\n${formatarAnaliseNegocioParaPrompt(analiseValida.analise)}`);
   }
-  const trechos = [...trechosCargo, ...trechosNegocio].filter(
+  const trechos = [...trechosCargo, ...trechosNegocioValidos].filter(
     (t, i, arr) => arr.findIndex((x) => x.conteudo.slice(0, 100) === t.conteudo.slice(0, 100)) === i
   );
   const trechosFmt = formatarTrechosConhecimentoParaPrompt(trechos.slice(0, 8));

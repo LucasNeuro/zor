@@ -174,6 +174,19 @@ export async function syncWebhooksUazapi(
   return { instance, global };
 }
 
+/** URL pública para colar no painel UAZAPI (global ou instância). */
+export function publicWebhookUrlFromRequest(request: NextRequest): string | null {
+  const origin = pickPublicAppOrigin(request);
+  if (!origin) return null;
+  return buildPublicWebhookUrl(origin, process.env.WEBHOOK_SECRET);
+}
+
+export function maskWebhookUrlForUi(url: string): string {
+  const secret = process.env.WEBHOOK_SECRET?.trim();
+  if (!secret || !url.includes(secret)) return url;
+  return url.replace(secret, `${secret.slice(0, 4)}…`);
+}
+
 export function formatWebhookSyncWarnings(sync: Awaited<ReturnType<typeof syncWebhooksUazapi>>): string | undefined {
   const parts: string[] = [];
   if (!sync.instance.ok) parts.push(`instância: ${sync.instance.error}`);

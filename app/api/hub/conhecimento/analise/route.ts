@@ -5,6 +5,7 @@ import {
   gerarAnaliseNegocioTenantConhecimento,
   isTenantConhecimentoMigrationMissing,
   lerAnaliseNegocioTenant,
+  limparAnaliseNegocioTenant,
 } from "@/lib/hub/tenant-conhecimento-rag";
 import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 
@@ -49,6 +50,18 @@ export async function GET(request: NextRequest) {
         documentos_indexados: 0,
         desatualizada: true,
         aviso: "Migração de conhecimento ainda não aplicada.",
+      });
+    }
+
+    if (docs.length === 0) {
+      const cache = await lerAnaliseNegocioTenant(supabase, tenantId);
+      if (cache) await limparAnaliseNegocioTenant(supabase, tenantId);
+      return NextResponse.json({
+        analise: null,
+        gerado_em: null,
+        documentos_usados: 0,
+        documentos_indexados: 0,
+        desatualizada: true,
       });
     }
 

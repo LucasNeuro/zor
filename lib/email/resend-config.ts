@@ -58,7 +58,7 @@ export function emailFromPermitidoParaResend(email: string): { ok: true } | { ok
       ok: false,
       error:
         `O remetente «${addr}» é caixa pessoal (${domain}). ` +
-        "Use um e-mail do domínio verificado no Resend (ex.: lucas.marcondes@clicvendy.com.br).",
+        "Use um e-mail do domínio verificado no Resend (ex.: atendimento@waje.com.br).",
     };
   }
   return { ok: true };

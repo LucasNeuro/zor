@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Briefcase, UserRound } from "lucide-react";
 import {
   CrmSideoverActionBtn,
@@ -15,6 +15,7 @@ import {
 } from "@/components/crm/CrmRetrofitSideoverShell";
 import { LeadEncaminharPanel } from "@/components/crm/leads/LeadEncaminharPanel";
 import { LeadChatTab } from "@/components/crm/leads/LeadChatTab";
+import { LeadEmailChatTab } from "@/components/crm/leads/LeadEmailChatTab";
 import { LeadNegocioPanel } from "@/components/crm/leads/LeadNegocioPanel";
 import { LeadSideoverChatToggle } from "@/components/crm/leads/LeadSideoverChatRail";
 import {
@@ -32,10 +33,12 @@ import {
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
+import { leadEhCanalEmail, leadEhCanalWhatsapp } from "@/lib/crm/lead-canal";
 import type { LeadTimelineEvent } from "@/lib/crm/lead-timeline";
 
 const ORIGENS_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp",
+  email: "E-mail",
   instagram: "Instagram",
   meta_ads: "Meta Ads",
   google_ads: "Google Ads",
@@ -128,6 +131,28 @@ export function LeadEditSideover({
   const navActive: LeadSideoverNavId | null =
     screen === "encaminhar" || screen === "negocio" ? null : screen;
 
+  const canalLead = useMemo(() => {
+    if (!lead) return { showWhatsapp: true, showEmail: false };
+    const input = {
+      origem: lead.origem,
+      telefone: lead.telefone,
+      email: lead.email,
+      metadata: leadMetadata,
+    };
+    return {
+      showWhatsapp: leadEhCanalWhatsapp(input),
+      showEmail: leadEhCanalEmail(input),
+    };
+  }, [lead, leadMetadata]);
+
+  useEffect(() => {
+    if (screen === "conversas" && !canalLead.showWhatsapp) {
+      setScreen(canalLead.showEmail ? "conversas_email" : "timeline");
+    } else if (screen === "conversas_email" && !canalLead.showEmail) {
+      setScreen(canalLead.showWhatsapp ? "conversas" : "timeline");
+    }
+  }, [screen, canalLead.showWhatsapp, canalLead.showEmail]);
+
   const carregarDetalhe = useCallback(async (leadId: string) => {
     const res = await fetch(`/api/crm/leads/${encodeURIComponent(leadId)}`, {
       headers: internalApiHeaders(),
@@ -142,7 +167,23 @@ export function LeadEditSideover({
 
   useEffect(() => {
     if (!open || !lead) return;
-    setScreen(initialTab === "chat" ? "conversas" : initialTab);
+    const canalInput = {
+      origem: lead.origem,
+      telefone: lead.telefone,
+      email: lead.email,
+      metadata: null,
+    };
+    const abrirWhatsapp = leadEhCanalWhatsapp(canalInput);
+    const abrirEmail = leadEhCanalEmail(canalInput);
+    setScreen(
+      initialTab === "chat"
+        ? abrirWhatsapp
+          ? "conversas"
+          : abrirEmail
+            ? "conversas_email"
+            : "timeline"
+        : initialTab
+    );
     setErro("");
     setErroObservacao("");
     setNovaNota("");
@@ -366,10 +407,16 @@ export function LeadEditSideover({
             setErro("");
           }}
           observacoesCount={notas.length}
+          showWhatsappTab={canalLead.showWhatsapp}
+          showEmailTab={canalLead.showEmail}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {erro && screen !== "negocio" && screen !== "encaminhar" && screen !== "conversas" ? (
+          {erro &&
+          screen !== "negocio" &&
+          screen !== "encaminhar" &&
+          screen !== "conversas" &&
+          screen !== "conversas_email" ? (
             <p className="shrink-0 px-6 pt-4 text-xs text-[#f85149]" role="alert">
               {erro}
             </p>
@@ -377,7 +424,7 @@ export function LeadEditSideover({
 
           <div
             className={`min-h-0 flex-1 ${
-              screen === "conversas"
+              screen === "conversas" || screen === "conversas_email"
                 ? "flex flex-col overflow-hidden px-6 py-4"
                 : "overflow-y-auto px-6 py-4"
             }`}
@@ -397,6 +444,18 @@ export function LeadEditSideover({
                   onUpdated?.({ ...lead, agente_responsavel: valor });
                 }}
                 onMetadataChange={setLeadMetadata}
+              />
+            ) : null}
+            {screen === "conversas_email" ? (
+              <LeadEmailChatTab
+                leadId={lead.id}
+                leadNome={lead.nome}
+                leadEmail={lead.email}
+                humanoResponsavel={lead.humano_responsavel}
+                agenteResponsavel={lead.agente_responsavel}
+                onHumanoResponsavelChange={(valor) => {
+                  onUpdated?.({ ...lead, humano_responsavel: valor });
+                }}
               />
             ) : null}
 

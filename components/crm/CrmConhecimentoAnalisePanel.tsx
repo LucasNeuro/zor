@@ -42,6 +42,18 @@ function confiancaCores(c: TenantConhecimentoAnaliseNegocio["confianca"]) {
   return { bg: "#eef6ff", border: "#cbe1ff", text: "#2e67b1" };
 }
 
+function SectionGroup({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <div className="border-b border-[#dcebd8] pb-2">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-[#3f9848]">{title}</h3>
+        {description ? <p className="mt-1 text-xs text-[#5d7a67]">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function SectionCard({
   title,
   children,
@@ -59,9 +71,9 @@ function SectionCard({
         background: accent ? "#f3fbf4" : "#fff",
       }}
     >
-      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: "#5d7a67" }}>
+      <h4 className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: "#5d7a67" }}>
         {title}
-      </h3>
+      </h4>
       <div className="text-sm leading-relaxed" style={{ color: "#1e3a23" }}>
         {children}
       </div>
@@ -164,31 +176,19 @@ export function CrmConhecimentoAnalisePanel({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          <div
-            className="rounded-xl border px-4 py-4"
-            style={{ borderColor: "#b8e8c0", background: "linear-gradient(135deg, #f3fbf4 0%, #fff 100%)" }}
-          >
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wide text-[#3f9848]">Síntese executiva</span>
-              {conf ? (
-                <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                  style={{ background: conf.bg, border: `1px solid ${conf.border}`, color: conf.text }}
-                >
-                  {confiancaLabel(analise.confianca)}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-sm leading-relaxed text-[#0b2210]">{analise.sintese || analise.perfil_empresa}</p>
-            {analise.nicho || analise.modelo_negocio ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {analise.nicho ? (
+        <div className="space-y-6">
+          <SectionGroup title="Síntese executiva" description="Visão geral do negócio inferida dos documentos indexados.">
+            <div
+              className="rounded-xl border px-4 py-4"
+              style={{ borderColor: "#b8e8c0", background: "linear-gradient(135deg, #f3fbf4 0%, #fff 100%)" }}
+            >
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                {conf ? (
                   <span
-                    className="rounded-full px-2.5 py-1 text-[11px] font-bold"
-                    style={{ background: "#eefbf1", border: "1px solid #cdecd5", color: "#1e4a24" }}
+                    className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                    style={{ background: conf.bg, border: `1px solid ${conf.border}`, color: conf.text }}
                   >
-                    Nicho: {analise.nicho}
+                    {confiancaLabel(analise.confianca)}
                   </span>
                 ) : null}
                 {analise.modelo_negocio ? (
@@ -200,44 +200,63 @@ export function CrmConhecimentoAnalisePanel({
                   </span>
                 ) : null}
               </div>
-            ) : null}
-          </div>
+              <p className="text-sm leading-relaxed text-[#0b2210]">{analise.sintese || analise.perfil_empresa}</p>
+              {analise.proposta_valor ? (
+                <p className="mt-3 text-sm text-[#5d7a67]">
+                  <span className="font-semibold text-[#1e4a24]">Proposta: </span>
+                  {analise.proposta_valor}
+                </p>
+              ) : null}
+            </div>
+          </SectionGroup>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <SectionCard title="Nicho do negócio" accent>
-              <p>{analise.nicho || analise.perfil_empresa || "—"}</p>
-            </SectionCard>
-            <SectionCard title="Perfil da empresa">
-              <p>{analise.perfil_empresa || "—"}</p>
-            </SectionCard>
-            <SectionCard title="Proposta de valor">
-              <p>{analise.proposta_valor || "—"}</p>
-            </SectionCard>
-            <SectionCard title="Público-alvo">
-              <p>{analise.publico_alvo || "—"}</p>
-            </SectionCard>
-            <SectionCard title="Tom de voz">
-              <p>{analise.tom_voz || "—"}</p>
-            </SectionCard>
-            <SectionCard title="Segmentos">
-              <BulletList items={analise.segmentos} />
-            </SectionCard>
-            <SectionCard title="Produtos e serviços">
-              <BulletList items={analise.produtos_servicos} />
-            </SectionCard>
-            <SectionCard title="Diferenciais" accent>
-              <BulletList items={analise.diferenciais} />
-            </SectionCard>
-            <SectionCard title="Oportunidades para agentes IA" accent>
-              <BulletList items={analise.oportunidades_ia} />
-            </SectionCard>
-            <SectionCard title="Lacunas na base documental">
-              <BulletList items={analise.lacunas_conhecimento} />
-            </SectionCard>
-            <SectionCard title="Recomendações">
-              <BulletList items={analise.recomendacoes} />
-            </SectionCard>
-          </div>
+          <SectionGroup title="Identidade do negócio" description="O que a empresa é e como opera.">
+            <div className="grid gap-3 md:grid-cols-2">
+              <SectionCard title="Nicho" accent>
+                <p>{analise.nicho || "—"}</p>
+              </SectionCard>
+              <SectionCard title="Perfil da empresa">
+                <p>{analise.perfil_empresa || "—"}</p>
+              </SectionCard>
+              <SectionCard title="Tom de voz">
+                <p>{analise.tom_voz || "—"}</p>
+              </SectionCard>
+              <SectionCard title="Segmentos">
+                <BulletList items={analise.segmentos} />
+              </SectionCard>
+            </div>
+          </SectionGroup>
+
+          <SectionGroup title="Mercado e oferta" description="Para quem vende e o que entrega.">
+            <div className="grid gap-3 md:grid-cols-2">
+              <SectionCard title="Público-alvo" accent>
+                <p>{analise.publico_alvo || "—"}</p>
+              </SectionCard>
+              <SectionCard title="Produtos e serviços">
+                <BulletList items={analise.produtos_servicos} />
+              </SectionCard>
+              <SectionCard title="Diferenciais" accent>
+                <BulletList items={analise.diferenciais} />
+              </SectionCard>
+            </div>
+          </SectionGroup>
+
+          <SectionGroup
+            title="Agentes IA e lacunas"
+            description="Oportunidades de automação e o que ainda falta na base documental."
+          >
+            <div className="grid gap-3 md:grid-cols-2">
+              <SectionCard title="Oportunidades para agentes IA" accent>
+                <BulletList items={analise.oportunidades_ia} />
+              </SectionCard>
+              <SectionCard title="Lacunas na base documental">
+                <BulletList items={analise.lacunas_conhecimento} />
+              </SectionCard>
+              <SectionCard title="Recomendações">
+                <BulletList items={analise.recomendacoes} />
+              </SectionCard>
+            </div>
+          </SectionGroup>
         </div>
       )}
     </div>

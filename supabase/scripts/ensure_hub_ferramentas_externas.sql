@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS public.hub_integracao_credenciais (
   credenciais jsonb NOT NULL DEFAULT '{}'::jsonb,
   atualizado_em timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT hub_integracao_credenciais_tipo_auth_check CHECK (
-    tipo_auth IN ('api_key', 'bearer', 'oauth_placeholder')
+    tipo_auth IN ('api_key', 'bearer', 'oauth_placeholder', 'oauth2')
   ),
   CONSTRAINT hub_integracao_credenciais_integracao_unique UNIQUE (integracao_id)
 );

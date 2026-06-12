@@ -110,7 +110,7 @@ Devolves **apenas um objeto JSON válido** (sem Markdown à volta, sem comentár
 Regras:
 - Português (Brasil), tom profissional.
 - Alinha segmento, especialidade, saudação e prompt ao **negócio real** descrito nos trechos de conhecimento — não assumas construção/reforma salvo que o contexto o indique.
-- POP, termo de garantia ou protocolo interno NÃO significam que a empresa é de "compliance" — identifica o serviço prestado (ex.: assistência técnica de smartphones, loja, clínica).
+- POP, termo de garantia ou protocolo interno NÃO significam que a empresa é de "compliance" — identifica o serviço prestado (ex.: restaurante, clínica, construção, consultoria, loja).
 - \`modelo_padrao\`, \`modelo_critico\`, \`modelo_alto_valor\`: preferir o literal **mistral** salvo que haja motivo forte para outro ID de modelo (o runtime resolve via env).
 - \`nivel\`: inteiro de 1 a 5 (5 = maior autonomia relativa no Hub).
 - \`limite_autonomia_brl\`: número >= 0 razoável para operações normais do cargo (ex.: 500–50000); não inventes dados financeiros específicos da empresa — usa valor conservador com breve raciocínio implícito no campo descricao se preciso.

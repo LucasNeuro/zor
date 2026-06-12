@@ -22,6 +22,8 @@ import {
 } from "@/lib/whatsapp/uazapi-proxy-connect";
 import {
   formatWebhookSyncWarnings,
+  maskWebhookUrlForUi,
+  publicWebhookUrlFromRequest,
   syncWebhooksUazapi,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
 import { resolverTokenCatalogoProxyCidades } from "@/lib/whatsapp/uazapi-proxy-cities-token";
@@ -451,6 +453,11 @@ export async function POST(
             }
           : {}),
         ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
+        webhook_url: publicWebhookUrlFromRequest(request),
+        webhook_url_display: (() => {
+          const u = publicWebhookUrlFromRequest(request);
+          return u ? maskWebhookUrlForUi(u) : null;
+        })(),
       });
     }
 
@@ -463,6 +470,7 @@ export async function POST(
           { status: 502 }
         );
       }
+      const webhookUrl = publicWebhookUrlFromRequest(request);
       return NextResponse.json({
         ok: true,
         action: "sync_webhook",
@@ -470,6 +478,8 @@ export async function POST(
           instance: webhookSync.instance.ok,
           global: webhookSync.global.ok || webhookSync.global.skipped === true,
         },
+        webhook_url: webhookUrl,
+        webhook_url_display: webhookUrl ? maskWebhookUrlForUi(webhookUrl) : null,
         ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
       });
     }

@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { mistralChatCompletion } from "@/lib/ia/mistral-chat";
+import { extrairTextoParaConhecimentoTenant } from "@/lib/hub/conhecimento-extracao";
 import {
   chunkTextRag,
-  extrairTextoDocumentoRag,
   gerarEmbeddingsRag,
   RAG_EMBEDDING_DIMENSIONS,
 } from "@/lib/hub/rag";
@@ -128,14 +128,15 @@ O objectivo é identificar o NEGÓCIO CONCRETO da empresa — não o tema juríd
 
 Regras críticas:
 - POP, protocolo, política de garantia, termo CDC, SOP descrevem COMO a empresa opera — não transformes isso em "empresa de conformidade" ou "consultoria regulatória".
-- Procura substantivos concretos: smartphone, celular, assistência técnica, loja, clínica, restaurante, construção, etc.
-- Se o texto menciona consumidor, CDC, retirada na loja, ordem de serviço, reparo, troca de peça → é operação B2C de serviço, salvo evidência contrária.
+- Procura substantivos concretos do negócio: construção civil, clínica, restaurante, consultoria, loja, escola, escritório contábil, software, etc.
+- Não assumas um sector específico sem evidência explícita no texto.
+- Inferir modelo_negocio (B2C/B2B/misto) a partir do público e da operação descrita — não por linguagem jurídica sozinha.
 - Não generalizes para "multi-setor" ou "ambientes regulados" só por linguagem legal.
 
 Devolve APENAS um objeto JSON válido (sem Markdown) com chaves:
 "empresa" (string, o que a empresa FAZ no dia a dia),
 "tipo_documento" (string, ex.: "termo de garantia", "POP recepção"),
-"nicho" (string, nicho específico inferido, ex.: "assistência técnica de smartphones"),
+"nicho" (string, nicho específico inferido, ex.: "clínica odontológica", "restaurante", "consultoria em RH"),
 "modelo_negocio" ("B2C" | "B2B" | "misto" | ""),
 "segmentos" (array de strings),
 "produtos_servicos" (array de strings),
@@ -167,6 +168,8 @@ export async function indexarDocumentoTenantConhecimento(params: {
   tenantId: string;
   texto: string;
   gerarResumo?: boolean;
+  resumoIaPrecomputado?: Record<string, unknown> | null;
+  metadataExtracao?: Record<string, unknown>;
 }): Promise<{ ok: true; chunks: number; resumo_ia: Record<string, unknown> | null } | { ok: false; error: string }> {
   const chunksBrutos = chunkTextRag(params.texto);
   const chunks = sanitizarChunksParaEmbedding(chunksBrutos);
@@ -205,9 +208,27 @@ export async function indexarDocumentoTenantConhecimento(params: {
     return { ok: false, error: insertErr.message };
   }
 
-  const resumo_ia =
-    params.gerarResumo !== false ? await gerarResumoIaDocumentoTenant(params.texto) : null;
+  let resumo_ia: Record<string, unknown> | null = null;
+  if (params.resumoIaPrecomputado && typeof params.resumoIaPrecomputado === "object") {
+    resumo_ia = params.resumoIaPrecomputado;
+  } else if (params.gerarResumo !== false) {
+    resumo_ia = await gerarResumoIaDocumentoTenant(params.texto);
+  }
   const texto_extraido = params.texto.slice(0, TEXTO_EXTRAIDO_MAX_CHARS);
+
+  let metadataPatch: Record<string, unknown> = {};
+  if (params.metadataExtracao && Object.keys(params.metadataExtracao).length > 0) {
+    const { data: rowMeta } = await params.supabase
+      .from("hub_tenant_conhecimento_documento")
+      .select("metadata")
+      .eq("id", params.documentoId)
+      .maybeSingle();
+    const prev =
+      rowMeta?.metadata && typeof rowMeta.metadata === "object"
+        ? (rowMeta.metadata as Record<string, unknown>)
+        : {};
+    metadataPatch = { ...prev, ...params.metadataExtracao };
+  }
 
   const { error: docErr } = await params.supabase
     .from("hub_tenant_conhecimento_documento")
@@ -218,6 +239,7 @@ export async function indexarDocumentoTenantConhecimento(params: {
       texto_extraido,
       resumo_ia,
       indexado_em: new Date().toISOString(),
+      ...(Object.keys(metadataPatch).length > 0 ? { metadata: metadataPatch } : {}),
     })
     .eq("id", params.documentoId);
 
@@ -248,11 +270,15 @@ export async function reindexarDocumentoTenantConhecimentoFromStorage(params: {
   }
 
   const bytes = Buffer.from(await blob.arrayBuffer());
-  const texto = extrairTextoDocumentoRag(params.documento.nome_arquivo, params.documento.mime_type, bytes);
+  const extracao = await extrairTextoParaConhecimentoTenant(
+    params.documento.nome_arquivo,
+    params.documento.mime_type,
+    bytes
+  );
 
-  if (!texto.ok) {
-    await marcarDocumentoErro(params.supabase, params.documento.id, texto.error);
-    return { ok: false, error: texto.error };
+  if (!extracao.ok) {
+    await marcarDocumentoErro(params.supabase, params.documento.id, extracao.error);
+    return { ok: false, error: extracao.error };
   }
 
   await params.supabase
@@ -264,7 +290,9 @@ export async function reindexarDocumentoTenantConhecimentoFromStorage(params: {
     supabase: params.supabase,
     documentoId: params.documento.id,
     tenantId: params.documento.tenant_id,
-    texto: texto.texto,
+    texto: extracao.texto,
+    resumoIaPrecomputado: extracao.resumo_ia,
+    metadataExtracao: extracao.metadata,
   });
 
   if (!indexed.ok) return indexed;
@@ -355,6 +383,7 @@ export type TenantConhecimentoAnaliseCache = {
   gerado_em: string;
   documentos_usados: number;
   ultimo_indexado_em: string | null;
+  documentos_ids_hash?: string;
   analise: TenantConhecimentoAnaliseNegocio;
 };
 
@@ -410,17 +439,30 @@ export function parseAnaliseCacheFromSettings(settings: unknown): TenantConhecim
     gerado_em: strField(b.gerado_em) || new Date(0).toISOString(),
     documentos_usados: Number.isFinite(Number(b.documentos_usados)) ? Number(b.documentos_usados) : 0,
     ultimo_indexado_em: strField(b.ultimo_indexado_em) || null,
+    documentos_ids_hash: strField(b.documentos_ids_hash) || undefined,
     analise,
   };
 }
 
+function hashDocumentoIds(ids: string[]): string {
+  return [...ids].sort().join("|");
+}
+
 export function analiseNegocioEstaDesatualizada(
   cache: TenantConhecimentoAnaliseCache | null,
-  docsProntos: Array<{ indexado_em?: string | null }>
+  docsProntos: Array<{ id?: string; indexado_em?: string | null }>
 ): boolean {
   if (!cache) return true;
-  if (docsProntos.length === 0) return false;
+  if (docsProntos.length === 0) return true;
   if (cache.documentos_usados !== docsProntos.length) return true;
+
+  const ids = docsProntos.map((d) => d.id).filter((id): id is string => Boolean(id?.trim()));
+  if (ids.length > 0) {
+    const hashAtual = hashDocumentoIds(ids);
+    if (cache.documentos_ids_hash && cache.documentos_ids_hash !== hashAtual) return true;
+    if (!cache.documentos_ids_hash && ids.length !== cache.documentos_usados) return true;
+  }
+
   const ultimo = docsProntos
     .map((d) => d.indexado_em)
     .filter((v): v is string => Boolean(v?.trim()))
@@ -462,21 +504,154 @@ export async function salvarAnaliseNegocioTenant(
   return { ok: true };
 }
 
+export async function limparAnaliseNegocioTenant(
+  supabase: SupabaseClient,
+  tenantId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: row, error: readErr } = await supabase
+    .from("hub_tenants")
+    .select("settings")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (readErr) return { ok: false, error: readErr.message };
+
+  const prev =
+    row?.settings && typeof row.settings === "object" ? (row.settings as Record<string, unknown>) : {};
+  if (!(SETTINGS_ANALISE_KEY in prev)) return { ok: true };
+
+  const { [SETTINGS_ANALISE_KEY]: _removed, ...rest } = prev;
+  const { error: writeErr } = await supabase.from("hub_tenants").update({ settings: rest }).eq("id", tenantId);
+  if (writeErr) return { ok: false, error: writeErr.message };
+  return { ok: true };
+}
+
+function extrairConsultasRagDeDocumentos(
+  docs: Array<{
+    resumo_ia?: Record<string, unknown> | null;
+    texto_extraido?: string | null;
+    titulo?: string | null;
+    nome_arquivo?: string | null;
+  }>
+): string[] {
+  const out: string[] = [];
+  const vistos = new Set<string>();
+
+  const add = (q: string) => {
+    const t = q.trim().replace(/\s+/g, " ");
+    if (t.length < 12) return;
+    const key = t.slice(0, 80).toLowerCase();
+    if (vistos.has(key)) return;
+    vistos.add(key);
+    out.push(t.slice(0, 500));
+  };
+
+  for (const d of docs) {
+    const r = d.resumo_ia;
+    if (r && typeof r === "object") {
+      add(strField(r.nicho));
+      add(strField(r.empresa));
+      const ps = arrStr(r.produtos_servicos);
+      if (ps.length) add(ps.slice(0, 6).join(" "));
+      const seg = arrStr(r.segmentos);
+      if (seg.length) add(seg.slice(0, 4).join(" "));
+      add(strField(r.publico_alvo));
+    }
+    const titulo = (d.titulo?.trim() || d.nome_arquivo || "").trim();
+    if (titulo.length >= 4) add(titulo);
+    const inicio = typeof d.texto_extraido === "string" ? d.texto_extraido.trim() : "";
+    if (inicio.length >= 80) add(inicio.slice(0, 450));
+  }
+
+  return out;
+}
+
+async function buscarTrechosDiretosDeChunks(
+  supabase: SupabaseClient,
+  tenantId: string,
+  limit = 8
+): Promise<TenantConhecimentoTrecho[]> {
+  const { data: docs, error: docErr } = await supabase
+    .from("hub_tenant_conhecimento_documento")
+    .select("id, titulo, nome_arquivo")
+    .eq("tenant_id", tenantId)
+    .eq("status", "pronto")
+    .order("indexado_em", { ascending: false })
+    .limit(Math.max(limit, 5));
+
+  if (docErr || !docs?.length) return [];
+
+  const docMap = new Map(
+    docs.map((d) => [
+      d.id,
+      {
+        titulo: (d.titulo?.trim() || d.nome_arquivo || "documento") as string,
+        nomeArquivo: (d.nome_arquivo || "documento") as string,
+      },
+    ])
+  );
+
+  const out: TenantConhecimentoTrecho[] = [];
+  const vistos = new Set<string>();
+
+  for (const docId of docs.map((d) => d.id)) {
+    const { data: chunks } = await supabase
+      .from("hub_tenant_conhecimento_chunk")
+      .select("conteudo, chunk_index")
+      .eq("tenant_id", tenantId)
+      .eq("document_id", docId)
+      .order("chunk_index", { ascending: true })
+      .limit(2);
+
+    if (!chunks?.length) continue;
+    const meta = docMap.get(docId);
+    for (const ch of chunks) {
+      const conteudo = String(ch.conteudo ?? "").trim();
+      if (conteudo.length < 40) continue;
+      const key = conteudo.slice(0, 120);
+      if (vistos.has(key)) continue;
+      vistos.add(key);
+      out.push({
+        titulo: meta?.titulo ?? "documento",
+        nomeArquivo: meta?.nomeArquivo ?? "documento",
+        conteudo,
+        similarity: 0.5,
+      });
+      if (out.length >= limit) return out;
+    }
+  }
+
+  return out;
+}
+
 export async function buscarTrechosAnaliseNegocio(
   supabase: SupabaseClient,
   tenantId: string
 ): Promise<TenantConhecimentoTrecho[]> {
-  const consultas = [
-    "assistência técnica smartphone celular reparo troca tela bateria ordem de serviço loja",
-    "garantia consumidor CDC cliente retirada aparelho laboratório técnico",
-    "empresa negócio serviços produtos público-alvo atendimento",
+  const { data: docs } = await supabase
+    .from("hub_tenant_conhecimento_documento")
+    .select("id, titulo, nome_arquivo, resumo_ia, texto_extraido")
+    .eq("tenant_id", tenantId)
+    .eq("status", "pronto")
+    .order("indexado_em", { ascending: false });
+
+  const prontos = docs ?? [];
+  if (prontos.length === 0) return [];
+
+  const consultasDinamicas = extrairConsultasRagDeDocumentos(prontos);
+  const consultasGenericas = [
+    "empresa negócio serviços produtos público-alvo operação",
+    "clientes atendimento modelo negócio segmento mercado",
   ];
+  const consultas = [...consultasDinamicas, ...consultasGenericas].slice(0, 8);
+
   const vistos = new Set<string>();
   const out: TenantConhecimentoTrecho[] = [];
+
   for (const q of consultas) {
     const rows = await buscarTrechosConhecimentoTenant(supabase, tenantId, q, {
-      limit: 4,
-      threshold: 0.55,
+      limit: 3,
+      threshold: 0.52,
     });
     for (const row of rows) {
       const key = row.conteudo.slice(0, 120);
@@ -486,6 +661,18 @@ export async function buscarTrechosAnaliseNegocio(
       if (out.length >= 10) return out;
     }
   }
+
+  if (out.length < 4) {
+    const diretos = await buscarTrechosDiretosDeChunks(supabase, tenantId, 10 - out.length);
+    for (const row of diretos) {
+      const key = row.conteudo.slice(0, 120);
+      if (vistos.has(key)) continue;
+      vistos.add(key);
+      out.push(row);
+      if (out.length >= 10) return out;
+    }
+  }
+
   return out;
 }
 
@@ -556,9 +743,9 @@ ${resumo ? `Resumo IA auxiliar:\n${resumo}` : ""}`;
     system: `És analista de negócio no ecossistema Waje. Sintetiza o NEGÓCIO REAL de UMA empresa a partir dos documentos internos.
 
 Regras críticas (obrigatórias):
-1. Identifica o nicho CONCRETO (ex.: "assistência técnica de smartphones", "clínica odontológica") — nunca substitua por "gestão de conformidade", "consultoria regulatória" ou "multi-setor" só porque o documento usa linguagem legal (CDC, garantia, POP, SOP).
-2. POPs, termos de garantia e protocolos descrevem processos INTERNOS do negócio — o negócio é quem presta o serviço (ex.: repara celulares), não quem "gere garantias" como produto principal.
-3. Se aparecem consumidor, aparelho, loja, ordem de serviço, reparo, smartphone → modelo_negocio deve ser "B2C" salvo evidência explícita de B2B.
+1. Identifica o nicho CONCRETO com base nos documentos (ex.: "construção civil", "clínica odontológica", "restaurante", "consultoria em marketing", "loja de moda") — nunca substitua por "gestão de conformidade", "consultoria regulatória" ou "multi-setor" só porque o documento usa linguagem legal (CDC, garantia, POP, SOP).
+2. POPs, termos de garantia e protocolos descrevem processos INTERNOS do negócio — o negócio é quem presta o serviço real (ex.: serve refeições, presta consultoria, constrói imóveis), não quem "gere garantias" como produto principal.
+3. Inferir modelo_negocio (B2C/B2B/misto) a partir do público, produtos e operação descritos — não por palavras jurídicas isoladas.
 4. Cita implicitamente o tipo de operação nos campos — sem inventar marcas, números ou factos ausentes.
 5. Se a evidência for só documentos operacionais (sem site/catálogo), confianca tende a "media" e indica lacunas.
 
@@ -583,10 +770,10 @@ Devolve APENAS um objeto JSON válido (sem Markdown) com estas chaves:
         content: `## Documentos indexados (${prontos.length}) — texto real + resumos
 ${textosBloco}
 
-${trechosBloco ? `## Trechos semânticos (RAG)\n${trechosBloco}` : ""}
+${trechosBloco ? `## Trechos semânticos (RAG)\n${trechosBloco}` : "## Nota\nSem trechos RAG adicionais — base a análise no texto extraído e nos resumos IA acima."}
 
 ## Tarefa
-Descreve o negócio real desta empresa para orientar cargos e agentes IA (ex.: atendente de assistência técnica de celulares, não consultor de compliance).`,
+Descreve o negócio real desta empresa para orientar cargos e agentes IA adequados ao sector (ex.: atendente de restaurante, recepcionista de clínica, SDR de software B2B — conforme a evidência nos documentos).`,
       },
     ],
     maxTokens: 1600,
@@ -610,6 +797,7 @@ Descreve o negócio real desta empresa para orientar cargos e agentes IA (ex.: a
     gerado_em: new Date().toISOString(),
     documentos_usados: prontos.length,
     ultimo_indexado_em,
+    documentos_ids_hash: hashDocumentoIds(prontos.map((d) => d.id)),
     analise,
   };
 

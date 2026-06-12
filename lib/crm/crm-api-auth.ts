@@ -19,6 +19,30 @@ export function requireInternalApiKey(request: Request): NextResponse | null {
   return null;
 }
 
+/**
+ * CRM autenticado: chave interna válida OU utilizador logado (x-caller-auth-id activo).
+ * Usado em OAuth e rotas chamadas pelo browser com sessão Supabase.
+ */
+export async function requireCrmApiAccess(request: Request): Promise<NextResponse | null> {
+  const config = crmApiConfigError();
+  if (config) return config;
+
+  const expected = process.env.INTERNAL_API_KEY?.trim();
+  const got = request.headers.get("x-api-key")?.trim();
+  if (expected && got === expected) return null;
+
+  const actor = await getCrmActor(request);
+  if (actor) {
+    const st = actor.status.trim().toLowerCase();
+    if (st && st !== "ativo") {
+      return NextResponse.json({ error: "Conta inativa." }, { status: 403 });
+    }
+    return null;
+  }
+
+  return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+}
+
 /** Admin-only: header opcional `x-caller-auth-id` (UUID Supabase Auth). */
 export async function requireCrmAdmin(request: Request): Promise<NextResponse | null> {
   const config = crmApiConfigError();

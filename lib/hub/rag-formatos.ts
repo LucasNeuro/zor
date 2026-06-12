@@ -1,4 +1,4 @@
-/** Extensões indexáveis no RAG (extração local, sem OCR). */
+/** Extensões indexáveis no RAG. Base de conhecimento tenant usa Mistral Document AI; agente RAG usa extração local. */
 export const RAG_EXTENSOES_ACEITAS = [
   ".txt",
   ".md",

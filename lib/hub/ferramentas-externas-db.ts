@@ -8,7 +8,7 @@ export type HubIntegracaoTipo =
 
 export type HubIntegracaoStatus = "ativo" | "em_breve" | "erro" | "pendente_configuracao";
 
-export type HubIntegracaoAuthTipo = "api_key" | "bearer" | "oauth_placeholder";
+export type HubIntegracaoAuthTipo = "api_key" | "bearer" | "oauth_placeholder" | "oauth2";
 
 export type HubFerramentaExternaPolitica = "leitura" | "escrita";
 
@@ -77,7 +77,7 @@ export function integracaoStatusValido(v: string): v is HubIntegracaoStatus {
 }
 
 export function integracaoAuthTipoValido(v: string): v is HubIntegracaoAuthTipo {
-  return v === "api_key" || v === "bearer" || v === "oauth_placeholder";
+  return v === "api_key" || v === "bearer" || v === "oauth_placeholder" || v === "oauth2";
 }
 
 export function ferramentaExternaPoliticaValida(v: string): v is HubFerramentaExternaPolitica {

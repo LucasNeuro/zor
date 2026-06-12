@@ -8,6 +8,7 @@ import {
   type HubIntegracaoCredenciaisRow,
   type HubIntegracaoRow,
 } from "@/lib/hub/ferramentas-externas-db";
+import { getValidGoogleAccessToken, readStoredGoogleOAuthCredentials } from "@/lib/email/oauth-google";
 
 const HTTP_TIMEOUT_MS = 30_000;
 
@@ -122,11 +123,18 @@ async function executarGoogleCalendar(
 async function executarGmail(
   toolName: string,
   args: Record<string, unknown>,
-  cred: HubIntegracaoCredenciaisRow | null
+  cred: HubIntegracaoCredenciaisRow | null,
+  supabase: SupabaseClient,
+  tenantId: string,
+  integracaoRowId: string
 ): Promise<string> {
-  const token = bearerToken(cred);
+  let token = bearerToken(cred);
+  if (readStoredGoogleOAuthCredentials(cred)) {
+    const refreshed = await getValidGoogleAccessToken(supabase, tenantId, cred, integracaoRowId);
+    if (refreshed) token = refreshed;
+  }
   if (!token) {
-    return JSON.stringify({ erro: "gmail_sem_token", detalhe: "Configure o token OAuth na integração." });
+    return JSON.stringify({ erro: "gmail_sem_token", detalhe: "Configure OAuth Gmail ou token na integração." });
   }
 
   if (toolName === "hub_int_gmail_enviar") {
@@ -283,7 +291,7 @@ export async function executarFerramentaIntegrador(
     case "google_calendar":
       return executarGoogleCalendar(toolName, args, credenciais);
     case "gmail":
-      return executarGmail(toolName, args, credenciais);
+      return executarGmail(toolName, args, credenciais, supabase, tenantId, String(integracao.id));
     case "zendesk":
       return executarZendesk(toolName, args, integracao, credenciais);
     default:

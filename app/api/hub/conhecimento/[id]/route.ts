@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import {
   isTenantConhecimentoMigrationMissing,
+  limparAnaliseNegocioTenant,
   removerArquivoConhecimentoStorage,
   TENANT_CONHECIMENTO_BUCKET,
 } from "@/lib/hub/tenant-conhecimento-rag";
@@ -144,5 +145,19 @@ export async function DELETE(
     .eq("tenant_id", tenantId);
 
   if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+  const { count, error: countErr } = await supabase
+    .from("hub_tenant_conhecimento_documento")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId);
+
+  if (countErr) return NextResponse.json({ error: countErr.message }, { status: 500 });
+
+  if ((count ?? 0) === 0) {
+    const limpo = await limparAnaliseNegocioTenant(supabase, tenantId);
+    if (!limpo.ok) return NextResponse.json({ error: limpo.error }, { status: 500 });
+    return NextResponse.json({ ok: true, analise_limpa: true });
+  }
+
   return NextResponse.json({ ok: true });
 }

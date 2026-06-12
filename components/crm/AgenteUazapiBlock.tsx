@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -366,6 +366,7 @@ export function AgenteUazapiBlock({
   } | null>(null);
   const [statusTempoReal, setStatusTempoReal] = useState<VerificacaoTempoReal | null>(null);
   const [webhookAviso, setWebhookAviso] = useState<string | null>(null);
+  const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
   const [ultimaVerificacaoAt, setUltimaVerificacaoAt] = useState<string | null>(null);
   const [ultimaVerificacaoResultado, setUltimaVerificacaoResultado] = useState<"sucesso" | "erro" | null>(null);
   const [dialogExcluirUazapi, setDialogExcluirUazapi] = useState(false);
@@ -575,6 +576,11 @@ export function AgenteUazapiBlock({
         setUltimaVerificacaoResultado("sucesso");
         if (typeof data.webhook_warning === "string" && data.webhook_warning.trim()) {
           setWebhookAviso(data.webhook_warning.trim());
+        }
+        if (typeof data.webhook_url === "string" && data.webhook_url.trim()) {
+          setWebhookUrl(data.webhook_url.trim());
+        } else if (typeof data.webhook_url_display === "string" && data.webhook_url_display.trim()) {
+          setWebhookUrl(data.webhook_url_display.trim());
         }
         if (typeof data.proxy_warning === "string" && data.proxy_warning.trim()) {
           setProxyAviso(data.proxy_warning.trim());
@@ -1410,6 +1416,34 @@ export function AgenteUazapiBlock({
               }}
             >
               {proxyAviso}
+            </div>
+          ) : null}
+          {webhookUrl ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: `1px solid ${RF_BORDER_STRONG}`,
+                background: "rgba(255,255,255,0.03)",
+                fontSize: 11,
+                color: RF_TEXT_SECONDARY,
+              }}
+            >
+              <p style={{ margin: "0 0 6px", fontWeight: 700, color: RF_ACCENT }}>URL do webhook (UAZAPI global)</p>
+              <code
+                style={{
+                  display: "block",
+                  wordBreak: "break-all",
+                  fontSize: 10,
+                  lineHeight: 1.45,
+                  color: RF_TEXT_PRIMARY,
+                }}
+              >
+                {webhookUrl}
+              </code>
+              <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_TEXT_MUTED }}>
+                Cole no painel UAZAPI → Webhooks → URL. Eventos: messages, connection. Excluir: wasSentByApi.
+              </p>
             </div>
           ) : null}
           {webhookAviso ? (

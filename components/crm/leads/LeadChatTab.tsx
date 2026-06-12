@@ -506,7 +506,7 @@ export function LeadChatTab({
       }
       try {
         const res = await fetch(
-          `/api/crm/atendimento/mensagens?leadId=${encodeURIComponent(leadId)}`,
+          `/api/crm/atendimento/mensagens?canal=whatsapp&leadId=${encodeURIComponent(leadId)}`,
           { headers: internalApiHeaders() }
         );
         const json = await res.json().catch(() => ({}));

@@ -152,12 +152,14 @@ export default function ConhecimentoPage() {
         analise?: TenantConhecimentoAnaliseNegocio | null;
         gerado_em?: string | null;
         desatualizada?: boolean;
+        documentos_indexados?: number;
         error?: string;
       };
       if (!r.ok) throw new Error(json.error || "Falha ao carregar análise.");
-      setAnalise(json.analise ?? null);
-      setAnaliseGeradoEm(json.gerado_em ?? null);
-      setAnaliseDesatualizada(Boolean(json.desatualizada));
+      const semDocs = (json.documentos_indexados ?? 0) === 0;
+      setAnalise(semDocs ? null : (json.analise ?? null));
+      setAnaliseGeradoEm(semDocs ? null : (json.gerado_em ?? null));
+      setAnaliseDesatualizada(semDocs ? false : Boolean(json.desatualizada));
     } catch (e) {
       setAnaliseErro(e instanceof Error ? e.message : "Erro ao carregar análise.");
     } finally {
@@ -220,12 +222,20 @@ export default function ConhecimentoPage() {
           headers: await crmApiHeaders(),
           body: form,
         });
-        const json = (await r.json()) as { documento?: TenantConhecimentoDocumento; error?: string };
+        const json = (await r.json()) as {
+          documento?: TenantConhecimentoDocumento;
+          analise_desatualizada?: boolean;
+          error?: string;
+        };
         if (!r.ok) throw new Error(json.error || "Falha no upload.");
         if (json.documento) {
           setDocumentos((prev) => [json.documento!, ...prev.filter((d) => d.id !== json.documento!.id)]);
-          toastSuccess("Documento processado com sucesso. Use «Analisar negócio» para gerar o perfil da empresa.");
-          if (json.documento.status === "pronto") setAnaliseDesatualizada(true);
+          if (json.documento.status === "pronto") {
+            toastSuccess("Documento indexado. A gerar análise do negócio…");
+            void gerarAnalise({ silencioso: true, mudarTab: false });
+          } else {
+            toastSuccess("Documento enviado com sucesso.");
+          }
         } else {
           await carregar();
         }
@@ -238,7 +248,7 @@ export default function ConhecimentoPage() {
         setUploading(false);
       }
     },
-    [carregar, noLimite, toastSuccess, toastError, toastWarning]
+    [carregar, gerarAnalise, noLimite, toastSuccess, toastError, toastWarning]
   );
 
   const reprocessar = useCallback(
@@ -283,13 +293,21 @@ export default function ConhecimentoPage() {
           method: "DELETE",
           headers: await crmApiHeaders(),
         });
-        const json = (await r.json()) as { error?: string };
+        const json = (await r.json()) as { ok?: boolean; analise_limpa?: boolean; error?: string };
         if (!r.ok) throw new Error(json.error || "Falha ao excluir.");
-        setDocumentos((prev) => prev.filter((d) => d.id !== id));
+        const remaining = documentos.filter((d) => d.id !== id);
+        setDocumentos(remaining);
         setSideover(null);
         toastSuccess("Documento removido.");
-        setAnaliseDesatualizada(true);
-        void carregarAnalise();
+
+        const indexadosRestantes = remaining.filter((d) => d.status === "pronto");
+        if (json.analise_limpa || indexadosRestantes.length === 0) {
+          setAnalise(null);
+          setAnaliseGeradoEm(null);
+          setAnaliseDesatualizada(false);
+        } else {
+          void gerarAnalise({ silencioso: true });
+        }
       } catch (e) {
         toastError(e instanceof Error ? e.message : "Erro ao excluir.");
       } finally {
@@ -298,7 +316,7 @@ export default function ConhecimentoPage() {
         closeConfirmDialog();
       }
     },
-    [carregarAnalise, closeConfirmDialog, confirmDialog, setConfirmLoading, toastSuccess, toastError]
+    [confirmDialog, documentos, gerarAnalise, setConfirmLoading, closeConfirmDialog, toastSuccess, toastError]
   );
 
   const indexados = documentos.filter((d) => d.status === "pronto");
@@ -709,7 +727,8 @@ export default function ConhecimentoPage() {
                 </div>
               </div>
               <p className="mt-4 text-xs text-[#89a095]">
-                Após o envio, o sistema extrai texto, gera embeddings Mistral, cria um resumo por documento e consolida
+                Após o envio, o Mistral Document AI lê o ficheiro (texto + dados estruturados), gera embeddings,
+                cria um resumo por documento e consolida
                 uma análise IA do negócio na aba «Análise IA».
               </p>
             </div>

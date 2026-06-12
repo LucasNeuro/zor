@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { extrairTextoDocumentoRag } from "@/lib/hub/rag";
+import { extrairTextoParaConhecimentoTenant } from "@/lib/hub/conhecimento-extracao";
 import { extensaoArquivo, ragExtensaoAceita } from "@/lib/hub/rag-formatos";
 import {
   indexarDocumentoTenantConhecimento,
@@ -167,20 +167,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: docErr.message }, { status: 500 });
   }
 
-  const texto = extrairTextoDocumentoRag(file.name, mimeType, bytes);
-  if (!texto.ok) {
+  const extracao = await extrairTextoParaConhecimentoTenant(file.name, mimeType, bytes);
+  if (!extracao.ok) {
     await supabase
       .from("hub_tenant_conhecimento_documento")
-      .update({ status: "erro", erro: texto.error, indexado_em: new Date().toISOString() })
+      .update({ status: "erro", erro: extracao.error, indexado_em: new Date().toISOString() })
       .eq("id", doc.id);
-    return NextResponse.json({ documento: { ...doc, status: "erro", erro: texto.error }, error: texto.error }, { status: 422 });
+    return NextResponse.json(
+      { documento: { ...doc, status: "erro", erro: extracao.error }, error: extracao.error },
+      { status: 422 }
+    );
   }
 
   const indexed = await indexarDocumentoTenantConhecimento({
     supabase,
     documentoId: doc.id,
     tenantId,
-    texto: texto.texto,
+    texto: extracao.texto,
+    resumoIaPrecomputado: extracao.resumo_ia,
+    metadataExtracao: extracao.metadata,
   });
 
   if (!indexed.ok) {
@@ -196,5 +201,6 @@ export async function POST(request: NextRequest) {
       resumo_ia: indexed.resumo_ia,
       indexado_em: new Date().toISOString(),
     },
+    analise_desatualizada: true,
   });
 }

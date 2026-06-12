@@ -4,11 +4,17 @@ import { stripHtmlBasicoFromInbound } from "@/lib/email/inbound-parser";
 import { resolverAgentePorDestinatariosInbound } from "@/lib/email/resolve-agente-por-email";
 import { fetchResendReceivedEmail } from "@/lib/email/resend-receiving";
 import { sendEmail } from "@/lib/email/resend-send";
+import { sendGmailEmail } from "@/lib/email/gmail-send";
+import type { AgenteEmailRow } from "@/lib/email/resolve-agente-por-email";
 import { processarMensagem } from "@/lib/ia/engine";
 import { identificarMercado } from "@/lib/ia/agentes-config";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { garantirCodigoLead, prepararRowHubLeadInsert } from "@/lib/crm/lead-cadastro";
 import { gerarCodigoPessoa } from "@/lib/crm/pessoa-cadastro";
+import {
+  ensureConversaAtiva,
+  gravarParMensagensConversa,
+} from "@/lib/crm/conversa-canal";
 
 export type ProcessInboundEmailResult =
   | {
@@ -118,7 +124,7 @@ async function encontrarOuCriarLeadPorEmail(
       nome: nomeLead,
       telefone: null,
       email: opts.email,
-      origem: "outro",
+      origem: "email",
       estagio: "novo",
       score: 10,
       valor_estimado: 0,
@@ -301,6 +307,39 @@ export async function processInboundEmail(
     return { ok: false, error: send.error, status: send.status || 502 };
   }
 
+  const conversaId = await ensureConversaAtiva(supabase, {
+    leadId: lead.id as string,
+    canal: "email",
+    tenantId,
+    pessoaId: (lead.pessoa_id as string | null) ?? null,
+    preview: resultado.resposta,
+  });
+
+  if (conversaId) {
+    await gravarParMensagensConversa(supabase, {
+      conversaId,
+      leadId: lead.id as string,
+      tenantId,
+      canal: "email",
+      entrada: {
+        conteudo: inbound.text,
+        emailSubject: inbound.subject,
+        emailMessageId: inbound.messageId,
+        metadados: { from: inbound.fromEmail, resend_email_id: inbound.resendEmailId },
+      },
+      saida: {
+        conteudo: resultado.resposta,
+        remetente: "ia",
+        agenteId: agenteSlug,
+        emailSubject: replySubject,
+        emailMessageId: send.id ?? null,
+        emailInReplyTo: inbound.messageId,
+        emailStatus: "enviado",
+        metadados: { resend_id: send.id ?? null },
+      },
+    });
+  }
+
   if (dedupeId) {
     const jobRow = {
       tenant_id: tenantId,
@@ -332,5 +371,217 @@ export async function processInboundEmail(
     lead_id: lead.id as string,
     agente_slug: agenteSlug,
     resend_id: send.id,
+  };
+}
+
+function gmailDedupeId(inbound: ParsedInboundEmail): string | null {
+  if (inbound.gmailMessageId?.trim()) return `gmail:${inbound.gmailMessageId.trim()}`;
+  if (inbound.messageId?.trim()) return inbound.messageId.trim();
+  return null;
+}
+
+async function registrarEmailSyncState(
+  supabase: SupabaseClient,
+  opts: {
+    tenantId: string;
+    integracaoRowId: string;
+    gmailMessageId: string;
+    rfcMessageId?: string | null;
+    agenteSlug: string;
+    leadId?: string | null;
+  }
+): Promise<void> {
+  const gmailId = opts.gmailMessageId.trim();
+  if (!gmailId) return;
+
+  const { error } = await supabase.from("hub_email_sync_state").upsert(
+    {
+      tenant_id: opts.tenantId,
+      integracao_id: opts.integracaoRowId,
+      gmail_message_id: gmailId,
+      rfc_message_id: opts.rfcMessageId?.trim() || null,
+      agente_slug: opts.agenteSlug,
+      lead_id: opts.leadId ?? null,
+      processado_em: new Date().toISOString(),
+    },
+    { onConflict: "integracao_id,gmail_message_id", ignoreDuplicates: true }
+  );
+
+  if (error && !isMissingPgColumn(error, "hub_email_sync_state")) {
+    console.warn("[email/oauth-inbound] hub_email_sync_state:", error.message);
+  }
+}
+
+/** Processa e-mail inbound Gmail OAuth: lead + IA + resposta via Gmail API. */
+export async function processOAuthInboundEmail(
+  supabase: SupabaseClient,
+  inbound: ParsedInboundEmail,
+  opts: {
+    agente: AgenteEmailRow;
+    integracaoRowId: string;
+    bearerToken: string;
+    mailboxEmail?: string | null;
+  }
+): Promise<ProcessInboundEmailResult> {
+  const inboundMsg = inbound;
+  if (!inboundMsg.text.trim()) {
+    return { ok: false, error: "E-mail recebido sem corpo utilizável", status: 422 };
+  }
+
+  const agente = opts.agente;
+  const agenteSlug = agente.agente_slug;
+  const tenantId =
+    (typeof agente.tenant_id === "string" && agente.tenant_id.trim()) || defaultTenantId();
+
+  const dedupeId = gmailDedupeId(inboundMsg);
+  if (await mensagemEmailJaProcessada(supabase, { dedupeId, email: inboundMsg.fromEmail })) {
+    return { ok: true, status: "duplicate", agente_slug: agenteSlug, reason: "duplicate_message_id" };
+  }
+
+  const mercado = identificarMercado(inboundMsg.text);
+  const { lead, isNovo } = await encontrarOuCriarLeadPorEmail(supabase, {
+    email: inboundMsg.fromEmail,
+    nome: inboundMsg.fromName,
+    mercado,
+    mensagem: inboundMsg.text,
+    agenteSlug,
+    tenantId,
+  });
+
+  if (!lead) {
+    return { ok: false, error: "Falha ao criar ou atualizar lead", status: 500 };
+  }
+
+  const resultado = await processarMensagem({
+    leadId: lead.id as string,
+    mensagem: inboundMsg.text,
+    canal: "email",
+    nome: inboundMsg.fromName || undefined,
+    agenteSlugHint: agenteSlug,
+    tenantId,
+    metadata: {
+      email: inboundMsg.fromEmail,
+      subject: inboundMsg.subject,
+      message_id: inboundMsg.messageId,
+      gmail_message_id: inboundMsg.gmailMessageId,
+      is_novo: isNovo,
+    },
+  });
+
+  if (!resultado.sucesso || !resultado.resposta?.trim()) {
+    return {
+      ok: false,
+      error: resultado.erro || "IA não devolveu resposta",
+      status: 502,
+    };
+  }
+
+  const replySubject = inboundMsg.subject.startsWith("Re:")
+    ? inboundMsg.subject
+    : `Re: ${inboundMsg.subject}`;
+
+  const fromEmail =
+    agente.email_from?.trim() ||
+    opts.mailboxEmail?.trim() ||
+    agente.email_inbound?.trim() ||
+    null;
+
+  const refs = [inboundMsg.references, inboundMsg.messageId].filter(Boolean).join(" ").trim() || undefined;
+
+  const send = await sendGmailEmail({
+    bearerToken: opts.bearerToken,
+    to: inboundMsg.fromEmail,
+    subject: replySubject,
+    text: resultado.resposta,
+    from: fromEmail,
+    fromName: agente.email_from_name,
+    inReplyTo: inboundMsg.messageId,
+    references: refs,
+    threadId: inboundMsg.gmailThreadId,
+  });
+
+  if (!send.ok) {
+    return { ok: false, error: send.error, status: 502 };
+  }
+
+  const conversaId = await ensureConversaAtiva(supabase, {
+    leadId: lead.id as string,
+    canal: "email",
+    tenantId,
+    pessoaId: (lead.pessoa_id as string | null) ?? null,
+    preview: resultado.resposta,
+  });
+
+  if (conversaId) {
+    await gravarParMensagensConversa(supabase, {
+      conversaId,
+      leadId: lead.id as string,
+      tenantId,
+      canal: "email",
+      entrada: {
+        conteudo: inboundMsg.text,
+        emailSubject: inboundMsg.subject,
+        emailMessageId: inboundMsg.messageId,
+        metadados: {
+          from: inboundMsg.fromEmail,
+          gmail_message_id: inboundMsg.gmailMessageId,
+          provider: "oauth_google",
+        },
+      },
+      saida: {
+        conteudo: resultado.resposta,
+        remetente: "ia",
+        agenteId: agenteSlug,
+        emailSubject: replySubject,
+        emailMessageId: send.id ?? null,
+        emailInReplyTo: inboundMsg.messageId,
+        emailStatus: "enviado",
+        metadados: { gmail_message_id: send.id ?? null, provider: "oauth_google" },
+      },
+    });
+  }
+
+  if (dedupeId) {
+    const jobRow = {
+      tenant_id: tenantId,
+      canal: "email",
+      telefone: inboundMsg.fromEmail,
+      lead_id: lead.id,
+      agente_slug: agenteSlug,
+      message_id: dedupeId,
+      payload: {
+        from: inboundMsg.fromEmail,
+        subject: inboundMsg.subject,
+        to: inboundMsg.toAddresses,
+        gmail_message_id: inboundMsg.gmailMessageId,
+        rfc_message_id: inboundMsg.messageId,
+        gmail_send_id: send.id ?? null,
+        provider: "oauth_google",
+      },
+    };
+    const { error: jobErr } = await supabase
+      .from("hub_msg_jobs")
+      .upsert(jobRow, { onConflict: "canal,message_id", ignoreDuplicates: true });
+    if (jobErr && !isMissingPgColumn(jobErr)) {
+      console.warn("[email/oauth-inbound] hub_msg_jobs:", jobErr.message);
+    }
+  }
+
+  if (inboundMsg.gmailMessageId?.trim()) {
+    await registrarEmailSyncState(supabase, {
+      tenantId,
+      integracaoRowId: opts.integracaoRowId,
+      gmailMessageId: inboundMsg.gmailMessageId,
+      rfcMessageId: inboundMsg.messageId,
+      agenteSlug,
+      leadId: lead.id as string,
+    });
+  }
+
+  return {
+    ok: true,
+    status: "processed",
+    lead_id: lead.id as string,
+    agente_slug: agenteSlug,
   };
 }

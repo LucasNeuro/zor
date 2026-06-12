@@ -20,9 +20,9 @@ import {
 import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-externas";
 import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
 import {
-  AgenteResendBlock,
+  AgenteEmailConnectBlock,
   type AgenteResendSnapshot,
-} from "@/components/crm/AgenteResendBlock";
+} from "@/components/crm/AgenteEmailConnectBlock";
 import {
   AgenteUazapiBlock,
   type AgenteUazapiSnapshot,
@@ -3232,7 +3232,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 />
               ) : null}
               {modoOperacao === "canal_email" ? (
-                <AgenteResendBlock
+                <AgenteEmailConnectBlock
                   layout="painel"
                   agenteNome={nome.trim() || agenteSlugCriado}
                   agenteSlug={agenteSlugCriado}

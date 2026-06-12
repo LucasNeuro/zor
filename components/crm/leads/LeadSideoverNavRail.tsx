@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import {
   FileText,
   LayoutDashboard,
+  Mail,
   MessageSquare,
   StickyNote,
   type LucideIcon,
@@ -14,7 +15,7 @@ import {
   RF_TEXT_SECONDARY,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 
-export type LeadSideoverNavId = "timeline" | "dados" | "observacoes" | "conversas";
+export type LeadSideoverNavId = "timeline" | "dados" | "observacoes" | "conversas" | "conversas_email";
 
 type NavItem = {
   id: LeadSideoverNavId;
@@ -27,17 +28,30 @@ type Props = {
   active: LeadSideoverNavId | null;
   onChange: (id: LeadSideoverNavId) => void;
   observacoesCount?: number;
+  /** Exibe ícone WhatsApp (leads com telefone / origem WhatsApp). */
+  showWhatsappTab?: boolean;
+  /** Exibe ícone E-mail (leads atendidos via canal e-mail). */
+  showEmailTab?: boolean;
 };
 
 const NAV_BG = "rgba(6, 13, 8, 0.85)";
 const ACTIVE_BG = "rgba(63, 185, 80, 0.14)";
 
 /** Mini sidebar — somente ícones (~48px), padrão drawer de cargos. */
-export function LeadSideoverNavRail({ active, onChange, observacoesCount = 0 }: Props) {
+export function LeadSideoverNavRail({
+  active,
+  onChange,
+  observacoesCount = 0,
+  showWhatsappTab = true,
+  showEmailTab = false,
+}: Props) {
   const items: NavItem[] = [
     { id: "timeline", label: "Resumo", icon: LayoutDashboard },
     { id: "dados", label: "Dados", icon: FileText },
-    { id: "conversas", label: "Conversas", icon: MessageSquare },
+    ...(showWhatsappTab
+      ? [{ id: "conversas" as const, label: "WhatsApp", icon: MessageSquare }]
+      : []),
+    ...(showEmailTab ? [{ id: "conversas_email" as const, label: "E-mail", icon: Mail }] : []),
     {
       id: "observacoes",
       label: "Observações",

@@ -42,7 +42,10 @@ import {
 } from "@/components/crm/AgenteFerramentasIaBlock";
 import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-externas";
 import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
-import { AgenteResendBlock, type AgenteResendSnapshot } from "@/components/crm/AgenteResendBlock";
+import {
+  AgenteEmailConnectBlock,
+  type AgenteResendSnapshot,
+} from "@/components/crm/AgenteEmailConnectBlock";
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
 import { hubModeloExibicaoProduto } from "@/lib/ia/hub-model-defaults";
 import {
@@ -1064,7 +1067,7 @@ export default function AgentePage() {
                   />
                 ) : null}
                 {agente.modo_operacao === "canal_email" ? (
-                  <AgenteResendBlock
+                  <AgenteEmailConnectBlock
                     agenteSlug={slug}
                     agenteNome={agente.nome}
                     snapshot={{

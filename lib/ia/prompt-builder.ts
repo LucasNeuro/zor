@@ -290,7 +290,16 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
     (typeof agente.tenant_id === "string" && agente.tenant_id.trim()) || defaultTenantId();
 
   // CAMADA 2.4 — Base de conhecimento da empresa (todos os agentes do tenant)
-  const analiseEmpresa = await lerAnaliseNegocioTenant(supabase, tenantId);
+  const { count: docsConhecimentoProntos } = await supabase
+    .from("hub_tenant_conhecimento_documento")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("status", "pronto");
+
+  const analiseEmpresa =
+    (docsConhecimentoProntos ?? 0) > 0
+      ? await lerAnaliseNegocioTenant(supabase, tenantId)
+      : null;
   if (analiseEmpresa?.analise) {
     const perfilEmpresa = formatarAnaliseNegocioParaPrompt(analiseEmpresa.analise);
     if (perfilEmpresa) {

@@ -3,6 +3,10 @@
 export type ParsedInboundEmail = {
   /** ID interno Resend (`email_id`) — usado para GET /emails/receiving/{id}. */
   resendEmailId: string | null;
+  /** ID interno Gmail (`messages/{id}`). */
+  gmailMessageId: string | null;
+  /** Thread Gmail para resposta in-thread. */
+  gmailThreadId: string | null;
   /** Message-ID RFC para threading (In-Reply-To / References). */
   messageId: string | null;
   fromEmail: string;
@@ -139,6 +143,8 @@ export function parseResendInboundWebhook(body: Record<string, unknown>): ParseI
     ok: true,
     value: {
       resendEmailId,
+      gmailMessageId: null,
+      gmailThreadId: null,
       messageId,
       fromEmail,
       fromName: extrairNomeRemetente(fromRaw),

@@ -22,6 +22,7 @@ import {
   rfCloseButtonStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
+import { emailFromPermitidoParaResend } from "@/lib/email/resend-config";
 
 export type AgenteResendSnapshot = {
   email_from?: string | null;
@@ -36,7 +37,7 @@ export type AgenteResendBlockProps = {
   onSnapshotPatch?: (patch: Partial<AgenteResendSnapshot>) => void;
   agenteNome?: string;
   bloqueado?: boolean;
-  layout?: "card" | "painel";
+  layout?: "card" | "painel" | "inline";
 };
 
 type ErroCtx = { titulo: string; detalhes: string[] };
@@ -49,6 +50,16 @@ type ResendStatus = {
   inbound_webhook_url?: string | null;
 };
 
+function detalhesErroResend(titulo: string): string[] {
+  if (!/domain is not verified|resend\.com\/domains/i.test(titulo)) return [];
+  return [
+    "A verificação é no painel Resend (resend.com/domains), não no Render.",
+    "Adicione o domínio (ex. waje.com.br), configure os registos DNS no seu provedor e aguarde «Verified».",
+    "Ative também «Receiving» no domínio para e-mails de entrada (webhook).",
+    "É uma configuração única por domínio — todos os agentes @waje.com.br usam o mesmo domínio verificado.",
+  ];
+}
+
 function montarErroDoCorpo(data: Record<string, unknown>, status: number): ErroCtx {
   const titulo =
     typeof data.error === "string" && data.error.trim()
@@ -56,6 +67,9 @@ function montarErroDoCorpo(data: Record<string, unknown>, status: number): ErroC
       : `Erro HTTP ${status}`;
   const detalhes: string[] = [];
   if (typeof data.detail === "string" && data.detail.trim()) detalhes.push(data.detail.trim());
+  for (const d of detalhesErroResend(titulo)) {
+    if (!detalhes.includes(d)) detalhes.push(d);
+  }
   return { titulo, detalhes };
 }
 
@@ -251,7 +265,9 @@ export function AgenteResendBlock({
   const [sucesso, setSucesso] = useState<string | null>(null);
 
   const acoesOff = loading !== null || bloqueado || statusLoading;
-  const emailConfigurado = Boolean(fromEmail.trim() && inbound.trim());
+  const fromCheck = fromEmail.trim() ? emailFromPermitidoParaResend(fromEmail) : null;
+  const fromInvalido = fromCheck !== null && !fromCheck.ok ? fromCheck.error : null;
+  const emailConfigurado = Boolean(fromEmail.trim() && inbound.trim() && !fromInvalido);
 
   useEffect(() => {
     setFromName(snapshot.email_from_name?.trim() || "");
@@ -318,7 +334,9 @@ export function AgenteResendBlock({
         width: "100%",
         padding: "10px 12px",
         borderRadius: 9,
-        border: `1px solid ${RF_BORDER_STRONG}`,
+        borderWidth: 1,
+        borderStyle: "solid",
+        borderColor: RF_BORDER_STRONG,
         background: "rgba(6, 13, 8, 0.85)",
         color: RF_TEXT_PRIMARY,
         fontSize: 13,
@@ -328,7 +346,9 @@ export function AgenteResendBlock({
         width: "100%",
         padding: "10px 12px",
         borderRadius: 9,
-        border: "1px solid #dcebd8",
+        borderWidth: 1,
+        borderStyle: "solid",
+        borderColor: "#dcebd8",
         background: "#f8fcf6",
         color: "#0b2210",
         fontSize: 13,
@@ -384,10 +404,11 @@ export function AgenteResendBlock({
     };
   };
 
-  async function salvar() {
-    setErr(null);
-    setSucesso(null);
-    setLoading("save");
+  async function persistirEmail(opts?: { mensagemSucesso?: string | null }): Promise<boolean> {
+    if (fromInvalido) {
+      setErr({ titulo: fromInvalido, detalhes: ["Altere o remetente para um @waje.com.br verificado no Resend."] });
+      return false;
+    }
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/email`, {
         method: "PATCH",
@@ -402,7 +423,7 @@ export function AgenteResendBlock({
       const data = await lerCorpoApi(res);
       if (!res.ok) {
         setErr(montarErroDoCorpo(data, res.status));
-        return;
+        return false;
       }
       const patch = patchEmailDoCorpo(data) ?? {
         email_from: fromEmail.trim() || null,
@@ -411,24 +432,53 @@ export function AgenteResendBlock({
         email_ativo: ativo,
       };
       onSnapshotPatchRef.current?.(patch);
-      setSucesso("Configuração de e-mail guardada.");
+      if (opts?.mensagemSucesso) setSucesso(opts.mensagemSucesso);
       void carregarStatus();
+      return true;
     } catch {
       setErr({
         titulo: "Falha de rede ao guardar.",
         detalhes: ["Verifique a ligação e se o servidor Next.js está a correr."],
       });
-    } finally {
-      setLoading(null);
+      return false;
     }
   }
 
+  async function salvar() {
+    setErr(null);
+    setSucesso(null);
+    setLoading("save");
+    const ok = await persistirEmail({ mensagemSucesso: "Configuração de e-mail guardada." });
+    setLoading(null);
+    if (!ok) return;
+  }
+
   async function enviarTeste() {
-    const destino = window.prompt("E-mail de destino para o teste:", fromEmail.trim() || "");
-    if (!destino?.trim()) return;
+    if (fromInvalido) {
+      setErr({
+        titulo: fromInvalido,
+        detalhes: [
+          "O Resend não envia de Gmail/Outlook. Use o mesmo domínio da entrada (ex.: atendimento@waje.com.br).",
+        ],
+      });
+      return;
+    }
+    const destino = fromEmail.trim() || inbound.trim();
+    if (!destino) {
+      setErr({
+        titulo: "Informe o e-mail de envio (from) ou de entrada antes de testar.",
+        detalhes: ["Guarde a configuração e use um endereço válido no domínio verificado no Resend."],
+      });
+      return;
+    }
     setErr(null);
     setSucesso(null);
     setLoading("test");
+    const saved = await persistirEmail({ mensagemSucesso: null });
+    if (!saved) {
+      setLoading(null);
+      return;
+    }
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/email/test`, {
         method: "POST",
@@ -474,6 +524,13 @@ export function AgenteResendBlock({
           type="button"
           disabled={acoesOff || !emailConfigurado}
           style={btnBase(acoesOff || !emailConfigurado, "default")}
+          title={
+            fromEmail.trim()
+              ? `Envia teste para ${fromEmail.trim()}`
+              : inbound.trim()
+                ? `Envia teste para ${inbound.trim()}`
+                : "Preencha o e-mail de envio ou de entrada"
+          }
           onClick={() => void enviarTeste()}
         >
           {loading === "test" ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
@@ -489,7 +546,7 @@ export function AgenteResendBlock({
   );
 
   const painelSubtitle =
-    "Remetente = de quem sai o e-mail (domínio verificado no Resend). Entrada = endereço que recebe respostas dos clientes.";
+    "Só agentes no modo «Atendimento (E-mail)». Remetente = quem envia; Entrada = caixa que o cliente usa (correlaciona webhook → este agente).";
 
   const formulario = (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -561,6 +618,20 @@ export function AgenteResendBlock({
             ) : null}
           </p>
         ) : null}
+        {resendStatus?.domain_hint ? (
+          <p style={{ margin: "8px 0 0", paddingLeft: 12, fontSize: 11, color: "#5d7a67", lineHeight: 1.5 }}>
+            Verifique <strong>{resendStatus.domain_hint}</strong> em{" "}
+            <a
+              href="https://resend.com/domains"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#79c0ff", textDecoration: "underline" }}
+            >
+              resend.com/domains
+            </a>{" "}
+            (DNS + Receiving). Uma vez por domínio — não é no Render nem por agente.
+          </p>
+        ) : null}
         {resendStatus?.resend_configured === false && resendStatus.resend_setup_hint ? (
           <p
             style={{
@@ -599,12 +670,54 @@ export function AgenteResendBlock({
           placeholder={
             resendStatus?.default_from_email?.trim() || "atendimento@empresa.com (domínio verificado no Resend)"
           }
-          style={fieldStyle}
+          style={{
+            ...fieldStyle,
+            ...(fromInvalido
+              ? { borderColor: "#f85149", boxShadow: "0 0 0 1px rgba(248, 81, 73, 0.35)" }
+              : {}),
+          }}
         />
-        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#5d7a67", lineHeight: 1.45 }}>
-          Não use Gmail/Outlook pessoal — o Resend só envia de domínios verificados (ex.{" "}
-          <strong>@clicvendy.com.br</strong>).
-        </p>
+        {fromInvalido ? (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: "1px solid rgba(248, 81, 73, 0.45)",
+              background: "rgba(248, 81, 73, 0.12)",
+              fontSize: 11,
+              lineHeight: 1.5,
+              color: "#ffb4af",
+            }}
+          >
+            <p style={{ margin: 0 }}>{fromInvalido}</p>
+            {resendStatus?.default_from_email ? (
+              <button
+                type="button"
+                disabled={acoesOff}
+                onClick={() => setFromEmail(resendStatus.default_from_email!.trim())}
+                style={{
+                  marginTop: 8,
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  border: "1px solid rgba(248, 81, 73, 0.5)",
+                  background: "transparent",
+                  color: "#ffb4af",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: acoesOff ? "not-allowed" : "pointer",
+                }}
+              >
+                Usar sugerido: {resendStatus.default_from_email}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <p style={{ margin: "8px 0 0", fontSize: 11, color: "#5d7a67", lineHeight: 1.45 }}>
+            Não use Gmail/Outlook pessoal — o Resend só envia de domínios verificados (ex.{" "}
+            <strong>@waje.com.br</strong>).
+          </p>
+        )}
       </div>
 
       <div style={{ padding: "14px 16px", ...cardSurface }}>
@@ -622,9 +735,18 @@ export function AgenteResendBlock({
           style={{ ...fieldStyle, marginBottom: 8 }}
         />
         <p style={{ margin: "0 0 12px", fontSize: 11, color: "#5d7a67", lineHeight: 1.45 }}>
-          E-mails que clientes enviam para este endereço entram no CRM e disparam a IA Mario. Pode ser o mesmo
-          endereço do remetente se o domínio tiver Receiving no Resend.
+          E-mails enviados para este endereço são roteados para <strong>este agente</strong> (campo único no CRM).
+          Leads criados por e-mail aparecem com aba <strong>E-mail</strong> no painel do lead — separada do WhatsApp.
         </p>
+        <ol style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 11, color: "#5d7a67", lineHeight: 1.5 }}>
+          <li>Verifique o domínio no Resend (Receiving ativo).</li>
+          <li>Preencha remetente + entrada abaixo e guarde.</li>
+          <li>Configure o webhook <code style={{ fontSize: 10 }}>email.received</code> (ver «Dicas de webhook»).</li>
+          <li>
+            «Enviar teste» envia para o e-mail de envio (from) — sem popup. Depois, teste a entrada com um e-mail
+            real para o endereço inbound.
+          </li>
+        </ol>
         <label
           style={{
             display: "flex",
@@ -738,6 +860,15 @@ export function AgenteResendBlock({
       ) : null}
     </div>
   );
+
+  if (layout === "inline") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {formulario}
+        {botoesFooter}
+      </div>
+    );
+  }
 
   return (
     <>

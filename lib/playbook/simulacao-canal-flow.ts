@@ -3,7 +3,7 @@
  * (`executeFlowEngine` + bloco waje_playbook_flow publicado).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { executeFlowEngine } from "@/lib/playbook/flow-engine";
+import { executeFlowEngine, type FlowEngineDefinition } from "@/lib/playbook/flow-engine";
 import {
   carregarDynamicPlaybookRuntime,
   resolverChoiceId,
@@ -60,6 +60,55 @@ export async function loadSimFlowStateFromSessao(
   return parseSimFlowState((data?.metadata as Record<string, unknown> | undefined)?.flow_state);
 }
 
+export function buildBlocoContextoFluxoParaLlm(
+  definition: FlowEngineDefinition,
+  state: SimFlowState
+): string {
+  const stepId = state.step || definition.start_step;
+  const step = definition.steps[stepId];
+  const linhas: string[] = [
+    "### CONTEXTO DO FLUXO WHATSAPP (playbook publicado)",
+    `Passo atual do motor: ${stepId}`,
+  ];
+
+  const respostas = Object.entries(state.answers).filter(([, v]) => v.trim());
+  if (respostas.length > 0) {
+    linhas.push(
+      "Dados já coletados no fluxo:",
+      ...respostas.map(([k, v]) => `- ${k}: ${v}`)
+    );
+  }
+
+  if (step?.type === "menu") {
+    linhas.push(`Menu do fluxo: ${step.text}`);
+    linhas.push(
+      "Opções válidas:",
+      ...step.choices.map((c, i) => `${i + 1}. ${c.label} (id: ${c.id})`)
+    );
+  } else if (step?.type === "ask_text" || step?.type === "await_name") {
+    linhas.push(`Coleta esperada (${step.answer_key ?? "nome"}): ${step.prompt}`);
+  } else if (step?.type === "send_text") {
+    linhas.push(`Mensagem estrutural seguinte: ${step.text}`);
+  }
+
+  linhas.push(
+    "",
+    "Instrução: responda como atendente IA da empresa (base de conhecimento + cargo).",
+    "Siga o fluxo quando o cliente colaborar, mas NÃO repita a mesma pergunta em loop.",
+    "Se o cliente sair do roteiro, responda com naturalidade e conduza de volta ao próximo passo útil.",
+    "Não diga que é simulação nem mencione passos técnicos do motor."
+  );
+  return linhas.join("\n");
+}
+
+export function fluxoAvancou(
+  antes: SimFlowState,
+  depois: SimFlowState
+): boolean {
+  if (antes.step !== depois.step) return true;
+  return JSON.stringify(antes.answers) !== JSON.stringify(depois.answers);
+}
+
 function formatMenuParaSimulacao(texto: string, choices: string[]): string {
   const linhas = choices.map((raw, index) => {
     const pipe = raw.includes("|") ? raw.split("|") : [raw, raw];
@@ -87,7 +136,7 @@ export async function executarSimulacaoCanalFluxoPlaybook(params: {
       flowState: SimFlowState;
       motor: "playbook_flow";
     }
-  | { ok: false; motivo: string; permitir_llm?: boolean }
+  | { ok: false; motivo: string; permitir_llm?: boolean; flowState?: SimFlowState }
 > {
   const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
   if (!runtime) {
@@ -136,11 +185,25 @@ export async function executarSimulacaoCanalFluxoPlaybook(params: {
   );
 
   if (!result.handled) {
-    return { ok: false, motivo: "flow_nao_tratou", permitir_llm: true };
+    return { ok: false, motivo: "flow_nao_tratou", permitir_llm: true, flowState: persisted };
   }
 
   if (outTexts.length === 0) {
-    return { ok: false, motivo: "flow_sem_saida", permitir_llm: true };
+    return { ok: false, motivo: "flow_sem_saida", permitir_llm: true, flowState: persisted };
+  }
+
+  const depois: SimFlowState = {
+    ...persisted,
+    step: result.step ?? persisted.step,
+  };
+
+  if (state.step && !fluxoAvancou(state, depois)) {
+    return {
+      ok: false,
+      motivo: "resposta_fora_fluxo",
+      permitir_llm: true,
+      flowState: depois,
+    };
   }
 
   if (persisted.complete) {
@@ -153,10 +216,7 @@ export async function executarSimulacaoCanalFluxoPlaybook(params: {
   return {
     ok: true,
     texto: outTexts.join("\n\n"),
-    flowState: {
-      ...persisted,
-      step: result.step ?? persisted.step,
-    },
+    flowState: depois,
     motor: "playbook_flow",
   };
 }

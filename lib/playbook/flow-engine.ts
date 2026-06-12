@@ -234,15 +234,21 @@ export async function executeFlowEngine(
     const step = definition.steps[currentStepId];
     if (!step) return { handled: false };
     const waitingAtCurrentStep = input.step === currentStepId;
-    const choiceId =
-      step.type === "menu" && waitingAtCurrentStep
-        ? resolveMenuChoiceId(
-            input.mensagem,
-            input.menuChoiceId,
-            step.choices,
-            adapter.resolveChoiceId
-          )
-        : adapter.resolveChoiceId(input.mensagem, input.menuChoiceId);
+    const choiceId = (() => {
+      if (!waitingAtCurrentStep) return null;
+      if (step.type === "menu") {
+        return resolveMenuChoiceId(
+          input.mensagem,
+          input.menuChoiceId,
+          step.choices,
+          adapter.resolveChoiceId
+        );
+      }
+      if (step.type === "branch_imob_sub") {
+        return adapter.resolveChoiceId(input.mensagem, input.menuChoiceId);
+      }
+      return null;
+    })();
 
     switch (step.type) {
       case "send_text": {

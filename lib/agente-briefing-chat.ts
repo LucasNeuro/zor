@@ -2,10 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { completarChatPreferindoMistral } from "@/lib/ia/llm-completion";
 import { construirPrompt } from "@/lib/ia/prompt-builder";
 import {
+  buildBlocoContextoFluxoParaLlm,
   executarSimulacaoCanalFluxoPlaybook,
   loadSimFlowStateFromSessao,
   type SimFlowState,
 } from "@/lib/playbook/simulacao-canal-flow";
+import { carregarDynamicPlaybookRuntime } from "@/lib/whatsapp/playbook-flow-maria";
 
 const MAX_SNAPSHOT_ACOES = 35;
 const MAX_SNAPSHOT_CICLO_LOG = 60;
@@ -215,7 +217,6 @@ export async function executarBriefingReply(params: {
     tokens_input: out.tokensEntrada,
     tokens_output: out.tokensSaida,
     custo_brl: brl,
-    motor: "llm_prompt",
   };
 }
 
@@ -225,44 +226,18 @@ export type SimulacaoCanalReplyResult = {
   tokens_input: number;
   tokens_output: number;
   custo_brl: number;
-  motor?: "playbook_flow" | "llm_prompt";
+  motor?: "playbook_flow" | "playbook_hibrido" | "llm_prompt";
   flow_state?: SimFlowState;
 };
 
-/** Simulação de canal: motor de fluxo WA (determinístico) quando há playbook publicado; senão LLM com prompt de produção. */
-export async function executarSimulacaoCanalReply(params: {
+async function executarSimulacaoCanalLlm(params: {
   agenteSlug: string;
   historico: BriefingMensagemLinha[];
   mensagemUsuario: string;
-  supabase?: SupabaseClient;
-  sessaoId?: string;
-  modoOperacao?: string | null;
+  blocoFluxoExtra?: string;
+  motor: "playbook_hibrido" | "llm_prompt";
+  flowState?: SimFlowState;
 }): Promise<SimulacaoCanalReplyResult> {
-  if (
-    params.supabase &&
-    params.sessaoId &&
-    params.modoOperacao === "canal_whatsapp"
-  ) {
-    const flowState = await loadSimFlowStateFromSessao(params.supabase, params.sessaoId);
-    const flowOut = await executarSimulacaoCanalFluxoPlaybook({
-      supabase: params.supabase,
-      agenteSlug: params.agenteSlug,
-      mensagemUsuario: params.mensagemUsuario,
-      flowState,
-    });
-    if (flowOut.ok) {
-      return {
-        texto: flowOut.texto,
-        modelo: "playbook-flow",
-        tokens_input: 0,
-        tokens_output: 0,
-        custo_brl: 0,
-        motor: "playbook_flow",
-        flow_state: flowOut.flowState,
-      };
-    }
-  }
-
   const turnosConversa = params.historico.map((m) => ({
     role: (m.papel === "user" ? "user" : "assistant") as "user" | "assistant",
     content: m.conteudo,
@@ -281,7 +256,13 @@ export async function executarSimulacaoCanalReply(params: {
     );
   }
 
-  const system = `${SIMULACAO_CANAL_PREAMBLE}\n\n${pc.systemPrompt}`;
+  const system = [
+    SIMULACAO_CANAL_PREAMBLE,
+    params.blocoFluxoExtra?.trim() || null,
+    pc.systemPrompt,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
   for (const m of params.historico) {
@@ -305,6 +286,66 @@ export async function executarSimulacaoCanalReply(params: {
     tokens_input: out.tokensEntrada,
     tokens_output: out.tokensSaida,
     custo_brl: brl,
-    motor: "llm_prompt",
+    motor: params.motor,
+    flow_state: params.flowState,
   };
+}
+
+/**
+ * Simulação de canal: fluxo determinístico em passos estruturais (menu/número);
+ * Mistral + cargo + conhecimento + RAG quando o cliente sai do roteiro.
+ */
+export async function executarSimulacaoCanalReply(params: {
+  agenteSlug: string;
+  historico: BriefingMensagemLinha[];
+  mensagemUsuario: string;
+  supabase?: SupabaseClient;
+  sessaoId?: string;
+  modoOperacao?: string | null;
+}): Promise<SimulacaoCanalReplyResult> {
+  let flowState: SimFlowState | undefined;
+  let blocoFluxoExtra = "";
+
+  if (params.supabase && params.sessaoId && params.modoOperacao === "canal_whatsapp") {
+    flowState = await loadSimFlowStateFromSessao(params.supabase, params.sessaoId);
+    const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
+    if (runtime) {
+      blocoFluxoExtra = buildBlocoContextoFluxoParaLlm(runtime.definition, flowState);
+    }
+
+    const flowOut = await executarSimulacaoCanalFluxoPlaybook({
+      supabase: params.supabase,
+      agenteSlug: params.agenteSlug,
+      mensagemUsuario: params.mensagemUsuario,
+      flowState,
+    });
+
+    if (flowOut.ok) {
+      return {
+        texto: flowOut.texto,
+        modelo: "playbook-flow",
+        tokens_input: 0,
+        tokens_output: 0,
+        custo_brl: 0,
+        motor: "playbook_flow",
+        flow_state: flowOut.flowState,
+      };
+    }
+
+    if (flowOut.flowState) {
+      flowState = flowOut.flowState;
+      if (runtime) {
+        blocoFluxoExtra = buildBlocoContextoFluxoParaLlm(runtime.definition, flowState);
+      }
+    }
+  }
+
+  return executarSimulacaoCanalLlm({
+    agenteSlug: params.agenteSlug,
+    historico: params.historico,
+    mensagemUsuario: params.mensagemUsuario,
+    blocoFluxoExtra,
+    motor: blocoFluxoExtra ? "playbook_hibrido" : "llm_prompt",
+    flowState,
+  });
 }

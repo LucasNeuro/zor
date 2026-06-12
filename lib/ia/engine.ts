@@ -338,6 +338,8 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     );
     const mistralTools = ferramentasMistralListaParaAgente(usoMap, customDefs, extDefs, intDefs);
     const modeloResolved = resolveInferenceModelId(modelo);
+    const playbookIaTurn =
+      motorPlaybook === "playbook_ia" || Boolean(blocoContextoFluxoPlaybook?.trim());
     const temMistralKey = Boolean(process.env.MISTRAL_API_KEY?.trim());
     const podeToolsMistral =
       temMistralKey &&
@@ -354,6 +356,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
           tools: mistralTools,
           maxTokens: 1024,
           playbookPublicado: promptData.playbookPublicado === true,
+          playbookIaTurn,
           executarTool: (nome, argumentosSerializados) =>
             executarFerramentaHub(nome, argumentosSerializados, {
               leadId: ctx.leadId!,
@@ -369,6 +372,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
           mensagens,
           modeloFromDb: modelo,
           maxTokens: 1024,
+          playbookIaTurn,
         });
     // Se tools Mistral falharem (ex.: 503 temporário), tenta sem tools antes de desistir.
     if (!out.ok && podeToolsMistral) {
@@ -377,6 +381,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         mensagens,
         modeloFromDb: modelo,
         maxTokens: 1024,
+        playbookIaTurn,
       });
       if (fallbackSemTools.ok) {
         out = fallbackSemTools;

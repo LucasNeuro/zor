@@ -7,6 +7,7 @@ import {
   loadSimFlowStateFromSessao,
   type SimFlowState,
 } from "@/lib/playbook/simulacao-canal-flow";
+import { playbookMenuUazapiEnhancementEnabled } from "@/lib/whatsapp/playbook-flow-runtime";
 
 const MAX_SNAPSHOT_ACOES = 35;
 const MAX_SNAPSHOT_CICLO_LOG = 60;
@@ -322,7 +323,8 @@ export async function executarSimulacaoCanalReply(params: {
       blocoFluxoExtra = buildBlocoContextoFluxoParaLlm(
         avancado.definition,
         flowState,
-        params.mensagemUsuario
+        params.mensagemUsuario,
+        playbookMenuUazapiEnhancementEnabled()
       );
     }
   }

@@ -26,6 +26,8 @@ export async function completarChatComFerramentasMistral(params: {
   maxTokens?: number;
   /** Playbook Unificado no bucket — menus list (5) / button (2). */
   playbookPublicado?: boolean;
+  /** Turno playbook IA — afeta `MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY`. */
+  playbookIaTurn?: boolean;
   executarTool: (nome: string, argumentosSerializados: string) => Promise<string>;
 }): Promise<
   | {
@@ -73,6 +75,7 @@ export async function completarChatComFerramentasMistral(params: {
       messages,
       tools: params.tools,
       maxTokens: params.maxTokens ?? 1024,
+      playbookIaTurn: params.playbookIaTurn,
     });
 
     if (!out.ok) return { ok: false, erro: out.error };

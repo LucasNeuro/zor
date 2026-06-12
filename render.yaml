@@ -8,6 +8,9 @@
 #   NEXT_PUBLIC_APP_URL          — https://<seu-servico>.onrender.com (sem barra final)
 #   CRON_SECRET                   — Bearer token for /api/cron/dispatch-ciclos (see lib/cron-auth.ts)
 #   MISTRAL_API_KEY               — IA no webhook WhatsApp e briefing
+#   MISTRAL_REASONING_EFFORT=none — ou high + PLAYBOOK_IA_ONLY=1 (docs/rollout-agentes-wa.md)
+#   PLAYBOOK_MENU_UAZAPI_ENHANCE=1 — menus UAZAPI; 0 = só texto
+#   HUB_CONHECIMENTO_AUTO_REGEN_ANALISE=1 — opcional, após reindex doc
 #   UAZAPI_BASE_URL               — ex. https://fitbot.uazapi.com (sem /api no fim)
 #   UAZAPI_ADMIN_TOKEN            — criar instância / sync webhook na ficha do agente
 #   UAZAPI_INSTANCE_TOKEN         — fallback global se agente sem token próprio (grupos/envio)

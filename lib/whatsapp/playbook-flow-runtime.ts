@@ -1,5 +1,5 @@
 /**
- * Fluxo determinístico WhatsApp — Playbook Unificado Maria (Obra10+).
+ * Runtime WhatsApp do playbook publicado (fluxo dinâmico + fallback legado Mari).
  * Estado em hub_leads_crm.metadata: wa_playbook_step, wa_playbook_answers, wa_playbook_active.
  */
 
@@ -175,7 +175,7 @@ function playbookHybridIaEnabled(): boolean {
   return !(raw === "0" || raw === "false" || raw === "off");
 }
 
-function playbookMenuUazapiEnhancementEnabled(): boolean {
+export function playbookMenuUazapiEnhancementEnabled(): boolean {
   const raw = String(process.env.PLAYBOOK_MENU_UAZAPI_ENHANCE ?? "1").trim().toLowerCase();
   return !(raw === "0" || raw === "false" || raw === "off");
 }
@@ -342,7 +342,8 @@ regAlias("Sou corretor/imobiliária", "fluxo3");
 regAlias("Imóveis", "fluxo_imobiliario");
 regAlias("Arquitetura", "fluxo_arquitetura");
 
-export function agenteUsaPlaybookMaria(agenteSlug: string): boolean {
+/** Apenas para fallback hardcoded legado (Maria/Obra10+), não para fluxo dinâmico publicado. */
+export function agenteUsaPlaybookLegadoMari(agenteSlug: string): boolean {
   if (process.env.WHATSAPP_PLAYBOOK_MARIA === "0") return false;
   const s = agenteSlug.trim().toLowerCase();
   if (!s) return false;
@@ -355,6 +356,9 @@ export function agenteUsaPlaybookMaria(agenteSlug: string): boolean {
   if (process.env.WHATSAPP_PLAYBOOK_MARIA === "all") return true;
   return false;
 }
+
+/** @deprecated Use agenteUsaPlaybookLegadoMari */
+export const agenteUsaPlaybookMaria = agenteUsaPlaybookLegadoMari;
 
 export function resolverChoiceId(mensagem: string, menuChoiceId?: string | null): string | null {
   const candidates = [menuChoiceId, mensagem].filter(
@@ -757,7 +761,7 @@ async function reenviarMenuTriagemInicial(ctx: FlowCtx): Promise<PlaybookProcess
       "Não consegui abrir o menu interativo agora. Tente de novo em instantes ou diga o que precisa (arquitetura, imóvel, parceria).",
       ctx.instanceToken
     );
-    console.warn("[playbook-flow-maria] menu triagem falhou:", menu.erro);
+    console.warn("[playbook-flow] menu triagem falhou:", menu.erro);
   }
   const meta = await persistirEstado(ctx.supabase, ctx.leadId, ctx.meta, {
     step: "triagem_inicial",
@@ -1190,7 +1194,7 @@ async function processarPasso(
   }
 }
 
-async function processarPlaybookMariaInboundHardcoded(params: {
+async function processarPlaybookInboundHardcoded(params: {
   supabase: SupabaseClient;
   leadId: string;
   telefone: string;
@@ -1384,7 +1388,7 @@ function mapDynamicStepToContract(step: string | undefined): PlaybookStep | unde
   return step as PlaybookStep;
 }
 
-async function processarPlaybookMariaInboundDynamic(params: {
+async function processarPlaybookInboundDynamic(params: {
   supabase: SupabaseClient;
   leadId: string;
   telefone: string;
@@ -1413,7 +1417,7 @@ async function processarPlaybookMariaInboundDynamic(params: {
   const hybridIa = playbookHybridIaEnabled();
 
   if (!hybridIa) {
-    return processarPlaybookMariaInboundDynamicLegacy(params);
+    return processarPlaybookInboundDynamicLegacy(params);
   }
 
   const flowStateInicial = simFlowStateFromPlaybookLead(state);
@@ -1525,7 +1529,8 @@ async function processarPlaybookMariaInboundDynamic(params: {
   const flowContext = buildBlocoContextoFluxoParaLlm(
     avancado.definition,
     avancado.flowState,
-    params.mensagem
+    params.mensagem,
+    playbookMenuUazapiEnhancementEnabled()
   );
 
   const pendingMenu =
@@ -1545,7 +1550,7 @@ async function processarPlaybookMariaInboundDynamic(params: {
 }
 
 /** Modo legado: motor envia texto/menus fixos (skipIa=true). */
-async function processarPlaybookMariaInboundDynamicLegacy(params: {
+async function processarPlaybookInboundDynamicLegacy(params: {
   supabase: SupabaseClient;
   leadId: string;
   telefone: string;
@@ -1732,7 +1737,7 @@ async function processarPlaybookMariaInboundDynamicLegacy(params: {
   };
 }
 
-export async function processarPlaybookMariaInbound(params: {
+export async function processarPlaybookInbound(params: {
   supabase: SupabaseClient;
   leadId: string;
   telefone: string;
@@ -1763,13 +1768,13 @@ export async function processarPlaybookMariaInbound(params: {
     playbookActive: state.active,
     playbookComplete: state.complete,
   });
-  const agenteLegadoMari = agenteUsaPlaybookMaria(params.agenteSlug);
+  const agenteLegadoMari = agenteUsaPlaybookLegadoMari(params.agenteSlug);
   const temPlaybookPublicado =
     routing.temPlaybookPublicado || temReferenciaPlaybookPublicado(ident);
 
   if (dynamicFlowEnabled()) {
     try {
-      const dynamicOut = await processarPlaybookMariaInboundDynamic({
+      const dynamicOut = await processarPlaybookInboundDynamic({
         supabase: params.supabase,
         leadId: params.leadId,
         telefone: params.telefone,
@@ -1843,5 +1848,8 @@ export async function processarPlaybookMariaInbound(params: {
     agente: params.agenteSlug,
     lead_id: params.leadId,
   });
-  return processarPlaybookMariaInboundHardcoded(params);
+  return processarPlaybookInboundHardcoded(params);
 }
+
+/** @deprecated Use processarPlaybookInbound */
+export const processarPlaybookMariaInbound = processarPlaybookInbound;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolverChoiceId } from "./playbook-flow-maria";
+import { resolverChoiceId } from "./playbook-flow-runtime";
 
 describe("resolverChoiceId", () => {
   it("resolve aliases legados e formato label|id", () => {

@@ -1,5 +1,11 @@
 /** Uma volta de chat completions com suporte a `tools` (Mistral). */
 
+import {
+  extrairTextoRespostaMistral,
+  resolveMistralReasoningEffort,
+  type MistralReasoningEffort,
+} from "@/lib/ia/mistral-reasoning";
+
 const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
 
 export type MistralChatToolDefinition = {
@@ -41,6 +47,8 @@ export async function mistralChatCompletionToolRound(params: {
   tools: MistralChatToolDefinition[];
   maxTokens?: number;
   temperature?: number;
+  reasoningEffort?: MistralReasoningEffort;
+  playbookIaTurn?: boolean;
 }): Promise<
   | {
       ok: true;
@@ -61,6 +69,8 @@ export async function mistralChatCompletionToolRound(params: {
   const key = process.env.MISTRAL_API_KEY?.trim();
   if (!key) return { ok: false, error: "MISTRAL_API_KEY não configurada" };
 
+  const reasoningEffort =
+    params.reasoningEffort ?? resolveMistralReasoningEffort({ playbookIaTurn: params.playbookIaTurn });
   const body: Record<string, unknown> = {
     model: params.model,
     temperature: params.temperature ?? 0.4,
@@ -70,6 +80,9 @@ export async function mistralChatCompletionToolRound(params: {
     tools: params.tools,
     messages: [{ role: "system", content: params.system }, ...params.messages],
   };
+  if (reasoningEffort === "high") {
+    body.reasoning_effort = "high";
+  }
 
   const res = await fetch(MISTRAL_CHAT_URL, {
     method: "POST",
@@ -118,13 +131,7 @@ export async function mistralChatCompletionToolRound(params: {
     };
   }
 
-  const text =
-    typeof msg?.content === "string"
-      ? msg.content
-      : msg?.content != null
-        ? JSON.stringify(msg.content)
-        : "";
-  const trimmed = text.trim();
+  const trimmed = extrairTextoRespostaMistral(msg?.content);
   if (!trimmed) {
     return { ok: false, error: "Mistral: resposta vazia (sem texto nem tools)" };
   }

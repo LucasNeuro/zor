@@ -313,8 +313,8 @@ export async function processarMensagemInboundWhatsapp(params: {
   try {
     const { mensagemEhSaudacaoSimples, mensagemPedeMenuOuOpcoes, leadJaRecebeuMenuTriagem } =
       await import("@/lib/whatsapp/menu-triagem-uazapi");
-    const { agenteUsaPlaybookMaria, lerEstadoPlaybook, processarPlaybookMariaInbound } = await import(
-      "@/lib/whatsapp/playbook-flow-maria"
+    const { agenteUsaPlaybookLegadoMari, lerEstadoPlaybook, processarPlaybookInbound } = await import(
+      "@/lib/whatsapp/playbook-flow-runtime"
     );
     const { AGENTE_IDENTIDADE_PLAYBOOK_SELECT, resolverRoteamentoPlaybookAgente } = await import(
       "@/lib/hub/agente-playbook-routing"
@@ -347,7 +347,7 @@ export async function processarMensagemInboundWhatsapp(params: {
     }
 
     if (instanceToken) {
-      const playbookOut = await processarPlaybookMariaInbound({
+      const playbookOut = await processarPlaybookInbound({
         supabase,
         leadId: lead.id,
         telefone: params.telefone,
@@ -519,14 +519,14 @@ export async function processarMensagemInboundWhatsapp(params: {
     }
 
     const pedeMenuOpcoes = mensagemPedeMenuOuOpcoes(params.mensagemFinal);
-    const usaPlaybookMaria = agenteUsaPlaybookMaria(agenteSlug);
+    const usaPlaybookLegadoMari = agenteUsaPlaybookLegadoMari(agenteSlug);
     const menuTriagemNuncaEnviado = !leadJaRecebeuMenuTriagem(leadMetaRow?.metadata);
-    // Playbook publicado ou fluxo ativo: não enviar menu hardcoded Mari/legado.
+    // Playbook publicado ou fluxo ativo: não enviar menu hardcoded legado.
     const deveFallbackMenu =
       !playbookPriorizaFluxoPublicado &&
       (pedeMenuOpcoes ||
         ((params.isNovo || mensagemEhSaudacaoSimples(params.mensagemFinal)) &&
-          (!usaPlaybookMaria || menuTriagemNuncaEnviado)));
+          (!usaPlaybookLegadoMari || menuTriagemNuncaEnviado)));
 
     if (!menuJaEnviado && deveFallbackMenu) {
       const { enviarMenuTriagemInicialUazapi, marcarMenuTriagemEnviado } = await import(

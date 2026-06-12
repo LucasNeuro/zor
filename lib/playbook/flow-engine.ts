@@ -131,13 +131,49 @@ function skipIaForAdapter(adapter: FlowEngineAdapter): boolean {
   return !adapter.stateOnly;
 }
 
-function mensagemPareceNome(mensagem: string): boolean {
+export function mensagemPareceNome(mensagem: string): boolean {
   const t = mensagem.trim();
   if (t.length < 2 || t.length > 60) return false;
   if (mensagemEhSaudacaoSimples(t)) return false;
   if (/^\d+$/.test(t)) return false;
   if (t.includes("@")) return false;
   return true;
+}
+
+const NOME_FLUXO_PATTERNS = [
+  /(?:me chamo|meu nome é|meu nome e|sou o|sou a|aqui é|pode me chamar de|sou)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s.'-]{1,48})/i,
+];
+
+/** Extrai nome de mensagens ricas («Sou Lucas, quero comprar…») ou texto curto puro. */
+export function extrairNomeDaMensagemFluxo(mensagem: string): string | null {
+  const trimmed = mensagem.trim();
+  if (!trimmed) return null;
+
+  for (const pattern of NOME_FLUXO_PATTERNS) {
+    const match = trimmed.match(pattern);
+    if (!match?.[1]) continue;
+    const candidato = match[1]
+      .trim()
+      .split(/[,.\n!?]/)[0]!
+      .trim()
+      .split(/\s+/)
+      .slice(0, 4)
+      .join(" ");
+    if (mensagemPareceNome(candidato)) return candidato;
+  }
+
+  if (mensagemPareceNome(trimmed)) return trimmed;
+  return null;
+}
+
+function segmentosMensagemParaResolucao(mensagem: string): string[] {
+  const trimmed = mensagem.trim();
+  if (!trimmed) return [];
+  const partes = trimmed
+    .split(/[,;.\n!?]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...new Set([trimmed, ...partes])];
 }
 
 function askTextAceitaResposta(step: FlowAskTextStep, texto: string, tipoMidia: string): boolean {
@@ -203,7 +239,9 @@ function choiceIdFromCandidates(
     const partialLabel = choices.find((c) => {
       const normLabel = normMenuChoiceText(c.label);
       if (!normLabel || normLabel.length < 4) return false;
-      return normMsg.includes(normLabel) || normLabel.includes(normMsg);
+      if (normMsg.includes(normLabel) || normLabel.includes(normMsg)) return true;
+      const palavras = normLabel.split(" ").filter((w) => w.length >= 4);
+      return palavras.some((w) => normMsg.includes(w));
     });
     if (partialLabel) return partialLabel.id;
   }
@@ -225,9 +263,10 @@ export function resolveMenuChoiceId(
   const fromGlobal = globalResolve?.(mensagem, menuChoiceId);
   if (fromGlobal && choices.some((c) => c.id === fromGlobal)) return fromGlobal;
 
-  const candidates = [menuChoiceId, mensagem].filter(
-    (x): x is string => typeof x === "string" && Boolean(x.trim())
-  );
+  const candidates = [
+    ...(typeof menuChoiceId === "string" && menuChoiceId.trim() ? [menuChoiceId.trim()] : []),
+    ...segmentosMensagemParaResolucao(mensagem),
+  ];
   return choiceIdFromCandidates(candidates, choices, globalResolve);
 }
 
@@ -248,8 +287,9 @@ export async function executeFlowEngine(
     const step = definition.steps[currentStepId];
     if (!step) return { handled: false };
     const waitingAtCurrentStep = input.step === currentStepId;
+    const canResolveFromMessage = waitingAtCurrentStep || transitions > 0;
     const choiceId = (() => {
-      if (!waitingAtCurrentStep) return null;
+      if (!canResolveFromMessage) return null;
       if (step.type === "menu") {
         return resolveMenuChoiceId(
           input.mensagem,
@@ -283,11 +323,13 @@ export async function executeFlowEngine(
       }
 
       case "await_name": {
-        if (waitingAtCurrentStep && mensagemPareceNome(texto) && !choiceId) {
+        const nomeCapturado =
+          waitingAtCurrentStep && !choiceId ? extrairNomeDaMensagemFluxo(texto) : null;
+        if (nomeCapturado) {
           const key = step.answer_key || "nome";
-          answers[key] = texto;
+          answers[key] = nomeCapturado;
           if (adapter.onNameCaptured) {
-            await adapter.onNameCaptured(texto);
+            await adapter.onNameCaptured(nomeCapturado);
           }
           await adapter.persistState({
             step: step.next_step,
@@ -312,7 +354,9 @@ export async function executeFlowEngine(
 
       case "menu": {
         const selected =
-          waitingAtCurrentStep && choiceId ? step.choices.find((c) => c.id === choiceId) : null;
+          canResolveFromMessage && choiceId
+            ? step.choices.find((c) => c.id === choiceId)
+            : null;
         if (selected) {
           const key = step.answer_key;
           if (key) answers[key] = selected.id;
@@ -381,13 +425,22 @@ export async function executeFlowEngine(
       }
 
       case "ask_text": {
-        if (
+        const mediaOk = step.allow_media === true && input.tipoMidia !== "texto";
+        const nomeExtraido =
           waitingAtCurrentStep &&
-          askTextAceitaResposta(step, texto, input.tipoMidia) &&
-          !choiceId
-        ) {
-          const mediaOk = step.allow_media === true && input.tipoMidia !== "texto";
-          answers[step.answer_key] = mediaOk ? input.tipoMidia : texto;
+          !choiceId &&
+          !mediaOk &&
+          step.answer_key === "nome"
+            ? extrairNomeDaMensagemFluxo(texto)
+            : null;
+        const respostaTexto =
+          nomeExtraido ??
+          (askTextAceitaResposta(step, texto, input.tipoMidia) ? texto : null);
+        if (waitingAtCurrentStep && respostaTexto && !choiceId) {
+          answers[step.answer_key] = mediaOk ? input.tipoMidia : respostaTexto;
+          if (step.answer_key === "nome" && adapter.onNameCaptured && !mediaOk) {
+            await adapter.onNameCaptured(respostaTexto);
+          }
           await adapter.persistState({
             step: step.next_step,
             answers,

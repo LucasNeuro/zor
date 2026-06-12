@@ -1,7 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  analiseNegocioEstaDesatualizada,
+  gerarAnaliseNegocioTenantConhecimento,
   isTenantConhecimentoMigrationMissing,
+  lerAnaliseNegocioTenant,
   reindexarDocumentoTenantConhecimentoFromStorage,
 } from "@/lib/hub/tenant-conhecimento-rag";
 import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
@@ -64,6 +67,23 @@ export async function POST(
     .eq("id", id)
     .maybeSingle();
 
+  // Após reindex: sinalizar análise desatualizada; opcionalmente regenerar (propaga a agentes via RAG).
+  const { data: docsProntos } = await supabase
+    .from("hub_tenant_conhecimento_documento")
+    .select("id, indexado_em")
+    .eq("tenant_id", tenantId)
+    .eq("status", "pronto");
+
+  const cache = await lerAnaliseNegocioTenant(supabase, tenantId);
+  const analiseDesatualizada = analiseNegocioEstaDesatualizada(cache, docsProntos ?? []);
+
+  let analiseRegenerada = false;
+  const autoRegen = String(process.env.HUB_CONHECIMENTO_AUTO_REGEN_ANALISE ?? "").trim().toLowerCase();
+  if (analiseDesatualizada && (autoRegen === "1" || autoRegen === "true")) {
+    const regen = await gerarAnaliseNegocioTenantConhecimento({ supabase, tenantId });
+    analiseRegenerada = regen.ok;
+  }
+
   return NextResponse.json({
     documento: atualizado ?? {
       id: doc.id,
@@ -72,5 +92,7 @@ export async function POST(
       erro: null,
       indexado_em: new Date().toISOString(),
     },
+    analise_desatualizada: analiseRegenerada ? false : analiseDesatualizada,
+    analise_regenerada: analiseRegenerada,
   });
 }

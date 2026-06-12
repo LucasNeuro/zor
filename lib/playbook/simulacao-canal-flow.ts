@@ -12,8 +12,9 @@ import {
 } from "@/lib/playbook/flow-engine";
 import {
   carregarDynamicPlaybookRuntime,
+  playbookMenuUazapiEnhancementEnabled,
   resolverChoiceId,
-} from "@/lib/whatsapp/playbook-flow-maria";
+} from "@/lib/whatsapp/playbook-flow-runtime";
 import { mensagemEhSaudacaoSimples } from "@/lib/whatsapp/menu-triagem-uazapi";
 
 export type SimFlowState = {
@@ -65,24 +66,43 @@ export async function loadSimFlowStateFromSessao(
   return parseSimFlowState((data?.metadata as Record<string, unknown> | undefined)?.flow_state);
 }
 
-function descreverPassoFluxo(definition: FlowEngineDefinition, stepId: string): string[] {
+function descreverPassoFluxo(
+  definition: FlowEngineDefinition,
+  stepId: string,
+  menuUazapiEnhancement?: boolean
+): string[] {
   const step = definition.steps[stepId];
   if (!step) return [`Passo ${stepId} (sem detalhe no motor).`];
 
   if (step.type === "menu") {
-    return [
-      `Tipo: menu de triagem`,
-      `Texto-base do fluxo: ${step.text}`,
-      "Opções (apresente em linguagem natural, numeradas):",
-      ...step.choices.map((c, i) => `  ${i + 1}. ${c.label}`),
-    ];
+    const linhas = [`Tipo: menu de triagem`, `Texto-base do fluxo: ${step.text}`];
+    if (menuUazapiEnhancement) {
+      linhas.push(
+        "Opções (NÃO listar no texto — menu interativo UAZAPI será enviado em seguida):",
+        ...step.choices.map((c) => `  - ${c.label}`)
+      );
+    } else {
+      linhas.push(
+        "Opções (apresente em linguagem natural, numeradas):",
+        ...step.choices.map((c, i) => `  ${i + 1}. ${c.label}`)
+      );
+    }
+    return linhas;
   }
   if (step.type === "ask_text" || step.type === "await_name") {
-    return [
+    const answerKey = step.answer_key ?? "nome";
+    const linhas = [
       `Tipo: coleta de informação`,
-      `Campo: ${step.answer_key ?? "nome"}`,
+      `Campo: ${answerKey}`,
       `Pergunta-base do fluxo: ${step.prompt}`,
     ];
+    if (answerKey === "nome" || step.type === "await_name") {
+      linhas.push(
+        "IMPORTANTE: peça SOMENTE o nome do cliente (1 pergunta curta).",
+        "NÃO pergunte «como posso ajudar», intenção ou assunto neste passo."
+      );
+    }
+    return linhas;
   }
   if (step.type === "send_text") {
     return [`Tipo: mensagem`, `Conteúdo-base: ${step.text}`];
@@ -96,9 +116,13 @@ function descreverPassoFluxo(definition: FlowEngineDefinition, stepId: string): 
 export function buildBlocoContextoFluxoParaLlm(
   definition: FlowEngineDefinition,
   state: SimFlowState,
-  mensagemCliente?: string
+  mensagemCliente?: string,
+  menuUazapiEnhancement?: boolean
 ): string {
   const stepId = state.step || definition.start_step;
+  const step = definition.steps[stepId];
+  const menuEnhanceOn =
+    menuUazapiEnhancement ?? playbookMenuUazapiEnhancementEnabled();
   const linhas: string[] = [
     "### ROTEIRO WHATSAPP (guia — NÃO copie frases fixas)",
     "O bloco abaixo define a **ordem** e os **temas** do atendimento. Você é a IA da empresa:",
@@ -106,7 +130,7 @@ export function buildBlocoContextoFluxoParaLlm(
     "Nunca responda com uma única frase robótica; seja natural, empático e específico ao negócio.",
     "",
     `Passo atual no roteiro: ${stepId}`,
-    ...descreverPassoFluxo(definition, stepId),
+    ...descreverPassoFluxo(definition, stepId, menuEnhanceOn && step?.type === "menu"),
   ];
 
   const respostas = Object.entries(state.answers).filter(([, v]) => v.trim());
@@ -128,8 +152,18 @@ export function buildBlocoContextoFluxoParaLlm(
   linhas.push(
     "",
     "Regras de condução:",
-    "- Se for menu: apresente as opções de forma clara (lista numerada), contextualizando com o negócio.",
-    "- Se for coleta: faça a pergunta do passo com suas palavras, uma pergunta por vez.",
+    ...(step?.type === "menu" && menuEnhanceOn
+      ? [
+          "- Se for menu: escreva APENAS uma introdução curta (1–2 frases) contextualizando o assunto.",
+          "- NÃO liste opções numeradas nem bullets — o menu interativo UAZAPI será enviado logo após sua mensagem.",
+        ]
+      : ["- Se for menu: apresente as opções de forma clara (lista numerada), contextualizando com o negócio."]),
+    ...(step?.type === "await_name" ||
+    (step?.type === "ask_text" && (step.answer_key === "nome" || !step.answer_key))
+      ? [
+          "- Se for coleta de nome: faça SOMENTE a pergunta pelo nome — sem «como posso ajudar» nem menu.",
+        ]
+      : ["- Se for coleta: faça a pergunta do passo com suas palavras, uma pergunta por vez."]),
     "- Se o cliente sair do roteiro: responda com IA (conhecimento) e retome suavemente o passo útil.",
     "- Não invente preços, prazos ou políticas fora da documentação.",
     "- Não mencione «passo», «motor», «playbook-flow» nem «simulação»."

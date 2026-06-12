@@ -49,6 +49,10 @@ No Render → serviço `escritorio-virtual` → **Environment**:
 | `UAZAPI_ADMIN_TOKEN` | token admin do painel UAZAPI |
 | `UAZAPI_INSTANCE_TOKEN` | token da instância WhatsApp |
 | `MISTRAL_API_KEY` | IA no webhook |
+| `MISTRAL_REASONING_EFFORT` | `none` (prod) ou `high` — ver `docs/rollout-agentes-wa.md` |
+| `MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY` | `1` — reasoning só em turnos playbook_ia |
+| `PLAYBOOK_MENU_UAZAPI_ENHANCE` | `1` menus list/button; `0` só texto |
+| `HUB_CONHECIMENTO_AUTO_REGEN_ANALISE` | `1` — regen análise após reindex doc |
 | `CRON_SECRET` | Bearer para cron jobs |
 | `DEFAULT_TENANT_ID` | `00000000-0000-4000-8000-000000000001` |
 | `INTERNAL_API_KEY` | chave interna API |

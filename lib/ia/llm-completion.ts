@@ -24,6 +24,8 @@ export async function completarChatPreferindoMistral(params: {
   mensagens: Array<{ role: "user" | "assistant"; content: string }>;
   modeloFromDb: string;
   maxTokens?: number;
+  /** Turno playbook IA (WhatsApp híbrido) — afeta `MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY`. */
+  playbookIaTurn?: boolean;
 }): Promise<
   | { ok: true; texto: string; tokensEntrada: number; tokensSaida: number; modeloLog: string }
   | { ok: false; erro: string }
@@ -46,6 +48,7 @@ export async function completarChatPreferindoMistral(params: {
       system: params.systemPrompt,
       messages: params.mensagens,
       maxTokens,
+      playbookIaTurn: params.playbookIaTurn,
     });
     if (!chat.ok) return { ok: false, erro: chat.error };
     return {

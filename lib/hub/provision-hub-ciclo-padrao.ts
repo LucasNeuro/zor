@@ -168,3 +168,66 @@ export async function repararCiclosAusentesParaAgentes(
   }
   return { reparados, erros };
 }
+
+const FOLLOWUP_CICLO_NOME = "Follow-up WhatsApp";
+
+/** Ciclo programado de follow-up proativo para leads que pararam de responder. */
+export async function provisionFollowupCicloWhatsapp(
+  supabase: SupabaseClient,
+  agenteSlug: string,
+  nomeAgente: string,
+  tenantId: string
+): Promise<{ criado: boolean; aviso?: string; erro?: string }> {
+  const { data: existentes, error: existErr } = await supabase
+    .from("hub_ciclos_ia")
+    .select("id, nome, configuracoes")
+    .eq("agente_slug", agenteSlug);
+
+  if (existErr) return { criado: false, erro: existErr.message };
+
+  const jaTemFollowup = (existentes ?? []).some((c) => {
+    const cfg = c.configuracoes as Record<string, unknown> | null;
+    const dispatch = cfg?.dispatch as { api?: string; ciclo?: string } | undefined;
+    if (dispatch?.api === "atendente" && dispatch?.ciclo === "followup") return true;
+    const nome = String(c.nome ?? "").toLowerCase();
+    return nome.includes("follow");
+  });
+
+  if (jaTemFollowup) return { criado: false };
+
+  const rotulo = nomeAgente.trim().slice(0, 80) || agenteSlug;
+  const baseCfg: Record<string, unknown> = {
+    ciclo_origem_provisionamento: "wa_preset_v1",
+    dispatch: { api: "atendente", ciclo: "followup" },
+    horas_followup: [24, 48, 72],
+    arquivar_apos_dias: 7,
+  };
+
+  const parsedCfg = validateAndNormalizeCicloConfiguracoes(baseCfg);
+  if (!parsedCfg.ok) return { criado: false, erro: parsedCfg.error };
+
+  const row: Record<string, unknown> = {
+    agente_slug: agenteSlug,
+    nome: FOLLOWUP_CICLO_NOME,
+    descricao: `Follow-up proativo para leads inactivos — Agente «${rotulo}». Configure dispatch antes de activar.`,
+    tipo: "programado",
+    cron_expressao: null,
+    intervalo_minutos: 60,
+    ativo: false,
+    configuracoes: parsedCfg.value,
+    tenant_id: tenantId || defaultTenantId(),
+  };
+
+  let { error } = await supabase.from("hub_ciclos_ia").insert(row);
+  if (error && /tenant_id/i.test(error.message) && /column|schema cache|could not find/i.test(error.message)) {
+    const { tenant_id: _omit, ...semTenant } = row;
+    ({ error } = await supabase.from("hub_ciclos_ia").insert(semTenant));
+  }
+  if (error) return { criado: false, erro: error.message };
+
+  return {
+    criado: true,
+    aviso:
+      "Ciclo follow-up criado em pausa. Active em CRM → Ciclos após validar dispatch atendente/followup.",
+  };
+}

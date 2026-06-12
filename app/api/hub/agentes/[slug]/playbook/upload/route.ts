@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { uploadCustomPlaybookForAgent } from "@/lib/playbook/custom-playbook";
+import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
 import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 
@@ -42,7 +43,30 @@ export async function POST(
     return NextResponse.json({ error: "Envie um arquivo no campo file." }, { status: 400 });
   }
 
-  const markdown = await file.text();
+  const supabase = db();
+
+  const { data: agenteModo } = await supabase
+    .from("hub_agente_identidade")
+    .select("modo_operacao")
+    .eq("agente_slug", slug)
+    .maybeSingle();
+
+  const markdownOriginal = await file.text();
+  let markdown = markdownOriginal;
+  let flowAutoAppended = false;
+
+  if (agenteModo?.modo_operacao === "canal_whatsapp") {
+    const ensured = await ensureMarkdownWithWhatsappFlow(markdown);
+    if (!ensured.ok) {
+      return NextResponse.json(
+        { error: "Fluxo WhatsApp inválido ou ausente.", errors: ensured.errors },
+        { status: 400 }
+      );
+    }
+    markdown = ensured.markdown;
+    flowAutoAppended = ensured.auto_appended_flow;
+  }
+
   const parsed = parsePlaybookFlowFromMarkdown(markdown);
   const noFlowBlock = !parsed.ok && parsed.reason === "not_found";
 
@@ -63,8 +87,12 @@ export async function POST(
     }
   }
 
-  const supabase = db();
-  const result = await uploadCustomPlaybookForAgent(supabase, slug, file);
+  const uploadFile =
+    markdown !== markdownOriginal
+      ? new File([markdown], file.name, { type: file.type || "text/markdown;charset=utf-8" })
+      : file;
+
+  const result = await uploadCustomPlaybookForAgent(supabase, slug, uploadFile);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
@@ -78,5 +106,6 @@ export async function POST(
     playbook_public_url: result.playbook_public_url,
     playbook_generated_at: result.playbook_generated_at,
     playbook_source_hash: result.playbook_source_hash,
+    ...(flowAutoAppended ? { wa_flow_auto_appended: true } : {}),
   });
 }

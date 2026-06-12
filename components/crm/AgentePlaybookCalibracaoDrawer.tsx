@@ -99,6 +99,7 @@ export function AgentePlaybookCalibracaoDrawer({
   const [publicando, setPublicando] = useState(false);
   const [regenerando, setRegenerando] = useState(false);
   const [adaptandoMotor, setAdaptandoMotor] = useState(false);
+  const [aplicandoPresetWa, setAplicandoPresetWa] = useState(false);
   const [visualSideoverOpen, setVisualSideoverOpen] = useState(false);
   const [markdownOrigem, setMarkdownOrigem] = useState<"visual" | "texto" | null>(null);
 
@@ -426,6 +427,47 @@ export function AgentePlaybookCalibracaoDrawer({
     }
   }
 
+  async function aplicarPresetConversacaoWa(forcarPlaybook = false) {
+    if (carregando || publicando || aplicandoPresetWa) return;
+    const ok = await confirmDialog({
+      title: forcarPlaybook ? "Substituir playbook pelo preset WA?" : "Aplicar preset conversação WA?",
+      message: forcarPlaybook
+        ? "Isto substitui o playbook pelo template Waje v1, actualiza ferramentas, conhecimento e ciclos. Continuar?"
+        : "Aplica cargo, ferramentas, conhecimento, ciclos e publica playbook só se ainda não existir. Continuar?",
+      confirmLabel: "Aplicar preset",
+      variant: forcarPlaybook ? "destructive" : "default",
+    });
+    if (!ok) return;
+
+    setAplicandoPresetWa(true);
+    setErro("");
+    try {
+      const res = await fetch(
+        `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/preset-wa`,
+        {
+          method: "POST",
+          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({
+            preset: "conversacao_universal",
+            forcar_playbook: forcarPlaybook,
+            publicar_playbook: forcarPlaybook,
+          }),
+        }
+      );
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        setErro(extractApiError(data, `Erro HTTP ${res.status}`));
+        return;
+      }
+      toastSuccess("Preset conversação WA aplicado com sucesso.");
+      await carregarConteudo();
+    } catch {
+      setErro("Falha de rede ao aplicar preset WA.");
+    } finally {
+      setAplicandoPresetWa(false);
+    }
+  }
+
   async function adaptarTextoAoMotorWhatsapp() {
     if (carregando || publicando || uploadStatus === "enviando" || adaptandoMotor) return;
     if (!temConteudo) {
@@ -665,6 +707,21 @@ export function AgentePlaybookCalibracaoDrawer({
               >
                 <RefreshCw size={14} /> Recarregar
               </button>
+              {whatsappFlowAgent ? (
+                <button
+                  type="button"
+                  onClick={() => void aplicarPresetConversacaoWa(false)}
+                  disabled={carregando || publicando || aplicandoPresetWa}
+                  style={{
+                    ...btnToolbar,
+                    background: "rgba(146, 255, 0, 0.18)",
+                    color: CRM_ACCENT,
+                  }}
+                  title="Playbook + cargo + ferramentas + ciclos (preserva playbook existente)"
+                >
+                  {aplicandoPresetWa ? "A aplicar…" : "Preset conversação WA"}
+                </button>
+              ) : null}
               {whatsappFlowAgent ? (
                 <button
                   type="button"

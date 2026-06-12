@@ -11,6 +11,7 @@ import {
 } from "@/lib/whatsapp/webhook-inbound";
 import { webhookSecretQueryParam } from "@/lib/whatsapp/webhook-auth";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
+import { processarMensagemInboundWhatsapp } from "@/lib/whatsapp/inbound-message-processor";
 import {
   mergeMetadataWhatsapp,
   montarPatchContatoWhatsapp,
@@ -178,6 +179,10 @@ async function mensagemWebhookJaProcessada(
     .limit(1);
 
   if (error) {
+    if (isMissingPgColumn(error, "message_id") || isMissingPgColumn(error, "canal")) {
+      console.warn("[WEBHOOK] hub_msg_jobs sem coluna message_id/canal — execute migração hub_msg_jobs_repair_schema.");
+      return false;
+    }
     console.error("[WEBHOOK] Erro ao deduplicar message_id:", error.message);
     return false;
   }
@@ -314,13 +319,17 @@ type EnqueueWhatsappJobInput = {
  * Enfileira no hub_msg_jobs para processamento assíncrono pelo worker.
  * O processamento legado in-request foi removido da rota.
  */
+type EnqueueWhatsappJobResult =
+  | { status: "accepted" | "duplicate" }
+  | { status: "schema_error"; error: string };
+
 async function enqueueWhatsappJob(
   supabase: ReturnType<typeof db>,
   input: EnqueueWhatsappJobInput
-): Promise<"accepted" | "duplicate"> {
+): Promise<EnqueueWhatsappJobResult> {
   const jobRow = {
     tenant_id: input.tenantId,
-      canal: "whatsapp",
+    canal: "whatsapp",
     telefone: input.telefone,
     lead_id: input.leadId,
     agente_slug: input.agenteSlug,
@@ -334,11 +343,151 @@ async function enqueueWhatsappJob(
     .select("id")
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (
+      isMissingPgColumn(error, "message_id") ||
+      isMissingPgColumn(error, "canal") ||
+      /hub_msg_jobs/i.test(error.message)
+    ) {
+      return {
+        status: "schema_error",
+        error: error.message,
+      };
+    }
+    throw error;
+  }
   if (data?.id) {
     await supersedeJobsAntigosMesmoTelefone(supabase, input.telefone, data.id);
   }
-  return data?.id ? "accepted" : "duplicate";
+  return { status: data?.id ? "accepted" : "duplicate" };
+}
+
+async function processarWhatsappInlineSeFilaIndisponivel(
+  supabase: ReturnType<typeof db>,
+  trace: ReturnType<typeof createWhatsappWebhookTrace>,
+  payload: Record<string, unknown>,
+  lead: Record<string, unknown>,
+  agenteSlug: string
+): Promise<void> {
+  const { data: agente } = await supabase
+    .from("hub_agente_identidade")
+    .select("*")
+    .eq("agente_slug", agenteSlug)
+    .maybeSingle();
+
+  const instanceToken =
+    typeof payload.instanceToken === "string" && payload.instanceToken.trim()
+      ? payload.instanceToken.trim()
+      : typeof agente?.uazapi_instance_token === "string"
+        ? agente.uazapi_instance_token.trim()
+        : null;
+
+  await processarMensagemInboundWhatsapp({
+    supabase,
+    trace,
+    lead,
+    agente: (agente as Record<string, unknown> | null) ?? { agente_slug: agenteSlug },
+    mensagemFinal: String(payload.mensagemFinal ?? ""),
+    telefone: String(payload.telefone ?? ""),
+    pushName: String(payload.pushName ?? ""),
+    messageId: typeof payload.messageId === "string" ? payload.messageId : null,
+    timestamp: String(payload.timestamp ?? new Date().toISOString()),
+    mercado: String(payload.mercado ?? "geral"),
+    instanceKey: typeof payload.instance === "string" ? payload.instance : null,
+    isNovo: payload.isNovo === true,
+    tipoMidia: String(payload.tipoMidia ?? "text"),
+    menuChoiceId: typeof payload.menuChoiceId === "string" ? payload.menuChoiceId : null,
+    waSendOpts: instanceToken ? { instanceToken } : {},
+    isGroupTransfer: payload.isGroupTransfer === true,
+    groupJid: typeof payload.groupJid === "string" ? payload.groupJid : null,
+    fromMe: payload.fromMe === true,
+    senderTelefone: typeof payload.senderTelefone === "string" ? payload.senderTelefone : null,
+  });
+}
+
+async function despacharJobWhatsappAposEnqueue(
+  supabase: ReturnType<typeof db>,
+  trace: ReturnType<typeof createWhatsappWebhookTrace>,
+  enqueue: EnqueueWhatsappJobResult,
+  ctx: {
+    payload: Record<string, unknown>;
+    lead: Record<string, unknown>;
+    agenteSlug: string;
+    telefone: string;
+    messageId: string;
+  }
+): Promise<{ httpStatus: number; body: Record<string, unknown>; outcome: string }> {
+  const { log } = trace;
+
+  if (enqueue.status === "schema_error") {
+    log.warn("wa.webhook.job_schema_fallback_inline", {
+      error: enqueue.error.slice(0, 240),
+      telefone: trace.maskTelefone(ctx.telefone),
+      message_id: ctx.messageId,
+    });
+    try {
+      await processarWhatsappInlineSeFilaIndisponivel(
+        supabase,
+        trace,
+        ctx.payload,
+        ctx.lead,
+        ctx.agenteSlug
+      );
+      return {
+        httpStatus: 200,
+        body: {
+          status: "processed_inline",
+          reason: "hub_msg_jobs_schema_repair_required",
+          queue: "inline_fallback",
+          message_id: ctx.messageId,
+        },
+        outcome: "inline_fallback_ok",
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.error("wa.webhook.inline_fallback_failed", { error: msg.slice(0, 300) });
+      return {
+        httpStatus: 500,
+        body: {
+          status: "erro",
+          code: "HUB_MSG_JOBS_SCHEMA",
+          erro: msg,
+          hint: "Execute supabase/migrations/20260612110000_hub_msg_jobs_repair_schema.sql no Supabase.",
+        },
+        outcome: "inline_fallback_failed",
+      };
+    }
+  }
+
+  if (enqueue.status === "accepted") {
+    if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
+      dispararProcessamentoJobsWhatsapp(log);
+    } else {
+      void runWhatsappWorkerTick()
+        .then((result) => {
+          log.info("wa.webhook.job_processor_inline", {
+            claimed: result.claimed,
+            ok: !result.error,
+            error: result.error ?? null,
+          });
+        })
+        .catch((e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          log.warn("wa.webhook.job_processor_inline_failed", { error: msg.slice(0, 200) });
+          dispararProcessamentoJobsWhatsapp(log);
+        });
+    }
+  }
+
+  return {
+    httpStatus: 200,
+    body: {
+      status: enqueue.status,
+      queue: "hub_msg_jobs",
+      message_id: ctx.messageId,
+    },
+    outcome: enqueue.status === "duplicate" ? "duplicate_accepted" : "accepted_async",
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -485,7 +634,7 @@ export async function POST(request: NextRequest) {
           humano_responsavel: leadGrupo.humano_responsavel ?? null,
         };
 
-        const enqueueStatus = await enqueueWhatsappJob(supabase, {
+        const enqueueResult = await enqueueWhatsappJob(supabase, {
           tenantId: defaultTenantId(),
           telefone: telefoneLead,
           leadId: leadGrupo.id,
@@ -494,24 +643,18 @@ export async function POST(request: NextRequest) {
           payload: enqueuePayload,
         });
 
-        if (enqueueStatus === "accepted") {
-          if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
-            dispararProcessamentoJobsWhatsapp(log);
-          } else {
-            void runWhatsappWorkerTick().catch(() => dispararProcessamentoJobsWhatsapp(log));
-          }
-        }
+        const dispatched = await despacharJobWhatsappAposEnqueue(supabase, trace, enqueueResult, {
+          payload: enqueuePayload,
+          lead: leadGrupo as Record<string, unknown>,
+          agenteSlug: agenteSlugHint,
+          telefone: telefoneLead,
+          messageId: messageIdParaFila,
+        });
 
         return trace.json(
-          {
-            status: enqueueStatus,
-            lead_id: leadGrupo.id,
-            queue: "hub_msg_jobs",
-            group_transfer: true,
-            message_id: messageIdParaFila,
-          },
-          200,
-          enqueueStatus === "duplicate" ? "duplicate_accepted" : "group_outgoing_accepted"
+          { ...dispatched.body, lead_id: leadGrupo.id, group_transfer: true },
+          dispatched.httpStatus,
+          dispatched.outcome
         );
       }
 
@@ -664,7 +807,7 @@ export async function POST(request: NextRequest) {
         humano_responsavel: leadGrupo.humano_responsavel ?? null,
       };
 
-      const enqueueStatus = await enqueueWhatsappJob(supabase, {
+      const enqueueResult = await enqueueWhatsappJob(supabase, {
         tenantId: defaultTenantId(),
         telefone: telefoneLead,
         leadId: leadGrupo.id,
@@ -674,39 +817,30 @@ export async function POST(request: NextRequest) {
       });
 
       log.info("wa.webhook.group_job_enqueued", {
-        enqueue_status: enqueueStatus,
+        enqueue_status: enqueueResult.status,
         lead_id: leadGrupo.id,
         group_jid: inboundRaw.groupJid,
         message_id: messageIdParaFila,
       });
 
-      if (enqueueStatus === "accepted") {
-        if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
-          dispararProcessamentoJobsWhatsapp(log);
-        } else {
-          void runWhatsappWorkerTick()
-            .then((result) => {
-              log.info("wa.webhook.group_job_processor_inline", {
-                claimed: result.claimed,
-                ok: !result.error,
-              });
-            })
-            .catch(() => dispararProcessamentoJobsWhatsapp(log));
-        }
-      }
+      const dispatched = await despacharJobWhatsappAposEnqueue(supabase, trace, enqueueResult, {
+        payload: enqueuePayload,
+        lead: leadGrupo as Record<string, unknown>,
+        agenteSlug: agenteSlugHint,
+        telefone: telefoneLead,
+        messageId: messageIdParaFila,
+      });
 
       return trace.json(
         {
-          status: enqueueStatus,
+          ...dispatched.body,
           lead_id: leadGrupo.id,
           mercado,
           agente_slug_hint: agenteSlugHint,
-          queue: "hub_msg_jobs",
           group_transfer: true,
-          message_id: messageIdParaFila,
         },
-        200,
-        enqueueStatus === "duplicate" ? "duplicate_accepted" : "group_inbound_accepted"
+        dispatched.httpStatus,
+        dispatched.outcome
       );
     }
 
@@ -896,9 +1030,9 @@ export async function POST(request: NextRequest) {
       hasInstanceToken: Boolean(waSendOpts.instanceToken),
     };
 
-    const enqueueStatus = await enqueueWhatsappJob(supabase, {
+    const enqueueResult = await enqueueWhatsappJob(supabase, {
       tenantId: defaultTenantId(),
-            telefone,
+      telefone,
       leadId: lead.id as string,
       agenteSlug: agenteSlugHint,
       messageId: messageIdParaFila,
@@ -906,7 +1040,7 @@ export async function POST(request: NextRequest) {
     });
 
     log.info("wa.webhook.job_enqueued", {
-      enqueue_status: enqueueStatus,
+      enqueue_status: enqueueResult.status,
       lead_id: lead.id,
       message_id: messageIdParaFila,
       agente_slug_hint: agenteSlugHint,
@@ -914,42 +1048,29 @@ export async function POST(request: NextRequest) {
       is_novo: isNovo,
     });
 
-    if (enqueueStatus === "accepted") {
-      if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
-        dispararProcessamentoJobsWhatsapp(log);
-      } else {
-        void runWhatsappWorkerTick()
-          .then((result) => {
-            log.info("wa.webhook.job_processor_inline", {
-              claimed: result.claimed,
-              ok: !result.error,
-              error: result.error ?? null,
-            });
-          })
-          .catch((e) => {
-            const msg = e instanceof Error ? e.message : String(e);
-            log.warn("wa.webhook.job_processor_inline_failed", { error: msg.slice(0, 200) });
-            dispararProcessamentoJobsWhatsapp(log);
-          });
-      }
-    }
+    const dispatched = await despacharJobWhatsappAposEnqueue(supabase, trace, enqueueResult, {
+      payload: enqueuePayload,
+      lead: lead as Record<string, unknown>,
+      agenteSlug: agenteSlugHint,
+      telefone,
+      messageId: messageIdParaFila,
+    });
 
     return trace.json(
       {
-        status: enqueueStatus,
+        ...dispatched.body,
         lead_id: lead.id,
         mercado,
         agente_slug_hint: agenteSlugHint,
         isNovo,
-        queue: "hub_msg_jobs",
-        message_id: messageIdParaFila,
       },
-      200,
-      enqueueStatus === "duplicate" ? "duplicate_accepted" : "accepted_async"
+      dispatched.httpStatus,
+      dispatched.outcome
     );
   } catch (erro) {
-    const errMsg = erro instanceof Error ? erro.message : "Erro desconhecido";
-    log.error("wa.webhook.unhandled", { error: errMsg });
+    const errMsg = erro instanceof Error ? erro.message : String(erro);
+    const errStack = erro instanceof Error ? erro.stack?.slice(0, 500) : undefined;
+    log.error("wa.webhook.unhandled", { error: errMsg, stack: errStack });
     return trace.json({ status: "erro", erro: errMsg, code: "UNHANDLED" }, 500, "unhandled_error");
   }
 }

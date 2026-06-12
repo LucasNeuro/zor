@@ -29,8 +29,9 @@ import {
 } from "@/components/crm/AgenteUazapiBlock";
 import {
   mergeUsoFerramentasComPadraoPreservandoCustom,
-
+  mergeUsoFerramentasWhatsappCanal,
 } from "@/lib/hub/agente-ferramentas-registry";
+import { WA_PRESET_CARGO_SLUG } from "@/lib/hub/presets/wa-conversacao-preset-shared";
 import { hubModeloExibicaoProduto, isHubModeloIdDbCompatible } from "@/lib/ia/hub-model-defaults";
 import {
   PlaybookUploadAnalisePanel,
@@ -325,6 +326,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [cargoSelecionado, setCargoSelecionado] = useState<Cargo | null>(null);
   /** Sem cargo no catálogo — instruções só do playbook publicado no bucket. */
   const [somentePlaybook, setSomentePlaybook] = useState(false);
+  /** Preset universal conversação WhatsApp (playbook + cargo + ciclos). */
+  const [usarPresetWa, setUsarPresetWa] = useState(false);
   const [nome, setNome] = useState("");
   const [valores, setValores] = useState<number[]>([3, 3, 3, 3, 3]);
   const [criando, setCriando] = useState(false);
@@ -1063,6 +1066,30 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     }
   }
 
+  function aplicarPresetWaNoWizard() {
+    setSomentePlaybook(false);
+    setUsarPresetWa(true);
+    setModoOperacao("canal_whatsapp");
+    setModoExecucao("interacao");
+    setMotorFerramentasHub(true);
+    setUsoFerramentasIa(mergeUsoFerramentasWhatsappCanal({}, "canal_whatsapp"));
+    const cargoPreset = cargos.find((c) => c.slug === WA_PRESET_CARGO_SLUG);
+    if (cargoPreset) setCargoSelecionado(cargoPreset);
+    setConhecimentoSecoes((prev) => ({
+      ...prev,
+      atendimento:
+        prev.atendimento.trim() ||
+        "- Uma pergunta por mensagem; máx. 2–3 linhas.\n- Seja proativo: sempre indique o próximo passo.\n- Use a base de conhecimento — não invente preços ou prazos.",
+      proibicoes:
+        prev.proibicoes.trim() ||
+        "- Não inventar preços, prazos ou condições fora da documentação.\n- Não prometer o que não está na base de conhecimento.",
+    }));
+    void aplicarTemplateWajeV1NoWizard();
+    setPlaybookUploadMensagem(
+      "Preset conversação WA aplicado: cargo, playbook v1, ferramentas e ciclos serão provisionados ao criar."
+    );
+  }
+
   async function aplicarTemplateWajeV1NoWizard() {
     if (playbookUploadStatus === "enviando" || playbookAnaliseLoading) return;
     setPlaybookErro("");
@@ -1338,6 +1365,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           payload.ciclos_vincular_ids = hubCiclosVincularIds;
         }
       }
+      if (usarPresetWa && modoOperacao === "canal_whatsapp") {
+        payload.wa_preset = "conversacao_universal";
+        if (!payload.cargo_slug) payload.cargo_slug = WA_PRESET_CARGO_SLUG;
+      }
       const res = await fetch("/api/hub/agentes", {
         method: "POST",
         headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
@@ -1589,13 +1620,37 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 {AGENTE_WIZARD_STEP_INTRO[1].descricao}
               </p>
 
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  border: `1px solid ${wizardDark ? "rgba(146, 255, 0, 0.28)" : "#2d6a4f44"}`,
+                  background: wizardDark ? "rgba(146, 255, 0, 0.06)" : "#2d6a4f0c",
+                }}
+              >
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: wzMuted, lineHeight: 1.5 }}>
+                  <strong style={{ color: wzStrong }}>Preset conversação WhatsApp</strong> — playbook com fluxo
+                  dinâmico, cargo de atendimento, ferramentas CRM, ciclo sob interação e follow-up proativo.
+                </p>
+                <button
+                  type="button"
+                  onClick={aplicarPresetWaNoWizard}
+                  disabled={playbookUploadStatus === "enviando" || playbookAnaliseLoading || criando}
+                  style={wizardOutline(playbookUploadStatus === "enviando" || playbookAnaliseLoading || criando)}
+                >
+                  {usarPresetWa ? "✓ Preset WA activo" : "Aplicar preset conversação WA"}
+                </button>
+              </div>
+
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
                 <button
                   type="button"
                   onClick={() => {
                     setSomentePlaybook(false);
+                    setUsarPresetWa(false);
                   }}
-                  style={chip(!somentePlaybook)}
+                  style={chip(!somentePlaybook && !usarPresetWa)}
                 >
                   Cargo do catálogo (recomendado)
                 </button>

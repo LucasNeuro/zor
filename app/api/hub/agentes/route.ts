@@ -31,6 +31,13 @@ import { PROMPT_BASE_PLAYBOOK_ONLY, CARGO_LABEL_PLAYBOOK_ONLY } from "@/lib/hub/
 import { slugifyCargoSlug } from "@/lib/hub/cargo-slug";
 import { MERCADO_PREFIXO_PADRAO } from "@/lib/crm/negocio-cadastro";
 import { gerarAvatarAgenteUrl } from "@/lib/crm/agente-avatar-gen";
+import {
+  applyWaConversacaoPreset,
+  isWaPresetId,
+  waPresetHintsParaCriacao,
+  type WaPresetId,
+} from "@/lib/hub/presets/wa-conversacao-preset";
+import { mergeUsoFerramentasWhatsappCanal } from "@/lib/hub/agente-ferramentas-registry";
 
 function parseBoolFerr(v: unknown, defaultVal: boolean): boolean {
   if (v === true || v === "true") return true;
@@ -276,11 +283,25 @@ export async function POST(request: NextRequest) {
     playbook_public_url?: string;
   };
 
+  const waPresetRaw = body.wa_preset ?? body.preset_wa;
+  const waPresetAtivo =
+    waPresetRaw === true ||
+    waPresetRaw === "true" ||
+    (typeof waPresetRaw === "string" && isWaPresetId(waPresetRaw));
+  const waPresetId: WaPresetId =
+    typeof waPresetRaw === "string" && isWaPresetId(waPresetRaw)
+      ? waPresetRaw
+      : "conversacao_universal";
+  const waHints = waPresetAtivo ? waPresetHintsParaCriacao() : null;
+
   const playbookOnly =
     playbook_only === true ||
     modo_instrucao === "playbook_only" ||
     modo_instrucao === "playbook-only";
-  const cargoSlugTrim = cargo_slug != null ? String(cargo_slug).trim() : "";
+  const cargoSlugTrim =
+    cargo_slug != null
+      ? String(cargo_slug).trim()
+      : waHints?.cargo_slug ?? "";
   const nomeTrim = nome != null ? String(nome).trim() : "";
 
   if (!nomeTrim) {
@@ -434,12 +455,16 @@ export async function POST(request: NextRequest) {
   };
   }
 
-  const ciclo_modoCliente = normCicloExecucao(body.ciclo_execucao);
+  const ciclo_modoCliente = normCicloExecucao(
+    body.ciclo_execucao ?? (waHints ? waHints.ciclo_execucao : undefined)
+  );
   const modoOperacaoBody = isModoOperacaoAgente(body.modo_operacao)
     ? (body.modo_operacao as ModoOperacaoAgente)
-    : ciclo_modoCliente != null
-      ? modoOperacaoFromCicloExecucao(ciclo_modoCliente)
-      : null;
+    : waHints
+      ? waHints.modo_operacao
+      : ciclo_modoCliente != null
+        ? modoOperacaoFromCicloExecucao(ciclo_modoCliente)
+        : null;
   const cicloExecPadrao: CicloExecucaoPadrao | null =
     ciclo_modoCliente ??
     (modoOperacaoBody != null ? cicloExecucaoPadraoFromModoOperacao(modoOperacaoBody) : null);
@@ -458,7 +483,10 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(agendaMinutes) || agendaMinutes <= 0) agendaMinutes = 60;
   if (agendaMinutes > 10080) agendaMinutes = 10080;
 
-  const motorFerramentasHub = parseBoolFerr(body.motor_ferramentas_habilitado, false);
+  const motorFerramentasHub = parseBoolFerr(
+    body.motor_ferramentas_habilitado,
+    waHints?.motor_ferramentas_habilitado ?? false
+  );
   const mistralAgentSyncHabilitado = parseBoolFerr(body.mistral_agent_sync_habilitado, false);
 
   const avatarTrim = avatar_url != null ? String(avatar_url).trim() : "";
@@ -476,7 +504,16 @@ export async function POST(request: NextRequest) {
 
   row.motor_ferramentas_habilitado = motorFerramentasHub;
   row.mistral_agent_sync_habilitado = mistralAgentSyncHabilitado;
-  row.uso_ferramentas_ia = serializarUsoFerramentasParaDb(body.uso_ferramentas_ia);
+  const usoFerramentasMerged = waHints
+    ? mergeUsoFerramentasWhatsappCanal(
+        {
+          ...(waHints.uso_ferramentas_ia as Record<string, boolean>),
+          ...((body.uso_ferramentas_ia as Record<string, boolean> | undefined) ?? {}),
+        },
+        waHints.modo_operacao
+      )
+    : body.uso_ferramentas_ia;
+  row.uso_ferramentas_ia = serializarUsoFerramentasParaDb(usoFerramentasMerged);
 
   let modeloForcado = false;
   const { data, error } = await insertHubAgenteIdentidadeCompat(supabase, row, {
@@ -512,7 +549,16 @@ export async function POST(request: NextRequest) {
     tenantId ||
     defaultTenantId();
 
-  const rawConhecimento = body.conhecimento_secoes;
+  const rawConhecimentoBase =
+    body.conhecimento_secoes && typeof body.conhecimento_secoes === "object" && !Array.isArray(body.conhecimento_secoes)
+      ? (body.conhecimento_secoes as Record<string, unknown>)
+      : {};
+  const rawConhecimento =
+    waHints?.conhecimento_secoes != null
+      ? { ...waHints.conhecimento_secoes, ...rawConhecimentoBase }
+      : Object.keys(rawConhecimentoBase).length > 0
+        ? rawConhecimentoBase
+        : null;
   if (rawConhecimento && typeof rawConhecimento === "object" && !Array.isArray(rawConhecimento)) {
     const rows: Array<Record<string, unknown>> = [];
     for (const [key, val] of Object.entries(rawConhecimento as Record<string, unknown>)) {
@@ -542,9 +588,11 @@ export async function POST(request: NextRequest) {
 
   after(async () => {
     try {
-      const out = await runPlaybookPipeline(supabase, created.agente_slug);
-      if (!out.ok) {
-        console.error("[playbook] pós-criação agente:", created.agente_slug, out.error);
+      if (!waPresetAtivo) {
+        const out = await runPlaybookPipeline(supabase, created.agente_slug);
+        if (!out.ok) {
+          console.error("[playbook] pós-criação agente:", created.agente_slug, out.error);
+        }
       }
       if (mistralAgentSyncHabilitado) {
         const syn = await syncHubAgenteParaMistral(supabase, created.agente_slug);
@@ -602,11 +650,35 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let wa_preset_result: Awaited<ReturnType<typeof applyWaConversacaoPreset>> | undefined;
+  if (waPresetAtivo && modoOperacaoBody === "canal_whatsapp") {
+    wa_preset_result = await applyWaConversacaoPreset(supabase, created.agente_slug, {
+      presetId: waPresetId,
+      publicarPlaybook: body.wa_preset_publicar_playbook !== false,
+      sincronizarCargo: false,
+    });
+    if (!wa_preset_result.ok) {
+      ciclo_erro = ciclo_erro
+        ? `${ciclo_erro}; preset WA: ${wa_preset_result.error}`
+        : `preset WA: ${wa_preset_result.error}`;
+    } else if (wa_preset_result.ciclo_followup_criado) {
+      const msg = "Preset WA: ciclo follow-up criado (activar em CRM → Ciclos).";
+      ciclo_aviso = ciclo_aviso ? `${ciclo_aviso} ${msg}` : msg;
+    }
+  }
+
   return NextResponse.json(
     {
       ...sanitizarAgenteHubParaCliente(data as Record<string, unknown>),
       ...(ciclo_aviso ? { ciclo_aviso } : {}),
       ...(ciclo_erro ? { ciclo_erro } : {}),
+      ...(wa_preset_result?.ok
+        ? {
+            wa_preset_aplicado: true,
+            wa_preset_id: wa_preset_result.preset_id,
+            wa_preset_passos: wa_preset_result.passos,
+          }
+        : {}),
     },
     { status: 201 }
   );

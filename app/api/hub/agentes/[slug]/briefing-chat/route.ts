@@ -4,6 +4,7 @@ import {
   executarBriefingReply,
   executarSimulacaoCanalReply,
   montarSnapshotOperacionalReadOnly,
+  type BriefingChatReplyResult,
   type BriefingMensagemLinha,
   type BriefingModoSessao,
 } from "@/lib/agente-briefing-chat";
@@ -265,7 +266,7 @@ export async function POST(
     memoriasAgenteBloco = "";
   }
 
-  let resultado;
+  let resultado: BriefingChatReplyResult;
   try {
     if (modo === "simulacao_canal") {
       resultado = await executarSimulacaoCanalReply({

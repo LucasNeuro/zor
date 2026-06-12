@@ -179,7 +179,6 @@ export async function executarSimulacaoCanalFluxoPlaybook(params: {
           active: patch.active ?? persisted.active,
           complete: patch.complete ?? persisted.complete,
         };
-        if (patch.resetAnswers) persisted.answers = {};
       },
     }
   );

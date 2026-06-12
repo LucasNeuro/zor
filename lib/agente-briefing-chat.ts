@@ -166,6 +166,16 @@ function calcularCustoBrl(modelo: string, input: number, output: number): { brl:
   return { usd, brl: usd * 5.5 };
 }
 
+export type BriefingChatReplyResult = {
+  texto: string;
+  modelo: string;
+  tokens_input: number;
+  tokens_output: number;
+  custo_brl: number;
+  motor?: "briefing_interno" | "playbook_flow" | "playbook_hibrido" | "llm_prompt";
+  flow_state?: SimFlowState;
+};
+
 export async function executarBriefingReply(params: {
   modelo: string;
   agenteNome: string;
@@ -176,7 +186,7 @@ export async function executarBriefingReply(params: {
   historico: BriefingMensagemLinha[];
   mensagemUsuario: string;
   memoriasAgenteBloco?: string;
-}): Promise<{ texto: string; modelo: string; tokens_input: number; tokens_output: number; custo_brl: number }> {
+}): Promise<BriefingChatReplyResult> {
   const identity = [
     `Identidade do agente (para tom de voz): nome=${params.agenteNome}, slug=${params.agenteSlug}`,
     params.cargo ? `Cargo: ${params.cargo}` : null,
@@ -217,18 +227,11 @@ export async function executarBriefingReply(params: {
     tokens_input: out.tokensEntrada,
     tokens_output: out.tokensSaida,
     custo_brl: brl,
+    motor: "briefing_interno",
   };
 }
 
-export type SimulacaoCanalReplyResult = {
-  texto: string;
-  modelo: string;
-  tokens_input: number;
-  tokens_output: number;
-  custo_brl: number;
-  motor?: "playbook_flow" | "playbook_hibrido" | "llm_prompt";
-  flow_state?: SimFlowState;
-};
+export type SimulacaoCanalReplyResult = BriefingChatReplyResult;
 
 async function executarSimulacaoCanalLlm(params: {
   agenteSlug: string;

@@ -17,7 +17,7 @@ function isPublicApiPath(pathname: string): boolean {
   if (pathname.startsWith("/api/ciclos/")) return true;
   if (pathname.startsWith("/api/cron/")) return true;
   if (pathname.startsWith("/api/ml/ciclo")) return true;
-  if (pathname === "/api/auth/crm-session") return true;
+  if (pathname.startsWith("/api/auth/")) return true;
   return false;
 }
 

@@ -11,6 +11,7 @@ import {
   tenantConhecimentoObjectPath,
 } from "@/lib/hub/tenant-conhecimento-rag";
 import { resolveTenantContextFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
+import { propagarCatalogoAposConhecimento } from "@/lib/crm/servicos-catalogo";
 
 function db() {
   return createClient(
@@ -192,6 +193,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ documento: { ...doc, status: "erro", erro: indexed.error }, error: indexed.error }, { status: 502 });
   }
 
+  const catalogoSync = await propagarCatalogoAposConhecimento(supabase, tenantId);
+
   return NextResponse.json({
     documento: {
       ...doc,
@@ -202,5 +205,6 @@ export async function POST(request: NextRequest) {
       indexado_em: new Date().toISOString(),
     },
     analise_desatualizada: true,
+    catalogo_sync: catalogoSync,
   });
 }

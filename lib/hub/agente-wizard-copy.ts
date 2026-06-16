@@ -41,12 +41,21 @@ export const AGENTE_WIZARD_STEP_INTRO: Record<
   },
   8: {
     titulo: "Canal",
-    descricao: "Configure o canal de atendimento (WhatsApp ou e-mail) após criar o agente.",
+    descricao: "Configure o canal WhatsApp após criar o agente.",
   },
 };
 
-export function agenteWizardPasso8Descricao(modo: ModoOperacaoAgente): string {
-  if (modo === "canal_email") {
+export function agenteWizardPasso8Intro(emailChannelEnabled: boolean): string {
+  return emailChannelEnabled
+    ? "Configure o canal de atendimento (WhatsApp ou e-mail) após criar o agente."
+    : "Configure o canal WhatsApp após criar o agente.";
+}
+
+export function agenteWizardPasso8Descricao(
+  modo: ModoOperacaoAgente,
+  emailChannelEnabled = false
+): string {
+  if (emailChannelEnabled && modo === "canal_email") {
     return "Configure remetente, endereço de entrada e envie um e-mail de teste (Resend). O playbook publicado define o fluxo de atendimento.";
   }
   return "Ligue o WhatsApp da empresa: região UAZAPI, instância e QR/código. O playbook publicado define o fluxo de atendimento.";

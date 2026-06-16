@@ -28,10 +28,11 @@ import {
 } from "lucide-react";
 import "@xyflow/react/dist/style.css";
 import type {
+  PlaybookFlowCompleteAction,
   PlaybookFlowDefinition,
   PlaybookFlowInputType,
-  PlaybookFlowJourney,
   PlaybookFlowMenuOption,
+  PlaybookFlowTransferKind,
 } from "@/lib/playbook/flow-definition-types";
 import {
   FLOW_NODE_TYPES,
@@ -48,6 +49,12 @@ import { FlowNodeEditorSideover } from "./FlowNodeEditorSideover";
 
 const NODE_TYPES: NodeTypes = FLOW_NODE_TYPES as NodeTypes;
 
+const CANVAS_MIN_H = 480;
+const READABLE_MIN_ZOOM = 0.25;
+/** Zoom confortável só para fluxos com poucos nós. */
+const SMALL_FLOW_MIN_ZOOM = 0.58;
+const ENTRY_FOCUS_ZOOM = 0.65;
+
 function scheduleViewportFit(
   instance: {
     fitView: (opts?: {
@@ -60,28 +67,31 @@ function scheduleViewportFit(
     zoomTo?: (zoom: number, opts?: { duration?: number }) => void;
   },
   host: HTMLElement | null,
-  attempt = 0
+  attempt = 0,
+  nodeCount = 1
 ) {
   const rect = host?.getBoundingClientRect();
   if (!rect || rect.width < 40 || rect.height < 80) {
     if (attempt < 24) {
-      requestAnimationFrame(() => scheduleViewportFit(instance, host, attempt + 1));
+      requestAnimationFrame(() => scheduleViewportFit(instance, host, attempt + 1, nodeCount));
     }
     return;
   }
   void instance.fitView({
-    padding: 0.2,
+    padding: 0.14,
     duration: attempt > 0 ? 200 : 0,
     minZoom: READABLE_MIN_ZOOM,
-    maxZoom: 1.15,
+    maxZoom: 1.2,
+    includeHiddenNodes: true,
   });
   const zoom = instance.getZoom?.() ?? 1;
-  if (zoom < READABLE_MIN_ZOOM) {
-    instance.zoomTo?.(READABLE_MIN_ZOOM, { duration: 0 });
+  // Só amplia fluxos pequenos; não força zoom alto em fluxos grandes (evita board “quebrado”).
+  if (nodeCount <= 4 && zoom < 0.5) {
+    instance.zoomTo?.(SMALL_FLOW_MIN_ZOOM, { duration: 0 });
+  } else if (zoom < 0.22) {
+    instance.zoomTo?.(0.32, { duration: 0 });
   }
 }
-const CANVAS_MIN_H = 520;
-const CANVAS_MAX_H = 860;
 
 // ─── Auto-layout (BFS topological) ───────────────────────────────────────────
 
@@ -89,8 +99,6 @@ const NODE_W = 300;
 const NODE_H_EST = 230;
 const H_GAP = 132;
 const V_GAP = 92;
-const READABLE_MIN_ZOOM = 0.3;
-const ENTRY_FOCUS_ZOOM = 0.42;
 const MENU_BASE_EXTRA_H = 28;
 const MENU_OPTION_EXTRA_H = 30;
 const MENU_OPTION_HEIGHT_CAP = 10;
@@ -109,12 +117,68 @@ function estimateNodeHeight(node?: Node<FlowVisualNodeData>): number {
 }
 
 function getTopDownPosition(layerY: number, index: number, layerSize: number): { x: number; y: number } {
-  const layerWidth = Math.max(0, layerSize - 1) * (NODE_W + H_GAP);
+  const gap = H_GAP + Math.max(0, layerSize - 2) * 48;
+  const layerWidth = Math.max(0, layerSize - 1) * (NODE_W + gap);
   const startX = -layerWidth / 2;
   return {
-    x: startX + index * (NODE_W + H_GAP),
+    x: startX + index * (NODE_W + gap),
     y: layerY,
   };
+}
+
+function formatMenuEdgeLabel(label: string, index: number): string {
+  const trimmed = label.trim();
+  const prefix = `${index + 1}`;
+  if (!trimmed) return prefix;
+  const max = 18;
+  if (trimmed.length <= max) return `${prefix} · ${trimmed}`;
+  return `${prefix} · ${trimmed.slice(0, max)}…`;
+}
+
+function findOrphanNodeIds(
+  entryId: string,
+  nodes: Array<Node<FlowVisualNodeData>>,
+  edges: Edge[]
+): Set<string> {
+  const allIds = new Set(nodes.map((n) => n.id));
+  if (!entryId || !allIds.has(entryId)) return new Set();
+
+  const outgoing = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (!allIds.has(edge.source) || !allIds.has(edge.target)) continue;
+    const list = outgoing.get(edge.source) ?? [];
+    list.push(edge.target);
+    outgoing.set(edge.source, list);
+  }
+
+  const visited = new Set<string>();
+  const queue = [entryId];
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+    for (const next of outgoing.get(current) ?? []) {
+      if (!visited.has(next)) queue.push(next);
+    }
+  }
+
+  const orphans = new Set<string>();
+  for (const id of allIds) {
+    if (!visited.has(id)) orphans.add(id);
+  }
+  return orphans;
+}
+
+function applyOrphanFlags(
+  nodes: Array<Node<FlowVisualNodeData>>,
+  entryId: string,
+  edges: Edge[]
+): Array<Node<FlowVisualNodeData>> {
+  const orphans = findOrphanNodeIds(entryId, nodes, edges);
+  return nodes.map((node) => ({
+    ...node,
+    data: { ...node.data, isOrphan: orphans.has(node.id) },
+  }));
 }
 
 function getNextVerticalPosition(nodes: Array<Node<FlowVisualNodeData>>): { x: number; y: number } {
@@ -283,12 +347,15 @@ function buildInitialNodes(def?: PlaybookFlowDefinition): Array<Node<FlowVisualN
         data: createDefaultNodeData("message", 1),
     }];
   }
-  return def.steps.map((step) => ({
-    id: step.id,
-    type: step.kind,                // ← must match nodeTypes key
-    position: { x: 0, y: 0 },      // overwritten by computeAutoLayout
-    data: toVisualNodeData(step),
-  }));
+  return def.steps.map((step) => {
+    const data = toVisualNodeData(step);
+    return {
+      id: step.id,
+      type: data.kind,
+      position: { x: 0, y: 0 },
+      data,
+    };
+  });
 }
 
 function buildInitialEdges(def?: PlaybookFlowDefinition): Edge[] {
@@ -307,22 +374,33 @@ function buildInitialEdges(def?: PlaybookFlowDefinition): Edge[] {
       });
     }
     if (step.kind === "menu") {
-      for (const opt of step.options) {
-        if (!opt.next) continue;
+      step.options.forEach((opt, index) => {
+        if (!opt.next) return;
         edges.push({
           id: `${step.id}__${opt.next}__${opt.id}`,
           source: step.id,
+          sourceHandle: opt.id,
           target: opt.next,
-          label: opt.label,
+          label: formatMenuEdgeLabel(opt.label, index),
           markerEnd: { type: MarkerType.ArrowClosed },
           style: { stroke: "#a78bfa", strokeWidth: 2 },
-          labelStyle: { fill: "#e2e8f0", fontSize: 10, fontFamily: "inherit", fontWeight: 600 },
-          labelBgStyle: { fill: "#0f172acc", opacity: 0.96 },
-          labelBgPadding: [4, 4],
-          labelBgBorderRadius: 4,
+          labelStyle: { fill: "#334155", fontSize: 10, fontFamily: "inherit", fontWeight: 700 },
+          labelBgStyle: { fill: "#f8fafc", stroke: "#cbd5e1", strokeWidth: 1 },
+          labelBgPadding: [5, 6] as [number, number],
+          labelBgBorderRadius: 6,
           type: "smoothstep",
         });
-      }
+      });
+    }
+    if (step.kind === "complete" && step.next) {
+      edges.push({
+        id: `${step.id}__${step.next}`,
+        source: step.id,
+        target: step.next,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: "#6366f1", strokeWidth: 2 },
+        type: "smoothstep",
+      });
     }
   }
   return edges;
@@ -460,7 +538,6 @@ function toDefinition(
           id: node.id,
           kind: "message",
           title,
-          journey: (node.data.journey as PlaybookFlowJourney | undefined) ?? undefined,
           message: node.data.content,
           next: firstTarget,
         };
@@ -468,7 +545,6 @@ function toDefinition(
       if (node.data.kind === "input") {
         return {
           id: node.id, kind: "input", title,
-          journey: (node.data.journey as PlaybookFlowJourney | undefined) ?? undefined,
           field: String(node.data.field ?? `${node.id}_value`).trim() || `${node.id}_value`,
           prompt: node.data.content,
           input_type: (node.data.inputType as PlaybookFlowInputType | undefined) ?? "text",
@@ -481,20 +557,44 @@ function toDefinition(
           id: node.id,
           kind: "menu",
           title,
-          journey: (node.data.journey as PlaybookFlowJourney | undefined) ?? undefined,
           prompt: node.data.content,
           field: String(node.data.field ?? node.id).trim() || node.id,
           options,
         };
       }
+      const completePayload = buildCompletePayload(node.data);
       return {
         id: node.id,
         kind: "complete",
         title,
-        journey: (node.data.journey as PlaybookFlowJourney | undefined) ?? undefined,
-        complete: { type: "complete", summary: node.data.content },
+        complete: completePayload,
+        ...(firstTarget ? { next: firstTarget } : {}),
       };
     }),
+  };
+}
+
+function buildCompletePayload(data: FlowVisualNodeData): PlaybookFlowCompleteAction {
+  const metadata: Record<string, unknown> = {};
+  const isTransfer = data.kind === "transfer";
+  const notifyPhone = data.notifyPhone?.trim();
+  const transferKind = isTransfer
+    ? notifyPhone
+      ? "whatsapp_card"
+      : (data.transferKind as PlaybookFlowTransferKind | undefined) ?? "whatsapp_card"
+    : notifyPhone
+      ? "whatsapp_card"
+      : (data.transferKind as PlaybookFlowTransferKind | undefined);
+  if (transferKind) metadata.transfer_kind = transferKind;
+  if (notifyPhone) metadata.notify_phone = notifyPhone;
+  if (data.notifyEmail?.trim()) metadata.notify_email = data.notifyEmail.trim();
+  if (data.agentSlug?.trim()) metadata.agent_slug = data.agentSlug.trim();
+
+  return {
+    type: "complete",
+    handoff_to: isTransfer || transferKind ? "time_humano" : data.handoffTo,
+    summary: data.content,
+    ...(Object.keys(metadata).length > 0 ? { crm_patch: { metadata } } : {}),
   };
 }
 
@@ -504,6 +604,13 @@ function connectionId(c: Connection): string {
 
 // ─── FlowCanvasInner ──────────────────────────────────────────────────────────
 
+export type FlowCanvasApi = {
+  addNode: (kind: FlowNodeKind) => void;
+  fitCanvas: () => void;
+  /** Aplica alterações pendentes do canvas (ex.: antes de salvar). */
+  flushAndSnapshot: () => FlowCanvasSnapshot | null;
+};
+
 type FlowCanvasProps = {
   initialDefinition?: PlaybookFlowDefinition;
   initialNodes?: Array<Node<FlowVisualNodeData>>;
@@ -511,9 +618,21 @@ type FlowCanvasProps = {
   onChange?: (snapshot: FlowCanvasSnapshot, nodes: Array<Node<FlowVisualNodeData>>, edges: Edge[]) => void;
   /** Dispara em qualquer alteração semântica aplicada ao markdown do fluxo. */
   onDirty?: () => void;
+  theme?: "dark" | "light";
+  toolbarPlacement?: "overlay" | "external";
+  onExposeApi?: (api: FlowCanvasApi) => void;
 };
 
-function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChange, onDirty }: FlowCanvasProps) {
+function FlowCanvasInner({
+  initialDefinition,
+  initialNodes,
+  initialEdges,
+  onChange,
+  onDirty,
+  theme = "light",
+  toolbarPlacement = "overlay",
+  onExposeApi,
+}: FlowCanvasProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rfInstance = useRef<any>(null);
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -524,7 +643,9 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
   const seedNodes = useMemo(() => {
     const raw = initialNodes?.length ? initialNodes : buildInitialNodes(initialDefinition);
     const rawEdges = initialEdges?.length ? initialEdges : buildInitialEdges(initialDefinition);
-    return computeAutoLayout(raw, rawEdges, initialDefinition?.entry_step_id);
+    const entry = initialDefinition?.entry_step_id;
+    const laid = computeAutoLayout(raw, rawEdges, entry);
+    return applyOrphanFlags(laid, entry ?? laid[0]?.id ?? "", rawEdges);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -543,20 +664,80 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
   });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
-  const fitCanvas = useCallback((animated = true) => {
-    const instance = rfInstance.current;
-    if (!instance) return;
-    instance.fitView({
-      padding: 0.18,
-      duration: animated ? 280 : 0,
-      minZoom: READABLE_MIN_ZOOM,
-      maxZoom: 1.15,
+  useEffect(() => {
+    setNodes((cur) => {
+      const next = applyOrphanFlags(cur, entryStepId, edges);
+      const changed = next.some((node, index) => node.data.isOrphan !== cur[index]?.data.isOrphan);
+      return changed ? next : cur;
     });
-    const zoom = instance.getZoom?.() ?? 1;
-    if (zoom < READABLE_MIN_ZOOM) {
-      instance.zoomTo(READABLE_MIN_ZOOM, { duration: 220 });
-    }
-  }, []);
+  }, [edges, entryStepId]);
+
+  const initialFitDoneRef = useRef(false);
+
+  const runViewportFit = useCallback(
+    (animated = false) => {
+      const instance = rfInstance.current;
+      const host = canvasHostRef.current;
+      if (!instance || !host || nodes.length === 0) return;
+      const rect = host.getBoundingClientRect();
+      if (rect.width < 40 || rect.height < 80) return;
+      setNodes((cur) => {
+        const laid = computeAutoLayout(cur, edges, entryStepId);
+        return applyOrphanFlags(laid, entryStepId, edges);
+      });
+      requestAnimationFrame(() => {
+        const inst = rfInstance.current;
+        if (!inst) return;
+        void inst.fitView({
+          padding: 0.14,
+          duration: animated ? 280 : 0,
+          minZoom: READABLE_MIN_ZOOM,
+          maxZoom: 1.2,
+          includeHiddenNodes: true,
+        });
+        const zoom = inst.getZoom?.() ?? 1;
+        if (nodes.length <= 4 && zoom < 0.5) {
+          inst.zoomTo?.(SMALL_FLOW_MIN_ZOOM, { duration: animated ? 220 : 0 });
+        } else if (zoom < 0.22) {
+          inst.zoomTo?.(0.32, { duration: 0 });
+        }
+      });
+    },
+    [edges, entryStepId, nodes.length]
+  );
+
+  const fitCanvas = useCallback(
+    (animated = true) => {
+      runViewportFit(animated);
+    },
+    [runViewportFit]
+  );
+
+  useEffect(() => {
+    const host = canvasHostRef.current;
+    if (!host) return;
+
+    initialFitDoneRef.current = false;
+
+    const tryInitialFit = () => {
+      if (initialFitDoneRef.current) return;
+      const instance = rfInstance.current;
+      const rect = host.getBoundingClientRect();
+      if (!instance || nodes.length === 0 || rect.width < 40 || rect.height < 80) return;
+      scheduleViewportFit(instance, host, 0, nodes.length);
+      initialFitDoneRef.current = true;
+    };
+
+    const observer = new ResizeObserver(() => tryInitialFit());
+    observer.observe(host);
+    tryInitialFit();
+
+    const timers = [80, 200, 450, 900].map((ms) => window.setTimeout(tryInitialFit, ms));
+    return () => {
+      observer.disconnect();
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, [nodes.length, runViewportFit]);
 
   const focusEntryNode = useCallback(
     (animated = true) => {
@@ -573,28 +754,6 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
     },
     [entryStepId, nodes]
   );
-
-  const initialFitDoneRef = useRef(false);
-
-  useEffect(() => {
-    const host = canvasHostRef.current;
-    if (!host) return;
-
-    const tryInitialFit = () => {
-      if (initialFitDoneRef.current) return;
-      const instance = rfInstance.current;
-      const rect = host.getBoundingClientRect();
-      if (!instance || nodes.length === 0 || rect.width < 40 || rect.height < 80) return;
-      scheduleViewportFit(instance, host);
-      initialFitDoneRef.current = true;
-    };
-
-    const observer = new ResizeObserver(() => tryInitialFit());
-    observer.observe(host);
-    tryInitialFit();
-    return () => observer.disconnect();
-  }, [nodes.length]);
-
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<FlowVisualNodeData>>[]) => {
@@ -663,6 +822,54 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
     },
     [nodeCounter, nodes]
   );
+
+  const emitSnapshotNow = useCallback(
+    (force = false): FlowCanvasSnapshot | null => {
+      if (emitTimerRef.current) {
+        window.clearTimeout(emitTimerRef.current);
+        emitTimerRef.current = null;
+      }
+      if (!force && !hasSemanticChangesRef.current) return null;
+
+      const resolvedEntry =
+        entryStepId && nodes.some((node) => node.id === entryStepId)
+          ? entryStepId
+          : (nodes[0]?.id ?? "step_1");
+
+      const definition = toDefinition(nodes, edges, resolvedEntry);
+      const snapshotKey = JSON.stringify(definition);
+      if (!force && snapshotKey === lastSnapshotRef.current) {
+        hasSemanticChangesRef.current = false;
+        return {
+          definition,
+          nodeCount: nodes.length,
+          edgeCount: edges.length,
+        };
+      }
+
+      lastSnapshotRef.current = snapshotKey;
+      hasSemanticChangesRef.current = false;
+
+      const snapshot: FlowCanvasSnapshot = {
+        definition,
+        nodeCount: nodes.length,
+        edgeCount: edges.length,
+      };
+
+      onChange?.(snapshot, nodes, edges);
+      onDirty?.();
+      return snapshot;
+    },
+    [edges, entryStepId, nodes, onChange, onDirty]
+  );
+
+  useEffect(() => {
+    onExposeApi?.({
+      addNode: handleAddNode,
+      fitCanvas: () => fitCanvas(true),
+      flushAndSnapshot: () => emitSnapshotNow(true),
+    });
+  }, [emitSnapshotNow, fitCanvas, handleAddNode, onExposeApi]);
 
   const handleDeleteNode = useCallback(
     (nodeId: string) => {
@@ -781,35 +988,12 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
   useEffect(() => {
     if (!onChange) return;
     if (!hasSemanticChangesRef.current) return;
+    onDirty?.();
     if (emitTimerRef.current) {
       window.clearTimeout(emitTimerRef.current);
     }
     emitTimerRef.current = window.setTimeout(() => {
-      const resolvedEntry =
-        entryStepId && nodes.some((node) => node.id === entryStepId)
-          ? entryStepId
-          : (nodes[0]?.id ?? "step_1");
-
-      if (resolvedEntry !== entryStepId) {
-        setEntryStepId(resolvedEntry);
-      }
-
-      const definition = toDefinition(nodes, edges, resolvedEntry);
-      const snapshotKey = JSON.stringify(definition);
-      if (snapshotKey === lastSnapshotRef.current) return;
-      lastSnapshotRef.current = snapshotKey;
-      hasSemanticChangesRef.current = false;
-
-      onChange(
-        {
-          definition,
-          nodeCount: nodes.length,
-          edgeCount: edges.length,
-        },
-        nodes,
-        edges
-      );
-      onDirty?.();
+      emitSnapshotNow(false);
     }, 80);
 
     return () => {
@@ -817,35 +1001,74 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
         window.clearTimeout(emitTimerRef.current);
       }
     };
-  }, [edges, entryStepId, nodes, onChange, onDirty]);
+  }, [edges, entryStepId, nodes, onChange, onDirty, emitSnapshotNow]);
+
+  const isDark = theme === "dark";
+  const surfaceStyles = useMemo(
+    () => ({
+      canvasStyle: {
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        border: isDark ? "1px solid rgba(63, 152, 72, 0.42)" : "1px solid #dcebd8",
+        borderRadius: 14,
+        overflow: "hidden",
+        background: isDark ? "#0b1f10" : "#f4faf2",
+        boxShadow: isDark ? "0 6px 24px rgba(0, 0, 0, 0.45)" : "0 4px 18px rgba(11, 34, 16, 0.06)",
+      } satisfies CSSProperties,
+      flowBackground: isDark
+        ? "linear-gradient(180deg, #0b1f10 0%, #060d08 100%)"
+        : "linear-gradient(180deg, #f4faf2 0%, #eef7eb 100%)",
+      dotColor: isDark ? "#1f3d24" : "#c8dcc4",
+      miniMapStyle: {
+        background: isDark ? "#0d2214" : "#ffffff",
+        border: isDark ? "1px solid rgba(63, 152, 72, 0.42)" : "1px solid #dcebd8",
+        borderRadius: 10,
+        width: 190,
+        height: 120,
+        boxShadow: isDark ? "0 4px 14px rgba(0, 0, 0, 0.45)" : "0 4px 14px rgba(11, 34, 16, 0.08)",
+      } satisfies CSSProperties,
+      controlsStyle: {
+        border: isDark ? "1px solid rgba(63, 152, 72, 0.42)" : "1px solid #dcebd8",
+        borderRadius: 10,
+        background: isDark ? "#0d2214" : "#ffffff",
+        boxShadow: isDark ? "0 4px 14px rgba(0, 0, 0, 0.45)" : "0 4px 14px rgba(11, 34, 16, 0.08)",
+      } satisfies CSSProperties,
+      maskColor: isDark ? "#1a3d2266" : "#e8f5e966",
+    }),
+    [isDark]
+  );
 
   return (
     <FlowNodeCallbacksContext.Provider value={callbacks}>
       <div style={wrapStyle}>
         <div ref={canvasHostRef} style={canvasShellStyle}>
-          <div style={canvasToolbarStyle}>
-            <button type="button" style={toolbarButtonStyle} onClick={() => handleAddNode("message")}>
-              <MessageSquare size={13} strokeWidth={2.2} />
-              Mensagem
-            </button>
-            <button type="button" style={toolbarButtonStyle} onClick={() => handleAddNode("input")}>
-              <PencilLine size={13} strokeWidth={2.2} />
-              Entrada
-            </button>
-            <button type="button" style={toolbarButtonStyle} onClick={() => handleAddNode("menu")}>
-              <List size={13} strokeWidth={2.2} />
-              Menu
-            </button>
-            <button type="button" style={toolbarButtonStyle} onClick={() => handleAddNode("complete")}>
-              <CheckCircle2 size={13} strokeWidth={2.2} />
-              Fim
-            </button>
-            <button type="button" style={toolbarButtonStyle} onClick={() => fitCanvas()}>
-              <LocateFixed size={13} strokeWidth={2.2} />
-              Centralizar
-            </button>
-          </div>
-          <div style={canvasStyle}>
+          {toolbarPlacement === "overlay" ? (
+            <div style={canvasToolbarStyle}>
+              <button type="button" style={toolbarButtonStyle} onClick={() => handleAddNode("message")}>
+                <MessageSquare size={13} strokeWidth={2.2} />
+                Mensagem
+              </button>
+              <button type="button" style={toolbarButtonStyle} onClick={() => handleAddNode("input")}>
+                <PencilLine size={13} strokeWidth={2.2} />
+                Entrada
+              </button>
+              <button type="button" style={toolbarButtonStyle} onClick={() => handleAddNode("menu")}>
+                <List size={13} strokeWidth={2.2} />
+                Menu
+              </button>
+              <button type="button" style={toolbarButtonStyle} onClick={() => handleAddNode("complete")}>
+                <CheckCircle2 size={13} strokeWidth={2.2} />
+                Fim
+              </button>
+              <button type="button" style={toolbarButtonStyle} onClick={() => fitCanvas()}>
+                <LocateFixed size={13} strokeWidth={2.2} />
+                Centralizar
+              </button>
+            </div>
+          ) : null}
+          <div style={{ ...surfaceStyles.canvasStyle, display: "flex", flexDirection: "column", minHeight: 0 }}>
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -861,7 +1084,9 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
               }}
               onInit={(instance) => {
                 rfInstance.current = instance;
-                scheduleViewportFit(instance, canvasHostRef.current);
+                scheduleViewportFit(instance, canvasHostRef.current, 0, nodes.length);
+                window.setTimeout(() => runViewportFit(false), 180);
+                window.setTimeout(() => runViewportFit(false), 520);
               }}
               nodeOrigin={[0, 0]}
               onlyRenderVisibleElements={false}
@@ -870,50 +1095,39 @@ function FlowCanvasInner({ initialDefinition, initialNodes, initialEdges, onChan
               snapToGrid
               snapGrid={[16, 16]}
               style={{
-                background: "linear-gradient(180deg, #060d08 0%, #0b1f10 100%)",
+                background: surfaceStyles.flowBackground,
                 width: "100%",
                 height: "100%",
+                flex: 1,
+                minHeight: 0,
               }}
               defaultEdgeOptions={{
                 markerEnd: { type: MarkerType.ArrowClosed },
-                style: { stroke: "#7aa2f7", strokeWidth: 2 },
+                style: { stroke: "#3f9848", strokeWidth: 2 },
                 type: "smoothstep",
               }}
               deleteKeyCode="Delete"
               proOptions={{ hideAttribution: true }}
             >
-              <Background color="#3f9848" gap={26} size={1.2} variant={"dots" as never} />
+              <Background color={surfaceStyles.dotColor} gap={26} size={1.2} variant={"dots" as never} />
               <MiniMap
                 pannable
                 zoomable
+                position="bottom-right"
                 nodeColor={(node) => {
                   const colors: Record<string, string> = {
-                    message: "#92ff00",
+                    message: "#3f9848",
                     input: "#d4a017",
-                    menu: "#3f9848",
-                    complete: "#92ff00",
+                    menu: "#5c9c63",
+                    complete: "#2d7a36",
+                    transfer: "#4f46e5",
                   };
-                  return colors[(node.data as FlowVisualNodeData).kind] ?? "#5d7a67";
+                  return colors[(node.data as FlowVisualNodeData).kind] ?? "#9cb89f";
                 }}
-                style={{
-                  background: "#0b1f10",
-                  border: "1px solid rgba(146, 255, 0, 0.2)",
-                  borderRadius: 10,
-                  width: 190,
-                  height: 120,
-                  boxShadow: "0 8px 22px #02061799",
-                }}
-                maskColor="#1f2a3b66"
+                style={surfaceStyles.miniMapStyle}
+                maskColor={surfaceStyles.maskColor}
               />
-              <Controls
-                showInteractive={false}
-                style={{
-                  border: "1px solid #22314a",
-                  borderRadius: 10,
-                  background: "#0c1423",
-                  boxShadow: "0 8px 22px #02061799",
-                }}
-              />
+              <Controls showInteractive={false} position="bottom-left" style={surfaceStyles.controlsStyle} />
             </ReactFlow>
             {selectedNode && (
               <FlowNodeEditorSideover
@@ -950,26 +1164,22 @@ export function FlowCanvas(props: FlowCanvasProps) {
 const wrapStyle: CSSProperties = {
   width: "100%",
   minWidth: 0,
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  minHeight: 0,
+  height: "100%",
+  position: "relative",
 };
 
 const canvasShellStyle: CSSProperties = {
-  position: "relative",
-  width: "100%",
-  height: `clamp(${CANVAS_MIN_H}px, 76vh, ${CANVAS_MAX_H}px)`,
-  minHeight: `${CANVAS_MIN_H}px`,
-  maxHeight: `${CANVAS_MAX_H}px`,
-};
-
-const canvasStyle: CSSProperties = {
   position: "absolute",
   inset: 0,
   width: "100%",
   height: "100%",
-  border: "1px solid rgba(146, 255, 0, 0.18)",
-  borderRadius: 14,
-  overflow: "hidden",
-  background: "#060d08",
-  boxShadow: "0 14px 36px rgba(6, 13, 8, 0.65)",
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
 };
 
 const canvasToolbarStyle: CSSProperties = {

@@ -12,6 +12,11 @@ import { sendEmail } from "@/lib/email/resend-send";
 import { resendConfigured } from "@/lib/email/resend-config";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { normalizarEnderecoEmail } from "@/lib/email/inbound-parser";
+import {
+  EMAIL_CHANNEL_DISABLED_CODE,
+  EMAIL_CHANNEL_DISABLED_MESSAGE,
+  isEmailChannelEnabled,
+} from "@/lib/feature-flags";
 
 function db() {
   return createClient(
@@ -22,6 +27,13 @@ function db() {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isEmailChannelEnabled()) {
+      return NextResponse.json(
+        { error: EMAIL_CHANNEL_DISABLED_MESSAGE, code: EMAIL_CHANNEL_DISABLED_CODE },
+        { status: 503 }
+      );
+    }
+
     if (!resendConfigured()) {
       return NextResponse.json(
         { error: "Resend não configurado: defina RESEND_API_KEY" },

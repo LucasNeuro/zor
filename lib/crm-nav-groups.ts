@@ -11,6 +11,7 @@ import {
   Sparkles,
   Settings,
   BookOpen,
+  LayoutDashboard,
 } from "lucide-react";
 
 export type CrmNavItem = {
@@ -36,6 +37,19 @@ export type CrmNavGroup = {
 /** Fonte de verdade do menu lateral — ver docs/menu-navegacao-consolidado.md */
 export const CRM_NAV_GROUPS: CrmNavGroup[] = [
   {
+    id: "insights",
+    label: "Insights",
+    sectionIcon: LayoutDashboard,
+    items: [
+      {
+        href: "/crm/painel",
+        label: "Dashboard & Relatórios",
+        icon: LayoutDashboard,
+        permission: "dashboard",
+      },
+    ],
+  },
+  {
     id: "ia",
     label: "IA",
     sectionIcon: Sparkles,
@@ -47,7 +61,7 @@ export const CRM_NAV_GROUPS: CrmNavGroup[] = [
         extra: { href: "/crm/agentes/novo", label: "Novo agente" },
         permission: "automacoes",
       },
-      { href: "/crm/ciclos", label: "Automações", icon: Zap, permission: "automacoes" },
+      { href: "/crm/ciclos", label: "Ciclos de agentes", icon: Zap, permission: "automacoes" },
       { href: "/crm/conhecimento", label: "Conhecimento", icon: BookOpen, permission: "automacoes" },
       { href: "/crm/ferramentas", label: "Ferramentas", icon: Wrench, permission: "automacoes" },
     ],

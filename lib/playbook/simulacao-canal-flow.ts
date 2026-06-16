@@ -16,6 +16,13 @@ import {
   resolverChoiceId,
 } from "@/lib/whatsapp/playbook-flow-runtime";
 import { mensagemEhSaudacaoSimples } from "@/lib/whatsapp/menu-triagem-uazapi";
+import type { TurnoMinimo } from "@/lib/ia/perguntas-essenciais-cargo";
+import {
+  clienteExpressouFrustracaoRepeticao,
+  extrairResumoProblemaCliente,
+  perguntaEssencialJaCobertaPeloCliente,
+} from "@/lib/ia/atendimento-fluido";
+import type { FlowEngineStep } from "@/lib/playbook/flow-engine";
 
 export type SimFlowState = {
   step: string | null;
@@ -98,8 +105,8 @@ function descreverPassoFluxo(
     ];
     if (answerKey === "nome" || step.type === "await_name") {
       linhas.push(
-        "IMPORTANTE: peça SOMENTE o nome do cliente (1 pergunta curta).",
-        "NÃO pergunte «como posso ajudar», intenção ou assunto neste passo."
+        "Se o nome já estiver no CRM ou na conversa: **não** peça de novo — cumprimente pelo nome e avance.",
+        "Se ainda faltar: peça **somente** o nome (1 pergunta curta), sem «como posso ajudar» nem menu."
       );
     }
     return linhas;
@@ -113,23 +120,48 @@ function descreverPassoFluxo(
   return [`Passo ${stepId}`];
 }
 
+function passoFluxoJaCoberto(
+  step: FlowEngineStep | undefined,
+  state: SimFlowState,
+  mensagemCliente?: string,
+  turnos?: TurnoMinimo[]
+): boolean {
+  if (!step) return false;
+  if (step.type === "ask_text" || step.type === "await_name") {
+    const key = step.answer_key ?? "nome";
+    if (state.answers[key]?.trim()) return true;
+    const turnosEfetivos =
+      turnos && turnos.length > 0
+        ? turnos
+        : mensagemCliente?.trim()
+          ? [{ role: "user" as const, content: mensagemCliente.trim() }]
+          : [];
+    if (turnosEfetivos.length > 0 && perguntaEssencialJaCobertaPeloCliente(step.prompt, turnosEfetivos)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function buildBlocoContextoFluxoParaLlm(
   definition: FlowEngineDefinition,
   state: SimFlowState,
   mensagemCliente?: string,
-  menuUazapiEnhancement?: boolean
+  menuUazapiEnhancement?: boolean,
+  turnos?: TurnoMinimo[]
 ): string {
   const stepId = state.step || definition.start_step;
   const step = definition.steps[stepId];
+  const passoCoberto = passoFluxoJaCoberto(step, state, mensagemCliente, turnos);
   const menuEnhanceOn =
     menuUazapiEnhancement ?? playbookMenuUazapiEnhancementEnabled();
   const linhas: string[] = [
-    "### ROTEIRO WHATSAPP (guia — NÃO copie frases fixas)",
-    "O bloco abaixo define a **ordem** e os **temas** do atendimento. Você é a IA da empresa:",
-    "use SEMPRE a base de conhecimento, cargo e playbook narrativo para redigir cada resposta.",
-    "Nunca responda com uma única frase robótica; seja natural, empático e específico ao negócio.",
+    "### ROTEIRO WHATSAPP (ferramenta de guia — NÃO é script)",
+    "Este bloco indica **ordem sugerida** e **temas** do atendimento. Você decide com raciocínio:",
+    "priorize o que o cliente disse, CRM, catálogo e documentos; **pule** passos já respondidos.",
+    "Nunca responda com frase robótica fixa; seja natural, empático e específico ao negócio.",
     "",
-    `Passo atual no roteiro: ${stepId}`,
+    `Passo sugerido no roteiro: ${stepId}${passoCoberto ? " (tema já coberto — avance sem repetir)" : ""}`,
     ...descreverPassoFluxo(definition, stepId, menuEnhanceOn && step?.type === "menu"),
   ];
 
@@ -149,9 +181,28 @@ export function buildBlocoContextoFluxoParaLlm(
     linhas.push("", `Última mensagem do cliente: «${mensagemCliente.trim().slice(0, 500)}»`);
   }
 
+  const turnosEfetivos =
+    turnos && turnos.length > 0
+      ? turnos
+      : mensagemCliente?.trim()
+        ? [{ role: "user" as const, content: mensagemCliente.trim() }]
+        : [];
+  if (turnosEfetivos.length > 0 && clienteExpressouFrustracaoRepeticao(turnosEfetivos)) {
+    linhas.push(
+      "",
+      "**Cliente frustrado com repetição** («já disse»): peça desculpas breves e avance com o que ele informou."
+    );
+  }
+  const resumo = extrairResumoProblemaCliente(turnosEfetivos);
+  if (resumo) {
+    linhas.push("", `Contexto do pedido já dito: «${resumo}»`);
+  }
+
   linhas.push(
     "",
     "Regras de condução:",
+    "- O roteiro **não obriga** repetir pergunta se o cliente já respondeu (defeito, modelo, nome, etc.).",
+    "- Responda primeiro ao que o cliente disse; use ferramentas CRM para gravar dados novos.",
     ...(step?.type === "menu" && menuEnhanceOn
       ? [
           "- Se for menu: escreva APENAS uma introdução curta (1–2 frases) contextualizando o assunto.",
@@ -160,11 +211,15 @@ export function buildBlocoContextoFluxoParaLlm(
       : ["- Se for menu: apresente as opções de forma clara (lista numerada), contextualizando com o negócio."]),
     ...(step?.type === "await_name" ||
     (step?.type === "ask_text" && (step.answer_key === "nome" || !step.answer_key))
-      ? [
-          "- Se for coleta de nome: faça SOMENTE a pergunta pelo nome — sem «como posso ajudar» nem menu.",
-        ]
-      : ["- Se for coleta: faça a pergunta do passo com suas palavras, uma pergunta por vez."]),
-    "- Se o cliente sair do roteiro: responda com IA (conhecimento) e retome suavemente o passo útil.",
+      ? passoCoberto
+        ? ["- Nome já conhecido: **não** peça de novo; avance ao próximo tema útil."]
+        : [
+            "- Se faltar nome: faça **somente** a pergunta pelo nome — sem «como posso ajudar» nem menu.",
+          ]
+      : passoCoberto
+        ? ["- Tema deste passo já coberto: avance (orçamento, agendamento ou solução)."]
+        : ["- Se faltar dado deste passo: uma pergunta curta com suas palavras."]),
+    "- Se o cliente sair do roteiro: responda com conhecimento e retome só o que ainda falta.",
     "- Não invente preços, prazos ou políticas fora da documentação.",
     "- Não mencione «passo», «motor», «playbook-flow» nem «simulação»."
   );

@@ -12,6 +12,7 @@ import {
 import { CRM_LIST_LIMIT } from "@/lib/crm/crm-list-config";
 
 import { listQueryDefaults } from "@/lib/crm/query-config";
+import { CRM_MODULE_PARCEIROS_ENABLED } from "@/lib/crm/waje-modules";
 
 async function fetchJsonList<T>(url: string): Promise<T[]> {
   const res = await fetch(url, { headers: internalApiHeaders() });
@@ -74,6 +75,7 @@ export type ParceiroListaRow = {
 };
 
 export async function fetchCrmParceirosList(): Promise<ParceiroListaRow[]> {
+  if (!CRM_MODULE_PARCEIROS_ENABLED) return [];
   const res = await fetch("/api/parceiros", { headers: internalApiHeaders() });
   const data = (await res.json().catch(() => ({}))) as {
     parceiros?: ParceiroListaRow[];
@@ -100,6 +102,7 @@ export function prefetchCrmEmpresasList(qc: QueryClient, filtros: CrmEmpresasFil
 }
 
 export function prefetchCrmParceirosList(qc: QueryClient) {
+  if (!CRM_MODULE_PARCEIROS_ENABLED) return Promise.resolve();
   return qc.prefetchQuery({
     queryKey: crmQueryKeys.parceiros(),
     queryFn: fetchCrmParceirosList,
@@ -127,11 +130,11 @@ export function useCrmEmpresasList(filtros: CrmEmpresasFiltros, enabled = true) 
   });
 }
 
-export function useCrmParceirosList(enabled = true) {
+export function useCrmParceirosList(enabled = CRM_MODULE_PARCEIROS_ENABLED) {
   return useQuery({
     queryKey: crmQueryKeys.parceiros(),
     queryFn: fetchCrmParceirosList,
-    enabled,
+    enabled: CRM_MODULE_PARCEIROS_ENABLED && enabled,
     ...listQueryDefaults,
     placeholderData: (prev: ParceiroListaRow[] | undefined) => prev,
   });

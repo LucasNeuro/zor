@@ -3,8 +3,8 @@ import {
   humanoResponsavelFromActor,
   resolveActorFromRequest,
 } from "@/lib/crm/resolve-crm-actor";
+import { devolverAtendimentoParaIa } from "@/lib/crm/atendimento-humano-whatsapp";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
-import { leadMetadataRecord } from "@/lib/whatsapp/lead-group-routing";
 
 export async function POST(request: NextRequest) {
   const configErr = crmConfigError();
@@ -35,23 +35,12 @@ export async function POST(request: NextRequest) {
   if (leadErr) return NextResponse.json({ error: leadErr.message }, { status: 500 });
   if (!lead) return NextResponse.json({ error: "Lead não encontrado" }, { status: 404 });
 
-  const meta = leadMetadataRecord(lead.metadata);
-  const agora = new Date().toISOString();
-
-  const { error: updErr } = await supabase
-    .from("hub_leads_crm")
-    .update({
-      humano_responsavel: null,
-      metadata: {
-        ...meta,
-        canal_ativo: "direct",
-        devolvido_ia_em: agora,
-      },
-      atualizado_em: agora,
-    })
-    .eq("id", leadId);
-
-  if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+  const { metadata } = await devolverAtendimentoParaIa(supabase, {
+    leadId,
+    feitoPor,
+    humanoAnterior: lead.humano_responsavel ?? null,
+    metadata: lead.metadata,
+  });
 
   await supabase.from("hub_atividades").insert({
     lead_id: leadId,
@@ -63,7 +52,6 @@ export async function POST(request: NextRequest) {
       acao: "devolver_ia",
       humano_anterior: lead.humano_responsavel ?? null,
       canal_ativo: "direct",
-      whatsapp_group_jid: meta.whatsapp_group_jid ?? null,
     },
   });
 
@@ -71,10 +59,6 @@ export async function POST(request: NextRequest) {
     ok: true,
     leadId,
     canal_ativo: "direct",
-    metadata: {
-      ...meta,
-      canal_ativo: "direct",
-      devolvido_ia_em: agora,
-    },
+    metadata,
   });
 }

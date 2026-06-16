@@ -7,6 +7,7 @@ import {
   lerAnaliseNegocioTenant,
   limparAnaliseNegocioTenant,
 } from "@/lib/hub/tenant-conhecimento-rag";
+import { propagarCatalogoAposConhecimento } from "@/lib/crm/servicos-catalogo";
 import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 
 function db() {
@@ -94,11 +95,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: out.error }, { status });
   }
 
+  const catalogoSync = await propagarCatalogoAposConhecimento(supabase, tenantId);
+
   return NextResponse.json({
     analise: out.cache.analise,
     gerado_em: out.cache.gerado_em,
     documentos_usados: out.cache.documentos_usados,
     documentos_indexados: out.cache.documentos_usados,
     desatualizada: false,
+    catalogo_sync: catalogoSync,
   });
 }

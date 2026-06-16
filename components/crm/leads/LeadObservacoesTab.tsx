@@ -4,8 +4,15 @@ import {
   RF_ACCENT,
   RF_BORDER_STRONG,
   RF_INPUT_STYLE,
+  RF_LIGHT_BORDER,
+  RF_LIGHT_BORDER_STRONG,
+  RF_LIGHT_INPUT_STYLE,
+  RF_LIGHT_PANEL,
+  RF_LIGHT_TEXT_MUTED,
+  RF_LIGHT_TEXT_SECONDARY,
   RF_TEXT_MUTED,
   RF_TEXT_PRIMARY,
+  type CrmSideoverTheme,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 
 export type CrmNota = {
@@ -21,8 +28,9 @@ type Props = {
   onNovaNotaChange: (value: string) => void;
   onAdicionar: () => void | Promise<void>;
   adicionando?: boolean;
-  /** sideover = painel escuro retrofit; waje = cartão claro em fichas CRM */
+  /** @deprecated use theme */
   variant?: "sideover" | "waje";
+  theme?: CrmSideoverTheme;
 };
 
 function tempo(iso: string) {
@@ -33,47 +41,87 @@ function tempo(iso: string) {
   return `${Math.floor(m / 1440)}d`;
 }
 
+function resolveLight(props: Props): boolean {
+  if (props.theme === "light") return true;
+  if (props.theme === "dark") return false;
+  return props.variant === "waje";
+}
+
 /** Aba de observações reutilizável (leads e negócios). */
-export function LeadObservacoesTab({
-  notas,
-  novaNota,
-  onNovaNotaChange,
-  onAdicionar,
-  adicionando,
-  variant = "sideover",
-}: Props) {
-  if (variant === "waje") {
+export function LeadObservacoesTab(props: Props) {
+  const {
+    notas,
+    novaNota,
+    onNovaNotaChange,
+    onAdicionar,
+    adicionando,
+  } = props;
+  const isLight = resolveLight(props);
+
+  if (isLight) {
     return (
-      <div className="rounded-2xl border border-[#dcebd8] bg-white p-4">
+      <div
+        className="rounded-xl border p-4"
+        style={{
+          borderColor: RF_LIGHT_BORDER_STRONG,
+          background: RF_LIGHT_PANEL,
+          boxShadow: "0 1px 3px rgba(11, 34, 16, 0.06)",
+        }}
+      >
         <textarea
           value={novaNota}
           onChange={(e) => onNovaNotaChange(e.target.value)}
           placeholder="Escreva uma observação…"
           rows={3}
-          className="mb-2 w-full resize-y rounded-xl border border-[#dcebd8] bg-[#f8fcf6] p-3 text-sm text-[#0b2210] outline-none placeholder:text-[#90a89b] focus:border-[#92ff00]"
+          className="mb-3 w-full resize-y rounded-xl border p-3 text-sm font-medium outline-none placeholder:text-[#9ca3af] focus:border-[#86efac]"
+          style={{
+            ...RF_LIGHT_INPUT_STYLE,
+            borderRadius: 10,
+            color: "#111827",
+          }}
         />
         <button
           type="button"
           onClick={() => void onAdicionar()}
           disabled={!novaNota.trim() || adicionando}
-          className="mb-4 w-full rounded-xl border-0 bg-[#92ff00] py-2.5 text-sm font-extrabold text-[#0b1f10] disabled:cursor-not-allowed disabled:opacity-50"
+          className="mb-4 w-full rounded-xl border-0 py-2.5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: RF_ACCENT, color: "#0b1f10" }}
         >
-          + Adicionar observação
+          {adicionando ? "A guardar…" : "+ Adicionar observação"}
         </button>
         {notas.length === 0 ? (
-          <p className="py-4 text-center text-sm text-[#6b8a76]">Nenhuma observação ainda</p>
+          <p
+            className="py-4 text-center text-sm"
+            style={{ color: RF_LIGHT_TEXT_MUTED }}
+          >
+            Nenhuma observação ainda
+          </p>
         ) : (
-          notas.map((n) => (
-            <div
-              key={n.id}
-              className="mb-2 rounded-xl border border-[#eef5ec] bg-[#f8fcf6] p-3 last:mb-0"
-            >
-              <p className="m-0 text-sm leading-relaxed text-[#0b2210]">{n.conteudo}</p>
-              <div className="mt-2 text-xs text-[#6b8a76]">
-                {n.criado_por} · {tempo(n.criado_em)} atrás
-              </div>
-            </div>
-          ))
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {notas.map((n) => (
+              <li
+                key={n.id}
+                className="rounded-xl border p-3"
+                style={{
+                  borderColor: RF_LIGHT_BORDER,
+                  background: "#ffffff",
+                }}
+              >
+                <p
+                  className="m-0 whitespace-pre-wrap text-sm font-medium leading-relaxed"
+                  style={{ color: "#111827" }}
+                >
+                  {n.conteudo}
+                </p>
+                <div
+                  className="mt-2 text-xs font-semibold"
+                  style={{ color: RF_LIGHT_TEXT_SECONDARY }}
+                >
+                  {n.criado_por} · {tempo(n.criado_em)} atrás
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     );
@@ -113,7 +161,7 @@ export function LeadObservacoesTab({
           marginBottom: 16,
         }}
       >
-        + Adicionar observação
+        {adicionando ? "A guardar…" : "+ Adicionar observação"}
       </button>
       {notas.length === 0 ? (
         <p style={{ color: RF_TEXT_MUTED, fontSize: 13, textAlign: "center" }}>

@@ -82,3 +82,39 @@ export async function uazapiObterUrlAudioMensagem(
   if (!url) return { ok: false, erro: "file_url_ausente" };
   return { ok: true, url };
 }
+
+/** URL pública de mídia WhatsApp (áudio, imagem, documento, vídeo). */
+export async function uazapiObterUrlMidiaMensagem(
+  messageId: string,
+  instanceToken: string,
+  opts?: { preferMp3?: boolean }
+): Promise<{ ok: true; url: string } | { ok: false; erro: string }> {
+  const id = messageId.trim();
+  const token = instanceToken.trim();
+  if (!id) return { ok: false, erro: "message_id_ausente" };
+  if (!token) return { ok: false, erro: "instance_token_ausente" };
+
+  const body: Record<string, unknown> = {
+    id,
+    transcribe: false,
+    return_link: true,
+    return_base64: false,
+  };
+  if (opts?.preferMp3) body.generate_mp3 = true;
+
+  const r = await uazapiFetchJson<DownloadMediaResponse>("/message/download", {
+    method: "POST",
+    instanceToken: token,
+    body,
+  });
+
+  if (!r.ok) return { ok: false, erro: r.error || `download_${r.status}` };
+
+  const url =
+    (typeof r.data?.fileURL === "string" && r.data.fileURL.trim()) ||
+    (typeof r.data?.fileUrl === "string" && r.data.fileUrl.trim()) ||
+    "";
+
+  if (!url) return { ok: false, erro: "file_url_ausente" };
+  return { ok: true, url };
+}

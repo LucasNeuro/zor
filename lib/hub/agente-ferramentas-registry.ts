@@ -15,7 +15,8 @@ export type HubAgenteFerramentaId =
   | "hub_relatorio_html_simples"
   | "hub_registar_nota_lead"
   | "hub_whatsapp_menu"
-  | "hub_atualizar_lead";
+  | "hub_atualizar_lead"
+  | "hub_criar_negocio";
 
 export type HubAgenteFerramentaCatalogo = {
   id: HubAgenteFerramentaId;
@@ -162,8 +163,8 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
         properties: {
           estagio: {
             type: "string",
-            enum: ["novo", "qualificando", "qualificado", "proposta", "negociando", "fechamento"],
-            description: "Estágio no pipeline (ganho/perdido bloqueados para a IA).",
+            description:
+              "Slug do estágio comercial activo no pipeline (ver secção PIPELINES CRM no prompt). Não use ganho/perdido.",
           },
           score: {
             type: "integer",
@@ -209,6 +210,42 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
           preferencias: {
             type: "object",
             description: "Preferências (merge JSON), ex.: horario manhã.",
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    id: "hub_criar_negocio",
+    categoria: "registos",
+    titulo: "Criar negócio / orçamento no CRM",
+    descricao:
+      "Regista um negócio comercial para o lead actual (serviço do catálogo + valor). Gera conta a receber no financeiro quando configurado.",
+    recomendadoWhatsApp: true,
+    mistralFunction: {
+      name: "hub_criar_negocio",
+      description:
+        "Cria negócio/orçamento no CRM para o lead desta conversa. Use quando o cliente aceitar orçamento ou pedir proposta formal. Informe serviço (nome ou catálogo) e valor em BRL.",
+      parameters: {
+        type: "object",
+        properties: {
+          servico_nome: {
+            type: "string",
+            description: "Nome do serviço no catálogo (ex.: Troca de tela, Assistência técnica).",
+          },
+          servico_catalogo_id: {
+            type: "string",
+            description: "UUID do item no catálogo, se souber.",
+          },
+          titulo: { type: "string", description: "Título opcional do negócio." },
+          valor_estimado: {
+            type: "number",
+            description: "Valor em BRL acordado ou da tabela de preços.",
+          },
+          etapa: {
+            type: "string",
+            description: "Etapa inicial: novo, proposta, negociando (padrão: proposta).",
           },
         },
         additionalProperties: false,
@@ -505,6 +542,7 @@ export function mergeUsoFerramentasComPadrao(
     hub_registar_nota_lead: false,
     hub_whatsapp_menu: false,
     hub_atualizar_lead: false,
+    hub_criar_negocio: false,
   };
   for (const id of Object.keys(base) as HubAgenteFerramentaId[]) {
     if (coalesceFerramentaBool(uso[id]) === true) base[id] = true;
@@ -529,6 +567,7 @@ export function mergeUsoFerramentasWhatsappCanal(
       base.hub_whatsapp_menu = true;
     }
     if (coalesceFerramentaBool(uso.hub_registar_nota_lead) !== false) base.hub_registar_nota_lead = true;
+    if (coalesceFerramentaBool(uso.hub_criar_negocio) !== false) base.hub_criar_negocio = true;
   }
   return base;
 }
@@ -551,4 +590,5 @@ export const HUB_FERRAMENTA_ACESSO: Record<HubAgenteFerramentaId, HubFerramentaN
   hub_registar_nota_lead: "escrita",
   hub_whatsapp_menu: "escrita",
   hub_atualizar_lead: "escrita",
+  hub_criar_negocio: "escrita",
 };

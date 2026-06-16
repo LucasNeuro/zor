@@ -23,6 +23,10 @@ import {
 } from "@/components/crm/CrmRetrofitTablePanel";
 import { crmHeaderPrimaryBtnStyle } from "@/lib/crm/crm-list-pill-styles";
 import { NegocioKanbanCard } from "@/components/crm/negocios/NegocioKanbanCard";
+import {
+  NegocioDetailSideover,
+  type NegocioDetailData,
+} from "@/components/crm/negocios/NegocioDetailSideover";
 import { ESTAGIOS_FALLBACK_NEGOCIO_UI } from "@/lib/crm/pipeline-defaults";
 import { useCrmToast } from "@/lib/crm/crm-feedback";
 import { supabase } from "@/lib/supabase/client";
@@ -143,6 +147,8 @@ export default function NegociosPage() {
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [etapasKanban, setEtapasKanban] = useState<EtapaUi[]>(ETAPAS_FALLBACK);
   const [notasMap, setNotasMap] = useState<Map<string, NotaPreview[]>>(new Map());
+  const [selectedNegocioId, setSelectedNegocioId] = useState<string | null>(null);
+  const [selectedNegocio, setSelectedNegocio] = useState<NegocioDetailData | null>(null);
 
   const carregarPipelines = useCallback(async () => {
     const res = await fetch("/api/crm/pipelines?tipo=negocio", {
@@ -207,9 +213,18 @@ export default function NegociosPage() {
   useEffect(() => {
     const et = searchParams.get("etapa");
     const v = searchParams.get("view");
+    const openNegocio = searchParams.get("negocio");
     if (et) setEtapa(et);
     if (v === "kanban" || v === "lista") setView(v);
-  }, [searchParams, isMobile]);
+    if (openNegocio) {
+      setSelectedNegocioId(openNegocio);
+      setSelectedNegocio(null);
+      const p = new URLSearchParams(searchParams.toString());
+      p.delete("negocio");
+      const q = p.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    }
+  }, [searchParams, isMobile, pathname, router]);
 
   useEffect(() => {
     void carregarLista(0, false);
@@ -383,12 +398,21 @@ export default function NegociosPage() {
     ];
   }, [etapasKanban, notasMap]);
 
-  const abrirNegocio = useCallback(
-    (negocio: Negocio) => {
-      router.push(`/crm/negocios/${negocio.id}`);
-    },
-    [router]
-  );
+  const abrirNegocio = useCallback((negocio: Negocio) => {
+    setSelectedNegocioId(negocio.id);
+    setSelectedNegocio({
+      id: negocio.id,
+      codigo: negocio.codigo,
+      titulo: negocio.titulo,
+      status: negocio.status,
+      etapa: negocio.etapa,
+      valor_estimado: negocio.valor_estimado,
+      valor_fechado: negocio.valor_fechado,
+      data_previsao_fechamento: negocio.data_previsao_fechamento,
+      criado_em: negocio.criado_em,
+      atualizado_em: negocio.atualizado_em,
+    });
+  }, []);
 
   const editarNegocio = useCallback(
     (negocio: Negocio) => {
@@ -396,6 +420,31 @@ export default function NegociosPage() {
     },
     [abrirNegocio]
   );
+
+  const fecharNegocioSideover = useCallback(() => {
+    setSelectedNegocioId(null);
+    setSelectedNegocio(null);
+  }, []);
+
+  const onNegocioAtualizado = useCallback((updated: NegocioDetailData) => {
+    setNegocios((prev) =>
+      prev.map((n) =>
+        n.id === updated.id
+          ? {
+              ...n,
+              titulo: updated.titulo,
+              status: updated.status,
+              etapa: updated.etapa,
+              valor_estimado: updated.valor_estimado,
+              valor_fechado: updated.valor_fechado,
+              data_previsao_fechamento: updated.data_previsao_fechamento,
+              atualizado_em: updated.atualizado_em ?? n.atualizado_em,
+            }
+          : n
+      )
+    );
+    setSelectedNegocio(updated);
+  }, []);
 
   const negociosExportConfig = useMemo(
     () => ({
@@ -475,11 +524,14 @@ export default function NegociosPage() {
       <NegocioFormDrawer
         open={drawerAberto}
         onClose={() => setDrawerAberto(false)}
-        onSaved={() => {
+        onSaved={(negocioId) => {
           void carregarLista(0, false);
+          if (negocioId) {
+            setSelectedNegocioId(negocioId);
+            setSelectedNegocio(null);
+          }
         }}
         pipelineId={pipelineAtivo?.id ?? null}
-        defaultMercado={null}
       />
 
       <PipelineConfigSideover
@@ -599,8 +651,8 @@ export default function NegociosPage() {
                           setDragId(null);
                           setDragOver(null);
                         }}
-                        onOpen={() => router.push(`/crm/negocios/${negocio.id}`)}
-                        onEdit={() => router.push(`/crm/negocios/${negocio.id}`)}
+                        onOpen={() => abrirNegocio(negocio)}
+                        onEdit={() => abrirNegocio(negocio)}
                       />
                     ))}
                     {col.length === 0 ? (
@@ -696,6 +748,15 @@ export default function NegociosPage() {
           </div>
         )}
       </div>
+
+      <NegocioDetailSideover
+        open={!!selectedNegocioId}
+        negocioId={selectedNegocioId}
+        negocio={selectedNegocio}
+        etapas={etapasKanban}
+        onClose={fecharNegocioSideover}
+        onUpdated={onNegocioAtualizado}
+      />
     </div>
   );
 }

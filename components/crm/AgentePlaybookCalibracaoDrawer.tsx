@@ -2,8 +2,8 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, GitBranch, LayoutGrid, RefreshCw, Save, Send, User, Wand2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { GitBranch, LayoutGrid, RefreshCw, Save, Wand2, X } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
   PlaybookUploadAnalisePanel,
@@ -37,14 +37,6 @@ import {
 } from "@/lib/crm/crm-feedback";
 
 const PLAYBOOK_INPUT_CALIB = "playbook-calibracao-upload";
-
-type ChatMsg = {
-  id: string;
-  papel: "user" | "assistant";
-  conteudo: string;
-  criado_em: string;
-  modelo?: string;
-};
 
 function extractApiError(payload: Record<string, unknown>, fallback: string): string {
   const base = typeof payload.error === "string" && payload.error.trim() ? payload.error.trim() : fallback;
@@ -233,11 +225,6 @@ export function AgentePlaybookCalibracaoDrawer({
   const [analiseErro, setAnaliseErro] = useState("");
   const [analiseResultado, setAnaliseResultado] = useState<PlaybookAnaliseResultado | null>(null);
 
-  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatEnviando, setChatEnviando] = useState(false);
-  const chatFimRef = useRef<HTMLDivElement>(null);
-
   const dirty = markdown.trim() !== markdownPublicado.trim();
   const temConteudo = markdown.trim().length > 0;
   const flowStatus = useMemo(() => assessPlaybookFlowInMarkdown(markdown), [markdown]);
@@ -323,8 +310,6 @@ export function AgentePlaybookCalibracaoDrawer({
 
   useEffect(() => {
     if (!open || !agenteSlug) return;
-    setChatMsgs([]);
-    setChatInput("");
     setAnaliseResultado(null);
     setAnaliseErro("");
     setUploadStatus("idle");
@@ -333,10 +318,6 @@ export function AgentePlaybookCalibracaoDrawer({
     setMarkdownOrigem(null);
     void carregarConteudo();
   }, [open, agenteSlug, carregarConteudo]);
-
-  useEffect(() => {
-    chatFimRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMsgs, chatEnviando, open]);
 
   async function confirmarEPublicar(
     markdownAlvo: string,
@@ -350,6 +331,45 @@ export function AgentePlaybookCalibracaoDrawer({
     } finally {
       setConfirmLoading(false);
       closeConfirmDialog();
+    }
+  }
+
+  async function salvarRascunhoPlaybookNoBucket(markdownAlvo: string) {
+    const trimmed = markdownAlvo.trim();
+    if (!trimmed || publicando) return;
+    setPublicando(true);
+    setErro("");
+    try {
+      const res = await fetch(
+        `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/conteudo`,
+        {
+          method: "PUT",
+          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ markdown: trimmed }),
+        }
+      );
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new Error(extractApiError(data, `Erro HTTP ${res.status}`));
+      }
+      setMarkdown(trimmed);
+      setMarkdownPublicado(trimmed);
+      setMarkdownOrigem("visual");
+      setMeta((m) => ({
+        ...m,
+        hash: typeof data.playbook_source_hash === "string" ? data.playbook_source_hash : m.hash,
+        url: typeof data.playbook_public_url === "string" ? data.playbook_public_url : m.url,
+        path: typeof data.playbook_object_path === "string" ? data.playbook_object_path : m.path,
+        generatedAt:
+          typeof data.playbook_generated_at === "string" ? data.playbook_generated_at : m.generatedAt,
+      }));
+      toastSuccess("Fluxo gravado no playbook (bucket).");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha ao gravar rascunho.";
+      setErro(msg);
+      throw e;
+    } finally {
+      setPublicando(false);
     }
   }
 
@@ -548,15 +568,6 @@ export function AgentePlaybookCalibracaoDrawer({
 
   async function aplicarPresetConversacaoWa(forcarPlaybook = false) {
     if (carregando || publicando || aplicandoPresetWa) return;
-    const ok = await confirmDialog({
-      title: forcarPlaybook ? "Substituir playbook pelo preset WA?" : "Aplicar preset conversação WA?",
-      message: forcarPlaybook
-        ? "Isto substitui o playbook pelo template Waje v1, actualiza ferramentas, conhecimento e ciclos. Continuar?"
-        : "Aplica cargo, ferramentas, conhecimento, ciclos e publica playbook só se ainda não existir. Continuar?",
-      confirmLabel: "Aplicar preset",
-      variant: forcarPlaybook ? "destructive" : "info",
-    });
-    if (!ok) return;
 
     setAplicandoPresetWa(true);
     setErro("");
@@ -662,63 +673,6 @@ export function AgentePlaybookCalibracaoDrawer({
       setErro("Falha de rede ao gerar fluxo da empresa.");
     } finally {
       setAdaptandoMotor(false);
-    }
-  }
-
-  async function enviarChat() {
-    const t = chatInput.trim();
-    if (!t || chatEnviando || !temConteudo) return;
-
-    const now = new Date().toISOString();
-    const tempId = `user-${Date.now()}`;
-    const historico = chatMsgs.map((m) => ({ papel: m.papel, conteudo: m.conteudo }));
-
-    setChatMsgs((prev) => [...prev, { id: tempId, papel: "user", conteudo: t, criado_em: now }]);
-    setChatEnviando(true);
-    setChatInput("");
-    setErro("");
-
-    try {
-      const res = await fetch(
-        `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/calibracao-chat`,
-        {
-          method: "POST",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mensagem: t,
-            historico,
-            markdown_rascunho: markdown,
-          }),
-        }
-      );
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        resposta?: string;
-        modelo?: string;
-      };
-      if (!res.ok) {
-        setChatMsgs((prev) => prev.filter((m) => m.id !== tempId));
-        setErro(typeof data.error === "string" ? data.error : `Erro HTTP ${res.status}`);
-        setChatInput(t);
-        return;
-      }
-      const resposta = typeof data.resposta === "string" ? data.resposta : "";
-      setChatMsgs((prev) => [
-        ...prev,
-        {
-          id: `asst-${Date.now()}`,
-          papel: "assistant",
-          conteudo: resposta || "(sem resposta)",
-          criado_em: new Date().toISOString(),
-          modelo: typeof data.modelo === "string" ? data.modelo : undefined,
-        },
-      ]);
-    } catch {
-      setChatMsgs((prev) => prev.filter((m) => m.id !== tempId));
-      setErro("Falha de rede no chat de calibração.");
-      setChatInput(t);
-    } finally {
-      setChatEnviando(false);
     }
   }
 
@@ -865,8 +819,8 @@ export function AgentePlaybookCalibracaoDrawer({
                         });
                         setVisualSideoverOpen(true);
                       }}
-                      style={calibToolbarBtn("accent")}
-                      title="Abrir editor visual React Flow"
+                      style={calibToolbarBtn("ghost")}
+                      title="Abrir editor visual do fluxo WhatsApp"
                     >
                       <LayoutGrid size={14} /> Editor visual
                     </button>
@@ -987,21 +941,19 @@ export function AgentePlaybookCalibracaoDrawer({
           style={{
             flex: 1,
             minHeight: 0,
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)",
-            gap: 0,
+            display: "flex",
+            flexDirection: "column",
             overflow: "hidden",
           }}
         >
-          {/* Coluna documento */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               minWidth: 0,
               minHeight: 0,
-              borderRight: "1px solid rgba(146, 255, 0, 0.16)",
               overflow: "hidden",
+              flex: 1,
             }}
           >
             <div
@@ -1101,168 +1053,37 @@ export function AgentePlaybookCalibracaoDrawer({
               />
             </div>
           </div>
-
-          {/* Coluna chat */}
-          <div style={{ display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden" }}>
-            <div
-              style={{
-                flexShrink: 0,
-                padding: "10px 14px",
-                borderBottom: "1px solid rgba(146, 255, 0, 0.16)",
-              }}
-            >
-              <p style={{ margin: 0, color: "#e8f5e9", fontSize: 13, fontWeight: 700 }}>
-                Chat de calibração
-              </p>
-              <p style={{ margin: "4px 0 0", color: "#6e7681", fontSize: 10, lineHeight: 1.45 }}>
-                Converse com a IA para auditar, reescrever secções e fechar gaps. Usa o rascunho do editor (publicar
-                continua manual).
-              </p>
-            </div>
-
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                overscrollBehavior: "contain",
-                padding: "14px 16px",
-              }}
-            >
-              {chatMsgs.length === 0 && !chatEnviando ? (
-                <p style={{ color: "#5d7a67", fontSize: 12, lineHeight: 1.55, maxWidth: 420 }}>
-                  Exemplos: «Resume os gaps críticos», «Reescreve a saudação mais curta», «O que falta para cobrir
-                  objeções de preço?»
-                </p>
-              ) : null}
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {chatMsgs.map((m) => {
-                  const isUser = m.papel === "user";
-                  return (
-                    <div
-                      key={m.id}
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        justifyContent: isUser ? "flex-end" : "flex-start",
-                      }}
-                    >
-                      {!isUser ? (
-                        <Bot size={18} color="#86efac" style={{ flexShrink: 0, marginTop: 4 }} />
-                      ) : null}
-                      <div
-                        style={{
-                          maxWidth: "92%",
-                          background: isUser ? "rgba(11, 31, 16, 0.95)" : "rgba(6, 13, 8, 0.85)",
-                          border: `1px solid ${isUser ? "rgba(63, 152, 72, 0.42)" : "rgba(146, 255, 0, 0.16)"}`,
-                          borderRadius: 10,
-                          padding: "10px 12px",
-                          fontSize: 12,
-                          color: "#e8f5e9",
-                          lineHeight: 1.55,
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {m.conteudo}
-                        {m.modelo ? (
-                          <div style={{ fontSize: 9, color: "#484f58", marginTop: 6 }}>{m.modelo}</div>
-                        ) : null}
-                      </div>
-                      {isUser ? (
-                        <User size={18} color="#79c0ff" style={{ flexShrink: 0, marginTop: 4 }} />
-                      ) : null}
-                    </div>
-                  );
-                })}
-                {chatEnviando ? (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#5d7a67", fontSize: 12 }}>
-                    <Bot size={18} color="#86efac" /> A pensar…
-                  </div>
-                ) : null}
-                <div ref={chatFimRef} />
-              </div>
-            </div>
-
-            <div
-              style={{
-                flexShrink: 0,
-                padding: 12,
-                borderTop: "1px solid rgba(146, 255, 0, 0.16)",
-                display: "flex",
-                gap: 8,
-              }}
-            >
-              <textarea
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void enviarChat();
-                  }
-                }}
-                disabled={!temConteudo || chatEnviando}
-                placeholder={
-                  temConteudo
-                    ? "Peça melhorias ao playbook… (Enter envia)"
-                    : "Carregue ou escreva um playbook primeiro."
-                }
-                rows={2}
-                style={{
-                  flex: 1,
-                  resize: "none",
-                  borderRadius: 10,
-                  border: "1px solid rgba(63, 152, 72, 0.42)",
-                  background: "rgba(6, 13, 8, 0.85)",
-                  color: "#e8f5e9",
-                  fontSize: 12,
-                  padding: "10px 12px",
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => void enviarChat()}
-                disabled={!temConteudo || chatEnviando || !chatInput.trim()}
-                style={{
-                  ...btnPrimario,
-                  alignSelf: "flex-end",
-                  opacity: !temConteudo || chatEnviando || !chatInput.trim() ? 0.45 : 1,
-                }}
-              >
-                <Send size={16} />
-              </button>
-            </div>
-          </div>
         </div>
-        {visualBuilderEnabled && visualSideoverOpen ? (
-          <PlaybookFlowVisualSideover
-            open={visualSideoverOpen}
-            onClose={() => setVisualSideoverOpen(false)}
-            markdown={markdown}
-            onMarkdownChange={(next) => {
-              setMarkdownOrigem("visual");
-              setMarkdown(next);
-            }}
-            agenteSlug={agenteSlug}
-            agenteNome={agenteNome}
-            disabled={carregando || publicando || uploadStatus === "enviando"}
-            onBuilderError={(message) => {
-              void emitFlowVisualTelemetry({
-                event: "playbook.flow_visual.builder_fallback",
-                agente_slug: agenteSlug,
-                metadata: {
-                  source: "builder_error_boundary",
-                  message_size: message.length,
-                },
-              });
-              setVisualSideoverOpen(false);
-              setErro(
-                `Editor visual indisponivel no momento. Continue pelo modo texto sem impacto na publicacao.\nDetalhe: ${message}`
-              );
-            }}
-          />
-        ) : null}
       </aside>
+      {visualBuilderEnabled && visualSideoverOpen ? (
+        <PlaybookFlowVisualSideover
+          open={visualSideoverOpen}
+          onClose={() => setVisualSideoverOpen(false)}
+          markdown={markdown}
+          onMarkdownChange={(next) => {
+            setMarkdownOrigem("visual");
+            setMarkdown(next);
+          }}
+          agenteSlug={agenteSlug}
+          agenteNome={agenteNome}
+          disabled={carregando || publicando || uploadStatus === "enviando"}
+          onPersistDraft={salvarRascunhoPlaybookNoBucket}
+          onBuilderError={(message) => {
+            void emitFlowVisualTelemetry({
+              event: "playbook.flow_visual.builder_fallback",
+              agente_slug: agenteSlug,
+              metadata: {
+                source: "builder_error_boundary",
+                message_size: message.length,
+              },
+            });
+            setVisualSideoverOpen(false);
+            setErro(
+              `Editor visual indisponivel no momento. Continue pelo modo texto sem impacto na publicacao.\nDetalhe: ${message}`
+            );
+          }}
+        />
+      ) : null}
     </>
   );
 }

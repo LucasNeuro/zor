@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -20,6 +20,7 @@ import {
 } from "@/components/crm/pipelines/PipelineTabsBar";
 import { moedaPipeline } from "@/lib/crm/pipeline-funil";
 import type { PrefixoMercado } from "@/lib/crm/negocio-cadastro";
+import { CRM_MODULE_PARCEIROS_ENABLED } from "@/lib/crm/waje-modules";
 
 function SectionTitle({ children }: { children: string }) {
   return (
@@ -362,7 +363,7 @@ export function CrmAnalyticsDashboard() {
               <div className="rounded-xl border border-[#dcebd8] bg-[#ffffff] p-8 text-center">
                 <p className="font-bold text-[#0b2210]">Sem histórico de KPIs neste período</p>
                 <p className="mt-1 text-sm text-[#5d7a67]">
-                  Use &quot;Atualizar KPIs&quot; para gravar métricas do funil em hub_kpis_resultados.
+                  Use &quot;Atualizar KPIs&quot; para gravar as métricas do funil no histórico.
                 </p>
                 <button
                   type="button"
@@ -452,6 +453,8 @@ export function CrmAnalyticsDashboard() {
               />
             </div>
 
+            {CRM_MODULE_PARCEIROS_ENABLED ? (
+            <>
             <SectionTitle>Parceiros</SectionTitle>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
               <MetricMini label="Homologados" value={data.parceiros.homologados} cor="#60a5fa" href="/crm/parceiros" />
@@ -463,6 +466,8 @@ export function CrmAnalyticsDashboard() {
               />
               <MetricMini label="Taxa encaminhamento" value={`${data.parceiros.taxaEncaminhamento}%`} cor="#f59e0b" />
             </div>
+            </>
+            ) : null}
 
             <SectionTitle>Marketing</SectionTitle>
             {data.marketing ? (

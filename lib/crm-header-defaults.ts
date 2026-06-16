@@ -19,12 +19,7 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
 
   if (parts.length === 1) {
     return {
-      title: "Dashboard",
-      subtitle: new Date().toLocaleDateString("pt-BR", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      }),
+      title: "Dashboard & Relatórios",
     };
   }
 
@@ -77,7 +72,12 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
     atendimento: { title: "Inbox", subtitle: "Central de conversas e atendimento" },
     aprovacoes: { title: "Central de Aprovações" },
     parceiros: { title: "Parceiros" },
-    relatorios: { title: "Relatórios", subtitle: "Exportáveis em CSV e análises operacionais" },
+    painel: {
+      title: "Dashboard & Relatórios",
+    },
+    relatorios: {
+      title: "Dashboard & Relatórios",
+    },
     trafego: {
       title: "Campanhas",
       subtitle: "Dados Windsor.ai · Meta Ads · Google Ads",
@@ -91,7 +91,7 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
       title: "Copiloto",
       subtitle: "IA operacional global — orquestração de fluxos, playbooks e ciclos",
     },
-    ciclos: { title: "Automações", subtitle: "Fluxos automáticos e ciclos dos agentes" },
+    ciclos: { title: "Ciclos de agentes", subtitle: "Agenda, intervalos e execução programada dos agentes IA" },
     canais: {
       title: "Canais WhatsApp",
       subtitle: "Instâncias UAZAPI conectadas aos agentes — operação e status",

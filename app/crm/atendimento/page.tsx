@@ -13,6 +13,9 @@ function RedirectContent() {
     if (p.has("lead") && !p.has("tab")) {
       p.set("tab", "chat");
     }
+    if (!p.has("view")) {
+      p.set("view", "atendimentos");
+    }
     const q = p.toString();
     router.replace(q ? `/crm/leads?${q}` : "/crm/leads");
   }, [router, searchParams]);

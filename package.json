@@ -28,7 +28,8 @@
     "verify:regression": "node scripts/verify-regression-plan.mjs",
     "open:dev": "node scripts/open-dev-url.cjs",
     "verify:mistral": "node scripts/verify-mistral-key.cjs",
-    "ensure:buckets": "node scripts/ensure-agent-storage-buckets.cjs"
+    "ensure:buckets": "node scripts/ensure-agent-storage-buckets.cjs",
+    "check:waje-schema": "node scripts/check-waje-schema.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

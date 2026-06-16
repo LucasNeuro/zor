@@ -12,6 +12,11 @@ import {
   selectHubAgenteIdentidadeCompat,
   updateHubAgenteIdentidadeCompat,
 } from "@/lib/hub/hub-agente-schema-compat";
+import {
+  EMAIL_CHANNEL_DISABLED_CODE,
+  EMAIL_CHANNEL_DISABLED_MESSAGE,
+  isEmailChannelEnabled,
+} from "@/lib/feature-flags";
 
 function erroAgenteJson(message: string, status: number) {
   return NextResponse.json({ error: mensagemErroHubAgente(message) }, { status });
@@ -144,6 +149,13 @@ export async function PATCH(
   }
   if ("uso_ferramentas_ia" in body && body.uso_ferramentas_ia !== undefined) {
     patch.uso_ferramentas_ia = serializarUsoFerramentasParaDb(body.uso_ferramentas_ia);
+  }
+
+  if (patch.modo_operacao === "canal_email" && !isEmailChannelEnabled()) {
+    return NextResponse.json(
+      { error: EMAIL_CHANNEL_DISABLED_MESSAGE, code: EMAIL_CHANNEL_DISABLED_CODE },
+      { status: 403 }
+    );
   }
 
   const syncTriggers = [

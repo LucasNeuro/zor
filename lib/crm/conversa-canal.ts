@@ -153,6 +153,7 @@ export async function gravarMensagemSaidaConversa(
     emailMessageId?: string | null;
     emailInReplyTo?: string | null;
     emailStatus?: string | null;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<void> {
   const tenantId = opts.tenantId?.trim() || defaultTenantId();
@@ -170,7 +171,12 @@ export async function gravarMensagemSaidaConversa(
     email_status: opts.emailStatus ?? "enviado",
     enviada_em: agora,
     tenant_id: tenantId,
-    metadados: { canal: opts.canal, feito_por: opts.feitoPor, feito_por_tipo: "humano" },
+    metadados: {
+      canal: opts.canal,
+      feito_por: opts.feitoPor,
+      feito_por_tipo: "humano",
+      ...(opts.metadata ?? {}),
+    },
   });
 
   if (error) {

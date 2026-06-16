@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Activity, Building2, MessageSquare, Megaphone, MoreHorizontal } from "lucide-react";
+import { CRM_MODULE_PARCEIROS_ENABLED } from "@/lib/crm/waje-modules";
 
 export type MobileTabId = "pulso" | "escritorio" | "atendimento" | "marketing" | "mais";
 
@@ -12,8 +13,8 @@ export type MobileTabDef = {
 };
 
 export const MOBILE_TABS: MobileTabDef[] = [
-  { id: "pulso", label: "Pulso", icon: Activity, rota: "/crm" },
-  { id: "escritorio", label: "CRM", icon: Building2, rota: "/crm" },
+  { id: "pulso", label: "Pulso", icon: Activity, rota: "/crm/painel" },
+  { id: "escritorio", label: "CRM", icon: Building2, rota: "/crm/painel" },
   { id: "atendimento", label: "Leads", icon: MessageSquare, rota: "/crm/leads?tab=chat" },
   { id: "marketing", label: "Marketing", icon: Megaphone, rota: "/crm/trafego" },
   { id: "mais", label: "Mais", icon: MoreHorizontal, opensSheet: true },
@@ -31,9 +32,10 @@ export const MOBILE_MORE_ITEMS: MobileMoreItem[] = [
   { label: "Agentes IA", href: "/crm/agentes" },
   { label: "Analytics", href: "/crm/analytics" },
   { label: "Negócios", href: "/crm/negocios" },
-  { label: "Parceiros", href: "/crm/parceiros" },
+  ...(CRM_MODULE_PARCEIROS_ENABLED ? [{ label: "Parceiros", href: "/crm/parceiros" } as MobileMoreItem] : []),
   { label: "Financeiro", href: "/crm/financeiro" },
-  { label: "Relatórios", href: "/crm/relatorios" },
+  { label: "Dashboard", href: "/crm/painel" },
+  { label: "Relatórios", href: "/crm/painel" },
   { label: "Conta", href: "/crm/configuracoes" },
 ];
 
@@ -44,8 +46,9 @@ const SHEET_PREFIXES = [
   "/crm/analytics",
   "/crm/kpis",
   "/crm/negocios",
-  "/crm/parceiros",
+  ...(CRM_MODULE_PARCEIROS_ENABLED ? ["/crm/parceiros"] : []),
   "/crm/financeiro",
+  "/crm/painel",
   "/crm/relatorios",
   "/crm/configuracoes",
   "/crm/pessoas",
@@ -70,6 +73,7 @@ export function mobileTabIdFromPath(pathname: string): MobileTabId {
   if (pathname.startsWith("/crm/leads")) return "atendimento";
   if (pathname.startsWith("/crm/trafego")) return "marketing";
   if (pathname === "/crm" || pathname === "/crm/") return "pulso";
+  if (pathname.startsWith("/crm/painel")) return "pulso";
   if (SHEET_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) return "mais";
   if (pathname.startsWith("/crm")) return "pulso";
   return "pulso";
@@ -86,7 +90,7 @@ export function isMobileShellRoute(pathname: string): boolean {
 }
 
 export function mobilePageTitle(pathname: string): string {
-  if (pathname === "/crm") return "Pulso";
+  if (pathname === "/crm" || pathname.startsWith("/crm/painel")) return "Dashboard";
   if (pathname === "/crm/leads" || pathname.startsWith("/crm/leads/")) return "Leads";
   if (pathname === "/crm/atendimento/equipe") return "Equipe";
   if (pathname === "/crm/aprovacoes") return "Aprovações";
@@ -96,7 +100,7 @@ export function mobilePageTitle(pathname: string): string {
   if (pathname === "/crm/trafego") return "Marketing";
   if (pathname === "/crm/financeiro" || pathname.startsWith("/crm/financeiro/")) return "Financeiro";
   if (pathname.startsWith("/crm/negocios")) return "Negócios";
-  if (pathname.startsWith("/crm/parceiros")) return "Parceiros";
+  if (CRM_MODULE_PARCEIROS_ENABLED && pathname.startsWith("/crm/parceiros")) return "Parceiros";
   if (pathname === "/crm/configuracoes") return "Conta";
   return "Waje";
 }

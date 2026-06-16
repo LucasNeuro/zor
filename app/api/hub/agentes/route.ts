@@ -38,6 +38,11 @@ import {
   type WaPresetId,
 } from "@/lib/hub/presets/wa-conversacao-preset";
 import { mergeUsoFerramentasWhatsappCanal } from "@/lib/hub/agente-ferramentas-registry";
+import {
+  EMAIL_CHANNEL_DISABLED_CODE,
+  EMAIL_CHANNEL_DISABLED_MESSAGE,
+  isEmailChannelEnabled,
+} from "@/lib/feature-flags";
 
 function parseBoolFerr(v: unknown, defaultVal: boolean): boolean {
   if (v === true || v === "true") return true;
@@ -479,6 +484,15 @@ export async function POST(request: NextRequest) {
       row.modo_operacao = modoOperacaoFromCicloExecucao(body.ciclo_execucao_padrao);
     }
   }
+
+  const modoFinal = typeof row.modo_operacao === "string" ? row.modo_operacao : null;
+  if (modoFinal === "canal_email" && !isEmailChannelEnabled()) {
+    return NextResponse.json(
+      { error: EMAIL_CHANNEL_DISABLED_MESSAGE, code: EMAIL_CHANNEL_DISABLED_CODE },
+      { status: 403 }
+    );
+  }
+
   let agendaMinutes = Number.parseInt(String(body.ciclo_intervalo_minutos ?? ""), 10);
   if (!Number.isFinite(agendaMinutes) || agendaMinutes <= 0) agendaMinutes = 60;
   if (agendaMinutes > 10080) agendaMinutes = 10080;

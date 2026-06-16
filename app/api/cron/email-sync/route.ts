@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
+import {
+  EMAIL_CHANNEL_DISABLED_CODE,
+  EMAIL_CHANNEL_DISABLED_MESSAGE,
+  isEmailChannelEnabled,
+} from "@/lib/feature-flags";
 import { runEmailSyncTick } from "@/lib/email/email-sync";
 
 function db() {
@@ -21,6 +26,18 @@ export async function GET(request: NextRequest) {
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
+  }
+
+  if (!isEmailChannelEnabled()) {
+    return NextResponse.json(
+      {
+        ok: true,
+        skipped: true,
+        code: EMAIL_CHANNEL_DISABLED_CODE,
+        message: EMAIL_CHANNEL_DISABLED_MESSAGE,
+      },
+      { status: 503 }
+    );
   }
 
   const result = await runEmailSyncTick(db());

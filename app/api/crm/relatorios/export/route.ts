@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { carregarRelatorio, type RelatorioEntidade } from "@/lib/crm/relatorios-data";
+import { carregarRelatorio } from "@/lib/crm/relatorios-data";
+import { resolveRelatorioViewId, relatorioViewById } from "@/lib/crm/relatorio-views-catalog";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
@@ -16,48 +17,45 @@ function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
   return lines.join("\n");
 }
 
-const ENTIDADES_VALIDAS = new Set<string>([
-  "leads",
-  "negocios",
-  "empresas",
-  "imoveis",
-  "contas_pagar",
-  "contas_receber",
-  "financeiro",
-]);
-
-function filenameFor(entidade: string): string {
-  if (entidade === "contas_pagar") return "contas-pagar";
-  if (entidade === "contas_receber") return "contas-receber";
-  return `relatorio-${entidade}`;
+function filenameFor(viewId: string): string {
+  const def = relatorioViewById(viewId);
+  const slug = def?.label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug || viewId.replace(/^vw_rel_/, "");
 }
 
 export async function GET(request: NextRequest) {
   const configErr = crmConfigError();
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
 
-  const entidade = request.nextUrl.searchParams.get("entidade") || "leads";
+  const viewIdParam =
+    request.nextUrl.searchParams.get("view_id") ||
+    request.nextUrl.searchParams.get("entidade") ||
+    "vw_rel_leads_enriquecidos";
   const format = request.nextUrl.searchParams.get("format") || "csv";
+  const colunasRaw = request.nextUrl.searchParams.get("colunas");
+  const colunasSelecionadas = colunasRaw
+    ? colunasRaw.split(",").map((c) => c.trim()).filter(Boolean)
+    : undefined;
 
-  if (!ENTIDADES_VALIDAS.has(entidade)) {
-    return NextResponse.json(
-      {
-        error:
-          "entidade inválida (leads|negocios|empresas|imoveis|contas_pagar|contas_receber|financeiro)",
-      },
-      { status: 400 }
-    );
+  const viewId = resolveRelatorioViewId(viewIdParam);
+  if (!relatorioViewById(viewId)) {
+    return NextResponse.json({ error: `view_id inválido: ${viewIdParam}` }, { status: 400 });
   }
 
   const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
   const supabase = crmDb();
 
   try {
-    const dataset = await carregarRelatorio(supabase, entidade as RelatorioEntidade, tenantId);
+    const dataset = await carregarRelatorio(supabase, viewId, tenantId, colunasSelecionadas);
 
     if (format === "json") {
       return NextResponse.json({
-        entidade: dataset.entidade,
+        viewId: dataset.viewId,
         headers: dataset.headers,
         rows: dataset.rows,
         total: dataset.rows.length,
@@ -66,7 +64,7 @@ export async function GET(request: NextRequest) {
     }
 
     const csv = toCsv(dataset.headers, dataset.rows);
-    const filename = filenameFor(entidade);
+    const filename = filenameFor(dataset.viewId);
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",

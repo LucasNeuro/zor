@@ -10,6 +10,7 @@ export type PipelineComEstagios = {
   tipo: PipelineTipo;
   mercado_sigla: string | null;
   ordem: number;
+  ativo: boolean;
   estagios: {
     id: string;
     slug: string;
@@ -56,6 +57,7 @@ function mapPipelineRow(raw: Record<string, unknown>): PipelineComEstagios {
     tipo: raw.tipo as PipelineTipo,
     mercado_sigla: raw.mercado_sigla != null ? String(raw.mercado_sigla) : null,
     ordem: Number(raw.ordem ?? 0),
+    ativo: raw.ativo !== false,
     estagios: sorted.map((e) => ({
       id: String(e.id ?? e.slug),
       slug: String(e.slug),
@@ -116,22 +118,34 @@ export async function ensureTenantPipelines(
 export async function listTenantPipelines(
   supabase: SupabaseClient,
   tenantId: string,
-  tipo: PipelineTipo
+  tipo: PipelineTipo,
+  options?: { incluirInativos?: boolean }
 ): Promise<PipelineComEstagios[]> {
   await ensureTenantPipelines(supabase, tenantId);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("hub_pipelines")
     .select(
       "id, slug, nome, tipo, mercado_sigla, ativo, ordem, hub_pipeline_estagios(id, slug, label, cor, ordem, ativo, tipo_fecho, sistema)"
     )
     .eq("tenant_id", tenantId)
-    .eq("tipo", tipo)
-    .eq("ativo", true)
-    .order("ordem", { ascending: true });
+    .eq("tipo", tipo);
+
+  if (!options?.incluirInativos) {
+    query = query.eq("ativo", true);
+  }
+
+  const { data, error } = await query.order("ordem", { ascending: true });
 
   if (error) throw error;
   return (data || []).map((row) => mapPipelineRow(row as Record<string, unknown>));
+}
+
+/** Pipeline inicial Waje do tenant (Leads, Negócios ou Atendimento) — não pode ser excluído. */
+export function isPipelinePrincipal(pipe: { slug: string; tipo: PipelineTipo }): boolean {
+  if (pipe.tipo === "lead") return /^leads-principal/i.test(pipe.slug);
+  if (pipe.tipo === "negocio") return /^negocios-principal/i.test(pipe.slug);
+  return /^atendimento-principal/i.test(pipe.slug);
 }
 
 const LEGACY_PIPELINE_LABELS = new Set(["global", "pipeline global", "funil operacional"]);

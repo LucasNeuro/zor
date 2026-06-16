@@ -5,12 +5,24 @@ export function CrmToggleSwitch({
   onCheckedChange,
   disabled,
   labelledBy,
+  variant = "light",
 }: {
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
   disabled?: boolean;
   labelledBy?: string;
+  /** "dark" = fundo escuro (sideover pipeline); "light" = formulários claros */
+  variant?: "light" | "dark";
 }) {
+  const offBg =
+    variant === "dark"
+      ? "rgba(255, 255, 255, 0.14)"
+      : "#eef7eb";
+  const offShadow =
+    variant === "dark"
+      ? "inset 0 1px 0 rgba(255,255,255,0.06)"
+      : "inset 0 1px 0 rgba(0,0,0,0.2)";
+
   return (
     <button
       type="button"
@@ -25,8 +37,8 @@ export function CrmToggleSwitch({
         borderRadius: 999,
         border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
-        background: checked ? "linear-gradient(180deg, #3fb950 0%, #2ea043 100%)" : "#eef7eb",
-        boxShadow: checked ? "inset 0 1px 0 rgba(255,255,255,0.12)" : "inset 0 1px 0 rgba(0,0,0,0.2)",
+        background: checked ? "linear-gradient(180deg, #3fb950 0%, #2ea043 100%)" : offBg,
+        boxShadow: checked ? "inset 0 1px 0 rgba(255,255,255,0.12)" : offShadow,
         position: "relative",
         flexShrink: 0,
         transition: "background 0.18s ease, opacity 0.15s",

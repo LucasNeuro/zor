@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import type { CSSProperties } from "react";
 import type { Node } from "@xyflow/react";
 import {
   CheckCircle,
   ClipboardList,
+  Link2,
   MessageSquare,
   Pencil,
   Plus,
@@ -12,7 +13,9 @@ import {
   X,
 } from "lucide-react";
 import type { FlowMenuOption, FlowVisualNodeData } from "./types";
-import type { PlaybookFlowInputType, PlaybookFlowJourney } from "@/lib/playbook/flow-definition-types";
+import type {
+  PlaybookFlowInputType,
+} from "@/lib/playbook/flow-definition-types";
 
 type FlowNodeEditorSideoverProps = {
   selectedNode: Node<FlowVisualNodeData>;
@@ -31,6 +34,7 @@ const KIND_COLOR: Record<string, string> = {
   input: "#e08a14",
   menu: "#9254de",
   complete: "#2ea043",
+  transfer: "#4f46e5",
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -38,6 +42,7 @@ const KIND_LABEL: Record<string, string> = {
   input: "Entrada",
   menu: "Menu",
   complete: "Conclusao",
+  transfer: "Transferir",
 };
 
 const KIND_ICON: Record<string, React.ComponentType<{ size: number; strokeWidth: number }>> = {
@@ -45,6 +50,7 @@ const KIND_ICON: Record<string, React.ComponentType<{ size: number; strokeWidth:
   input: Pencil,
   menu: ClipboardList,
   complete: CheckCircle,
+  transfer: Link2,
 };
 
 export function FlowNodeEditorSideover({
@@ -100,9 +106,11 @@ export function FlowNodeEditorSideover({
       ? "Prompt do menu"
       : data.kind === "input"
         ? "Prompt da entrada"
-        : data.kind === "complete"
-          ? "Mensagem de conclusao"
-          : "Mensagem";
+        : data.kind === "transfer"
+          ? "Resumo enviado na transferencia"
+          : data.kind === "complete"
+            ? "Mensagem de conclusao"
+            : "Mensagem";
 
   return (
     <>
@@ -147,22 +155,6 @@ export function FlowNodeEditorSideover({
             >
               {entryStepId === id ? "Este é o início do fluxo" : "Definir este step como início"}
             </button>
-          </FieldRow>
-
-          <FieldRow label="Jornada">
-            <select
-              value={String(data.journey ?? "")}
-              onChange={(event) => {
-                const value = event.target.value.trim();
-                update({ journey: (value || undefined) as PlaybookFlowJourney | undefined });
-              }}
-              style={selectStyle}
-            >
-              <option value="">(sem jornada)</option>
-              <option value="triagem">triagem</option>
-              <option value="arquitetura">arquitetura</option>
-              <option value="imobiliario">imobiliario</option>
-            </select>
           </FieldRow>
 
           <FieldRow label="Titulo">
@@ -240,6 +232,29 @@ export function FlowNodeEditorSideover({
             </FieldRow>
           )}
 
+          {data.kind === "transfer" && (
+            <>
+              <FieldRow label="WhatsApp do consultor / atendente">
+                <input
+                  value={String(data.notifyPhone ?? "")}
+                  onChange={(event) =>
+                    update({
+                      notifyPhone: event.target.value,
+                      transferKind: "whatsapp_card",
+                    })
+                  }
+                  placeholder="5511999999999"
+                  style={inputStyle}
+                />
+              </FieldRow>
+
+              <p style={transferHintStyle}>
+                No fim deste caminho, a UAZAPI envia um card com resumo e contato do lead para este número.
+                A conversa com o lead continua registada no CRM.
+              </p>
+            </>
+          )}
+
           <datalist id="flow-existing-node-ids">
             {allNodeIds.map((nodeId) => (
               <option key={nodeId} value={nodeId} />
@@ -270,7 +285,7 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
 const backdropStyle: CSSProperties = {
   position: "absolute",
   inset: 0,
-  background: "linear-gradient(90deg, transparent 0%, #00000033 70%, #00000055 100%)",
+  background: "linear-gradient(90deg, transparent 0%, rgba(11, 34, 16, 0.08) 70%, rgba(11, 34, 16, 0.16) 100%)",
   zIndex: 7,
 };
 
@@ -280,9 +295,9 @@ const panelStyle: CSSProperties = {
   right: 0,
   bottom: 0,
   width: "min(360px, 42vw)",
-  borderLeft: "1px solid rgba(63, 152, 72, 0.42)",
-  background: "#060d08",
-  boxShadow: "-16px 0 36px rgba(0,0,0,0.55)",
+  borderLeft: "1px solid #dcebd8",
+  background: "#ffffff",
+  boxShadow: "-12px 0 28px rgba(11, 34, 16, 0.1)",
   display: "flex",
   flexDirection: "column",
   zIndex: 8,
@@ -290,8 +305,8 @@ const panelStyle: CSSProperties = {
 
 const headerStyle: CSSProperties = {
   padding: "12px 14px",
-  borderBottom: "1px solid rgba(146, 255, 0, 0.16)",
-  background: "#0b1f10",
+  borderBottom: "1px solid #e8f0e6",
+  background: "#f8fcf6",
   display: "flex",
   justifyContent: "space-between",
   gap: 10,
@@ -309,8 +324,8 @@ const iconWrapStyle: CSSProperties = {
   width: 24,
   height: 24,
   borderRadius: 999,
-  background: "rgba(6, 13, 8, 0.85)",
-  border: "1px solid rgba(63, 152, 72, 0.42)",
+  background: "#ffffff",
+  border: "1px solid #dcebd8",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -320,7 +335,7 @@ const iconWrapStyle: CSSProperties = {
 const headerLabelStyle: CSSProperties = {
   margin: 0,
   fontSize: 12,
-  color: "#92ff00",
+  color: "#2d7a36",
   fontWeight: 700,
   lineHeight: 1.2,
 };
@@ -328,8 +343,8 @@ const headerLabelStyle: CSSProperties = {
 const headerIdStyle: CSSProperties = {
   margin: "3px 0 0",
   fontSize: 11,
-  color: "#7a9a7e",
-  fontFamily: "monospace",
+  color: "#5d7a67",
+  fontFamily: "inherit",
 };
 
 const headerActionsStyle: CSSProperties = {
@@ -352,9 +367,9 @@ const closeButtonStyle: CSSProperties = {
   width: 26,
   height: 26,
   borderRadius: 7,
-  border: "1px solid rgba(63, 152, 72, 0.42)",
-  background: "rgba(6, 13, 8, 0.85)",
-  color: "#92ff00",
+  border: "1px solid #dcebd8",
+  background: "#ffffff",
+  color: "#5d7a67",
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
@@ -370,6 +385,7 @@ const bodyStyle: CSSProperties = {
   overflowY: "auto",
   flex: 1,
   minHeight: 0,
+  background: "#ffffff",
 };
 
 const fieldRowStyle: CSSProperties = {
@@ -381,16 +397,27 @@ const fieldRowStyle: CSSProperties = {
 const fieldLabelStyle: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 700,
-  color: "#92ff00",
+  color: "#3f9848",
   textTransform: "uppercase",
   letterSpacing: 0.45,
 };
 
+const transferHintStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 10.5,
+  color: "#5d7a67",
+  lineHeight: 1.45,
+  padding: "8px 10px",
+  borderRadius: 8,
+  background: "#f4faf2",
+  border: "1px solid #dcebd8",
+};
+
 const inputStyle: CSSProperties = {
-  border: "1px solid rgba(63, 152, 72, 0.42)",
+  border: "1px solid #dcebd8",
   borderRadius: 9,
-  background: "rgba(6, 13, 8, 0.85)",
-  color: "#e8f5e9",
+  background: "#ffffff",
+  color: "#0b2210",
   padding: "8px 10px",
   fontSize: 12.5,
   outline: "none",
@@ -399,10 +426,10 @@ const inputStyle: CSSProperties = {
 };
 
 const textareaStyle: CSSProperties = {
-  border: "1px solid rgba(63, 152, 72, 0.42)",
+  border: "1px solid #dcebd8",
   borderRadius: 9,
-  background: "rgba(6, 13, 8, 0.85)",
-  color: "#e8f5e9",
+  background: "#ffffff",
+  color: "#0b2210",
   padding: "8px 10px",
   fontSize: 12,
   fontFamily: "inherit",
@@ -425,8 +452,8 @@ const optionRowStyle: CSSProperties = {
   alignItems: "center",
   gap: 6,
   borderRadius: 8,
-  border: "1px solid rgba(63, 152, 72, 0.42)",
-  background: "rgba(6, 13, 8, 0.85)",
+  border: "1px solid #dcebd8",
+  background: "#f4faf2",
   padding: "6px 8px",
 };
 
@@ -442,7 +469,7 @@ const optionInputStyle: CSSProperties = {
   border: "none",
   background: "transparent",
   outline: "none",
-  color: "#cbd5e1",
+  color: "#2d4a35",
   fontSize: 11.5,
   fontFamily: "inherit",
 };
@@ -451,9 +478,9 @@ const optionRemoveStyle: CSSProperties = {
   width: 24,
   height: 24,
   borderRadius: 7,
-  border: "1px solid #ef444488",
-  background: "#2a1313",
-  color: "#fca5a5",
+  border: "1px solid #ef9a9a",
+  background: "#ffebee",
+  color: "#c62828",
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
@@ -466,10 +493,10 @@ const addOptionButtonStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   gap: 6,
-  border: "1px dashed rgba(63, 152, 72, 0.42)",
+  border: "1px dashed #b8d4bc",
   borderRadius: 8,
-  background: "rgba(6, 13, 8, 0.6)",
-  color: "#7a9a7e",
+  background: "#f8fcf6",
+  color: "#5d7a67",
   fontSize: 11,
   fontWeight: 600,
   cursor: "pointer",
@@ -478,16 +505,16 @@ const addOptionButtonStyle: CSSProperties = {
 
 const footerStyle: CSSProperties = {
   padding: 12,
-  borderTop: "1px solid rgba(146, 255, 0, 0.16)",
-  background: "#0b1f10",
+  borderTop: "1px solid #e8f0e6",
+  background: "#f8fcf6",
 };
 
 const deleteButtonStyle: CSSProperties = {
   width: "100%",
-  border: "1px solid #f8514944",
+  border: "1px solid #ef9a9a",
   borderRadius: 8,
-  background: "#f851491a",
-  color: "#ff7b72",
+  background: "#ffebee",
+  color: "#c62828",
   fontSize: 11.5,
   fontWeight: 700,
   cursor: "pointer",
@@ -499,10 +526,10 @@ const deleteButtonStyle: CSSProperties = {
 };
 
 const entryButtonStyle: CSSProperties = {
-  border: "1px solid rgba(63, 152, 72, 0.42)",
+  border: "1px solid #dcebd8",
   borderRadius: 9,
-  background: "rgba(6, 13, 8, 0.85)",
-  color: "#e8f5e9",
+  background: "#ffffff",
+  color: "#2d4a35",
   padding: "8px 10px",
   fontSize: 12,
   fontWeight: 600,
@@ -511,16 +538,16 @@ const entryButtonStyle: CSSProperties = {
 };
 
 const entryButtonActiveStyle: CSSProperties = {
-  borderColor: "#22c55e66",
-  color: "#4ade80",
-  background: "#112a1b",
+  borderColor: "#81c784",
+  color: "#2e7d32",
+  background: "#e8f5e9",
 };
 
 const selectStyle: CSSProperties = {
-  border: "1px solid rgba(63, 152, 72, 0.42)",
+  border: "1px solid #dcebd8",
   borderRadius: 9,
-  background: "rgba(6, 13, 8, 0.85)",
-  color: "#e8f5e9",
+  background: "#ffffff",
+  color: "#0b2210",
   padding: "8px 10px",
   fontSize: 12.5,
   outline: "none",

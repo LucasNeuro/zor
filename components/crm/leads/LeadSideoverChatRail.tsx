@@ -4,11 +4,16 @@ import { MessageSquare, X } from "lucide-react";
 import { LeadChatTab } from "@/components/crm/leads/LeadChatTab";
 import {
   RF_ACCENT,
-  RF_BG_DEEP,
-  RF_BORDER,
   RF_BORDER_STRONG,
+  RF_LIGHT_BORDER,
+  RF_LIGHT_BORDER_STRONG,
+  RF_LIGHT_PANEL,
+  RF_LIGHT_TEXT_MUTED,
+  RF_LIGHT_TEXT_PRIMARY,
+  RF_LIGHT_TEXT_SECONDARY,
   RF_TEXT_MUTED,
   RF_TEXT_PRIMARY,
+  type CrmSideoverTheme,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 
 type Props = {
@@ -78,10 +83,13 @@ export function LeadSideoverChatRail({ open, onClose, leadId, leadNome, metadata
 export function LeadSideoverChatToggle({
   active,
   onClick,
+  theme = "light",
 }: {
   active: boolean;
   onClick: () => void;
+  theme?: CrmSideoverTheme;
 }) {
+  const isLight = theme === "light";
   return (
     <button
       type="button"
@@ -90,9 +98,21 @@ export function LeadSideoverChatToggle({
       title={active ? "Fechar conversas" : "Abrir conversas"}
       className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-[11px] font-bold"
       style={{
-        border: `1px solid ${active ? RF_ACCENT : RF_BORDER_STRONG}`,
-        background: active ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.6)",
-        color: active ? RF_ACCENT : RF_TEXT_PRIMARY,
+        border: `1px solid ${active ? (isLight ? "#86efac" : RF_ACCENT) : isLight ? RF_LIGHT_BORDER_STRONG : RF_BORDER_STRONG}`,
+        background: active
+          ? isLight
+            ? "#f0fdf4"
+            : "rgba(146, 255, 0, 0.12)"
+          : isLight
+            ? RF_LIGHT_PANEL
+            : "rgba(6, 13, 8, 0.6)",
+        color: active
+          ? isLight
+            ? "#15803d"
+            : RF_ACCENT
+          : isLight
+            ? RF_LIGHT_TEXT_PRIMARY
+            : RF_TEXT_PRIMARY,
       }}
     >
       <MessageSquare size={15} />

@@ -2,6 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 import {
+  EMAIL_CHANNEL_DISABLED_CODE,
+  EMAIL_CHANNEL_DISABLED_MESSAGE,
+  isEmailChannelEnabled,
+} from "@/lib/feature-flags";
+import {
   selectHubAgenteIdentidadeCompat,
   updateHubAgenteIdentidadeCompat,
 } from "@/lib/hub/hub-agente-schema-compat";
@@ -59,6 +64,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
+  if (!isEmailChannelEnabled()) {
+    return NextResponse.json(
+      { error: EMAIL_CHANNEL_DISABLED_MESSAGE, code: EMAIL_CHANNEL_DISABLED_CODE },
+      { status: 403 }
+    );
+  }
+
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
   }
@@ -90,6 +102,13 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
+  if (!isEmailChannelEnabled()) {
+    return NextResponse.json(
+      { error: EMAIL_CHANNEL_DISABLED_MESSAGE, code: EMAIL_CHANNEL_DISABLED_CODE },
+      { status: 403 }
+    );
+  }
+
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
   }

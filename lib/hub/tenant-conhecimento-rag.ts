@@ -566,7 +566,7 @@ function extrairConsultasRagDeDocumentos(
   return out;
 }
 
-async function buscarTrechosDiretosDeChunks(
+export async function buscarTrechosDiretosConhecimentoTenant(
   supabase: SupabaseClient,
   tenantId: string,
   limit = 8
@@ -663,7 +663,7 @@ export async function buscarTrechosAnaliseNegocio(
   }
 
   if (out.length < 4) {
-    const diretos = await buscarTrechosDiretosDeChunks(supabase, tenantId, 10 - out.length);
+    const diretos = await buscarTrechosDiretosConhecimentoTenant(supabase, tenantId, 10 - out.length);
     for (const row of diretos) {
       const key = row.conteudo.slice(0, 120);
       if (vistos.has(key)) continue;

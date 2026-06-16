@@ -47,7 +47,12 @@ export async function GET(request: NextRequest) {
   const supabase = crmDb();
 
   try {
-    const pipelines = await listTenantPipelines(supabase, tenantId, tipo);
+    const incluirInativos =
+      request.nextUrl.searchParams.get("incluir_inativos") === "1" ||
+      request.nextUrl.searchParams.get("admin") === "1";
+    const pipelines = await listTenantPipelines(supabase, tenantId, tipo, {
+      incluirInativos,
+    });
     if (pipelines.length === 0) return fallbackResponse(tipo);
     return NextResponse.json({ data: pipelines });
   } catch (error) {

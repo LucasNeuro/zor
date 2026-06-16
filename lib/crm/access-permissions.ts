@@ -27,7 +27,9 @@ const PATH_PERMISSION_RULES: Array<{ prefix: string; key: CrmPermissionKey }> = 
   { prefix: "/crm/conhecimento", key: "automacoes" },
   { prefix: "/crm/ferramentas", key: "automacoes" },
   { prefix: "/crm/trafego", key: "leads" },
+  { prefix: "/crm/painel", key: "dashboard" },
   { prefix: "/crm/relatorios", key: "dashboard" },
+  { prefix: "/crm/analytics", key: "dashboard" },
   { prefix: "/crm", key: "dashboard" },
 ];
 

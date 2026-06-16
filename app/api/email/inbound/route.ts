@@ -1,5 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  EMAIL_CHANNEL_DISABLED_CODE,
+  EMAIL_CHANNEL_DISABLED_MESSAGE,
+  isEmailChannelEnabled,
+} from "@/lib/feature-flags";
 import { parseResendInboundWebhook } from "@/lib/email/inbound-parser";
 import { processInboundEmail } from "@/lib/email/inbound-processor";
 import {
@@ -22,6 +27,16 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isEmailChannelEnabled()) {
+      return NextResponse.json(
+        {
+          error: EMAIL_CHANNEL_DISABLED_MESSAGE,
+          code: EMAIL_CHANNEL_DISABLED_CODE,
+        },
+        { status: 503 }
+      );
+    }
+
     const rawBody = await request.text();
 
     const skipVerify =

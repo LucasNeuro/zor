@@ -1,5 +1,10 @@
 /** Condução fluida das perguntas obrigatórias do cargo (hub_cargos_catalogo) — uma por mensagem, sem checklist. */
 
+import {
+  clienteExpressouFrustracaoRepeticao,
+  perguntaEssencialJaCobertaPeloCliente,
+} from "@/lib/ia/atendimento-fluido";
+
 export type TurnoMinimo = { role: "user" | "assistant"; content: string };
 
 function palavrasChavePergunta(pergunta: string): string[] {
@@ -28,9 +33,11 @@ export function perguntaEssencialJaFeita(pergunta: string, turnos: TurnoMinimo[]
 export function obterProximaPerguntaEssencial(
   perguntas: string[],
   turnos: TurnoMinimo[],
-  ordem: "inicio" | "final"
+  ordem: "inicio" | "final",
+  opts?: { evitarRepetirQualificacao?: boolean }
 ): string | null {
   if (!perguntas.length) return null;
+  if (clienteExpressouFrustracaoRepeticao(turnos)) return null;
 
   const assistentes = turnos.filter((t) => t.role === "assistant").length;
   const usuarios = turnos.filter((t) => t.role === "user").length;
@@ -40,7 +47,17 @@ export function obterProximaPerguntaEssencial(
   }
 
   for (const p of perguntas) {
-    if (!perguntaEssencialJaFeita(p, turnos)) return p.trim();
+    if (perguntaEssencialJaFeita(p, turnos)) continue;
+    if (perguntaEssencialJaCobertaPeloCliente(p, turnos)) continue;
+    if (opts?.evitarRepetirQualificacao && /\bnome\b/i.test(p)) {
+      const nomeNoUser = turnos.some(
+        (t) =>
+          t.role === "user" &&
+          /^[A-Za-zÀ-ÿ]{2,}(?:\s+[A-Za-zÀ-ÿ]{2,}){0,3}$/.test(t.content.trim())
+      );
+      if (nomeNoUser) continue;
+    }
+    return p.trim();
   }
   return null;
 }
@@ -71,17 +88,26 @@ export function blocoPerguntasEssenciaisCargo(params: {
   comprimentoPadrao?: string;
   conversaEmAndamento: boolean;
   proximaPergunta: string | null;
+  evitarRepetirQualificacao?: boolean;
 }): string[] {
   const linhas: string[] = [];
   if (!params.usarPerguntas || params.perguntas.length === 0) return linhas;
 
   linhas.push(
-    "- Qualificação do cargo: conduza as perguntas obrigatórias **uma de cada vez**, com tom de WhatsApp natural."
+    "- Qualificação do cargo: **sugestões** de temas a cobrir — **não** é checklist obrigatório se o cliente já informou."
   );
   linhas.push(
     "- **Nunca** liste, numere ou diga «pergunta 1 de 5», «sequência de perguntas» ou «roteiro de qualificação»."
   );
-  linhas.push("- Integre cada pergunta na conversa (ex.: após o cliente dizer a profissão, pergunte o objetivo do projeto).");
+  linhas.push(
+    "- Se o cliente já disse modelo, defeito, nome ou pedido: **reconheça** e **pule** perguntas redundantes; avance para orçamento/solução."
+  );
+
+  if (params.evitarRepetirQualificacao) {
+    linhas.push(
+      "- Lead retornante no CRM: **não** repita nome nem dados já gravados; use **hub_atualizar_lead** só para informação nova."
+    );
+  }
 
   if (!params.conversaEmAndamento) {
     if (params.saudacao) {
@@ -96,25 +122,25 @@ export function blocoPerguntasEssenciaisCargo(params: {
       const saudacaoComPergunta = params.saudacao ? saudacaoJaTemPergunta(params.saudacao) : false;
       if (saudacaoComPergunta) {
         linhas.push(
-          "- A saudação já traz pergunta aberta — **não** empilhe outra na mesma mensagem; na **próxima** resposta use a pergunta obrigatória abaixo."
+          "- A saudação já traz pergunta aberta — na próxima resposta, **só** pergunte se ainda faltar o tema abaixo."
         );
       } else {
         linhas.push(
-          "- Na **1ª mensagem**, após o tom da saudação (máx. 2 frases), **termine** com a pergunta obrigatória abaixo — não use só «Olá, como posso ajudar?» genérico."
+          "- Na 1ª mensagem, saudação curta; **só** pergunte o tema abaixo se o cliente ainda não tiver dito."
         );
       }
     }
   } else {
     linhas.push("- Conversa em andamento: **sem** nova saudação, **sem** reapresentação.");
-    linhas.push("- Responda primeiro ao que o cliente acabou de dizer; depois, se couber, **uma** pergunta nova.");
+    linhas.push("- Responda primeiro ao que o cliente acabou de dizer; depois, **no máximo uma** pergunta — só se faltar dado.");
   }
 
   if (params.proximaPergunta) {
     linhas.push(
-      `- Pergunta obrigatória **desta vez** (parafraseie; não leia como formulário): «${params.proximaPergunta}»`
+      `- **Sugestão de tema** (pule se já respondido): «${params.proximaPergunta}»`
     );
     linhas.push(
-      "- Se o cliente informou nome, profissão ou pedido (obra, orçamento, reforma): reconheça em uma frase e em seguida faça só esta pergunta."
+      "- Se o cliente demonstrar irritação («já disse»): peça desculpas em uma linha e **não** repita a pergunta."
     );
   } else if (params.conversaEmAndamento && params.ordem === "final") {
     linhas.push("- Se faltar dado do cargo, pode fechar com uma pergunta pendente — ainda uma só por mensagem.");

@@ -323,7 +323,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const narrow = useNarrowViewport();
-  const slimMobile = narrow !== false;
+  /** Evita alternar árvore mobile/desktop antes do matchMedia (hidratação). */
+  const layoutReady = narrow !== null;
+  const slimMobile = narrow === true;
 
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -411,6 +413,28 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
       try { localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "1" : "0"); } catch { /* noop */ }
       return next;
     });
+  }
+
+  if (!layoutReady) {
+    return (
+      <CrmQueryProvider>
+        <CrmFeedbackProvider>
+          <CrmListPrefetcher />
+          <CrmHeaderProvider>
+            <CrmShellProvider value={{ sidebarExpanded: false, toggleSidebar: () => {} }}>
+              <div
+                className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain"
+                style={{ background: CRM_SURFACE_MAIN, WebkitOverflowScrolling: "touch" }}
+              >
+                <CrmAccessGuard baseRole={accessCtx.baseRole} permissoes={accessCtx.permissoes}>
+                  {children}
+                </CrmAccessGuard>
+              </div>
+            </CrmShellProvider>
+          </CrmHeaderProvider>
+        </CrmFeedbackProvider>
+      </CrmQueryProvider>
+    );
   }
 
   /* ── Mobile layout ─────────────────────────────── */

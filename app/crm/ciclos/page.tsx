@@ -46,15 +46,12 @@ import {
   type ModoOperacaoAgente,
 } from "@/lib/hub/agente-modo-operacao";
 import { CRM_ENTITY_GRID } from "@/lib/crm-glass-card";
-import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
 import { CicloCard, type CicloCardAgente } from "@/components/crm/CicloCard";
 import { CicloTimelinePanel } from "@/components/crm/CicloTimelinePanel";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import {
-  Bell,
   ChevronRight,
   Clock,
-  ScrollText,
   Sparkles,
   Webhook,
   X,
@@ -138,34 +135,11 @@ function resumoAgendamentoParaIa(opts: {
   return "";
 }
 
-function tempoRelativo(d?: string): string {
-  if (!d) return "nunca";
-  const diff = (Date.now() - new Date(d).getTime()) / 60000;
-  if (diff < 1) return "agora";
-  if (diff < 60) return `${Math.round(diff)}min atrás`;
-  if (diff < 1440) return `${Math.round(diff / 60)}h atrás`;
-  return `${Math.round(diff / 1440)}d atrás`;
-}
-
-const TIPO_COR: Record<string, string> = {
-  continuo: "#22c55e",
-  programado: BRAND_GREEN_BRIGHT,
-  gatilho: "#6b8a76",
-};
-
 function slugParaApiCiclos(agenteSlug: string): string {
   if (agenteSlug === "diretor" || agenteSlug === "diretor_geral_ia" || agenteSlug === "diretor_operacoes") return "diretor";
   if (agenteSlug === "gerente_atendimento") return "gerente";
   return agenteSlug;
 }
-
-const STATUS_COR: Record<string, string> = {
-  sucesso: "#22c55e",
-  sem_acao: "#6b8a76",
-  erro: "#dc2626",
-  rodando: BRAND_GREEN_BRIGHT,
-  nunca_executado: "#94a3b8",
-};
 
 /** Indica se o ciclo provavelmente usa o job de follow-up WhatsApp (nome ou configuracoes.dispatch). */
 function cicloPareceFollowupWhatsApp(nome: string, cfg: Record<string, unknown>): boolean {
@@ -191,9 +165,6 @@ export default function CiclosPage() {
     error: ciclosQueryError,
   } = useHubCiclosList();
   const ciclosTodos = ciclosRaw as unknown as Ciclo[];
-  const [logs, setLogs] = useState<Record<string, unknown>[]>([]);
-  const [alertas, setAlertas] = useState<Record<string, unknown>[]>([]);
-  const [aba, setAba] = useState<"ciclos" | "logs" | "alertas">("ciclos");
   const [modoLista, setModoLista] = useState<ListMode>("todos");
   const [busca, setBusca] = useState(() => searchParams.get("q")?.trim() || "");
   const [drawerSubTab, setDrawerSubTab] = useState<DrawerSubTab>("dados");
@@ -305,11 +276,7 @@ export default function CiclosPage() {
   }, [ciclosTodos, modoLista, busca]);
 
   const carregarAuxiliar = useCallback(async () => {
-    const [l, a, agRes] = await Promise.all([
-      fetch("/api/hub/ciclos-log?limit=20", { headers: internalApiHeaders() }),
-      fetch("/api/hub/alertas?resolvido=false&limit=30", { headers: internalApiHeaders() }),
-      fetch("/api/hub/agentes?todos=true", { headers: internalApiHeaders() }),
-    ]);
+    const agRes = await fetch("/api/hub/agentes?todos=true", { headers: internalApiHeaders() });
 
     if (agRes.ok) {
       const agJson = (await agRes.json()) as unknown;
@@ -330,18 +297,6 @@ export default function CiclosPage() {
     } else {
       setAgentesHub([]);
     }
-    if (l.ok) {
-      const j = await l.json() as { logs?: Record<string, unknown>[] };
-      setLogs(Array.isArray(j.logs) ? j.logs : []);
-    } else {
-      setLogs([]);
-    }
-    if (a.ok) {
-      const j = await a.json() as { alertas?: Record<string, unknown>[] };
-      setAlertas(Array.isArray(j.alertas) ? j.alertas : []);
-    } else {
-      setAlertas([]);
-    }
   }, []);
 
   const recarregarCiclos = useCallback(async () => {
@@ -359,24 +314,21 @@ export default function CiclosPage() {
 
   useEffect(() => {
     void carregarAuxiliar();
-  }, [aba, carregarAuxiliar]);
+  }, [carregarAuxiliar]);
 
-  /** Tempo real: hub_ciclos_ia + logs — invalida cache TanStack (sem refetch pesado manual). */
+  /** Tempo real: hub_ciclos_ia — invalida cache TanStack. */
   useEffect(() => {
     const onDbChange = () => {
       void invalidateHubCiclosList(queryClient);
-      if (aba === "logs" || aba === "alertas") void carregarAuxiliar();
     };
     const channel = supabase
       .channel("ciclos_page_rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "hub_ciclos_ia" }, onDbChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "hub_ciclos_log" }, onDbChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "hub_alertas" }, onDbChange)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, aba, carregarAuxiliar]);
+  }, [queryClient]);
 
   useEffect(() => {
     if (!drawerOpen || drawerSubTab !== "dados") return;
@@ -494,21 +446,6 @@ export default function CiclosPage() {
     setFHorasFollowup(base.map((p) => String(p.hubHoras)).join(", "));
   }
 
-  async function carregarLogsEAlertas() {
-    const [l, a] = await Promise.all([
-      fetch("/api/hub/ciclos-log?limit=20", { headers: internalApiHeaders() }),
-      fetch("/api/hub/alertas?resolvido=false&limit=30", { headers: internalApiHeaders() }),
-    ]);
-    if (l.ok) {
-      const j = await l.json() as { logs?: Record<string, unknown>[] };
-      setLogs(Array.isArray(j.logs) ? j.logs : []);
-    }
-    if (a.ok) {
-      const j = await a.json() as { alertas?: Record<string, unknown>[] };
-      setAlertas(Array.isArray(j.alertas) ? j.alertas : []);
-    }
-  }
-
   async function toggleCiclo(id: string, ativo: boolean) {
     setAlternandoCicloId(id);
     queryClient.setQueryData<Record<string, unknown>[]>(hubQueryKeys.ciclos.list(), (prev) => {
@@ -620,18 +557,8 @@ export default function CiclosPage() {
       );
     } catch (e) { console.error(e); }
 
-    await carregarLogsEAlertas();
     await recarregarCiclos();
     setExecutando(null);
-  }
-
-  async function resolverAlerta(id: string) {
-    await fetch(`/api/hub/alertas/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", ...internalApiHeaders() },
-      body: JSON.stringify({ resolvido: true, resolvido_em: new Date().toISOString() }),
-    });
-    void carregarAuxiliar();
   }
 
   function toggleCronDia(dow: number) {
@@ -860,16 +787,6 @@ export default function CiclosPage() {
           >
             {contadores.ativos} ativos
           </span>
-          <span
-            className="rounded-full px-2.5 py-1 font-bold"
-            style={{
-              background: alertas.length > 0 ? "#fff2f1" : "#ffffff",
-              color: alertas.length > 0 ? "#dc2626" : "#5d7a67",
-              border: `1px solid ${alertas.length > 0 ? "#fecaca" : "#d4ecd0"}`,
-            }}
-          >
-            {alertas.length} alertas
-          </span>
           <button type="button" onClick={abrirNovoCiclo} style={crmBtnPrimary()}>
             + Novo ciclo
           </button>
@@ -877,25 +794,13 @@ export default function CiclosPage() {
       ),
     });
     return () => setSlot(null);
-  }, [pathname, setSlot, contadores.ativos, alertas]);
+  }, [pathname, setSlot, contadores.ativos]);
 
   return (
     <>
     <div style={{ background: "#f8fcf6", minHeight: "100vh" }}>
-      <CrmStickyTabs
-        variant="light"
-        activeId={aba}
-        onChange={(id) => setAba(id as typeof aba)}
-        tabs={[
-          { id: "ciclos", label: `Ciclos (${contadores.todos})`, icon: Zap },
-          { id: "logs", label: `Logs (${logs.length})`, icon: ScrollText },
-          { id: "alertas", label: `Alertas (${alertas.length})`, icon: Bell },
-        ]}
-      />
-
       <div style={{ padding: 24 }}>
-        {aba === "ciclos" && (
-          <div>
+        <div>
             <div style={{ marginBottom: 18 }}>
               <p
                 style={{
@@ -1104,77 +1009,7 @@ export default function CiclosPage() {
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {aba === "logs" && (
-          <div className="space-y-2">
-            {logs.length === 0 ? (
-              <p className="text-center py-8 text-sm" style={{ color: "#5d7a67" }}>Nenhuma execução registrada ainda</p>
-            ) : logs.map(l => (
-              <div key={l.id as string} className="rounded-xl p-3" style={{ background: "#ffffff", border: "1px solid #d4ecd0" }}>
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-sm" style={{ color: BRAND_TEXT_DARK }}>{l.agente_slug as string}</p>
-                  <span className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: `${STATUS_COR[l.status as string] || "#5d7a67"}30`, color: STATUS_COR[l.status as string] || "#5d7a67" }}>
-                    {l.status as string}
-                  </span>
-                </div>
-                <p className="text-xs" style={{ color: "#5d7a67" }}>{tempoRelativo(l.iniciado_em as string)}</p>
-                {typeof l.erro === "string" && <p className="text-xs mt-1" style={{ color: "#dc2626" }}>{l.erro}</p>}
-                {Array.isArray(l.acoes_tomadas) && (l.acoes_tomadas as string[]).length > 0 && (
-                  <div className="mt-1 space-y-0.5">
-                    {(l.acoes_tomadas as string[]).slice(0, 3).map((a, i) => (
-                      <p key={i} className="text-xs" style={{ color: "#6b8a76" }}>• {a}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {aba === "alertas" && (
-          <div className="space-y-2">
-            {alertas.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-2xl mb-2">✓</p>
-                <p className="font-bold" style={{ color: "#0b2210" }}>Nenhum alerta pendente</p>
-                <p className="text-xs mt-1" style={{ color: "#484f58" }}>Operação saudável</p>
-              </div>
-            ) : alertas.map(a => {
-              const cor = a.tipo === "critico" ? "#dc2626" : a.tipo === "importante" ? CRM_ACCENT : a.tipo === "sugestao" ? BRAND_TEXT_DARK : "#5d7a67";
-              return (
-                <div key={a.id as string} className="rounded-xl p-3"
-                  style={{
-                    background: "#ffffff",
-                    borderTop: `1px solid ${cor}44`,
-                    borderRight: `1px solid ${cor}44`,
-                    borderBottom: `1px solid ${cor}44`,
-                    borderLeft: `3px solid ${cor}`,
-                  }}>
-                  <div className="flex items-start justify-between mb-1">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                          style={{ background: `${cor}22`, color: cor }}>{a.tipo as string}</span>
-                        <span className="text-xs" style={{ color: "#6b8a76" }}>{a.agente_slug as string}</span>
-                      </div>
-                      <p className="font-bold text-sm" style={{ color: BRAND_TEXT_DARK }}>{a.titulo as string}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "#5d7a67" }}>{a.mensagem as string}</p>
-                    </div>
-                    <button type="button" onClick={() => resolverAlerta(a.id as string)}
-                      className="ml-2 text-xs px-2 py-1 rounded-lg flex-shrink-0"
-                      style={crmBtnSecondary()}>
-                      Resolver
-                    </button>
-                  </div>
-                  <p className="text-xs" style={{ color: "#6b8a76" }}>{tempoRelativo(a.criado_em as string)}</p>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        </div>
       </div>
     </div>
       {drawerOpen && (

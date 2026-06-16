@@ -83,6 +83,7 @@ function AgenteUazapiSideoverShell({
   children,
   footer,
   embedded = false,
+  theme = "light",
 }: {
   open: boolean;
   onClose: () => void;
@@ -92,41 +93,71 @@ function AgenteUazapiSideoverShell({
   footer: ReactNode;
   /** Painel fixo no wizard (sem overlay escuro). */
   embedded?: boolean;
+  theme?: "dark" | "light";
 }) {
   if (!open && !embedded) return null;
+
+  const isDark = theme === "dark";
 
   if (embedded) {
     return (
       <section
         style={{
           borderRadius: 14,
-          border: "1px solid #dcebd8",
-          background: "#ffffff",
+          border: isDark ? `1px solid ${RF_BORDER_STRONG}` : "1px solid #dcebd8",
+          background: isDark ? "#060d08" : "#ffffff",
           overflow: "hidden",
-          boxShadow: "0 4px 16px rgba(11, 31, 16, 0.06)",
+          boxShadow: isDark ? "0 4px 16px rgba(0, 0, 0, 0.35)" : "0 4px 16px rgba(11, 31, 16, 0.06)",
         }}
       >
         <header
           style={{
-            borderBottom: "1px solid #dcebd8",
+            borderBottom: isDark ? `1px solid ${RF_BORDER}` : "1px solid #dcebd8",
             padding: "14px 16px",
-            background: "linear-gradient(180deg, #f8fcf6 0%, #ffffff 100%)",
+            background: isDark
+              ? "linear-gradient(180deg, #0b1f10 0%, #060d08 100%)"
+              : "linear-gradient(180deg, #f8fcf6 0%, #ffffff 100%)",
           }}
         >
           <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
             WhatsApp
           </p>
-          <h2 style={{ margin: "4px 0 0", color: BRAND_TEXT_DARK, fontSize: 17, fontWeight: 800 }}>{title}</h2>
+          <h2
+            style={{
+              margin: "4px 0 0",
+              color: isDark ? RF_TEXT_PRIMARY : BRAND_TEXT_DARK,
+              fontSize: 17,
+              fontWeight: 800,
+            }}
+          >
+            {title}
+          </h2>
           {subtitle ? (
-            <p style={{ margin: "6px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.45 }}>{subtitle}</p>
+            <p
+              style={{
+                margin: "6px 0 0",
+                color: isDark ? RF_TEXT_MUTED : "#5d7a67",
+                fontSize: 12,
+                lineHeight: 1.45,
+              }}
+            >
+              {subtitle}
+            </p>
           ) : null}
         </header>
-        <div style={{ padding: 16 }}>{children}</div>
         <div
           style={{
-            borderTop: "1px solid #dcebd8",
+            padding: 16,
+            background: isDark ? "#060d08" : "#ffffff",
+          }}
+        >
+          {children}
+        </div>
+        <div
+          style={{
+            borderTop: isDark ? `1px solid ${RF_BORDER}` : "1px solid #dcebd8",
             padding: "14px 18px 18px",
-            background: "#f8fcf6",
+            background: isDark ? "#0b1f10" : "#f8fcf6",
           }}
         >
           {footer}
@@ -345,7 +376,9 @@ export function AgenteUazapiBlock({
   bloqueado = false,
   layout = "card",
 }: AgenteUazapiBlockProps) {
-  const darkSideover = layout === "card";
+  const darkSideover = layout === "card" || layout === "painel";
+  const textMuted = darkSideover ? RF_TEXT_MUTED : "#5d7a67";
+  const textStrong = darkSideover ? RF_TEXT_PRIMARY : "#0b2210";
   const [sideoverOpen, setSideoverOpen] = useState(false);
   const [proxyCity, setProxyCity] = useState("");
   const [proxyState, setProxyState] = useState("");
@@ -366,7 +399,6 @@ export function AgenteUazapiBlock({
   } | null>(null);
   const [statusTempoReal, setStatusTempoReal] = useState<VerificacaoTempoReal | null>(null);
   const [webhookAviso, setWebhookAviso] = useState<string | null>(null);
-  const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
   const [ultimaVerificacaoAt, setUltimaVerificacaoAt] = useState<string | null>(null);
   const [ultimaVerificacaoResultado, setUltimaVerificacaoResultado] = useState<"sucesso" | "erro" | null>(null);
   const [dialogExcluirUazapi, setDialogExcluirUazapi] = useState(false);
@@ -577,11 +609,6 @@ export function AgenteUazapiBlock({
         if (typeof data.webhook_warning === "string" && data.webhook_warning.trim()) {
           setWebhookAviso(data.webhook_warning.trim());
         }
-        if (typeof data.webhook_url === "string" && data.webhook_url.trim()) {
-          setWebhookUrl(data.webhook_url.trim());
-        } else if (typeof data.webhook_url_display === "string" && data.webhook_url_display.trim()) {
-          setWebhookUrl(data.webhook_url_display.trim());
-        }
         if (typeof data.proxy_warning === "string" && data.proxy_warning.trim()) {
           setProxyAviso(data.proxy_warning.trim());
         } else if (
@@ -745,7 +772,11 @@ export function AgenteUazapiBlock({
       minHeight: 42,
       borderRadius: 0,
       border: "none",
-      borderRight: withRightDivider ? "1px solid #dcebd8" : undefined,
+      borderRight: withRightDivider
+        ? darkSideover
+          ? `1px solid ${RF_BORDER_STRONG}`
+          : "1px solid #dcebd8"
+        : undefined,
       boxShadow: "none",
     };
   };
@@ -813,7 +844,7 @@ export function AgenteUazapiBlock({
           <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: 0.08 }}>
             PASSO 1 — CADASTRAR INSTÂNCIA
           </p>
-          <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, lineHeight: 1.45 }}>
+          <p style={{ margin: 0, color: textMuted, fontSize: 11, lineHeight: 1.45 }}>
             Crie a ligação WhatsApp com o botão abaixo. Depois escolha a cidade e use «Guardar região». O QR para ligar
             o telefone fica no passo 2.
           </p>
@@ -1021,6 +1052,7 @@ export function AgenteUazapiBlock({
 
       <AgenteUazapiSideoverShell
         embedded={layout === "painel"}
+        theme={darkSideover ? "dark" : "light"}
         open={layout === "painel" ? true : sideoverOpen}
         onClose={() => setSideoverOpen(false)}
         title={agenteNome?.trim() || agenteSlug}
@@ -1059,7 +1091,7 @@ export function AgenteUazapiBlock({
                 opacity: temInstancia ? 1 : 0.72,
               }}
             >
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: temInstancia ? CRM_ACCENT : "#5d7a67" }}>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: temInstancia ? CRM_ACCENT : textMuted }}>
                 2. Ligar WhatsApp
               </p>
             </div>
@@ -1098,15 +1130,15 @@ export function AgenteUazapiBlock({
                 {rotuloEstado}
               </span>
               {ultimaVerificacaoAt ? (
-                <span style={{ fontSize: 10, color: "#5d7a67" }}>
+                <span style={{ fontSize: 10, color: textMuted }}>
                   {ultimaVerificacaoResultado === "erro" ? "Últ. verificação: erro" : "Últ. verificação: ok"} ·{" "}
                   {formatarDataHoraPtBr(ultimaVerificacaoAt)}
                 </span>
               ) : null}
             </div>
             {!temInstancia ? (
-              <p style={{ margin: "10px 0 0", paddingLeft: 12, fontSize: 12, color: "#5d7a67" }}>
-                Conclua o <strong style={{ color: BRAND_TEXT_DARK }}>passo 1</strong> abaixo para ligar o WhatsApp.
+              <p style={{ margin: "10px 0 0", paddingLeft: 12, fontSize: 12, color: textMuted }}>
+                Conclua o <strong style={{ color: textStrong }}>passo 1</strong> abaixo para ligar o WhatsApp.
               </p>
             ) : null}
           </div>
@@ -1115,7 +1147,7 @@ export function AgenteUazapiBlock({
             <p style={{ margin: "0 0 12px", color: CRM_ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
               PASSO 1 — REGIÃO E INSTÂNCIA
             </p>
-            <p style={{ margin: "0 0 12px", color: "#5d7a67", fontSize: 11, fontWeight: 700, letterSpacing: 0.06 }}>
+            <p style={{ margin: "0 0 12px", color: textMuted, fontSize: 11, fontWeight: 700, letterSpacing: 0.06 }}>
               REGIÃO DO NÚMERO
             </p>
             <UazapiProxyCityPicker
@@ -1151,8 +1183,8 @@ export function AgenteUazapiBlock({
                 background: darkSideover ? "rgba(6, 13, 8, 0.55)" : "#f8fcf6",
               }}
             >
-              <p style={{ margin: 0, color: "#5d7a67", fontSize: 12, lineHeight: 1.5 }}>
-                O <strong style={{ color: "#0b2210" }}>QR e o pareamento</strong> ficam disponíveis depois de criar a
+              <p style={{ margin: 0, color: textMuted, fontSize: 12, lineHeight: 1.5 }}>
+                O <strong style={{ color: textStrong }}>QR e o pareamento</strong> ficam disponíveis depois de criar a
                 instância (passo 2). Use os botões no rodapé deste painel.
               </p>
             </div>
@@ -1169,7 +1201,7 @@ export function AgenteUazapiBlock({
               <p style={{ margin: 0, color: "#3fb950", fontSize: 13, fontWeight: 800 }}>
                 WhatsApp conectado
               </p>
-              <p style={{ margin: "8px 0 0", color: "#5d7a67", fontSize: 11 }}>
+              <p style={{ margin: "8px 0 0", color: textMuted, fontSize: 11 }}>
                 A instância está ativa. Para trocar de número, desligue a sessão e gere um novo QR.
               </p>
             </div>
@@ -1181,7 +1213,7 @@ export function AgenteUazapiBlock({
             <p
               style={{
                 margin: "0 0 10px",
-                color: "#5d7a67",
+                color: textMuted,
                 fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: 0.06,
@@ -1212,7 +1244,7 @@ export function AgenteUazapiBlock({
             {pairingMode === "code" ? (
               <div style={{ marginTop: 12 }}>
                 <label
-                  style={{ display: "block", color: "#5d7a67", fontSize: 11, fontWeight: 700, marginBottom: 8 }}
+                  style={{ display: "block", color: textMuted, fontSize: 11, fontWeight: 700, marginBottom: 8 }}
                 >
                   Número do WhatsApp (com DDI)
                 </label>
@@ -1223,7 +1255,7 @@ export function AgenteUazapiBlock({
                   inputMode="numeric"
                   style={fieldStyle}
                 />
-                <p style={{ margin: "8px 0 0", color: "#5d7a67", fontSize: 11 }}>
+                <p style={{ margin: "8px 0 0", color: textMuted, fontSize: 11 }}>
                   Use o código de pareamento para ligar o telefone sem QR.
                 </p>
                 {pairingPhone.trim() && !podeConectarPorCodigo ? (
@@ -1253,7 +1285,7 @@ export function AgenteUazapiBlock({
                   gap: 8,
                 }}
               >
-                <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, fontWeight: 700 }}>QR WHATSAPP</p>
+                <p style={{ margin: 0, color: textMuted, fontSize: 11, fontWeight: 700 }}>QR WHATSAPP</p>
                 {qrSegundosRestantes != null && qrSegundosRestantes > 0 ? (
                   <span
                     style={{
@@ -1276,14 +1308,14 @@ export function AgenteUazapiBlock({
                   width: 260,
                   height: "auto",
                   borderRadius: 10,
-                  border: "1px solid #dcebd8",
+                  border: darkSideover ? `1px solid ${RF_BORDER_STRONG}` : "1px solid #dcebd8",
                   margin: "0 auto",
                   display: "block",
                 }}
               />
-              <p style={{ margin: "12px 0 0", color: "#5d7a67", fontSize: 11, lineHeight: 1.5 }}>
+              <p style={{ margin: "12px 0 0", color: textMuted, fontSize: 11, lineHeight: 1.5 }}>
                 WhatsApp → Aparelhos ligados → Ligar com QR. Quando o tempo acabar, use{" "}
-                <strong style={{ color: "#0b2210" }}>Reconectar</strong>.
+                <strong style={{ color: textStrong }}>Reconectar</strong>.
               </p>
             </div>
           ) : null}
@@ -1305,13 +1337,13 @@ export function AgenteUazapiBlock({
                   fontSize: 28,
                   fontWeight: 900,
                   letterSpacing: 1.2,
-                  color: "#0b2210",
+                  color: darkSideover ? RF_TEXT_PRIMARY : "#0b2210",
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {paircode}
               </p>
-              <p style={{ margin: 0, color: "#5d7a67", fontSize: 11, lineHeight: 1.5 }}>
+              <p style={{ margin: 0, color: textMuted, fontSize: 11, lineHeight: 1.5 }}>
                 WhatsApp → Aparelhos conectados → Conectar com número. Digite este código no app.
               </p>
             </div>
@@ -1330,8 +1362,8 @@ export function AgenteUazapiBlock({
               <p style={{ margin: "0 0 8px", color: "#f85149", fontSize: 12, fontWeight: 800 }}>
                 QR EXPIRADO OU SESSÃO PENDENTE
               </p>
-              <p style={{ margin: "0 0 14px", color: "#5d7a67", fontSize: 11, lineHeight: 1.55 }}>
-                O código anterior já não serve. Só funciona após gerar um <strong style={{ color: "#0b2210" }}>novo QR</strong>{" "}
+              <p style={{ margin: "0 0 14px", color: textMuted, fontSize: 11, lineHeight: 1.55 }}>
+                O código anterior já não serve. Só funciona após gerar um <strong style={{ color: textStrong }}>novo QR</strong>{" "}
                 (o antigo deixa de ligar).
               </p>
               <button
@@ -1378,14 +1410,14 @@ export function AgenteUazapiBlock({
             style={{
               padding: "10px 14px",
               borderRadius: 10,
-              border: "1px solid #dcebd8",
-              background: "#f8fcf6",
+              border: darkSideover ? `1px solid ${RF_BORDER_STRONG}` : "1px solid #dcebd8",
+              background: darkSideover ? "rgba(6, 13, 8, 0.72)" : "#f8fcf6",
             }}
           >
             <summary
               style={{
                 cursor: "pointer",
-                color: "#5d7a67",
+                color: textMuted,
                 fontSize: 12,
                 fontWeight: 700,
                 listStyle: "none",
@@ -1394,7 +1426,7 @@ export function AgenteUazapiBlock({
             >
               Dicas de webhook
             </summary>
-            <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.55, color: "#5d7a67" }}>
+            <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.55, color: textMuted }}>
               <p style={{ margin: 0 }}>
                 <code style={{ fontSize: 11, color: "#79c0ff" }}>/api/whatsapp/webhook?wh=…</code>
               </p>
@@ -1416,34 +1448,6 @@ export function AgenteUazapiBlock({
               }}
             >
               {proxyAviso}
-            </div>
-          ) : null}
-          {webhookUrl ? (
-            <div
-              style={{
-                padding: "10px 12px",
-                borderRadius: 8,
-                border: `1px solid ${RF_BORDER_STRONG}`,
-                background: "rgba(255,255,255,0.03)",
-                fontSize: 11,
-                color: RF_TEXT_SECONDARY,
-              }}
-            >
-              <p style={{ margin: "0 0 6px", fontWeight: 700, color: RF_ACCENT }}>URL do webhook (UAZAPI global)</p>
-              <code
-                style={{
-                  display: "block",
-                  wordBreak: "break-all",
-                  fontSize: 10,
-                  lineHeight: 1.45,
-                  color: RF_TEXT_PRIMARY,
-                }}
-              >
-                {webhookUrl}
-              </code>
-              <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_TEXT_MUTED }}>
-                Cole no painel UAZAPI → Webhooks → URL. Eventos: messages, connection. Excluir: wasSentByApi.
-              </p>
             </div>
           ) : null}
           {webhookAviso ? (

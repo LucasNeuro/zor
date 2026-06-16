@@ -228,6 +228,28 @@ export function validatePlaybookFlowDefinition(
     }
   }
 
+  if (typeof entryStepId === "string" && entryStepId.trim() && stepIds.has(entryStepId.trim())) {
+    const adjacency = new Map<string, string[]>();
+    for (const step of steps) {
+      if (!isRecord(step) || typeof step.id !== "string" || !step.id.trim()) continue;
+      adjacency.set(step.id.trim(), collectNextTargets(step as PlaybookFlowStep));
+    }
+    const visited = new Set<string>();
+    const queue = [entryStepId.trim()];
+    while (queue.length) {
+      const current = queue.shift();
+      if (!current || visited.has(current)) continue;
+      visited.add(current);
+      for (const next of adjacency.get(current) ?? []) {
+        if (!visited.has(next)) queue.push(next);
+      }
+    }
+    const orphans = [...stepIds].filter((id) => !visited.has(id));
+    if (orphans.length > 0) {
+      errors.push(`Steps órfãos (não alcançáveis do entry): ${orphans.join(", ")}.`);
+    }
+  }
+
   if (errors.length > 0) {
     return { ok: false, errors };
   }

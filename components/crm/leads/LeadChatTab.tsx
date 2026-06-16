@@ -1,18 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Bot, Send, StickyNote, User, UserRound, Users } from "lucide-react";
-import {
-  CRM_SIDEOVER_INPUT,
-  CRM_SIDEOVER_INPUT_STYLE,
-  CRM_SIDEOVER_LABEL,
-  CrmSideoverActionBtn,
-  CrmSideoverActionGroup,
-  CrmSideoverInlinePanel,
-  CrmSideoverToolbarRow,
-} from "@/components/crm/CrmSideoverActionGroup";
+import { Bot, Send, StickyNote, User, UserRound } from "lucide-react";
+import { ChatMensagemMidia } from "@/components/crm/leads/ChatMensagemMidia";
 import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
 import type { CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
+import {
+  conteudoEhPlaceholderMidia,
+  parseMidiaFromRow,
+  type TipoMidiaChat,
+} from "@/lib/crm/chat-mensagem-midia";
+import { textoExibicaoMensagemHumano } from "@/lib/crm/mensagem-consultor-whatsapp";
 import {
   effectiveHumanoResponsavel,
   formatHumanoDisplayName,
@@ -20,16 +18,12 @@ import {
 import { crmApiHeadersWithActor, getCrmSessionActor } from "@/lib/internal-api-headers-client";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { parseConversaTurnos } from "@/lib/crm/lead-timeline";
-import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
-import type { AtendenteCrm } from "@/lib/crm/atendentes-crm";
 import { supabase } from "@/lib/supabase/client";
 import {
   RF_ACCENT,
-  RF_BORDER,
-  RF_BORDER_STRONG,
-  RF_TEXT_MUTED,
-  RF_TEXT_PRIMARY,
-  RF_TEXT_SECONDARY,
+  RF_LIGHT_BG,
+  RF_LIGHT_BORDER,
+  RF_LIGHT_BORDER_STRONG,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 
 type AutorTipo = "cliente" | "ia" | "humano" | "anotacao";
@@ -41,13 +35,10 @@ type ChatMsg = {
   autorLabel: string;
   agentSlug?: string;
   criado_em: string;
-};
-
-type HubAgenteOption = {
-  agente_slug: string;
-  nome: string;
-  ativo?: boolean;
-  arquivado_em?: string | null;
+  tipoMidia: TipoMidiaChat;
+  urlMidia?: string | null;
+  nomeArquivo?: string | null;
+  whatsappMessageId?: string | null;
 };
 
 type AtendimentoModo = "ia" | "humano" | "grupo";
@@ -59,13 +50,35 @@ type Props = {
   humanoResponsavel?: string | null;
   agenteResponsavel?: string | null;
   onHumanoResponsavelChange?: (valor: string | null) => void;
-  onAgenteResponsavelChange?: (valor: string | null) => void;
   onMetadataChange?: (metadata: unknown) => void;
-  /** Notas já carregadas no sideover (atualização imediata ao adicionar). */
   notasExternas?: CrmNota[];
-  /** false = só histórico (sem assumir/enviar). */
   interactive?: boolean;
 };
+
+const CHAT = {
+  bg: RF_LIGHT_BG,
+  panel: "#ffffff",
+  border: RF_LIGHT_BORDER,
+  borderStrong: RF_LIGHT_BORDER_STRONG,
+  text: "#111827",
+  textStrong: "#030712",
+  muted: "#6b7280",
+  secondary: "#374151",
+  accent: RF_ACCENT,
+  humano: "#b45309",
+  humanoBg: "#fffbeb",
+  humanoBorder: "#fcd34d",
+  ia: "#15803d",
+  iaBg: "#f0fdf4",
+  iaBorder: "#86efac",
+  cliente: "#1d4ed8",
+  clienteBg: "#eff6ff",
+  clienteBorder: "#93c5fd",
+  nota: "#7c3aed",
+  notaBg: "#f5f3ff",
+};
+
+const AVATAR_SIZE = 36;
 
 function metaRecord(metadata: unknown): Record<string, unknown> {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
@@ -90,21 +103,29 @@ function parseAtendimentoState(
 }
 
 function badgeTone(modo: AtendimentoModo): { bg: string; border: string; color: string } {
-  if (modo === "grupo") {
-    return { bg: "rgba(56, 139, 253, 0.14)", border: "rgba(56, 139, 253, 0.45)", color: "#79c0ff" };
-  }
-  if (modo === "humano") {
-    return { bg: "rgba(201, 162, 74, 0.14)", border: "rgba(201, 162, 74, 0.45)", color: "#c9a24a" };
-  }
-  return { bg: "rgba(34, 197, 94, 0.12)", border: "rgba(34, 197, 94, 0.4)", color: "#86efac" };
+  if (modo === "grupo") return { bg: CHAT.clienteBg, border: CHAT.clienteBorder, color: CHAT.cliente };
+  if (modo === "humano") return { bg: CHAT.humanoBg, border: CHAT.humanoBorder, color: CHAT.humano };
+  return { bg: CHAT.iaBg, border: CHAT.iaBorder, color: CHAT.ia };
 }
-
-const AVATAR_SIZE = 36;
 
 function tempo(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function renderTextoMensagem(texto: string) {
+  const parts = texto.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} style={{ fontWeight: 700, color: CHAT.textStrong }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
 }
 
 function autorFromMensagem(row: Record<string, unknown>): {
@@ -113,18 +134,19 @@ function autorFromMensagem(row: Record<string, unknown>): {
   agentSlug?: string;
 } {
   const direcao = String(row.direcao ?? "");
-  if (direcao === "entrada") {
-    return { autor: "cliente", label: "Lead" };
-  }
+  if (direcao === "entrada") return { autor: "cliente", label: "Lead" };
+
   const agenteId = String(row.agente_id ?? row.agente_responsavel ?? "").trim();
   const agenteLower = agenteId.toLowerCase();
   const meta =
     row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
       ? (row.metadata as Record<string, unknown>)
       : {};
+  const remetente = String(row.remetente ?? "").toLowerCase();
   const feitoPorTipo = String(row.feito_por_tipo ?? meta.feito_por_tipo ?? "").toLowerCase();
   const feitoPor = String(meta.feito_por ?? "").trim();
-  if (feitoPorTipo === "humano" || agenteLower.includes("humano")) {
+
+  if (feitoPorTipo === "humano" || remetente === "humano" || agenteLower.includes("humano")) {
     return {
       autor: "humano",
       label: feitoPor ? formatHumanoDisplayName(feitoPor) : "Humano",
@@ -137,6 +159,44 @@ function autorFromMensagem(row: Record<string, unknown>): {
   };
 }
 
+function rowParaChatMsg(row: Record<string, unknown>): ChatMsg | null {
+  const meta =
+    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : row.metadados && typeof row.metadados === "object" && !Array.isArray(row.metadados)
+        ? (row.metadados as Record<string, unknown>)
+        : {};
+  const conteudoBruto = String(row.conteudo ?? "");
+  const conteudo = textoExibicaoMensagemHumano(conteudoBruto, meta);
+  const midiaApi = {
+    tipo_conteudo: row.tipo_conteudo,
+    url_midia: row.url_midia,
+    nome_arquivo: row.nome_arquivo,
+    whatsapp_message_id: row.whatsapp_message_id,
+    tipo_midia: row.tipo_midia,
+    metadata: row.metadata,
+  };
+  const midia = parseMidiaFromRow(midiaApi);
+  if (!conteudo.trim() && midia.tipo === "texto") return null;
+
+  const { autor, label, agentSlug } = autorFromMensagem(row);
+  const criado = String(row.criado_em ?? row.enviada_em ?? new Date().toISOString());
+  const id = String(row.id ?? `msg-${criado}-${conteudo.slice(0, 8)}`);
+
+  return {
+    id,
+    conteudo,
+    autor,
+    autorLabel: label,
+    agentSlug,
+    criado_em: criado,
+    tipoMidia: midia.tipo,
+    urlMidia: midia.urlMidia,
+    nomeArquivo: midia.nomeArquivo,
+    whatsappMessageId: midia.whatsappMessageId,
+  };
+}
+
 function notasParaMensagens(notas: CrmNota[]): ChatMsg[] {
   return notas.map((n) => ({
     id: `nota-${n.id}`,
@@ -144,6 +204,7 @@ function notasParaMensagens(notas: CrmNota[]): ChatMsg[] {
     autor: "anotacao" as const,
     autorLabel: n.criado_por || "Equipe",
     criado_em: n.criado_em,
+    tipoMidia: "texto" as const,
   }));
 }
 
@@ -155,12 +216,8 @@ function mergeMensagens(
   const map = new Map<string, ChatMsg>();
 
   for (const row of fila) {
-    const conteudo = String(row.conteudo ?? "").trim();
-    if (!conteudo) continue;
-    const { autor, label, agentSlug } = autorFromMensagem(row);
-    const criado = String(row.enviada_em ?? row.criado_em ?? new Date().toISOString());
-    const id = String(row.id ?? `fila-${criado}-${conteudo.slice(0, 12)}`);
-    map.set(id, { id, conteudo, autor, autorLabel: label, agentSlug, criado_em: criado });
+    const msg = rowParaChatMsg(row);
+    if (msg) map.set(msg.id, msg);
   }
 
   for (const turno of parseConversaTurnos(metadata)) {
@@ -172,6 +229,7 @@ function mergeMensagens(
       autor: turno.role === "assistant" ? "ia" : "cliente",
       autorLabel: turno.role === "assistant" ? "Funcionário IA" : "Lead",
       criado_em: turno.at ?? new Date(0).toISOString(),
+      tipoMidia: "texto",
     });
   }
 
@@ -188,63 +246,48 @@ function LeadChatAvatar({ autor, agentSlug }: { autor: AutorTipo; agentSlug?: st
   if (autor === "anotacao") {
     return (
       <div
+        className="flex shrink-0 items-center justify-center rounded-full"
         style={{
           width: AVATAR_SIZE,
           height: AVATAR_SIZE,
-          borderRadius: "50%",
-          background: "rgba(167, 139, 250, 0.14)",
-          border: "1px solid rgba(167, 139, 250, 0.45)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
+          background: CHAT.notaBg,
+          border: `1px solid ${CHAT.nota}55`,
         }}
       >
-        <StickyNote size={17} color="#c4b5fd" strokeWidth={2} aria-hidden />
+        <StickyNote size={17} color={CHAT.nota} strokeWidth={2} aria-hidden />
       </div>
     );
   }
-
   if (autor === "cliente") {
     return (
       <div
+        className="flex shrink-0 items-center justify-center rounded-full"
         style={{
           width: AVATAR_SIZE,
           height: AVATAR_SIZE,
-          borderRadius: "50%",
-          background: "#1c2a3a",
-          border: "1px solid #388bfd55",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
+          background: CHAT.clienteBg,
+          border: `1px solid ${CHAT.clienteBorder}`,
         }}
       >
-        <UserRound size={18} color="#79c0ff" strokeWidth={2} aria-hidden />
+        <UserRound size={18} color={CHAT.cliente} strokeWidth={2} aria-hidden />
       </div>
     );
   }
-
   if (autor === "humano") {
     return (
       <div
+        className="flex shrink-0 items-center justify-center rounded-full"
         style={{
           width: AVATAR_SIZE,
           height: AVATAR_SIZE,
-          borderRadius: "50%",
-          background: "rgba(201, 162, 74, 0.14)",
-          border: "1px solid rgba(201, 162, 74, 0.45)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
+          background: CHAT.humanoBg,
+          border: `1px solid ${CHAT.humanoBorder}`,
         }}
       >
-        <User size={18} color="#c9a24a" strokeWidth={2} aria-hidden />
+        <User size={18} color={CHAT.humano} strokeWidth={2} aria-hidden />
       </div>
     );
   }
-
   if (agentSlug) {
     return (
       <CrmBotRingAvatar
@@ -256,22 +299,17 @@ function LeadChatAvatar({ autor, agentSlug }: { autor: AutorTipo; agentSlug?: st
       />
     );
   }
-
   return (
     <div
+      className="flex shrink-0 items-center justify-center rounded-full"
       style={{
         width: AVATAR_SIZE,
         height: AVATAR_SIZE,
-        borderRadius: "50%",
-        background: "linear-gradient(145deg, #003b26, #14532d)",
-        border: "1px solid #22c55e55",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
+        background: CHAT.iaBg,
+        border: `1px solid ${CHAT.iaBorder}`,
       }}
     >
-      <Bot size={20} color="#86efac" strokeWidth={2} aria-hidden />
+      <Bot size={20} color={CHAT.ia} strokeWidth={2} aria-hidden />
     </div>
   );
 }
@@ -279,77 +317,72 @@ function LeadChatAvatar({ autor, agentSlug }: { autor: AutorTipo; agentSlug?: st
 function LeadChatMessageLabel({ msg }: { msg: ChatMsg }) {
   if (msg.autor === "anotacao") {
     return (
-      <span style={{ fontSize: 11, fontWeight: 700, color: "#c4b5fd" }}>
+      <span className="text-[11px] font-bold" style={{ color: CHAT.nota }}>
         Anotação interna · {msg.autorLabel}
       </span>
     );
   }
   if (msg.autor === "cliente") {
     return (
-      <span style={{ fontSize: 11, fontWeight: 700, color: "#79c0ff" }}>{msg.autorLabel}</span>
+      <span className="text-[11px] font-bold" style={{ color: CHAT.cliente }}>
+        {msg.autorLabel}
+      </span>
     );
   }
   if (msg.autor === "humano") {
     return (
-      <span style={{ fontSize: 11, fontWeight: 700, color: "#c9a24a" }}>{msg.autorLabel}</span>
+      <span className="text-[11px] font-bold" style={{ color: CHAT.humano }}>
+        {msg.autorLabel}
+      </span>
     );
   }
   const parts = msg.autorLabel.split(" · ");
   if (parts.length >= 2) {
     return (
-      <span style={{ fontSize: 11, fontWeight: 700, color: "#86efac" }}>
+      <span className="text-[11px] font-bold" style={{ color: CHAT.ia }}>
         {parts[0]}{" "}
-        <span style={{ fontWeight: 600, color: "#7f90a8" }}>· {parts.slice(1).join(" · ")}</span>
+        <span style={{ fontWeight: 600, color: CHAT.secondary }}>· {parts.slice(1).join(" · ")}</span>
       </span>
     );
   }
   return (
-    <span style={{ fontSize: 11, fontWeight: 700, color: "#86efac" }}>{msg.autorLabel}</span>
+    <span className="text-[11px] font-bold" style={{ color: CHAT.ia }}>
+      {msg.autorLabel}
+    </span>
   );
 }
 
-function LeadChatBubble({ msg }: { msg: ChatMsg }) {
+function LeadChatBubble({ msg, leadId }: { msg: ChatMsg; leadId: string }) {
+  const temaMidia = {
+    text: CHAT.text,
+    muted: CHAT.muted,
+    border: CHAT.border,
+    surface: CHAT.bg,
+    accent: CHAT.accent,
+  };
+
   if (msg.autor === "anotacao") {
     return (
-      <div style={{ display: "flex", justifyContent: "center", padding: "2px 0" }}>
-        <div style={{ maxWidth: "min(92%, 560px)", width: "100%" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              marginBottom: 6,
-            }}
-          >
+      <div className="flex justify-center py-0.5">
+        <div className="w-full max-w-[560px]">
+          <div className="mb-1.5 flex items-center justify-center gap-2">
             <LeadChatAvatar autor="anotacao" />
             <LeadChatMessageLabel msg={msg} />
-            <span style={{ fontSize: 10, color: "#6e7681" }}>{tempo(msg.criado_em)}</span>
+            <span className="text-[10px]" style={{ color: CHAT.muted }}>
+              {tempo(msg.criado_em)}
+            </span>
           </div>
           <div
+            className="rounded-xl px-3.5 py-3 text-center text-[14px] font-medium leading-relaxed"
             style={{
-              background: "rgba(167, 139, 250, 0.08)",
-              border: "1px dashed rgba(167, 139, 250, 0.45)",
-              borderRadius: 12,
-              padding: "12px 14px",
-              fontSize: 13,
-              color: RF_TEXT_PRIMARY,
-              lineHeight: 1.55,
-              whiteSpace: "pre-wrap",
-              textAlign: "center",
+              background: CHAT.notaBg,
+              border: `1px dashed ${CHAT.nota}66`,
+              color: CHAT.textStrong,
             }}
           >
             {msg.conteudo}
           </div>
-          <p
-            style={{
-              margin: "6px 0 0",
-              textAlign: "center",
-              fontSize: 10,
-              fontWeight: 600,
-              color: "#7f90a8",
-            }}
-          >
+          <p className="mt-1.5 text-center text-[10px] font-semibold" style={{ color: CHAT.muted }}>
             Só visível no CRM — não enviada ao cliente
           </p>
         </div>
@@ -362,57 +395,69 @@ function LeadChatBubble({ msg }: { msg: ChatMsg }) {
 
   const bubbleStyle: CSSProperties = isCliente
     ? {
-        background: "rgba(11, 31, 16, 0.95)",
-        border: `1px solid ${RF_BORDER_STRONG}`,
+        background: CHAT.clienteBg,
+        border: `1px solid ${CHAT.clienteBorder}`,
         borderRadius: "16px 16px 6px 16px",
       }
     : isHumano
       ? {
-          background: "rgba(201, 162, 74, 0.12)",
-          border: "1px solid rgba(201, 162, 74, 0.35)",
+          background: CHAT.humanoBg,
+          border: `1px solid ${CHAT.humanoBorder}`,
           borderRadius: "16px 16px 16px 6px",
         }
       : {
-          background: "rgba(6, 13, 8, 0.85)",
-          border: `1px solid ${RF_BORDER}`,
+          background: CHAT.panel,
+          border: `1px solid ${CHAT.border}`,
           borderRadius: "16px 16px 16px 6px",
         };
 
+  const mostrarTextoPuro =
+    msg.tipoMidia === "texto" ||
+    (msg.conteudo.trim() && !conteudoEhPlaceholderMidia(msg.conteudo, msg.tipoMidia));
+
   return (
     <div
-      style={{
-        display: "flex",
-        flexDirection: "row",
-        gap: 10,
-        alignItems: "flex-start",
-        justifyContent: isCliente ? "flex-end" : "flex-start",
-      }}
+      className="flex items-start gap-2.5"
+      style={{ flexDirection: "row", justifyContent: isCliente ? "flex-end" : "flex-start" }}
     >
       {!isCliente ? <LeadChatAvatar autor={msg.autor} agentSlug={msg.agentSlug} /> : null}
-      <div style={{ maxWidth: "min(88%, 680px)", order: isCliente ? 1 : 0 }}>
+      <div className="max-w-[min(88%,680px)]" style={{ order: isCliente ? 1 : 0 }}>
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 6,
-            flexDirection: isCliente ? "row-reverse" : "row",
-          }}
+          className="mb-1.5 flex items-center gap-2"
+          style={{ flexDirection: isCliente ? "row-reverse" : "row" }}
         >
           <LeadChatMessageLabel msg={msg} />
-          <span style={{ fontSize: 10, color: "#6e7681" }}>{tempo(msg.criado_em)}</span>
+          <span className="text-[10px]" style={{ color: CHAT.muted }}>
+            {tempo(msg.criado_em)}
+          </span>
         </div>
         <div
-          style={{
-            ...bubbleStyle,
-            padding: "12px 14px",
-            fontSize: 13,
-            color: RF_TEXT_PRIMARY,
-            lineHeight: 1.55,
-            whiteSpace: "pre-wrap",
-          }}
+          className="px-3.5 py-3 text-[13px] leading-relaxed"
+          style={{ ...bubbleStyle, color: CHAT.text }}
         >
-          {msg.conteudo}
+          {msg.tipoMidia !== "texto" ? (
+            <ChatMensagemMidia
+              leadId={leadId}
+              conteudo={msg.conteudo}
+              tipoMidia={msg.tipoMidia}
+              urlMidia={msg.urlMidia}
+              nomeArquivo={msg.nomeArquivo}
+              whatsappMessageId={msg.whatsappMessageId}
+              tema={temaMidia}
+            />
+          ) : mostrarTextoPuro ? (
+            <span
+              style={{
+                whiteSpace: "pre-wrap",
+                color: CHAT.textStrong,
+                fontWeight: 500,
+                fontSize: 14,
+                lineHeight: 1.55,
+              }}
+            >
+              {renderTextoMensagem(msg.conteudo)}
+            </span>
+          ) : null}
         </div>
       </div>
       {isCliente ? <LeadChatAvatar autor="cliente" /> : null}
@@ -420,7 +465,38 @@ function LeadChatBubble({ msg }: { msg: ChatMsg }) {
   );
 }
 
-/** Painel de atendimento completo — estilo Copiloto, com envio de mensagens. */
+function ChatActionBtn({
+  children,
+  onClick,
+  active,
+  disabled,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className="rounded-lg border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+      style={{
+        borderColor: active ? CHAT.accent : CHAT.borderStrong,
+        background: active ? CHAT.accent : CHAT.panel,
+        color: active ? "#0b2210" : CHAT.text,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Painel de atendimento humano — tema claro, áudio/arquivos, sem transferências. */
 export function LeadChatTab({
   leadId,
   leadNome = "Lead",
@@ -428,7 +504,6 @@ export function LeadChatTab({
   humanoResponsavel,
   agenteResponsavel,
   onHumanoResponsavelChange,
-  onAgenteResponsavelChange,
   onMetadataChange,
   notasExternas = [],
   interactive = true,
@@ -443,24 +518,26 @@ export function LeadChatTab({
     null
   );
   const [assumindo, setAssumindo] = useState(false);
-  const [painelTransferir, setPainelTransferir] = useState<"vendedor" | "agente" | null>(null);
-  const [atendenteSelId, setAtendenteSelId] = useState("");
-  const [vendedorManual, setVendedorManual] = useState(false);
-  const [vendedorTelefone, setVendedorTelefone] = useState("");
-  const [vendedorNome, setVendedorNome] = useState("");
-  const [atendentes, setAtendentes] = useState<AtendenteCrm[]>([]);
-  const [transferindo, setTransferindo] = useState(false);
-  const [agentes, setAgentes] = useState<HubAgenteOption[]>([]);
-  const [agenteSel, setAgenteSel] = useState(agenteResponsavel ?? "");
+  const [humanoAtivoLocal, setHumanoAtivoLocal] = useState<string | null>(null);
   const [sessionActor, setSessionActor] = useState<{ id?: string; email?: string; name?: string }>({});
   const fimRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const humanoEfetivo =
+    humanoAtivoLocal ?? effectiveHumanoResponsavel(humanoResponsavel);
+
+  useEffect(() => {
+    setHumanoAtivoLocal(effectiveHumanoResponsavel(humanoResponsavel));
+  }, [humanoResponsavel, leadId]);
 
   useEffect(() => {
     let cancelled = false;
     void getCrmSessionActor().then((actor) => {
       if (!cancelled) setSessionActor(actor);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       void getCrmSessionActor().then((actor) => {
         if (!cancelled) setSessionActor(actor);
       });
@@ -477,12 +554,11 @@ export function LeadChatTab({
   );
 
   const atendimento = useMemo(
-    () => parseAtendimentoState(metadata, effectiveHumanoResponsavel(humanoResponsavel)),
-    [metadata, humanoResponsavel]
+    () => parseAtendimentoState(metadata, humanoEfetivo),
+    [metadata, humanoEfetivo]
   );
   const assumido = atendimento.modo === "humano";
-  const emGrupo = atendimento.modo === "grupo";
-  const podeEnviar = assumido && !emGrupo;
+  const podeEnviar = assumido;
   const badgeStyle = badgeTone(atendimento.modo);
 
   const notasMerged = useMemo(() => {
@@ -536,73 +612,23 @@ export function LeadChatTab({
   }, [carregar]);
 
   useEffect(() => {
-    setAgenteSel(agenteResponsavel ?? "");
-  }, [agenteResponsavel]);
-
-  useEffect(() => {
-    if (!interactive) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/hub/agentes?ativo=true", { headers: internalApiHeaders() });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || cancelled) return;
-        const list = (Array.isArray(json) ? json : json?.agentes ?? []) as HubAgenteOption[];
-        setAgentes(list.filter((a) => a.ativo !== false && !a.arquivado_em));
-      } catch {
-        /* lista opcional — dropdown fica vazio */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [interactive]);
-
-  useEffect(() => {
-    if (!interactive || painelTransferir !== "vendedor") return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/crm/atendentes", { headers: internalApiHeaders() });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || cancelled) return;
-        setAtendentes((json.atendentes ?? []) as AtendenteCrm[]);
-      } catch {
-        /* lista opcional */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [interactive, painelTransferir]);
-
-  useEffect(() => {
     if (!leadId) return;
     const channel = supabase
       .channel(`lead-chat-${leadId}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "hub_fila_mensagens",
-          filter: `lead_id=eq.${leadId}`,
-        },
-        () => {
-          void carregar({ quiet: true });
-        }
+        { event: "INSERT", schema: "public", table: "hub_fila_mensagens", filter: `lead_id=eq.${leadId}` },
+        () => void carregar({ quiet: true })
       )
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "hub_notas",
-          filter: `lead_id=eq.${leadId}`,
-        },
-        () => {
-          void carregar({ quiet: true });
-        }
+        { event: "INSERT", schema: "public", table: "hub_mensagens", filter: `lead_id=eq.${leadId}` },
+        () => void carregar({ quiet: true })
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "hub_notas", filter: `lead_id=eq.${leadId}` },
+        () => void carregar({ quiet: true })
       )
       .subscribe();
     return () => {
@@ -648,28 +674,27 @@ export function LeadChatTab({
       const json = (await res.json().catch(() => ({}))) as {
         error?: string;
         humano_responsavel?: string;
-        humanoResponsavel?: string;
       };
       if (!res.ok) {
         setSendStrip({
           kind: "error",
-          text:
-            typeof json.error === "string"
-              ? json.error
-              : res.status === 404
-                ? "API de assumir ainda não disponível."
-                : "Não foi possível assumir o atendimento.",
+          text: typeof json.error === "string" ? json.error : "Não foi possível assumir o atendimento.",
         });
         return;
       }
       const humano =
-        typeof json.humano_responsavel === "string"
-          ? json.humano_responsavel
-          : typeof json.humanoResponsavel === "string"
-            ? json.humanoResponsavel
-            : "operador";
+        typeof json.humano_responsavel === "string" ? json.humano_responsavel : "operador";
+      setHumanoAtivoLocal(humano);
       onHumanoResponsavelChange?.(humano);
-      setSendStrip({ kind: "success", text: "Atendimento assumido." });
+      onMetadataChange?.({
+        ...metaRecord(metadata),
+        fase_atendimento: "atendimento_humano",
+        humano_assumiu_em: new Date().toISOString(),
+        humano_assumiu_via: "crm_assumir",
+      });
+      setSendStrip({ kind: "success", text: "Atendimento assumido. Pode enviar mensagens ao lead." });
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+      await carregar({ quiet: true });
     } catch {
       setSendStrip({ kind: "error", text: "Erro de rede ao assumir." });
     } finally {
@@ -691,21 +716,13 @@ export function LeadChatTab({
       if (!res.ok) {
         setSendStrip({
           kind: "error",
-          text:
-            typeof json.error === "string"
-              ? json.error
-              : res.status === 404
-                ? "API de devolver à IA ainda não disponível."
-                : "Não foi possível devolver à IA.",
+          text: typeof json.error === "string" ? json.error : "Não foi possível devolver à IA.",
         });
         return;
       }
       onHumanoResponsavelChange?.(null);
-      if (json.metadata !== undefined) {
-        onMetadataChange?.(json.metadata);
-      } else if (emGrupo) {
-        onMetadataChange?.({ ...metaRecord(metadata), canal_ativo: "direct" });
-      }
+      setHumanoAtivoLocal(null);
+      if (json.metadata !== undefined) onMetadataChange?.(json.metadata);
       setSendStrip({ kind: "success", text: "Conversa devolvida à IA." });
     } catch {
       setSendStrip({ kind: "error", text: "Erro de rede ao devolver à IA." });
@@ -714,112 +731,16 @@ export function LeadChatTab({
     }
   }
 
-  async function transferirParaVendedor() {
-    const atendente = atendentes.find((a) => a.id === atendenteSelId);
-    const tel = vendedorManual ? vendedorTelefone.trim() : "";
-    if (!atendenteSelId && !tel) {
-      setSendStrip({ kind: "error", text: "Selecione um atendente ou informe o telefone." });
-      return;
-    }
-    setTransferindo(true);
-    setSendStrip(null);
-    try {
-      const body: Record<string, string | undefined> = { leadId };
-      if (atendenteSelId && !vendedorManual) {
-        body.atendenteId = atendenteSelId;
-      } else {
-        body.vendedorTelefone = tel;
-        body.vendedorNome = vendedorNome.trim() || undefined;
-      }
-      const res = await fetch("/api/crm/atendimento/transferir-grupo", {
-        method: "POST",
-        credentials: "include",
-        headers: { ...(await atendimentoHeaders()), "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        groupJid?: string;
-        groupName?: string;
-        humano_responsavel?: string;
-        metadata?: unknown;
-      };
-      if (!res.ok) {
-        setSendStrip({
-          kind: "error",
-          text:
-            typeof json.error === "string"
-              ? json.error
-              : res.status === 404
-                ? "API de transferência para grupo ainda não disponível."
-                : "Não foi possível transferir para o vendedor.",
-        });
-        return;
-      }
-      if (json.metadata !== undefined) {
-        onMetadataChange?.(json.metadata);
-      } else if (json.groupJid) {
-        onMetadataChange?.({
-          ...metaRecord(metadata),
-          canal_ativo: "group",
-          whatsapp_group_jid: json.groupJid,
-          transferido_em: new Date().toISOString(),
-          vendedor_telefone: atendente?.telefone || vendedorTelefone.trim(),
-          vendedor_nome: atendente?.nome || vendedorNome.trim() || undefined,
-          ...(atendenteSelId ? { atendente_id: atendenteSelId } : {}),
-        });
-      }
-      if (typeof json.humano_responsavel === "string") {
-        onHumanoResponsavelChange?.(json.humano_responsavel);
-      } else if (atendente?.slug) {
-        onHumanoResponsavelChange?.(atendente.slug);
-      }
-      setPainelTransferir(null);
-      setAtendenteSelId("");
-      setVendedorManual(false);
-      setVendedorTelefone("");
-      setVendedorNome("");
-      setSendStrip({
-        kind: "success",
-        text: json.groupName
-          ? `Grupo WhatsApp criado: ${json.groupName}`
-          : "Lead transferido para grupo WhatsApp com o vendedor.",
-      });
-      await carregar({ quiet: true });
-    } catch {
-      setSendStrip({ kind: "error", text: "Erro de rede ao transferir." });
-    } finally {
-      setTransferindo(false);
-    }
-  }
-
-  async function transferirAgente() {
-    const slug = agenteSel.trim();
-    if (!slug) {
-      setSendStrip({ kind: "error", text: "Selecione um agente IA." });
-      return;
-    }
-    setTransferindo(true);
-    setSendStrip(null);
-    try {
-      const res = await patchLeadCrm(leadId, { agente_responsavel: slug });
-      if (!res.ok) {
-        setSendStrip({ kind: "error", text: res.error });
-        return;
-      }
-      onAgenteResponsavelChange?.(slug);
-      setPainelTransferir(null);
-      setSendStrip({ kind: "success", text: "Agente IA atualizado." });
-    } catch {
-      setSendStrip({ kind: "error", text: "Erro de rede ao transferir agente." });
-    } finally {
-      setTransferindo(false);
-    }
-  }
-
   async function enviarMensagem() {
     const texto = input.trim();
     if (!texto || enviando) return;
+    if (!podeEnviar) {
+      setSendStrip({
+        kind: "error",
+        text: "Clique em «Assumir atendimento» para enviar mensagens como humano.",
+      });
+      return;
+    }
     setEnviando(true);
     setSendStrip(null);
     setInput("");
@@ -838,10 +759,7 @@ export function LeadChatTab({
         setInput(texto);
         setSendStrip({
           kind: "error",
-          text:
-            typeof json.error === "string"
-              ? json.error
-              : "Não foi possível enviar a mensagem.",
+          text: typeof json.error === "string" ? json.error : "Não foi possível enviar a mensagem.",
         });
         return;
       }
@@ -863,264 +781,102 @@ export function LeadChatTab({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col rounded-xl border p-4"
+      style={{ background: CHAT.bg, borderColor: CHAT.border }}
+    >
       <div className="shrink-0 pb-3">
-        <p
-          className="m-0 text-[10px] font-bold uppercase tracking-[0.08em]"
-          style={{ color: RF_TEXT_MUTED }}
-        >
-          Atendimento
-        </p>
-        <p className="m-0 mt-0.5 truncate text-sm font-bold" style={{ color: RF_TEXT_PRIMARY }}>
-          {leadNome}
-        </p>
-
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <span
-            className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide"
-            style={{
-              background: badgeStyle.bg,
-              borderColor: badgeStyle.border,
-              color: badgeStyle.color,
-            }}
-          >
-            {atendimento.badgeLabel}
-          </span>
-          {agenteResponsavel ? (
-            <span style={{ fontSize: 10, fontWeight: 700, color: RF_TEXT_MUTED }}>
-              Agente · {agenteResponsavel}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            <span
+              className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em]"
+              style={{ color: CHAT.muted }}
+            >
+              Atendimento
             </span>
-          ) : null}
-        </div>
-
-        {interactive ? (
-          <div className="mt-3">
-            <CrmSideoverToolbarRow>
-              <CrmSideoverActionGroup>
-                {assumido || emGrupo ? (
-                  <CrmSideoverActionBtn
-                    onClick={() => void devolverIA()}
-                    title="Devolver conversa para a IA"
-                    disabled={assumindo || transferindo}
-                  >
-                    {assumindo ? "A devolver…" : "Devolver à IA"}
-                  </CrmSideoverActionBtn>
-                ) : (
-                  <CrmSideoverActionBtn
-                    active
-                    onClick={() => void assumirAtendimento()}
-                    title="Assumir atendimento humano (chat direto)"
-                    disabled={assumindo || transferindo}
-                  >
-                    {assumindo ? "A assumir…" : "Assumir"}
-                  </CrmSideoverActionBtn>
-                )}
-                <CrmSideoverActionBtn
-                  active={painelTransferir === "vendedor"}
-                  onClick={() =>
-                    setPainelTransferir((p) => (p === "vendedor" ? null : "vendedor"))
-                  }
-                  title="Criar grupo WhatsApp com lead e vendedor"
-                  disabled={emGrupo || assumindo || transferindo}
-                >
-                  <Users size={14} />
-                  Transferir para vendedor
-                </CrmSideoverActionBtn>
-                <CrmSideoverActionBtn
-                  active={painelTransferir === "agente"}
-                  onClick={() => setPainelTransferir((p) => (p === "agente" ? null : "agente"))}
-                  title="Alterar agente IA responsável pelo lead"
-                  disabled={assumindo || transferindo}
-                >
-                  <Bot size={14} />
-                  Transferir agente IA
-                </CrmSideoverActionBtn>
-              </CrmSideoverActionGroup>
-            </CrmSideoverToolbarRow>
+            <span
+              className="h-3 w-px shrink-0"
+              style={{ background: CHAT.borderStrong }}
+              aria-hidden
+            />
+            <p
+              className="m-0 min-w-0 truncate text-sm font-bold"
+              style={{ color: CHAT.text }}
+              title={leadNome}
+            >
+              {leadNome}
+            </p>
+            <span
+              className="inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide"
+              style={{
+                background: badgeStyle.bg,
+                borderColor: badgeStyle.border,
+                color: badgeStyle.color,
+              }}
+            >
+              {atendimento.badgeLabel}
+            </span>
+            {agenteResponsavel ? (
+              <span
+                className="hidden shrink-0 truncate text-[10px] font-bold sm:inline"
+                style={{ color: CHAT.muted }}
+                title={`Agente · ${agenteResponsavel}`}
+              >
+                Agente · {agenteResponsavel}
+              </span>
+            ) : null}
+            <span
+              className="h-3 w-px shrink-0"
+              style={{ background: CHAT.borderStrong }}
+              aria-hidden
+            />
+            <span className="shrink-0 text-[10px] font-bold" style={{ color: CHAT.accent }}>
+              {stats.total} mensagens
+            </span>
+            {stats.cliente > 0 ? (
+              <span className="hidden shrink-0 text-[10px] font-bold md:inline" style={{ color: CHAT.muted }}>
+                Lead {stats.cliente}
+              </span>
+            ) : null}
+            {stats.ia > 0 ? (
+              <span className="hidden shrink-0 text-[10px] font-bold md:inline" style={{ color: CHAT.muted }}>
+                IA {stats.ia}
+              </span>
+            ) : null}
+            {stats.humano > 0 ? (
+              <span className="hidden shrink-0 text-[10px] font-bold md:inline" style={{ color: CHAT.muted }}>
+                Humano {stats.humano}
+              </span>
+            ) : null}
           </div>
-        ) : null}
 
-        {interactive && painelTransferir === "vendedor" ? (
-          <CrmSideoverInlinePanel title="Transferir para vendedor (grupo WhatsApp)">
-            <p className="mb-3 text-xs leading-relaxed" style={{ color: RF_TEXT_MUTED }}>
-              Cria um grupo no WhatsApp com o lead e o atendente cadastrado. Cadastre a equipe em CRM →
-              Atendimento → Equipe.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className={CRM_SIDEOVER_LABEL}>Atendente / vendedor *</label>
-                <select
-                  className={CRM_SIDEOVER_INPUT}
-                  style={CRM_SIDEOVER_INPUT_STYLE}
-                  value={vendedorManual ? "__manual__" : atendenteSelId}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "__manual__") {
-                      setVendedorManual(true);
-                      setAtendenteSelId("");
-                      return;
-                    }
-                    setVendedorManual(false);
-                    setAtendenteSelId(v);
-                    const a = atendentes.find((x) => x.id === v);
-                    if (a) {
-                      setVendedorTelefone(a.telefone);
-                      setVendedorNome(a.nome);
-                    }
-                  }}
+          {interactive ? (
+            <div className="shrink-0">
+              {assumido ? (
+                <ChatActionBtn
+                  onClick={() => void devolverIA()}
+                  title="Devolver conversa para a IA"
+                  disabled={assumindo}
                 >
-                  <option value="">— Selecione —</option>
-                  {atendentes
-                    .filter((a) => a.ativo)
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.nome} · {a.telefone}
-                        {a.cargo ? ` (${a.cargo})` : ""}
-                      </option>
-                    ))}
-                  <option value="__manual__">Outro número (manual)…</option>
-                </select>
-                {atendentes.length === 0 ? (
-                  <p className="mt-1 text-[10px]" style={{ color: RF_TEXT_MUTED }}>
-                    Nenhum atendente cadastrado — use manual ou cadastre em Equipe (menu Atendimento).
-                  </p>
-                ) : null}
-              </div>
-              {vendedorManual ? (
-                <>
-                  <div>
-                    <label className={CRM_SIDEOVER_LABEL}>Telefone *</label>
-                    <input
-                      className={CRM_SIDEOVER_INPUT}
-                      style={CRM_SIDEOVER_INPUT_STYLE}
-                      value={vendedorTelefone}
-                      onChange={(e) => setVendedorTelefone(e.target.value)}
-                      placeholder="5511999999999"
-                    />
-                  </div>
-                  <div>
-                    <label className={CRM_SIDEOVER_LABEL}>Nome</label>
-                    <input
-                      className={CRM_SIDEOVER_INPUT}
-                      style={CRM_SIDEOVER_INPUT_STYLE}
-                      value={vendedorNome}
-                      onChange={(e) => setVendedorNome(e.target.value)}
-                      placeholder="Opcional"
-                    />
-                  </div>
-                </>
-              ) : null}
-              <CrmSideoverActionGroup>
-                <CrmSideoverActionBtn
-                  onClick={() => {
-                    setPainelTransferir(null);
-                    setAtendenteSelId("");
-                    setVendedorManual(false);
-                    setVendedorTelefone("");
-                    setVendedorNome("");
-                  }}
-                  disabled={transferindo}
-                >
-                  Cancelar
-                </CrmSideoverActionBtn>
-                <CrmSideoverActionBtn
+                  {assumindo ? "A devolver…" : "Devolver à IA"}
+                </ChatActionBtn>
+              ) : (
+                <ChatActionBtn
                   active
-                  onClick={() => void transferirParaVendedor()}
-                  disabled={
-                    transferindo ||
-                    (!atendenteSelId && !(vendedorManual && vendedorTelefone.trim()))
-                  }
+                  onClick={() => void assumirAtendimento()}
+                  title="Assumir atendimento humano para enviar mensagens via WhatsApp"
+                  disabled={assumindo}
                 >
-                  {transferindo ? "A transferir…" : "Criar grupo"}
-                </CrmSideoverActionBtn>
-              </CrmSideoverActionGroup>
+                  {assumindo ? "A assumir…" : "Assumir atendimento"}
+                </ChatActionBtn>
+              )}
             </div>
-          </CrmSideoverInlinePanel>
-        ) : null}
-
-        {interactive && painelTransferir === "agente" ? (
-          <CrmSideoverInlinePanel title="Transferir agente IA">
-            <p className="mb-3 text-xs leading-relaxed" style={{ color: RF_TEXT_MUTED }}>
-              Próximas mensagens do lead serão tratadas pelo agente selecionado (quando a IA estiver
-              ativa).
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className={CRM_SIDEOVER_LABEL}>Agente IA</label>
-                <select
-                  className={CRM_SIDEOVER_INPUT}
-                  style={CRM_SIDEOVER_INPUT_STYLE}
-                  value={agenteSel}
-                  onChange={(e) => setAgenteSel(e.target.value)}
-                >
-                  <option value="">— Selecione —</option>
-                  {agentes.map((a) => (
-                    <option key={a.agente_slug} value={a.agente_slug}>
-                      {a.nome} ({a.agente_slug})
-                    </option>
-                  ))}
-                </select>
-                {agentes.length === 0 ? (
-                  <p className="mt-1 text-[10px]" style={{ color: RF_TEXT_MUTED }}>
-                    Nenhum agente ativo carregado.
-                  </p>
-                ) : null}
-              </div>
-              <CrmSideoverActionGroup>
-                <CrmSideoverActionBtn
-                  onClick={() => setPainelTransferir(null)}
-                  disabled={transferindo}
-                >
-                  Cancelar
-                </CrmSideoverActionBtn>
-                <CrmSideoverActionBtn
-                  active
-                  onClick={() => void transferirAgente()}
-                  disabled={transferindo || !agenteSel.trim()}
-                >
-                  {transferindo ? "A guardar…" : "Confirmar"}
-                </CrmSideoverActionBtn>
-              </CrmSideoverActionGroup>
-            </div>
-          </CrmSideoverInlinePanel>
-        ) : null}
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span style={{ fontSize: 10, fontWeight: 700, color: RF_ACCENT }}>
-            {stats.total} mensagens
-          </span>
-          {stats.cliente > 0 ? (
-            <span style={{ fontSize: 10, fontWeight: 700, color: RF_TEXT_MUTED }}>Lead {stats.cliente}</span>
-          ) : null}
-          {stats.ia > 0 ? (
-            <span style={{ fontSize: 10, fontWeight: 700, color: RF_TEXT_MUTED }}>IA {stats.ia}</span>
-          ) : null}
-          {stats.humano > 0 ? (
-            <span style={{ fontSize: 10, fontWeight: 700, color: RF_TEXT_MUTED }}>
-              Humano {stats.humano}
-            </span>
-          ) : null}
-          {stats.anotacao > 0 ? (
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#c4b5fd" }}>
-              Anotações {stats.anotacao}
-            </span>
           ) : null}
         </div>
-
-        {interactive && emGrupo ? (
-          <p className="m-0 mt-2 text-[11px] leading-relaxed" style={{ color: RF_TEXT_MUTED }}>
-            Atendimento no grupo WhatsApp. Responda pelo app WhatsApp — mensagens do grupo aparecem
-            aqui no histórico.
-          </p>
-        ) : interactive && !assumido ? (
-          <p className="m-0 mt-2 text-[11px] leading-relaxed" style={{ color: RF_TEXT_MUTED }}>
-            Assuma o atendimento para enviar mensagens ao lead via WhatsApp (chat direto).
-          </p>
-        ) : null}
       </div>
 
       {erro ? (
-        <p className="mb-2 shrink-0 text-xs text-[#f85149]" role="alert">
+        <p className="mb-2 shrink-0 text-xs text-[#b42318]" role="alert">
           {erro}
         </p>
       ) : null}
@@ -1131,10 +887,10 @@ export function LeadChatTab({
           style={{
             color:
               sendStrip.kind === "error"
-                ? "#f85149"
+                ? "#b42318"
                 : sendStrip.kind === "info"
-                  ? "#79c0ff"
-                  : RF_ACCENT,
+                  ? CHAT.cliente
+                  : CHAT.ia,
           }}
           role="alert"
         >
@@ -1142,21 +898,20 @@ export function LeadChatTab({
         </p>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-white p-3" style={{ borderColor: CHAT.border }}>
         {loading ? (
-          <p style={{ color: RF_TEXT_MUTED, fontSize: 13, textAlign: "center", padding: "24px 0" }}>
+          <p className="py-6 text-center text-[13px]" style={{ color: CHAT.muted }}>
             A carregar conversas…
           </p>
         ) : mensagens.length === 0 ? (
-          <p style={{ color: RF_TEXT_SECONDARY, fontSize: 13, lineHeight: 1.55, margin: 0, maxWidth: 640 }}>
-            Ainda não há mensagens registadas para este lead. O histórico de{" "}
-            <strong style={{ color: "#aebccf" }}>WhatsApp, IA e atendimento humano</strong> aparecerá
-            aqui quando existir conversa. Assuma o atendimento para responder pelo sistema.
+          <p className="m-0 max-w-[640px] text-[13px] leading-relaxed" style={{ color: CHAT.secondary }}>
+            Ainda não há mensagens registadas. O histórico de WhatsApp, IA e atendimento humano
+            aparecerá aqui. Áudios e arquivos podem ser reproduzidos ou baixados neste painel.
           </p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="flex flex-col gap-4">
             {mensagens.map((msg) => (
-              <LeadChatBubble key={msg.id} msg={msg} />
+              <LeadChatBubble key={msg.id} msg={msg} leadId={leadId} />
             ))}
           </div>
         )}
@@ -1164,31 +919,23 @@ export function LeadChatTab({
       </div>
 
       {interactive ? (
-        <div
-          className="shrink-0 pt-3"
-          style={{ borderTop: `1px solid ${RF_BORDER}`, marginTop: 12 }}
-        >
+        <div className="shrink-0 pt-3" style={{ borderTop: `1px solid ${CHAT.border}`, marginTop: 12 }}>
           <div
+            className="flex items-end gap-2.5 rounded-xl border px-3 py-2"
             style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 10,
-              background: "rgba(6, 13, 8, 0.85)",
-              border: `1px solid ${RF_BORDER_STRONG}`,
-              borderRadius: 14,
-              padding: "8px 10px 8px 14px",
-              opacity: podeEnviar ? 1 : 0.55,
+              borderColor: assumido ? "#86efac" : CHAT.borderStrong,
+              background: assumido ? "#ffffff" : "#f9fafb",
+              boxShadow: assumido ? "0 0 0 1px rgba(34, 197, 94, 0.2)" : undefined,
             }}
           >
             <textarea
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={
-                emGrupo
-                  ? "Conversa no grupo WhatsApp — use o app para responder…"
-                  : assumido
-                    ? "Mensagem para o lead (WhatsApp)…"
-                    : "Assuma o atendimento para enviar mensagens…"
+                assumido
+                  ? "Escreva a mensagem — será enviada com tag Consultor + nome do negócio"
+                  : "Assuma o atendimento para enviar mensagens…"
               }
               rows={2}
               disabled={enviando || !podeEnviar}
@@ -1198,17 +945,9 @@ export function LeadChatTab({
                   void enviarMensagem();
                 }
               }}
+              className="min-h-11 max-h-[120px] flex-1 resize-none border-0 bg-transparent text-[14px] font-medium leading-snug outline-none disabled:cursor-not-allowed"
               style={{
-                flex: 1,
-                minHeight: 44,
-                maxHeight: 120,
-                resize: "none",
-                border: "none",
-                background: "transparent",
-                color: RF_TEXT_PRIMARY,
-                fontSize: 13,
-                lineHeight: 1.45,
-                outline: "none",
+                color: assumido ? CHAT.textStrong : CHAT.muted,
               }}
             />
             <button
@@ -1216,28 +955,19 @@ export function LeadChatTab({
               disabled={enviando || !input.trim() || !podeEnviar}
               onClick={() => void enviarMensagem()}
               aria-label="Enviar mensagem"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-0 disabled:cursor-not-allowed"
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                border: "none",
-                background:
-                  enviando || !input.trim() || !podeEnviar
-                    ? "#dcebd8"
-                    : "linear-gradient(145deg, #003b26, #14532d)",
-                color: "#c9a24a",
-                cursor: enviando || !input.trim() || !podeEnviar ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
+                background: enviando || !input.trim() || !podeEnviar ? CHAT.border : CHAT.accent,
+                color: "#0b2210",
               }}
             >
               <Send size={20} />
             </button>
           </div>
-          <p style={{ fontSize: 10, color: "#484f58", margin: "8px 0 0", textAlign: "center" }}>
-            Enter envia · Shift+Enter nova linha · mensagens vão para WhatsApp quando configurado
+          <p className="mt-2 text-center text-[10px]" style={{ color: CHAT.muted }}>
+            {assumido
+              ? "Enter envia · a tag *[Consultor seu nome — negócio]* é acrescentada automaticamente"
+              : "Enter envia · Shift+Enter nova linha"}
           </p>
         </div>
       ) : null}

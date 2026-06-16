@@ -5,7 +5,7 @@ import { telefoneConversaId } from "@/lib/crm/isolamento-conversa-lead";
 import { isMissingPgColumn } from "@/lib/tenant-default";
 import { cancelarJobsIaPendentesTelefone } from "@/lib/whatsapp/human-handoff-from-device";
 import { leadMetadataRecord } from "@/lib/whatsapp/lead-group-routing";
-import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
+import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsapp";
 import { uazapiCreateGroup, uazapiSendTextToGroup } from "@/lib/whatsapp/uazapi-group";
 import { whatsappConfigured } from "@/lib/whatsapp/whatsapp-send";
 
@@ -66,43 +66,6 @@ function resolverHumanoResponsavel(body: TransferirGrupoBody): string {
   const fromNome = slugFromText(body.vendedorNome);
   if (fromNome) return fromNome;
   return slugHumanoFallback();
-}
-
-async function resolverTokenInstanciaWhatsapp(
-  supabase: SupabaseClient,
-  agenteSlug: string | null | undefined
-): Promise<{ token: string | null; origem: string }> {
-  const slug = typeof agenteSlug === "string" ? agenteSlug.trim() : "";
-  if (slug) {
-    const { data: agenteRow, error } = await supabase
-      .from("hub_agente_identidade")
-      .select("uazapi_instance_token, uazapi_connection_status, ativo, arquivado_em")
-      .eq("agente_slug", slug)
-      .maybeSingle();
-
-    if (error) {
-      console.warn("[TRANSFERIR-GRUPO] token por agente:", error.message);
-    } else {
-      const token =
-        typeof agenteRow?.uazapi_instance_token === "string"
-          ? agenteRow.uazapi_instance_token.trim()
-          : "";
-      if (token && agenteRow?.ativo !== false && agenteRow?.arquivado_em == null) {
-        return { token, origem: `agente:${slug}` };
-      }
-    }
-  }
-
-  const linha = await resolverLinhaWhatsAppInbound(supabase, null, {});
-  if (linha.kind === "agent_instance") {
-    return { token: linha.instanceToken, origem: `linha:${linha.agenteSlug}` };
-  }
-  if (linha.kind === "legacy_global_token") {
-    const legacy = process.env.UAZAPI_INSTANCE_TOKEN?.trim() || null;
-    return { token: legacy, origem: "legacy_global_token" };
-  }
-
-  return { token: null, origem: linha.kind === "ignored" ? linha.reason : "desconhecido" };
 }
 
 function mensagemBoasVindasPadrao(leadNome: string, vendedorNome?: string): string {

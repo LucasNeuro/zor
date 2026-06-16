@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 
 
@@ -489,7 +489,7 @@ export function PessoaFormDrawer({ open, onClose, onSaved }: Props) {
 
             <p style={{ margin: "6px 0 0", fontSize: 12, color: "#5d7a67" }}>
 
-              Cadastro em hub_pessoas — PF ou PJ na mesma lista.
+              Cadastro de pessoa física ou jurídica na mesma lista.
 
             </p>
 

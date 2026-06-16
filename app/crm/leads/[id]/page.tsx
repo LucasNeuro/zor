@@ -408,7 +408,7 @@ export default function LeadFichaPage() {
       toastError(json.error || "Não foi possível criar o negócio.");
       return;
     }
-    if (json.data?.id) router.push(`/crm/negocios/${json.data.id}`);
+    if (json.data?.id) router.push(`/crm/negocios?negocio=${encodeURIComponent(json.data.id)}`);
   }
 
   async function moverEstagio(estagioNovo: string, extra?: Record<string, unknown>) {

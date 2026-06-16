@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Briefcase, UserRound } from "lucide-react";
+import { Briefcase, History, UserRound } from "lucide-react";
 import {
   CrmSideoverActionBtn,
   CrmSideoverActionGroup,
@@ -13,10 +13,10 @@ import {
   crmRetrofitSideoverFooterBtnPrimary,
   CrmRetrofitSideoverShell,
 } from "@/components/crm/CrmRetrofitSideoverShell";
-import { LeadEncaminharPanel } from "@/components/crm/leads/LeadEncaminharPanel";
 import { LeadChatTab } from "@/components/crm/leads/LeadChatTab";
 import { LeadEmailChatTab } from "@/components/crm/leads/LeadEmailChatTab";
 import { LeadNegocioPanel } from "@/components/crm/leads/LeadNegocioPanel";
+import { LeadNegociosListPanel } from "@/components/crm/leads/LeadNegociosListPanel";
 import { LeadSideoverChatToggle } from "@/components/crm/leads/LeadSideoverChatRail";
 import {
   LeadSideoverNavRail,
@@ -24,16 +24,19 @@ import {
 } from "@/components/crm/leads/LeadSideoverNavRail";
 import { LeadObservacoesTab, type CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
 import { LeadTimelineTab } from "@/components/crm/leads/LeadTimelineTab";
+import { LeadStatusTimelineTab } from "@/components/crm/leads/LeadStatusTimelineTab";
 import { LEAD_ORIGENS } from "@/lib/crm/lead-cadastro";
 import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
 import {
-  RF_INPUT_STYLE,
-  RF_LABEL_STYLE,
-  RF_TEXT_MUTED,
+  RF_LIGHT_INPUT_STYLE,
+  RF_LIGHT_LABEL_STYLE,
+  RF_LIGHT_TEXT_MUTED,
+  type CrmSideoverTheme,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
 import { leadEhCanalEmail, leadEhCanalWhatsapp } from "@/lib/crm/lead-canal";
+import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import type { LeadTimelineEvent } from "@/lib/crm/lead-timeline";
 
 const ORIGENS_LABEL: Record<string, string> = {
@@ -48,8 +51,15 @@ const ORIGENS_LABEL: Record<string, string> = {
   outro: "Outro",
 };
 
-const INPUT: React.CSSProperties = { ...RF_INPUT_STYLE, padding: "10px 12px", borderRadius: 10, fontSize: 13 };
-const LABEL: React.CSSProperties = { ...RF_LABEL_STYLE, fontWeight: 600, marginBottom: 4 };
+const INPUT: React.CSSProperties = {
+  ...RF_LIGHT_INPUT_STYLE,
+  padding: "10px 12px",
+  borderRadius: 10,
+  fontSize: 13,
+};
+const LABEL: React.CSSProperties = { ...RF_LIGHT_LABEL_STYLE, fontWeight: 600, marginBottom: 4 };
+
+const LEAD_SIDEOVER_THEME: CrmSideoverTheme = "light";
 
 export type LeadEditData = {
   id: string;
@@ -74,7 +84,7 @@ export type LeadEditData = {
 
 type EstagioUi = { id: string; label: string; color: string };
 
-type ScreenId = LeadSideoverNavId | "encaminhar" | "negocio";
+type ScreenId = LeadSideoverNavId | "negocio" | "status_timeline";
 
 type Props = {
   open: boolean;
@@ -88,7 +98,9 @@ type Props = {
   onNotasChanged?: () => void;
   onEncaminhado?: (lead: LeadEditData) => void;
   onNegocioCreated?: (lead: LeadEditData, negocioId: string) => void;
-  initialTab?: LeadSideoverNavId | "chat";
+  /** Abre sideover de detalhe do negócio (Agent 2). */
+  onOpenNegocio?: (negocioId: string) => void;
+  initialTab?: LeadSideoverNavId | "chat" | "status_timeline";
   /** Funil comercial (padrão) ou funil de atendimento (estagio_atendimento). */
   context?: "vendas" | "atendimento";
 };
@@ -103,6 +115,7 @@ export function LeadEditSideover({
   onNotasChanged,
   onEncaminhado,
   onNegocioCreated,
+  onOpenNegocio,
   initialTab = "timeline",
   context = "vendas",
 }: Props) {
@@ -129,7 +142,7 @@ export function LeadEditSideover({
   });
 
   const navActive: LeadSideoverNavId | null =
-    screen === "encaminhar" || screen === "negocio" ? null : screen;
+    screen === "negocio" || screen === "status_timeline" ? null : screen;
 
   const canalLead = useMemo(() => {
     if (!lead) return { showWhatsapp: true, showEmail: false };
@@ -141,7 +154,7 @@ export function LeadEditSideover({
     };
     return {
       showWhatsapp: leadEhCanalWhatsapp(input),
-      showEmail: leadEhCanalEmail(input),
+      showEmail: isEmailChannelEnabledClient() && leadEhCanalEmail(input),
     };
   }, [lead, leadMetadata]);
 
@@ -174,7 +187,7 @@ export function LeadEditSideover({
       metadata: null,
     };
     const abrirWhatsapp = leadEhCanalWhatsapp(canalInput);
-    const abrirEmail = leadEhCanalEmail(canalInput);
+    const abrirEmail = isEmailChannelEnabledClient() && leadEhCanalEmail(canalInput);
     setScreen(
       initialTab === "chat"
         ? abrirWhatsapp
@@ -182,7 +195,9 @@ export function LeadEditSideover({
           : abrirEmail
             ? "conversas_email"
             : "timeline"
-        : initialTab
+        : initialTab === "status_timeline"
+          ? "status_timeline"
+          : initialTab
     );
     setErro("");
     setErroObservacao("");
@@ -312,38 +327,37 @@ export function LeadEditSideover({
 
   const headerToolbar = (
     <CrmSideoverToolbarRow>
-      {(onEncaminhado || onNegocioCreated) ? (
-        <CrmSideoverActionGroup>
-          {onEncaminhado ? (
-            <CrmSideoverActionBtn
-              active={screen === "encaminhar"}
-              onClick={() => toggleScreen("encaminhar")}
-              title="Encaminhar lead (funil comercial — parceiro/responsável)"
-            >
-              <ArrowUpRight size={14} />
-              Encaminhar
-            </CrmSideoverActionBtn>
-          ) : null}
-          {onNegocioCreated ? (
-            <CrmSideoverActionBtn
-              active={screen === "negocio"}
-              onClick={() => toggleScreen("negocio")}
-              title="Criar negócio"
-            >
-              <Briefcase size={14} />
-              Negócio
-            </CrmSideoverActionBtn>
-          ) : null}
-        </CrmSideoverActionGroup>
-      ) : null}
+      <CrmSideoverActionGroup theme={LEAD_SIDEOVER_THEME}>
+        {onNegocioCreated ? (
+          <CrmSideoverActionBtn
+            active={screen === "negocio"}
+            onClick={() => toggleScreen("negocio")}
+            title="Criar negócio"
+            theme={LEAD_SIDEOVER_THEME}
+          >
+            <Briefcase size={14} />
+            Negócio
+          </CrmSideoverActionBtn>
+        ) : null}
+        <CrmSideoverActionBtn
+          active={screen === "status_timeline"}
+          onClick={() => toggleScreen("status_timeline")}
+          title="Histórico de mudanças de status"
+          theme={LEAD_SIDEOVER_THEME}
+        >
+          <History size={14} />
+          Histórico
+        </CrmSideoverActionBtn>
+      </CrmSideoverActionGroup>
 
-      <CrmSideoverActionGroup className="min-w-max">
+      <CrmSideoverActionGroup className="min-w-max" theme={LEAD_SIDEOVER_THEME}>
         {estagios.map((e) => (
           <CrmSideoverActionBtn
             key={e.id}
             active={estagioAtual === e.id}
             onClick={() => void moverEstagio(e.id)}
             title={`Funil comercial: ${e.label}`}
+            theme={LEAD_SIDEOVER_THEME}
           >
             {e.label}
           </CrmSideoverActionBtn>
@@ -351,13 +365,18 @@ export function LeadEditSideover({
       </CrmSideoverActionGroup>
 
       {context === "vendas" && estagiosAtendimento?.length ? (
-        <CrmSideoverActionGroup className="min-w-max" aria-label="Status de atendimento">
+        <CrmSideoverActionGroup
+          className="min-w-max"
+          aria-label="Status de atendimento"
+          theme={LEAD_SIDEOVER_THEME}
+        >
           {estagiosAtendimento.map((e) => (
             <CrmSideoverActionBtn
               key={`at-${e.id}`}
               active={(lead.estagio_atendimento || "novo") === e.id}
               onClick={() => void moverEstagioAtendimento(e.id)}
               title={`Atendimento: ${e.label}`}
+              theme={LEAD_SIDEOVER_THEME}
             >
               {e.label}
             </CrmSideoverActionBtn>
@@ -372,6 +391,7 @@ export function LeadEditSideover({
       open={open}
       onClose={onClose}
       wide
+      theme={LEAD_SIDEOVER_THEME}
       kindLabel={context === "atendimento" ? "Atendimento" : "Vendas"}
       title={lead.nome}
       subtitle={subtitleParts.join(" · ") || undefined}
@@ -385,6 +405,7 @@ export function LeadEditSideover({
         <LeadSideoverChatToggle
           active={screen === "conversas"}
           onClick={() => setScreen((s) => (s === "conversas" ? "timeline" : "conversas"))}
+          theme={LEAD_SIDEOVER_THEME}
         />
       }
       headerToolbar={headerToolbar}
@@ -394,7 +415,8 @@ export function LeadEditSideover({
           ? crmRetrofitSideoverFooterBtnPrimary(
               salvando ? "Salvando…" : "Salvar alterações",
               () => void salvarDados(),
-              salvando || !form.nome.trim()
+              salvando || !form.nome.trim(),
+              LEAD_SIDEOVER_THEME
             )
           : undefined
       }
@@ -409,12 +431,15 @@ export function LeadEditSideover({
           observacoesCount={notas.length}
           showWhatsappTab={canalLead.showWhatsapp}
           showEmailTab={canalLead.showEmail}
+          showNegociosTab={context === "atendimento"}
+          theme={LEAD_SIDEOVER_THEME}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {erro &&
           screen !== "negocio" &&
-          screen !== "encaminhar" &&
+          screen !== "status_timeline" &&
+          screen !== "negocios" &&
           screen !== "conversas" &&
           screen !== "conversas_email" ? (
             <p className="shrink-0 px-6 pt-4 text-xs text-[#f85149]" role="alert">
@@ -440,13 +465,10 @@ export function LeadEditSideover({
                 onHumanoResponsavelChange={(valor) => {
                   onUpdated?.({ ...lead, humano_responsavel: valor });
                 }}
-                onAgenteResponsavelChange={(valor) => {
-                  onUpdated?.({ ...lead, agente_responsavel: valor });
-                }}
                 onMetadataChange={setLeadMetadata}
               />
             ) : null}
-            {screen === "conversas_email" ? (
+            {isEmailChannelEnabledClient() && screen === "conversas_email" ? (
               <LeadEmailChatTab
                 leadId={lead.id}
                 leadNome={lead.nome}
@@ -459,31 +481,39 @@ export function LeadEditSideover({
               />
             ) : null}
 
-            {screen === "encaminhar" && onEncaminhado ? (
-              <LeadEncaminharPanel
-                leadId={lead.id}
-                leadNome={lead.nome}
-                onCancel={() => setScreen("timeline")}
-                onSuccess={() => {
-                  setScreen("timeline");
-                  void carregarDetalhe(lead.id);
-                  onEncaminhado(lead);
-                }}
-              />
-            ) : null}
-
             {screen === "negocio" && onNegocioCreated ? (
               <LeadNegocioPanel
                 leadId={lead.id}
                 leadNome={lead.nome}
                 leadCodigo={lead.codigo}
                 valorEstimadoLead={lead.valor_estimado}
-                onCancel={() => setScreen("timeline")}
+                theme={LEAD_SIDEOVER_THEME}
+                onCancel={() => setScreen(context === "atendimento" ? "negocios" : "timeline")}
                 onSuccess={(negocioId) => {
-                  setScreen("timeline");
+                  setScreen(context === "atendimento" ? "negocios" : "timeline");
                   void carregarDetalhe(lead.id);
                   onNegocioCreated(lead, negocioId);
                 }}
+              />
+            ) : null}
+
+            {screen === "negocios" ? (
+              <LeadNegociosListPanel
+                leadId={lead.id}
+                theme={LEAD_SIDEOVER_THEME}
+                onOpenNegocio={onOpenNegocio}
+                onCreateNegocio={
+                  onNegocioCreated ? () => setScreen("negocio") : undefined
+                }
+              />
+            ) : null}
+
+            {screen === "status_timeline" ? (
+              <LeadStatusTimelineTab
+                leadNome={lead.nome}
+                events={timelineEvents}
+                theme={LEAD_SIDEOVER_THEME}
+                compact
               />
             ) : null}
 
@@ -492,14 +522,14 @@ export function LeadEditSideover({
                 leadId={lead.id}
                 leadNome={lead.nome}
                 metadata={leadMetadata}
-                theme="dark"
+                theme={LEAD_SIDEOVER_THEME}
                 compact
                 initialEvents={timelineEvents}
               />
             ) : null}
 
             {screen === "dados" ? (
-              <CrmSideoverFormPanel>
+              <CrmSideoverFormPanel theme={LEAD_SIDEOVER_THEME}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <label style={{ gridColumn: "1 / -1" }}>
                     <span style={LABEL}>Nome</span>
@@ -618,9 +648,9 @@ export function LeadEditSideover({
                   onNovaNotaChange={setNovaNota}
                   onAdicionar={adicionarNota}
                   adicionando={adicionandoNota}
-                  variant="sideover"
+                  theme={LEAD_SIDEOVER_THEME}
                 />
-                <p className="mt-3 text-[11px] leading-relaxed" style={{ color: RF_TEXT_MUTED }}>
+                <p className="mt-3 text-[11px] leading-relaxed" style={{ color: RF_LIGHT_TEXT_MUTED }}>
                   As observações aparecem no chat como anotações internas — o cliente não as vê nem
                   recebe no WhatsApp.
                 </p>

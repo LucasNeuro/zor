@@ -31,6 +31,11 @@ type Props = {
   compact?: boolean;
   leadNome?: string;
   className?: string;
+  /** Fixa o filtro de categoria (oculta chips de filtro). */
+  lockCategory?: LeadTimelineCategory | "todos";
+  headerTitle?: string;
+  headerSubtitle?: string;
+  showExport?: boolean;
 };
 
 const FILTER_OPTIONS: { id: LeadTimelineCategory | "todos"; label: string }[] = [
@@ -123,14 +128,19 @@ export function LeadActivityFlow({
   compact = false,
   leadNome,
   className = "",
+  lockCategory,
+  headerTitle,
+  headerSubtitle,
+  showExport = true,
 }: Props) {
-  const [filtro, setFiltro] = useState<LeadTimelineCategory | "todos">("todos");
+  const [filtro, setFiltro] = useState<LeadTimelineCategory | "todos">(lockCategory ?? "todos");
   const [showFiltros, setShowFiltros] = useState(false);
   const t = themeTokens(theme);
+  const filtroAtivo = lockCategory ?? filtro;
 
   const filtrados = useMemo(
-    () => filtrarTimelinePorCategoria(events, filtro),
-    [events, filtro]
+    () => filtrarTimelinePorCategoria(events, filtroAtivo),
+    [events, filtroAtivo]
   );
 
   const counts = useMemo(() => {
@@ -174,62 +184,67 @@ export function LeadActivityFlow({
               color: t.textMuted,
             }}
           >
-            Fluxo de Atividade Recente
+            {headerTitle ?? "Fluxo de Atividade Recente"}
           </h3>
-          {!compact ? (
+          {!compact && (headerSubtitle || !lockCategory) ? (
             <p style={{ margin: "4px 0 0", fontSize: 11, color: t.textSub, lineHeight: 1.45 }}>
-              Estágios, transferências, conversas e ações do sistema
+              {headerSubtitle ??
+                "Estágios, transferências, conversas e ações do sistema"}
             </p>
           ) : null}
         </div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          <button
-            type="button"
-            onClick={() => setShowFiltros((v) => !v)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "7px 12px",
-              borderRadius: 10,
-              border: `1px solid ${t.btnBorder}`,
-              background: showFiltros ? t.chipActiveBg : t.chipBg,
-              color: t.chipColor,
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-            aria-expanded={showFiltros}
-          >
-            <Filter size={13} />
-            Filtrar
-          </button>
-          <button
-            type="button"
-            onClick={() => exportarTimelineCsv(filtrados, leadNome)}
-            disabled={filtrados.length === 0}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "7px 12px",
-              borderRadius: 10,
-              border: `1px solid ${t.btnBorder}`,
-              background: t.chipBg,
-              color: filtrados.length === 0 ? t.textMuted : t.chipColor,
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: filtrados.length === 0 ? "not-allowed" : "pointer",
-              opacity: filtrados.length === 0 ? 0.55 : 1,
-            }}
-          >
-            <Download size={13} />
-            Exportar
-          </button>
+          {!lockCategory ? (
+            <button
+              type="button"
+              onClick={() => setShowFiltros((v) => !v)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "7px 12px",
+                borderRadius: 10,
+                border: `1px solid ${t.btnBorder}`,
+                background: showFiltros ? t.chipActiveBg : t.chipBg,
+                color: t.chipColor,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+              aria-expanded={showFiltros}
+            >
+              <Filter size={13} />
+              Filtrar
+            </button>
+          ) : null}
+          {showExport ? (
+            <button
+              type="button"
+              onClick={() => exportarTimelineCsv(filtrados, leadNome)}
+              disabled={filtrados.length === 0}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "7px 12px",
+                borderRadius: 10,
+                border: `1px solid ${t.btnBorder}`,
+                background: t.chipBg,
+                color: filtrados.length === 0 ? t.textMuted : t.chipColor,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: filtrados.length === 0 ? "not-allowed" : "pointer",
+                opacity: filtrados.length === 0 ? 0.55 : 1,
+              }}
+            >
+              <Download size={13} />
+              Exportar
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {showFiltros ? (
+      {showFiltros && !lockCategory ? (
         <div
           style={{
             display: "flex",

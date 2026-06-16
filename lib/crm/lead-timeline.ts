@@ -223,6 +223,11 @@ export function filtrarTimelinePorCategoria(
   return events.filter((e) => e.categoria === categoria);
 }
 
+/** Mudanças de funil comercial e status de atendimento (estágio / status_change). */
+export function filtrarTimelineMudancasStatus(events: LeadTimelineEvent[]): LeadTimelineEvent[] {
+  return filtrarTimelinePorCategoria(events, "estagio");
+}
+
 export function exportarTimelineCsv(events: LeadTimelineEvent[], leadNome?: string): void {
   const header = ["data", "categoria", "tipo", "titulo", "descricao", "autor", "fonte"];
   const rows = events.map((e) =>

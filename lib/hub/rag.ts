@@ -589,3 +589,47 @@ export async function buscarTrechosRag(
     similarity: Number(row.similarity ?? 0),
   }));
 }
+
+/** Trechos iniciais dos documentos do agente — fallback quando a busca semântica não retorna match. */
+export async function buscarTrechosDiretosAgente(
+  supabase: SupabaseClient,
+  agenteSlug: string,
+  limit = 6
+): Promise<RagTrecho[]> {
+  const { data: docs, error: docErr } = await supabase
+    .from("hub_agente_rag_documentos")
+    .select("id, nome_arquivo")
+    .eq("agente_slug", agenteSlug)
+    .eq("status", "pronto")
+    .order("indexado_em", { ascending: false })
+    .limit(Math.max(limit, 4));
+
+  if (docErr || !docs?.length) return [];
+
+  const docMap = new Map(docs.map((d) => [d.id, String(d.nome_arquivo ?? "documento")]));
+  const out: RagTrecho[] = [];
+  const vistos = new Set<string>();
+
+  for (const docId of docs.map((d) => d.id)) {
+    const { data: chunks } = await supabase
+      .from("hub_agente_rag_chunks")
+      .select("conteudo, chunk_index")
+      .eq("document_id", docId)
+      .order("chunk_index", { ascending: true })
+      .limit(2);
+
+    if (!chunks?.length) continue;
+    const nomeArquivo = docMap.get(docId) ?? "documento";
+    for (const ch of chunks) {
+      const conteudo = String(ch.conteudo ?? "").trim();
+      if (conteudo.length < 40) continue;
+      const key = conteudo.slice(0, 120);
+      if (vistos.has(key)) continue;
+      vistos.add(key);
+      out.push({ nomeArquivo, conteudo, similarity: 0.5 });
+      if (out.length >= limit) return out;
+    }
+  }
+
+  return out;
+}

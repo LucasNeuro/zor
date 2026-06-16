@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCrmApiAccess } from "@/lib/crm/crm-api-auth";
 import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 import {
+  EMAIL_CHANNEL_DISABLED_CODE,
+  EMAIL_CHANNEL_DISABLED_MESSAGE,
+  isEmailChannelEnabled,
+} from "@/lib/feature-flags";
+import {
   buildGoogleOAuthAuthorizeUrl,
   buildGoogleOAuthState,
   googleOAuthConfigured,
@@ -25,6 +30,13 @@ function sanitizeReturnTo(raw: string | null): string | null {
 export async function GET(request: NextRequest) {
   const accessErr = await requireCrmApiAccess(request);
   if (accessErr) return accessErr;
+
+  if (!isEmailChannelEnabled()) {
+    return NextResponse.json(
+      { error: EMAIL_CHANNEL_DISABLED_MESSAGE, code: EMAIL_CHANNEL_DISABLED_CODE },
+      { status: 503 }
+    );
+  }
 
   const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
 

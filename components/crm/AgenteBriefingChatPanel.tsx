@@ -5,6 +5,12 @@ import { Bot, Send, User, X } from "lucide-react";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 import {
+  agenteEhCopilotoInterno,
+  isModoOperacaoAgente,
+  type ModoOperacaoAgente,
+} from "@/lib/hub/agente-modo-operacao";
+import { agenteEhPerfilAnalistaCrm } from "@/lib/hub/copiloto-interno-escopo";
+import {
   RF_ACCENT,
   RF_BORDER,
   RF_BORDER_STRONG,
@@ -36,9 +42,21 @@ export type AgenteBriefingDrawerProps = {
   onClose: () => void;
   agenteSlug: string;
   agenteNome: string;
+  agenteCargo?: string | null;
+  modoOperacao?: ModoOperacaoAgente | string | null;
 };
 
-export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: AgenteBriefingDrawerProps) {
+export function AgenteBriefingDrawer({
+  open,
+  onClose,
+  agenteSlug,
+  agenteNome,
+  agenteCargo = null,
+  modoOperacao = null,
+}: AgenteBriefingDrawerProps) {
+  const modoResolvido = isModoOperacaoAgente(modoOperacao) ? modoOperacao : null;
+  const ehCopilotoInterno = agenteEhCopilotoInterno(modoResolvido);
+  const ehAnalistaCrm = agenteEhPerfilAnalistaCrm({ cargo: agenteCargo });
   const [modoChat, setModoChat] = useState<ModoBriefingChat>("briefing_interno");
   const [sessaoId, setSessaoId] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<Msg[]>([]);
@@ -61,11 +79,12 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
   /** Conversa única por abertura do painel — foco em testar playbook / prompt sem lista de sessões. */
   useEffect(() => {
     if (!open || !agenteSlug) return;
+    setModoChat("briefing_interno");
     setSessaoId(null);
     setMensagens([]);
     setErro("");
     setInput("");
-  }, [open, agenteSlug, modoChat]);
+  }, [open, agenteSlug, modoOperacao]);
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -84,7 +103,11 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
       const res = await fetch(base, {
         method: "POST",
         headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ sessao_id: sessaoId, mensagem: t, modo: modoChat }),
+        body: JSON.stringify({
+          sessao_id: sessaoId,
+          mensagem: t,
+          modo: ehCopilotoInterno ? "briefing_interno" : modoChat,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
@@ -175,56 +198,65 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
               }}
             >
               {agenteNome}
+              {ehCopilotoInterno ? (
+                <span style={{ color: RF_TEXT_SECONDARY, fontWeight: 500 }}> · Agente interno</span>
+              ) : null}
             </p>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-                marginTop: 10,
-              }}
-              role="group"
-              aria-label="Modo de teste do funcionário IA"
-            >
-              <button
-                type="button"
-                onClick={() => setModoChat("briefing_interno")}
-                disabled={enviando}
+            {!ehCopilotoInterno ? (
+              <div
                 style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: `1px solid ${modoChat === "briefing_interno" ? RF_BORDER_STRONG : RF_BORDER}`,
-                  background: modoChat === "briefing_interno" ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
-                  color: modoChat === "briefing_interno" ? RF_ACCENT : RF_TEXT_MUTED,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: enviando ? "not-allowed" : "pointer",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginTop: 10,
                 }}
+                role="group"
+                aria-label="Modo de teste do assistente"
               >
-                Revisão operacional
-              </button>
-              <button
-                type="button"
-                onClick={() => setModoChat("simulacao_canal")}
-                disabled={enviando}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: `1px solid ${modoChat === "simulacao_canal" ? RF_BORDER_STRONG : RF_BORDER}`,
-                  background: modoChat === "simulacao_canal" ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
-                  color: modoChat === "simulacao_canal" ? RF_ACCENT : RF_TEXT_MUTED,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: enviando ? "not-allowed" : "pointer",
-                }}
-              >
-                Simulação interna
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setModoChat("briefing_interno")}
+                  disabled={enviando}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: `1px solid ${modoChat === "briefing_interno" ? RF_BORDER_STRONG : RF_BORDER}`,
+                    background: modoChat === "briefing_interno" ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
+                    color: modoChat === "briefing_interno" ? RF_ACCENT : RF_TEXT_MUTED,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: enviando ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Revisão operacional
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModoChat("simulacao_canal")}
+                  disabled={enviando}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: `1px solid ${modoChat === "simulacao_canal" ? RF_BORDER_STRONG : RF_BORDER}`,
+                    background: modoChat === "simulacao_canal" ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
+                    color: modoChat === "simulacao_canal" ? RF_ACCENT : RF_TEXT_MUTED,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: enviando ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Simulação interna
+                </button>
+              </div>
+            ) : null}
             <p style={{ fontSize: 10, color: "#6e7681", margin: "8px 0 0", lineHeight: 1.45 }}>
-              {modoChat === "briefing_interno"
-                ? "Visão de operação: ciclos, logs e acções reais do agente. Sem ferramentas — isso só na conversa ao vivo com o cliente."
-                : "Sempre Mistral + base do negócio. O fluxo WhatsApp só guia passos; a IA redige cada resposta. Sem UAZAPI/CRM real."}
+              {ehCopilotoInterno
+                ? ehAnalistaCrm
+                  ? "Analista de CRM: organiza e analisa leads no sistema. Não encaminha a parceiros — pergunte sobre status, ciclos e registos."
+                  : "Converse com o copiloto como num chat: função do agente, leads, ciclos e registos. Memórias são guardadas só para este assistente."
+                : modoChat === "briefing_interno"
+                  ? "Consulte o histórico de operação deste assistente. Ações automáticas só funcionam na conversa real com o cliente."
+                  : "Espelha o WhatsApp real: conhecimento, catálogo de preços, RAG e ferramentas CRM. Não envia mensagens reais."}
             </p>
           </div>
           <button
@@ -258,16 +290,29 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
             )}
             {mensagens.length === 0 && !erro && !enviando && (
               <p style={{ color: RF_TEXT_SECONDARY, fontSize: 13, lineHeight: 1.55, maxWidth: 640 }}>
-                {modoChat === "briefing_interno" ? (
+                {ehCopilotoInterno ? (
+                  ehAnalistaCrm ? (
+                    <>
+                      Olá! Sou o copiloto de <strong style={{ color: RF_TEXT_PRIMARY }}>{agenteNome}</strong>,
+                      analista de CRM. Ajudo a equipa a entender leads, ciclos e registos no sistema — sem
+                      encaminhar a ninguém e sem atender cliente no WhatsApp.
+                    </>
+                  ) : (
+                    <>
+                      Olá! Sou o copiloto de <strong style={{ color: RF_TEXT_PRIMARY }}>{agenteNome}</strong>. Pergunte o
+                      que este assistente faz, peça resumos de leads, ciclos ou sugestões de próximo passo. Cada agente
+                      guarda as próprias memórias — nada se mistura com outros assistentes.
+                    </>
+                  )
+                ) : modoChat === "briefing_interno" ? (
                   <>
-                    Envie uma mensagem: o agente interpreta{" "}
-                    <strong style={{ color: "#aebccf" }}>ciclos, logs e ações</strong> já registados. Estas respostas
-                    <strong style={{ color: "#aebccf" }}> não usam</strong> ferramentas automáticas — essas só na conversa
-                    ao vivo com o cliente no WhatsApp.
+                    Pergunte sobre o que o assistente já fez — atividades, mensagens e registos guardados. Aqui não
+                    executa ações automáticas; isso só acontece na conversa real com o cliente no WhatsApp.
                   </>
                 ) : (
                   <>
-                    Simule o WhatsApp com <strong style={{ color: "#aebccf" }}>IA inteligente</strong>: cada resposta vem do Mistral usando conhecimento da empresa; o fluxo visual só define ordem e perguntas. Feche e reabra para conversa nova.
+                    Escreva como se fosse um cliente no WhatsApp. O assistente responde com o tom e conhecimento
+                    configurados. Feche e reabra este painel para começar outra conversa.
                   </>
                 )}
               </p>
@@ -482,7 +527,11 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Mensagem para o funcionário IA (revisão ou simulação interna)…"
+                placeholder={
+                  ehCopilotoInterno
+                    ? "Pergunte ao copiloto sobre leads, ciclos, relatórios ou a função deste assistente…"
+                    : "Escreva sua mensagem para testar o assistente…"
+                }
                 rows={2}
                 disabled={enviando}
                 onKeyDown={(e) => {
@@ -528,7 +577,7 @@ export function AgenteBriefingDrawer({ open, onClose, agenteSlug, agenteNome }: 
               </button>
             </div>
             <p style={{ fontSize: 10, color: "#484f58", margin: "8px 0 0", textAlign: "center" }}>
-              Enter envia · Shift+Enter nova linha · ao fechar e reabrir, conversa nova com este funcionário IA
+              Enter envia · Shift+Enter nova linha · feche e reabra para conversa nova
             </p>
           </div>
         </div>

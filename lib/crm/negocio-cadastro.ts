@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { AREAS_ATUACAO } from "@/lib/crm/areas-atuacao";
 import { gerarCodigoSequencial, HUB_PREFIXO_CODIGO } from "@/lib/crm/codigos-rastreio";
 
-/** GRL = geral / multi-setor (default Waje). Demais siglas = verticais legadas Obra10. */
+/** Siglas gravadas em `hub_negocios.prefixo_mercado` — Waje usa GRL por defeito. */
 export const MERCADOS_PREFIXO = ["GRL", "IMB", "ARQ", "RFM", "MRC", "ENG", "SRV", "PRO", "FOR"] as const;
 
 export type PrefixoMercado = (typeof MERCADOS_PREFIXO)[number];
@@ -13,19 +13,12 @@ const LABEL_POR_SIGLA = new Map(
   AREAS_ATUACAO.filter((a) => a.mercadoSigla).map((a) => [a.mercadoSigla!, a.label])
 );
 
-/** Opções de mercado para selects: valor = sigla gravada no banco, label = nome completo. */
-export const MERCADOS_PREFIXO_OPTIONS = MERCADOS_PREFIXO.map((sigla) => ({
-  value: sigla,
-  label: LABEL_POR_SIGLA.get(sigla) ?? sigla,
-}));
+/** UI Waje: apenas mercado geral — catálogo de serviços substitui verticais fixas. */
+export const MERCADOS_PREFIXO_OPTIONS = [
+  { value: MERCADO_PREFIXO_PADRAO, label: LABEL_POR_SIGLA.get(MERCADO_PREFIXO_PADRAO) ?? "Geral" },
+] as const;
 
-/** Verticais legadas Obra10 (obra / arquitetura) — válidas no banco; ocultas na UI Waje de agentes. */
-const MERCADOS_LEGADO_OBRA10 = new Set<PrefixoMercado>(["ARQ", "RFM", "MRC", "ENG"]);
-
-/**
- * @deprecated Waje não expõe verticais Obra10 na UI de agentes — plataforma multi-setor (GRL).
- * Mantido vazio para evitar reintrodução acidental de chips IMB/SRV/PRO/FOR.
- */
+/** Agentes Waje não escolhem mercado vertical na UI. */
 export const MERCADOS_PREFIXO_OPTIONS_AGENTE: { value: PrefixoMercado; label: string }[] = [];
 
 export function labelMercadoPrefixo(sigla: string | null | undefined): string {
@@ -61,10 +54,13 @@ export type NegocioStatus = (typeof NEGOCIO_STATUS)[number];
 export type NegocioCadastroPayload = {
   titulo: string;
   prefixo_mercado: PrefixoMercado;
+  servico_catalogo_id: string | null;
   etapa: NegocioEtapa;
   status: NegocioStatus;
   valor_estimado: number | null;
   data_previsao_fechamento: string | null;
+  data_entrada: string | null;
+  data_entrega: string | null;
   lead_id: string | null;
   pessoa_id: string | null;
 };
@@ -80,10 +76,13 @@ export function validarNegocioCadastro(
   body: Partial<{
     titulo?: string;
     prefixo_mercado?: string;
+    servico_catalogo_id?: string | null;
     etapa?: string;
     status?: string;
     valor_estimado?: number | string | null;
     data_previsao_fechamento?: string | null;
+    data_entrada?: string | null;
+    data_entrega?: string | null;
     lead_id?: string | null;
     pessoa_id?: string | null;
   }>
@@ -93,9 +92,15 @@ export function validarNegocioCadastro(
     return { ok: false, erro: "Título é obrigatório (mín. 2 caracteres)." };
   }
 
-  const prefixo = (body.prefixo_mercado || "").trim().toUpperCase() as PrefixoMercado;
+  const servico_catalogo_id = body.servico_catalogo_id?.trim() || null;
+  if (servico_catalogo_id && !uuidValido(servico_catalogo_id)) {
+    return { ok: false, erro: "Serviço selecionado inválido." };
+  }
+
+  const prefixoRaw = (body.prefixo_mercado || "").trim().toUpperCase();
+  const prefixo = (prefixoRaw || MERCADO_PREFIXO_PADRAO) as PrefixoMercado;
   if (!MERCADOS_PREFIXO.includes(prefixo)) {
-    return { ok: false, erro: "Selecione um mercado válido." };
+    return { ok: false, erro: "Mercado inválido." };
   }
 
   const etapa = (body.etapa || "novo").trim() as NegocioEtapa;
@@ -124,14 +129,37 @@ export function validarNegocioCadastro(
     valor_estimado = v;
   }
 
-  const dataRaw = (body.data_previsao_fechamento || "").trim();
+  const dataRaw = (body.data_previsao_fechamento || body.data_entrega || "").trim();
   let data_previsao_fechamento: string | null = null;
   if (dataRaw) {
     const parsed = new Date(dataRaw);
     if (Number.isNaN(parsed.getTime())) {
-      return { ok: false, erro: "Data de previsão inválida." };
+      return { ok: false, erro: "Data de entrega inválida." };
     }
     data_previsao_fechamento = parsed.toISOString().slice(0, 10);
+  }
+
+  const entradaRaw = (body.data_entrada || "").trim();
+  let data_entrada: string | null = null;
+  if (entradaRaw) {
+    const parsed = new Date(entradaRaw);
+    if (Number.isNaN(parsed.getTime())) {
+      return { ok: false, erro: "Data de entrada inválida." };
+    }
+    data_entrada = parsed.toISOString().slice(0, 10);
+  }
+
+  const entregaRaw = (body.data_entrega || "").trim();
+  let data_entrega: string | null = data_previsao_fechamento;
+  if (entregaRaw) {
+    const parsed = new Date(entregaRaw);
+    if (Number.isNaN(parsed.getTime())) {
+      return { ok: false, erro: "Data de entrega inválida." };
+    }
+    data_entrega = parsed.toISOString().slice(0, 10);
+    if (!data_previsao_fechamento) {
+      data_previsao_fechamento = data_entrega;
+    }
   }
 
   const lead_id = body.lead_id?.trim() || null;
@@ -148,10 +176,13 @@ export function validarNegocioCadastro(
     data: {
       titulo: titulo.slice(0, 200),
       prefixo_mercado: prefixo,
+      servico_catalogo_id,
       etapa,
       status,
       valor_estimado,
       data_previsao_fechamento,
+      data_entrada,
+      data_entrega,
       lead_id,
       pessoa_id,
     },

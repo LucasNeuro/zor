@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { mensagemTemCorpo, parseMidiaFromRow } from "@/lib/crm/chat-mensagem-midia";
 
 function db() {
   return createClient(
@@ -8,22 +9,103 @@ function db() {
   );
 }
 
+function metaRecord(row: Record<string, unknown>): Record<string, unknown> {
+  const raw = row.metadados ?? row.metadata;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return raw as Record<string, unknown>;
+}
+
 function mapHubMensagem(row: Record<string, unknown>) {
   const remetente = String(row.remetente ?? "");
   const direcao =
     remetente === "lead" || remetente === "user" ? "entrada" : "saida";
+  const meta = metaRecord(row);
+  const midia = parseMidiaFromRow(row);
   return {
     id: row.id,
     conteudo: row.conteudo,
     direcao,
     remetente,
     agente_id: row.agente_id ?? null,
+    feito_por_tipo:
+      remetente === "humano"
+        ? "humano"
+        : remetente === "ia" || remetente === "agente"
+          ? "ia"
+          : meta.feito_por_tipo ?? null,
     criado_em: row.enviada_em ?? row.criado_em,
     email_subject: row.email_subject ?? null,
     email_message_id: row.email_message_id ?? null,
-    metadata: row.metadados ?? row.metadata ?? {},
+    tipo_conteudo: midia.tipo,
+    url_midia: midia.urlMidia,
+    nome_arquivo: midia.nomeArquivo,
+    whatsapp_message_id: midia.whatsappMessageId,
+    metadata: meta,
     fonte: "hub_mensagens",
   };
+}
+
+function mapFilaMensagem(row: Record<string, unknown>) {
+  const meta = metaRecord(row);
+  const direcao = String(row.direcao ?? "saida");
+  const remetente =
+    direcao === "entrada" ? "lead" : meta.feito_por_tipo === "humano" ? "humano" : "ia";
+  const midia = parseMidiaFromRow(row);
+  return {
+    id: row.id,
+    conteudo: row.conteudo,
+    direcao,
+    remetente,
+    agente_id: row.agente_id ?? null,
+    feito_por_tipo: meta.feito_por_tipo ?? (direcao === "saida" ? "humano" : null),
+    criado_em: row.enviada_em ?? row.criado_em ?? row.recebida_em,
+    tipo_conteudo: midia.tipo,
+    url_midia: midia.urlMidia,
+    nome_arquivo: midia.nomeArquivo,
+    whatsapp_message_id: midia.whatsappMessageId ?? row.whatsapp_message_id ?? null,
+    metadata: meta,
+    fonte: "hub_fila_mensagens",
+  };
+}
+
+function mergeMensagensWhatsapp(
+  hubRows: Record<string, unknown>[],
+  filaRows: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  const map = new Map<string, Record<string, unknown>>();
+
+  for (const row of hubRows) {
+    if (!mensagemTemCorpo(row)) continue;
+    const mapped = mapHubMensagem(row);
+    map.set(String(mapped.id), mapped);
+  }
+
+  for (const row of filaRows) {
+    if (!mensagemTemCorpo(row)) continue;
+    const mapped = mapFilaMensagem(row);
+    const id = String(mapped.id);
+    if (map.has(id)) continue;
+
+    const criado = String(mapped.criado_em ?? "");
+    const conteudo = String(mapped.conteudo ?? "").trim();
+    const dup = [...map.values()].some(
+      (m) =>
+        String(m.conteudo ?? "").trim() === conteudo &&
+        String(m.direcao) === String(mapped.direcao) &&
+        Math.abs(
+          new Date(String(m.criado_em ?? 0)).getTime() - new Date(criado || 0).getTime()
+        ) < 5000
+    );
+    if (dup) continue;
+
+    map.set(id, mapped);
+  }
+
+  return [...map.values()].sort(
+    (a, b) =>
+      new Date(String(a.criado_em ?? 0)).getTime() -
+      new Date(String(b.criado_em ?? 0)).getTime()
+  );
 }
 
 async function mensagensEmail(supabase: ReturnType<typeof db>, leadId: string) {
@@ -56,22 +138,24 @@ async function mensagensWhatsapp(supabase: ReturnType<typeof db>, leadId: string
     .eq("lead_id", leadId)
     .eq("canal", "whatsapp")
     .order("criado_em", { ascending: false })
-    .limit(1);
+    .limit(3);
 
-  const convId = conversas?.[0]?.id;
-  if (convId) {
+  const convIds = (conversas ?? []).map((c) => c.id).filter(Boolean);
+
+  let hubRows: Record<string, unknown>[] = [];
+  if (convIds.length > 0) {
     const { data, error } = await supabase
       .from("hub_mensagens")
       .select("*")
-      .eq("conversa_id", convId)
+      .in("conversa_id", convIds)
       .order("enviada_em", { ascending: true, nullsFirst: false })
       .limit(250);
-    if (!error && data && data.length > 0) {
-      return data.map((r) => mapHubMensagem(r as Record<string, unknown>));
+    if (!error && data) {
+      hubRows = data as Record<string, unknown>[];
     }
   }
 
-  const { data, error } = await supabase
+  const { data: filaData, error: filaErr } = await supabase
     .from("hub_fila_mensagens")
     .select("*")
     .eq("lead_id", leadId)
@@ -79,8 +163,9 @@ async function mensagensWhatsapp(supabase: ReturnType<typeof db>, leadId: string
     .order("criado_em", { ascending: true })
     .limit(250);
 
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  if (filaErr) throw new Error(filaErr.message);
+
+  return mergeMensagensWhatsapp(hubRows, (filaData ?? []) as Record<string, unknown>[]);
 }
 
 export async function GET(request: NextRequest) {

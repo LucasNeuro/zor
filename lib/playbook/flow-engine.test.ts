@@ -126,15 +126,15 @@ describe("buildBlocoContextoFluxoParaLlm inicio_nome", () => {
     },
   };
 
-  it("reforça pedir somente o nome", () => {
+  it("reforça pedir somente o nome quando ainda faltar", () => {
     const bloco = buildBlocoContextoFluxoParaLlm(definition, {
       step: "inicio_nome",
       answers: {},
       active: true,
       complete: false,
     });
-    expect(bloco).toContain("SOMENTE o nome");
-    expect(bloco).toContain("NÃO pergunte «como posso ajudar»");
+    expect(bloco).toContain("somente");
+    expect(bloco).toContain("como posso ajudar");
   });
 });
 

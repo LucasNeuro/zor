@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  carregarTrechoPlaybookCopiloto,
   executarBriefingReply,
   executarSimulacaoCanalReply,
   montarSnapshotOperacionalReadOnly,
@@ -8,6 +9,7 @@ import {
   type BriefingMensagemLinha,
   type BriefingModoSessao,
 } from "@/lib/agente-briefing-chat";
+import { agenteEhCopilotoInterno, isModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { extrairESalvarMemoriasAgente, formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 
@@ -188,12 +190,29 @@ export async function POST(
 
   const { data: agente, error: agErr } = await supabase
     .from("hub_agente_identidade")
-    .select("agente_slug, nome, cargo, modelo_padrao, system_prompt_base, modo_operacao")
+    .select(
+      "agente_slug, nome, cargo, area, bio, modelo_padrao, system_prompt_base, modo_operacao, tenant_id, playbook_generated_at, playbook_object_path, playbook_public_url, playbook_source_hash"
+    )
     .eq("agente_slug", slug)
     .maybeSingle();
 
   if (agErr) return erroBriefingJson(agErr.message, 500);
   if (!agente) return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
+
+  const modoOperacaoRaw =
+    typeof agente.modo_operacao === "string" ? agente.modo_operacao : null;
+  const modoOperacao = isModoOperacaoAgente(modoOperacaoRaw) ? modoOperacaoRaw : null;
+  const ehCopilotoInterno = agenteEhCopilotoInterno(modoOperacao);
+
+  if (modo === "simulacao_canal" && ehCopilotoInterno) {
+    return NextResponse.json(
+      {
+        error:
+          "Este é um agente interno. Use o copiloto para conversar com a equipa — simulação de canal só existe em agentes de atendimento (WhatsApp).",
+      },
+      { status: 400 }
+    );
+  }
 
   const modelo =
     (typeof agente.modelo_padrao === "string" && agente.modelo_padrao.trim())
@@ -277,6 +296,7 @@ export async function POST(
         sessaoId,
         modoOperacao:
           typeof agente.modo_operacao === "string" ? agente.modo_operacao : null,
+        tenantId: typeof agente.tenant_id === "string" ? agente.tenant_id : null,
       });
     } else {
       const snapshot = await montarSnapshotOperacionalReadOnly(
@@ -284,17 +304,34 @@ export async function POST(
         slug,
         String(agente.nome || slug)
       );
+      let playbookTrecho: string | undefined;
+      if (ehCopilotoInterno) {
+        playbookTrecho = await carregarTrechoPlaybookCopiloto(supabase, slug, {
+          playbook_generated_at:
+            typeof agente.playbook_generated_at === "string" ? agente.playbook_generated_at : null,
+          playbook_object_path:
+            typeof agente.playbook_object_path === "string" ? agente.playbook_object_path : null,
+          playbook_public_url:
+            typeof agente.playbook_public_url === "string" ? agente.playbook_public_url : null,
+          playbook_source_hash:
+            typeof agente.playbook_source_hash === "string" ? agente.playbook_source_hash : null,
+        });
+      }
       resultado = await executarBriefingReply({
         modelo,
         agenteNome: String(agente.nome || slug),
         agenteSlug: slug,
         cargo: typeof agente.cargo === "string" ? agente.cargo : undefined,
+        area: typeof agente.area === "string" ? agente.area : undefined,
+        bio: typeof agente.bio === "string" ? agente.bio : undefined,
         promptBaseTrecho:
           typeof agente.system_prompt_base === "string" ? agente.system_prompt_base : undefined,
+        playbookTrecho,
         snapshot,
         historico: historicoParaModelo,
         mensagemUsuario: textoUser,
         memoriasAgenteBloco,
+        modoOperacao,
       });
     }
   } catch (e) {

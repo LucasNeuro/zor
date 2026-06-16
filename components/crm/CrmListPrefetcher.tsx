@@ -8,6 +8,7 @@ import {
   prefetchCrmParceirosList,
   prefetchCrmPessoasList,
 } from "@/hooks/useCrmListQueries";
+import { CRM_MODULE_PARCEIROS_ENABLED } from "@/lib/crm/waje-modules";
 import {
   prefetchCrmNegociosList,
   prefetchCrmPipelines,
@@ -23,7 +24,9 @@ export function CrmListPrefetcher() {
   useEffect(() => {
     void prefetchCrmPessoasList(queryClient, {});
     void prefetchCrmEmpresasList(queryClient, {});
-    void prefetchCrmParceirosList(queryClient);
+    if (CRM_MODULE_PARCEIROS_ENABLED) {
+      void prefetchCrmParceirosList(queryClient);
+    }
     void prefetchHubAgentesList(queryClient, "todos");
     void prefetchHubAgentesList(queryClient, "ativos");
     void prefetchCrmPipelines(queryClient, "lead");

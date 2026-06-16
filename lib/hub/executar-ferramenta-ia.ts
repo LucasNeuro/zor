@@ -12,6 +12,11 @@ import { uploadArquivo } from "@/lib/ia/storage";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
+import { criarNegocioParaLead } from "@/lib/crm/criar-negocio-from-lead";
+import {
+  formatarEstagiosPipelineParaPrompt,
+  listarEstagiosPipelineParaIa,
+} from "@/lib/crm/pipeline-estagios-ia";
 import {
   telefoneConversaId,
   telefonesConversaEquivalentes,
@@ -26,6 +31,8 @@ export type FerramentaHubContexto = {
   telefoneSessao?: string | null;
   /** hub_agente_identidade.modo_operacao — usado para gates de escrita seguros */
   modoOperacao?: string | null;
+  /** Simulação interna do CRM — não envia WhatsApp real; CRM de teste permitido. */
+  simulacaoCanal?: boolean;
 };
 
 function db(): SupabaseClient {
@@ -238,7 +245,18 @@ async function executarFerramentaHubBuiltin(
       if (errLead) return JSON.stringify({ erro: "supabase", detalhe: errLead.message });
       if (!leadAtual) return JSON.stringify({ erro: "lead_nao_encontrado", lead_id: ctx.leadId });
 
-      const built = buildHubLeadsCrmPatch(args, leadAtual as Record<string, unknown>);
+      const tenantId = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      let estagiosPipeline: { slug: string; tipo_fecho: string }[] = [];
+      try {
+        const refs = await listarEstagiosPipelineParaIa(supabase, tenantId, "lead");
+        estagiosPipeline = refs.map((e) => ({ slug: e.slug, tipo_fecho: e.tipo_fecho }));
+      } catch {
+        /* fallback lista fixa em buildHubLeadsCrmPatch */
+      }
+
+      const built = buildHubLeadsCrmPatch(args, leadAtual as Record<string, unknown>, {
+        estagiosPipeline,
+      });
       if (!built.ok) {
         return JSON.stringify({ erro: built.codigo ?? built.erro, detalhe: built.erro });
       }
@@ -292,6 +310,74 @@ async function executarFerramentaHubBuiltin(
         campos_alterados: Object.keys(built.patch).filter(
           (k) => k !== "atualizado_em" && k !== "ultimo_contato"
         ),
+      });
+    }
+    case "hub_criar_negocio": {
+      if (ctx.modoOperacao !== "canal_whatsapp") {
+        return JSON.stringify({
+          erro: "ferramenta_apenas_modo_atendimento_canal_whatsapp",
+          modo_actual: ctx.modoOperacao ?? null,
+        });
+      }
+
+      const tenantId = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      const servicoNome =
+        typeof args.servico_nome === "string" ? args.servico_nome.trim() : undefined;
+      const servicoCatalogoId =
+        typeof args.servico_catalogo_id === "string" ? args.servico_catalogo_id.trim() : undefined;
+      const titulo = typeof args.titulo === "string" ? args.titulo.trim() : undefined;
+      const etapa = typeof args.etapa === "string" ? args.etapa.trim() : "proposta";
+      let valorEstimado: number | null = null;
+      if (typeof args.valor_estimado === "number" && Number.isFinite(args.valor_estimado)) {
+        valorEstimado = args.valor_estimado;
+      }
+
+      if (!servicoNome && !servicoCatalogoId) {
+        return JSON.stringify({
+          erro: "servico_obrigatorio",
+          detalhe: "Informe servico_nome ou servico_catalogo_id do catálogo.",
+        });
+      }
+
+      const result = await criarNegocioParaLead(supabase, {
+        tenantId,
+        leadId: ctx.leadId,
+        servicoCatalogoId,
+        servicoNome,
+        titulo,
+        valorEstimado,
+        etapa,
+        origem: ctx.simulacaoCanal ? "simulacao_ia" : "whatsapp_ia",
+      });
+
+      if (!result.ok) {
+        return JSON.stringify({ erro: result.erro });
+      }
+
+      await supabase.from("hub_acoes_ia").insert({
+        agente_slug: ctx.agenteSlug,
+        tipo: "negocio_criado",
+        descricao: `Negócio criado: ${result.titulo}`,
+        lead_id: ctx.leadId,
+        sucesso: true,
+        metadata: {
+          ferramenta: "hub_criar_negocio",
+          negocio_id: result.negocioId,
+          valor: result.valor,
+          servico_id: result.servico?.id ?? null,
+        },
+      });
+
+      return JSON.stringify({
+        ok: true,
+        negocio_id: result.negocioId,
+        titulo: result.titulo,
+        valor_estimado: result.valor,
+        servico: result.servico
+          ? { id: result.servico.id, nome: result.servico.nome, preco: result.servico.preco_referencia }
+          : null,
+        financeiro:
+          "Conta a receber será gerada automaticamente se o trigger hub_negocios_sync_conta_receber estiver ativo.",
       });
     }
     case "hub_registar_nota_lead": {
@@ -405,6 +491,18 @@ async function executarFerramentaHubBuiltin(
       }
       if (!number) {
         return JSON.stringify({ erro: "numero_destino_ausente", nota: "Lead sem telefone ou override inválido." });
+      }
+
+      if (ctx.simulacaoCanal) {
+        return JSON.stringify({
+          ok: true,
+          simulacao: true,
+          aviso: "Menu simulado — não enviado ao WhatsApp real.",
+          tipo,
+          texto,
+          opcoes,
+          number,
+        });
       }
 
       const { data: agenteRow, error: ea } = await supabase

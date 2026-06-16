@@ -153,9 +153,6 @@ export function AtendimentoEditSideover({
             onHumanoResponsavelChange={(valor) => {
               onUpdated?.({ ...lead, humano_responsavel: valor });
             }}
-            onAgenteResponsavelChange={(valor) => {
-              onUpdated?.({ ...lead, agente_responsavel: valor });
-            }}
           />
         </div>
       </div>

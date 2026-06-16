@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { ChangeEventHandler, CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1011,9 +1011,8 @@ export function CrmCargosCatalogDrawer({
             </button>
           </div>
           <p style={{ margin: "8px 0 0", color: OB.texto2, fontSize: 12 }}>
-            Catálogo completo em <code style={{ fontSize: 11, color: OB.limao, fontWeight: 700 }}>hub_cargos_catalogo</code> —
-            disponível no wizard de novos agentes quando activo. Sugestões IA usam cargos e mercados actuais do Hub como
-            contexto.
+            Cargos disponíveis no wizard de novos agentes quando activos. As sugestões de IA usam os cargos e mercados
+            actuais da empresa como contexto.
           </p>
           {!cargosListaPendente && (
             <>
@@ -1050,7 +1049,7 @@ export function CrmCargosCatalogDrawer({
                     type="search"
                     value={filtroBusca}
                     onChange={(e) => setFiltroBusca(e.target.value)}
-                    placeholder="Buscar cargo, slug…"
+                    placeholder="Buscar cargo…"
                     aria-label="Buscar cargos"
                     disabled={cargosListaPendente}
                     style={{
@@ -1489,7 +1488,7 @@ export function CrmCargosCatalogDrawer({
                         const seg = segmentoLabelCargo(cargo);
                         const segDisplay = seg !== "Outros" ? seg : "";
                         const esp = cargo.especialidade ? String(cargo.especialidade) : "";
-                        const meta = `@${slug}${segDisplay ? ` · ${segDisplay}` : ""}${esp ? ` · ${esp}` : ""}`;
+                        const meta = [segDisplay, esp].filter(Boolean).join(" · ");
                         return (
                           <div
                             key={slug}
@@ -1534,6 +1533,7 @@ export function CrmCargosCatalogDrawer({
                               >
                                 {String(cargo.titulo || cargo.nome || slug)}
                               </p>
+                              {meta ? (
                               <p
                                 style={{
                                   margin: "2px 0 0",
@@ -1546,6 +1546,7 @@ export function CrmCargosCatalogDrawer({
                               >
                                 {meta}
                               </p>
+                              ) : null}
                             </div>
                             <div onClick={(e) => e.stopPropagation()}>
                               <CrmIconButtonGroup
@@ -1697,36 +1698,13 @@ export function CrmCargosCatalogDrawer({
                   />
                 </label>
 
-                {criando ? (
+                {criando ? null : (
                   <label style={{ display: "block" }}>
-                    <span style={lbl}>
-                      Slug (gerado do título — pode editar)
-                    </span>
-                    <input
-                      value={form.slug}
-                      onChange={(e) => actualizarSlugNovo(e.target.value)}
-                      placeholder={
-                        form.titulo.trim()
-                          ? slugSugeridoDoTitulo(form.titulo) || "ex.: sdr_marcos"
-                          : "ex.: sdr_marcos"
-                      }
-                      style={inp}
-                    />
-                    {form.titulo.trim() && !form.slug.trim() ? (
-                      <span style={{ display: "block", marginTop: 4, fontSize: 10, color: OB.texto3 }}>
-                        Ao guardar será usado: <code style={{ fontSize: 10 }}>{slugSugeridoDoTitulo(form.titulo)}</code>
-                      </span>
-                    ) : null}
-                  </label>
-                ) : (
-                  <label style={{ display: "block" }}>
-                    <span style={lbl}>
-                      Renomear slug (opcional)
-                    </span>
+                    <span style={lbl}>Renomear identificador interno (opcional)</span>
                     <input
                       value={form.novo_slug}
                       onChange={(e) => setForm((p) => ({ ...p, novo_slug: e.target.value }))}
-                      placeholder={`Actual: ${focusSlug}`}
+                      placeholder="Deixe vazio para manter o actual"
                       style={inp}
                     />
                   </label>
@@ -1772,10 +1750,8 @@ export function CrmCargosCatalogDrawer({
                   </label>
                 </div>
                 <p style={{ margin: 0, fontSize: 11, color: OB.texto2, lineHeight: 1.45 }}>
-                  Taxonomia oficial em código:{" "}
-                  <code style={{ fontSize: 10, color: OB.texto2 }}>lib/hub/documento-conceito-catalogo.ts</code>
-                  . Novos setores ou mudanças nas secções do playbook devem actualizar esse ficheiro primeiro; a IA de
-                  sugestão segue esse «documento conceito» para não inventar nomes.
+                  Use os setores e especialidades oficiais da empresa para manter relatórios e sugestões de IA
+                  alinhados. Novos setores devem ser acordados com a equipa antes de criar cargos.
                 </p>
                 {segmentoForaDoConceito ? (
                   <p
@@ -1790,10 +1766,8 @@ export function CrmCargosCatalogDrawer({
                       background: OB.okMuted,
                     }}
                   >
-                    Este segmento não está no documento conceito ({nomesSegmentosConceito().join(", ")}). Só continue se
-                    tiver actualizado{" "}
-                    <code style={{ fontSize: 10 }}>documento-conceito-catalogo.ts</code>; caso contrário prefira um dos
-                    setores listados para relatórios e sugestões IA alinhadas.
+                    Este segmento não está na lista oficial ({nomesSegmentosConceito().join(", ")}). Prefira um dos
+                    setores listados para manter relatórios e sugestões de IA consistentes.
                   </p>
                 ) : null}
 
@@ -1880,7 +1854,7 @@ export function CrmCargosCatalogDrawer({
 
                 <label style={{ display: "block" }}>
                   <span style={lbl}>
-                    Supervisor (slug de outro cargo)
+                    Supervisor (outro cargo)
                   </span>
                   <input
                     value={form.supervisor_slug}
@@ -2080,8 +2054,7 @@ export function CrmCargosCatalogDrawer({
                       />
                     </span>
                     <span style={{ color: OB.texto, fontSize: 12, lineHeight: 1.45 }}>
-                      Ao alterar o título, actualizar o campo <code style={{ fontSize: 11 }}>cargo</code> em todos os
-                      agentes que ainda usam o título antigo (referência por texto).
+                      Ao alterar o título, actualizar também todos os agentes que ainda usam o título antigo.
                     </span>
                   </label>
                 ) : null}
@@ -2137,8 +2110,8 @@ export function CrmCargosCatalogDrawer({
         {confirmExclusaoCargo?.kind === "one" ? (
           <>
             <p style={{ margin: 0, color: OB.texto2, fontSize: 13, lineHeight: 1.55 }}>
-              O cargo <strong style={{ color: OB.limao }}>«{confirmExclusaoCargo.rotulo}»</strong> (
-              <code style={{ color: OB.limao }}>@{confirmExclusaoCargo.slug}</code>) será removido do catálogo.
+              O cargo <strong style={{ color: OB.limao }}>«{confirmExclusaoCargo.rotulo}»</strong> será removido do
+              catálogo.
             </p>
             <p style={{ margin: "10px 0 0", color: OB.texto3, fontSize: 12, lineHeight: 1.5 }}>
               Se existirem agentes com este título, a operação será bloqueada.
@@ -2169,23 +2142,8 @@ export function CrmCargosCatalogDrawer({
               Serão eliminados <strong style={{ color: OB.limao }}>{confirmExclusaoCargo.slugs.length}</strong>{" "}
               cargo(s) do catálogo.
             </p>
-            <p
-              style={{
-                margin: "10px 0 0",
-                color: OB.texto3,
-                fontSize: 11,
-                lineHeight: 1.45,
-                fontFamily: "ui-monospace, monospace",
-                wordBreak: "break-all",
-              }}
-            >
-              {confirmExclusaoCargo.slugs.slice(0, 10).join(", ")}
-              {confirmExclusaoCargo.slugs.length > 10
-                ? ` … (+${confirmExclusaoCargo.slugs.length - 10})`
-                : ""}
-            </p>
             <p style={{ margin: "10px 0 0", color: OB.texto3, fontSize: 12, lineHeight: 1.5 }}>
-              Linhas em uso por agentes não serão apagadas e aparecerão no relatório de erros.
+              Cargos em uso por agentes não serão apagados e aparecerão no relatório de erros.
             </p>
           </>
         ) : null}

@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  EMAIL_CHANNEL_DISABLED_CODE,
+  EMAIL_CHANNEL_DISABLED_MESSAGE,
+  isEmailChannelEnabled,
+} from "@/lib/feature-flags";
+import {
   exchangeGoogleOAuthCode,
   getGoogleProfileEmail,
   linkAgenteToGmailOAuth,
@@ -44,6 +49,13 @@ function redirectComResultado(
  * e opcionalmente liga agente (agente_slug no state).
  */
 export async function GET(request: NextRequest) {
+  if (!isEmailChannelEnabled()) {
+    return redirectComResultado(request, {
+      ok: false,
+      error: EMAIL_CHANNEL_DISABLED_CODE,
+    });
+  }
+
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
   }

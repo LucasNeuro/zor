@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -16,6 +16,7 @@ import { FilterPills } from "@/components/crm/FilterPills";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { CrmCanalSideover, type CanalAgenteRow } from "@/components/crm/CrmCanalSideover";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import {
   sparklineFromCounts,
   sparklineFromSeed,
@@ -37,7 +38,8 @@ function ehCanalRelevante(a: CanalAgenteRow): boolean {
   if (a.arquivado_em) return false;
   if (a.ativo === false) return false;
   if (a.modo_operacao === "jobs_internos") return false;
-  if (a.modo_operacao === "canal_whatsapp" || a.modo_operacao === "canal_email") return true;
+  if (a.modo_operacao === "canal_email") return isEmailChannelEnabledClient();
+  if (a.modo_operacao === "canal_whatsapp") return true;
   const id = typeof a.uazapi_instance_id === "string" ? a.uazapi_instance_id.trim() : "";
   if (id.length > 0) return true;
   if (a.modo_operacao == null || a.modo_operacao === "") {
@@ -133,7 +135,7 @@ export default function CanaisPage() {
   useEffect(() => {
     setSlot({
       path: pathname,
-      subtitle: `${agentes.length} canais · WhatsApp e e-mail`,
+      subtitle: `${agentes.length} canais · WhatsApp${isEmailChannelEnabledClient() ? " e e-mail" : ""}`,
       actions: botaoAtualizar,
     });
     return () => setSlot(null);
@@ -382,7 +384,7 @@ export default function CanaisPage() {
             toolbar={{
               searchValue: busca,
               onSearchChange: setBusca,
-              searchPlaceholder: "Buscar por nome, slug ou instância…",
+              searchPlaceholder: "Buscar por nome ou instância…",
               showAdvancedFilters,
               onToggleAdvancedFilters: () => setShowAdvancedFilters((v) => !v),
               advancedFilters: (

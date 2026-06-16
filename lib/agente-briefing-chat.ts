@@ -1,6 +1,36 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { completarChatPreferindoMistral } from "@/lib/ia/llm-completion";
+import { completarChatComFerramentasMistral } from "@/lib/ia/llm-completion-tools";
 import { construirPrompt } from "@/lib/ia/prompt-builder";
+import { formatarBlocoContextoConversa } from "@/lib/ia/conversation-context";
+import { resolveInferenceModelId, isMistralFamilyModelId } from "@/lib/ia/hub-model-defaults";
+import {
+  ferramentasMistralListaParaAgente,
+  mergeUsoFerramentasComPadraoPreservandoCustom,
+  mergeUsoFerramentasWhatsappCanal,
+} from "@/lib/hub/agente-ferramentas-registry";
+import { executarFerramentaHub } from "@/lib/hub/executar-ferramenta-ia";
+import {
+  fetchFerramentasCustomAtivas,
+  rowParaMistralDef,
+  type FerramentaCustomParaMistral,
+} from "@/lib/hub/ferramentas-custom-db";
+import {
+  fetchFerramentasExternasAtivas,
+  rowParaMistralDefExterna,
+  type FerramentaExternaParaMistral,
+} from "@/lib/hub/ferramentas-externas-db";
+import {
+  ferramentasIntegradorAtivasParaTenant,
+} from "@/lib/hub/integradores-runtime";
+import type { FerramentaIntegradorDefMistral } from "@/lib/hub/agente-ferramentas-registry";
+import { defaultTenantId } from "@/lib/tenant-default";
+import { blocoDadosCanalWhatsappCrm } from "@/lib/crm/sincronizar-contato-whatsapp";
+import { blocoIsolamentoConversaWhatsapp } from "@/lib/crm/isolamento-conversa-lead";
+import { garantirLeadSimulacaoCanal } from "@/lib/simulacao-canal/lead-simulacao";
+import { agenteEhCopilotoInterno, isModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
+import { blocoEscopoFuncaoCopilotoInterno } from "@/lib/hub/copiloto-interno-escopo";
+import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
 import {
   avancarEstadoFluxoSimulacao,
   buildBlocoContextoFluxoParaLlm,
@@ -23,13 +53,33 @@ Regras absolutas:
 - Seja objetivo e útil para operação: status, últimos erros, o que revisar em Ciclos IA / logs.
 `;
 
+export function copilotoInternoPreamble(
+  agenteNome: string,
+  cargo?: string,
+  escopoExtra?: string
+): string {
+  const cargoLinha = cargo?.trim() ? `Cargo: ${cargo.trim()}.` : "";
+  return `Você é o **copiloto interno** de **${agenteNome}** no CRM Waje — um assistente para a equipa, no estilo de um chat especializado (como um ChatGPT do papel deste agente).
+${cargoLinha}
+Regras:
+- Converse com um colega humano (gestor, operador ou admin): tom natural, claro e útil.
+- Explique a **função real deste agente** conforme o escopo oficial abaixo — não invente encaminhamentos nem atendimento WhatsApp.
+- Use as **memórias deste agente** (só de ${agenteNome}), cargo, playbook e extractos operacionais quando relevante — nunca misture contexto de outro assistente.
+- Este agente **não atende cliente final** e **não simula WhatsApp/Hub** neste painel.
+- Ferramentas automáticas não são executadas aqui; interprete apenas o que já está nos extractos.
+- Se faltar dado nos extractos, diga que não há registro — não invente.
+${escopoExtra?.trim() ? `\n${escopoExtra.trim()}` : ""}`;
+}
+
 /** Pré-texto para o modo que espelha o system prompt de produção (prompt-builder), sem snapshot operacional. */
-export const SIMULACAO_CANAL_PREAMBLE = `### MODO SIMULAÇÃO DE CANAL (teste no CRM Waje)
-Você é o **atendente IA da empresa** falando com um cliente/lead — sempre com inteligência (Mistral), nunca como bot de frases fixas.
-- Use **base de conhecimento do negócio**, **conhecimento do agente**, **cargo** e **playbook** publicados; o roteiro WhatsApp (se houver) é só guia de ordem e temas.
-- Não diga que está em briefing interno, simulação ou revisão de logs.
-- **Sem ferramentas reais** neste painel: não afirme ter gravado no CRM nem enviado WhatsApp.
-- Respostas naturais, curtas (2–4 linhas no WhatsApp), uma pergunta por vez quando estiver coletando dados.`;
+export const SIMULACAO_CANAL_PREAMBLE = `### MODO SIMULAÇÃO DE CANAL (espelha WhatsApp real)
+Você é o **atendente IA da empresa** falando com um cliente/lead — mesmo motor da produção (cargo, conhecimento, catálogo, RAG, ferramentas CRM).
+- **Raciocínio primeiro:** responda ao que o cliente disse; fluxo e perguntas do cargo são **guia**, não roteiro fixo.
+- Use **base de conhecimento**, **catálogo de preços**, **playbook**, **CRM** e **ferramentas** como no WhatsApp.
+- Lead retornante: **não** repita nome nem perguntas já respondidas (CRM + histórico); use **hub_atualizar_lead** para dados novos.
+- Não diga que está em simulação, briefing ou teste interno.
+- **WhatsApp real não envia mensagens** neste painel — menus ficam simulados; ferramentas CRM funcionam no lead de teste.
+- Respostas naturais, curtas (2–4 linhas); quando tiver dados ou preço na base, **dê orçamento** como funcionário da loja.`;
 
 export type BriefingModoSessao = "briefing_interno" | "simulacao_canal";
 
@@ -182,22 +232,48 @@ export async function executarBriefingReply(params: {
   agenteNome: string;
   agenteSlug: string;
   cargo?: string;
+  area?: string;
+  bio?: string;
   promptBaseTrecho?: string;
+  playbookTrecho?: string;
   snapshot: string;
   historico: BriefingMensagemLinha[];
   mensagemUsuario: string;
   memoriasAgenteBloco?: string;
+  modoOperacao?: string | null;
 }): Promise<BriefingChatReplyResult> {
+  const ehCopilotoInterno = agenteEhCopilotoInterno(
+    isModoOperacaoAgente(params.modoOperacao) ? params.modoOperacao : null
+  );
+  const limitePromptBase = ehCopilotoInterno ? 3_200 : 1_200;
+
   const identity = [
-    `Identidade do agente (para tom de voz): nome=${params.agenteNome}, slug=${params.agenteSlug}`,
+    `Identidade do agente: nome=${params.agenteNome}, slug=${params.agenteSlug}`,
     params.cargo ? `Cargo: ${params.cargo}` : null,
-    params.promptBaseTrecho ? `Trecho do system prompt base (referência): ${trunc(params.promptBaseTrecho, 1200)}` : null,
+    params.promptBaseTrecho
+      ? `Instruções base do agente:\n${trunc(params.promptBaseTrecho, limitePromptBase)}`
+      : null,
+    params.playbookTrecho
+      ? `Referência do playbook publicado (função operacional):\n${trunc(params.playbookTrecho, ehCopilotoInterno ? 2_400 : 1_200)}`
+      : null,
   ]
     .filter(Boolean)
     .join("\n");
 
+  const escopoInterno = ehCopilotoInterno
+    ? blocoEscopoFuncaoCopilotoInterno({
+        cargo: params.cargo,
+        area: params.area,
+        bio: params.bio,
+      })
+    : "";
+
+  const preamble = ehCopilotoInterno
+    ? copilotoInternoPreamble(params.agenteNome, params.cargo, escopoInterno)
+    : BRIEFING_SYSTEM_PREAMBLE;
+
   const system = [
-    BRIEFING_SYSTEM_PREAMBLE,
+    preamble,
     identity,
     params.memoriasAgenteBloco?.trim() || null,
     params.snapshot,
@@ -232,6 +308,21 @@ export async function executarBriefingReply(params: {
   };
 }
 
+export async function carregarTrechoPlaybookCopiloto(
+  supabase: SupabaseClient,
+  agenteSlug: string,
+  meta: {
+    playbook_generated_at?: string | null;
+    playbook_object_path?: string | null;
+    playbook_public_url?: string | null;
+    playbook_source_hash?: string | null;
+  }
+): Promise<string | undefined> {
+  const loaded = await loadPublishedPlaybookRuntimeSource(supabase, agenteSlug, meta);
+  if (!loaded.ok) return undefined;
+  return loaded.prompt;
+}
+
 export type SimulacaoCanalReplyResult = BriefingChatReplyResult;
 
 async function executarSimulacaoCanalLlm(params: {
@@ -241,18 +332,39 @@ async function executarSimulacaoCanalLlm(params: {
   blocoFluxoExtra?: string;
   motor: "playbook_ia" | "llm_prompt";
   flowState?: SimFlowState;
+  supabase?: SupabaseClient;
+  sessaoId?: string;
+  tenantId?: string | null;
+  modoOperacao?: string | null;
 }): Promise<SimulacaoCanalReplyResult> {
   const turnosConversa = params.historico.map((m) => ({
     role: (m.papel === "user" ? "user" : "assistant") as "user" | "assistant",
     content: m.conteudo,
   }));
 
+  let leadId: string | undefined;
+  let telefoneSim = "";
+  let pushNameSim: string | undefined;
+
+  if (params.supabase && params.sessaoId) {
+    const leadSim = await garantirLeadSimulacaoCanal(params.supabase, {
+      sessaoId: params.sessaoId,
+      agenteSlug: params.agenteSlug,
+      tenantId: params.tenantId,
+    });
+    leadId = leadSim.leadId;
+    telefoneSim = leadSim.telefone;
+    pushNameSim = leadSim.nome;
+  }
+
   const pc = await construirPrompt({
     agenteSlug: params.agenteSlug,
+    leadId,
     canal: "whatsapp",
     turnosAnteriores: params.historico.length,
     mensagemAtual: params.mensagemUsuario,
     turnosConversa: [...turnosConversa, { role: "user", content: params.mensagemUsuario }],
+    blocoContextoFluxoPlaybook: params.blocoFluxoExtra?.trim() || undefined,
   });
   if (!pc) {
     throw new Error(
@@ -260,13 +372,27 @@ async function executarSimulacaoCanalLlm(params: {
     );
   }
 
-  const system = [
+  let systemPrompt = [
     SIMULACAO_CANAL_PREAMBLE,
-    params.blocoFluxoExtra?.trim() || null,
+    `═══ IDENTIDADE DA SIMULAÇÃO ═══
+Você é **${pc.agenteNome}** neste teste. Responda sempre com o nome, tom e função deste assistente — nunca como outro agente do sistema.`,
     pc.systemPrompt,
   ]
     .filter(Boolean)
     .join("\n\n");
+
+  if (turnosConversa.length > 0) {
+    const blocoCtx = formatarBlocoContextoConversa(turnosConversa);
+    if (blocoCtx) systemPrompt = `${systemPrompt}\n\n${blocoCtx}`;
+  }
+
+  if (telefoneSim) {
+    systemPrompt = `${systemPrompt}\n\n${blocoDadosCanalWhatsappCrm({
+      telefone: telefoneSim,
+      pushName: pushNameSim,
+      leadId,
+    })}\n\n${blocoIsolamentoConversaWhatsapp(telefoneSim)}`;
+  }
 
   const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
   for (const m of params.historico) {
@@ -275,13 +401,99 @@ async function executarSimulacaoCanalLlm(params: {
   }
   mensagens.push({ role: "user", content: params.mensagemUsuario });
 
-  const out = await completarChatPreferindoMistral({
-    systemPrompt: system,
-    mensagens,
-    modeloFromDb: pc.modelo,
-    maxTokens: 2048,
-  });
-  if (!out.ok) throw new Error(out.erro);
+  const playbookIaTurn =
+    params.motor === "playbook_ia" || Boolean(params.blocoFluxoExtra?.trim());
+
+  let out: Awaited<ReturnType<typeof completarChatPreferindoMistral>> | null = null;
+
+  if (params.supabase && leadId) {
+    const tenantForTools = (params.tenantId && params.tenantId.trim()) || defaultTenantId();
+    const { data: ferrIaRow } = await params.supabase
+      .from("hub_agente_identidade")
+      .select("motor_ferramentas_habilitado, uso_ferramentas_ia, modo_operacao")
+      .eq("agente_slug", params.agenteSlug)
+      .maybeSingle();
+
+    const motorFerramentas = ferrIaRow?.motor_ferramentas_habilitado === true;
+    const modoOp =
+      params.modoOperacao ??
+      ferrIaRow?.modo_operacao ??
+      "canal_whatsapp";
+
+    let customDefs: FerramentaCustomParaMistral[] = [];
+    try {
+      const rows = await fetchFerramentasCustomAtivas(params.supabase, tenantForTools);
+      customDefs = rows.map(rowParaMistralDef);
+    } catch {
+      customDefs = [];
+    }
+    let extDefs: FerramentaExternaParaMistral[] = [];
+    try {
+      const extRows = await fetchFerramentasExternasAtivas(params.supabase, tenantForTools);
+      extDefs = extRows.map(rowParaMistralDefExterna);
+    } catch {
+      extDefs = [];
+    }
+    let intDefs: FerramentaIntegradorDefMistral[] = [];
+    try {
+      const rows = await ferramentasIntegradorAtivasParaTenant(params.supabase, tenantForTools);
+      intDefs = rows.map((r) => ({
+        ferramenta_key: r.ferramenta_key,
+        descricao_modelo: r.descricao_modelo,
+        parametros_schema: r.parametros_schema,
+      }));
+    } catch {
+      intDefs = [];
+    }
+
+    const usoMap = mergeUsoFerramentasWhatsappCanal(
+      mergeUsoFerramentasComPadraoPreservandoCustom(ferrIaRow?.uso_ferramentas_ia ?? {}),
+      modoOp
+    );
+    const mistralTools = ferramentasMistralListaParaAgente(usoMap, customDefs, extDefs, intDefs);
+    const modeloResolved = resolveInferenceModelId(pc.modelo);
+    const temMistralKey = Boolean(process.env.MISTRAL_API_KEY?.trim());
+    const podeToolsMistral =
+      temMistralKey &&
+      motorFerramentas &&
+      mistralTools.length > 0 &&
+      isMistralFamilyModelId(modeloResolved);
+
+    if (podeToolsMistral) {
+      out = await completarChatComFerramentasMistral({
+        systemPrompt,
+        mensagens,
+        modeloFromDb: pc.modelo,
+        tools: mistralTools,
+        maxTokens: 2048,
+        playbookPublicado: pc.playbookPublicado === true,
+        playbookIaTurn,
+        executarTool: (nome, argumentosSerializados) =>
+          executarFerramentaHub(nome, argumentosSerializados, {
+            leadId,
+            agenteSlug: params.agenteSlug,
+            tenantId: params.tenantId ?? tenantForTools,
+            telefoneSessao: telefoneSim,
+            modoOperacao: modoOp,
+            simulacaoCanal: true,
+          }),
+      });
+    }
+  }
+
+  if (!out?.ok) {
+    const semTools = await completarChatPreferindoMistral({
+      systemPrompt,
+      mensagens,
+      modeloFromDb: pc.modelo,
+      maxTokens: 2048,
+      playbookIaTurn,
+    });
+    if (semTools.ok) out = semTools;
+    else if (!out) out = semTools;
+  }
+
+  if (!out?.ok) throw new Error(out?.erro || "Falha ao gerar resposta");
 
   const { brl } = calcularCustoBrl(out.modeloLog, out.tokensEntrada, out.tokensSaida);
   return {
@@ -306,6 +518,7 @@ export async function executarSimulacaoCanalReply(params: {
   supabase?: SupabaseClient;
   sessaoId?: string;
   modoOperacao?: string | null;
+  tenantId?: string | null;
 }): Promise<SimulacaoCanalReplyResult> {
   let flowState: SimFlowState | undefined;
   let blocoFluxoExtra = "";
@@ -324,7 +537,14 @@ export async function executarSimulacaoCanalReply(params: {
         avancado.definition,
         flowState,
         params.mensagemUsuario,
-        playbookMenuUazapiEnhancementEnabled()
+        playbookMenuUazapiEnhancementEnabled(),
+        [
+          ...params.historico.map((m) => ({
+            role: (m.papel === "user" ? "user" : "assistant") as "user" | "assistant",
+            content: m.conteudo,
+          })),
+          { role: "user" as const, content: params.mensagemUsuario },
+        ]
       );
     }
   }
@@ -336,5 +556,9 @@ export async function executarSimulacaoCanalReply(params: {
     blocoFluxoExtra,
     motor: blocoFluxoExtra ? "playbook_ia" : "llm_prompt",
     flowState,
+    supabase: params.supabase,
+    sessaoId: params.sessaoId,
+    tenantId: params.tenantId,
+    modoOperacao: params.modoOperacao,
   });
 }

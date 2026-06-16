@@ -16,6 +16,13 @@ export type PlaybookFlowJourney =
 
 export type PlaybookFlowStepKind = "message" | "menu" | "input" | "complete";
 
+/** Tipos de transferência (metadata + editor visual). */
+export type PlaybookFlowTransferKind =
+  | "humano"
+  | "agente"
+  | "whatsapp_card"
+  | "email";
+
 export type PlaybookFlowInputType = "text" | "email" | "phone" | "number";
 
 export type PlaybookFlowHandoffTarget =
@@ -96,6 +103,8 @@ export type PlaybookFlowInputStep = PlaybookFlowBaseStep & {
 export type PlaybookFlowCompleteStep = PlaybookFlowBaseStep & {
   kind: "complete";
   complete: PlaybookFlowCompleteAction;
+  /** Opcional: passo após ação de conclusão/transferência (ex.: mensagem de confirmação). */
+  next?: string;
 };
 
 export type PlaybookFlowStep =

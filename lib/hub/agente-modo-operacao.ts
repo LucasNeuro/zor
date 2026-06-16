@@ -37,6 +37,11 @@ export function agenteEhModoCanal(modo: ModoOperacaoAgente | null | undefined): 
   return modo === "canal_whatsapp" || modo === "canal_email";
 }
 
+/** Copiloto interno (ciclos/CRM) — sem simulação de canal ao vivo. */
+export function agenteEhCopilotoInterno(modo: ModoOperacaoAgente | null | undefined): boolean {
+  return !agenteEhModoCanal(modo);
+}
+
 /** Rótulos para UI (wizard, ciclos, listagens). */
 export const MODO_OPERACAO_LABEL: Record<ModoOperacaoAgente, string> = {
   canal_whatsapp: "Atendimento (WhatsApp)",

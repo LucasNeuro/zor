@@ -18,6 +18,10 @@ import {
   type FlowEngineStep,
 } from "@/lib/playbook/flow-engine";
 import type { PlaybookFlowDefinition, PlaybookFlowStep } from "@/lib/playbook/flow-definition-types";
+import {
+  executarAcaoTransferenciaFluxo,
+  extrairTransferDoPassoComplete,
+} from "@/lib/playbook/flow-transfer-actions";
 import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
 import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
@@ -295,10 +299,14 @@ export function convertStructuredFlowToEngine(definition: PlaybookFlowDefinition
     }
 
     if (step.kind === "complete") {
+      const transfer = extrairTransferDoPassoComplete(step);
+      const nextStep = typeof step.next === "string" && step.next.trim() ? step.next.trim() : undefined;
       steps[stepId] = {
         id: stepId,
         type: "complete",
         text: textFromCompleteAction(step, "Concluído. Nosso time seguirá com você por aqui."),
+        next_step: nextStep,
+        transfer,
       };
     }
   }
@@ -587,6 +595,43 @@ const MENU_PROP_TAMANHO = MENU_ARQ_TAMANHO;
 const MENU_PROP_INTENCAO = ["Vender|prop_vender", "Alugar|prop_alugar"];
 
 const MENU_PARC_TIPO = ["Cadastrar imóvel|parc_cadastro", "Parceria|parc_parceria"];
+
+async function aplicarConclusaoPassoDinamico(
+  supabase: SupabaseClient,
+  ctx: {
+    leadId: string;
+    telefone: string;
+    leadNome?: string | null;
+    agenteSlug: string;
+    instanceToken: string;
+    definition: FlowEngineDefinition;
+  },
+  stepId: string,
+  answers: Record<string, string>
+): Promise<void> {
+  const engineStep = ctx.definition.steps[stepId];
+  if (engineStep?.type !== "complete") return;
+
+  if (engineStep.transfer) {
+    await executarAcaoTransferenciaFluxo(supabase, {
+      leadId: ctx.leadId,
+      leadTelefone: ctx.telefone,
+      leadNome: ctx.leadNome,
+      agenteSlug: ctx.agenteSlug,
+      instanceToken: ctx.instanceToken,
+      stepId,
+      transfer: engineStep.transfer,
+      answers,
+    });
+    return;
+  }
+
+  if (ctx.definition.steps[stepId]?.type === "complete") {
+    await atualizarLeadPlaybook(supabase, ctx.leadId, ctx.agenteSlug, {
+      metadata: { wa_playbook_complete: true },
+    });
+  }
+}
 
 async function encaminharArquitetura(
   ctx: FlowCtx,
@@ -1439,7 +1484,24 @@ async function processarPlaybookInboundDynamic(params: {
     meta = persisted;
   };
 
+  const runtime = await carregarDynamicPlaybookRuntime(params.supabase, params.agenteSlug);
+  if (!runtime) return { handled: false, motivo: "runtime_indisponivel" };
+
   const onStepComplete = async (stepId: string, answers: Record<string, string>) => {
+    await aplicarConclusaoPassoDinamico(
+      params.supabase,
+      {
+        leadId: params.leadId,
+        telefone: params.telefone,
+        leadNome: params.leadNome,
+        agenteSlug: params.agenteSlug,
+        instanceToken: params.instanceToken,
+        definition: runtime.definition,
+      },
+      stepId,
+      answers
+    );
+
     switch (stepId) {
       case "complete_arquitetura":
         await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
@@ -1503,9 +1565,6 @@ async function processarPlaybookInboundDynamic(params: {
         });
         break;
       default:
-        await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
-          metadata: { wa_playbook_complete: true },
-        });
         break;
     }
   };
@@ -1653,6 +1712,20 @@ async function processarPlaybookInboundDynamicLegacy(params: {
         await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, { nome: name });
       },
       onStepComplete: async (stepId, answers) => {
+        await aplicarConclusaoPassoDinamico(
+          params.supabase,
+          {
+            leadId: params.leadId,
+            telefone: params.telefone,
+            leadNome: params.leadNome,
+            agenteSlug: params.agenteSlug,
+            instanceToken: params.instanceToken,
+            definition: runtime.definition,
+          },
+          stepId,
+          answers
+        );
+
         switch (stepId) {
           case "complete_arquitetura":
             await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
@@ -1716,11 +1789,6 @@ async function processarPlaybookInboundDynamicLegacy(params: {
             });
             break;
           default:
-            if (runtime.source === "published_dynamic_flow") {
-              await atualizarLeadPlaybook(params.supabase, params.leadId, params.agenteSlug, {
-                metadata: { wa_playbook_complete: true },
-              });
-            }
             break;
         }
       },

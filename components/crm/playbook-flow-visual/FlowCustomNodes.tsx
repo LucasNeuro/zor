@@ -50,40 +50,49 @@ type KindTheme = {
 
 const KIND_THEME: Record<FlowNodeKind, KindTheme> = {
   message: {
-    border: "#92ff00",
-    headerBg: "#0b1f10",
-    headerText: "#d4ffc4",
-    badgeBg: "#1a4d22",
-    badgeText: "#e8f5e9",
+    border: "#3f9848",
+    headerBg: "#e8f5e9",
+    headerText: "#0b3d14",
+    badgeBg: "#c8e6c9",
+    badgeText: "#1b5e20",
     label: "Mensagem",
     Icon: MessageSquare,
   },
   input: {
     border: "#d4a017",
-    headerBg: "#1f1808",
-    headerText: "#f5e6b8",
-    badgeBg: "#5c4510",
-    badgeText: "#fff8e6",
+    headerBg: "#fff8e1",
+    headerText: "#6d4c00",
+    badgeBg: "#ffe082",
+    badgeText: "#5d4037",
     label: "Coleta",
     Icon: Pencil,
   },
   menu: {
-    border: "#3f9848",
-    headerBg: "#0d1f12",
-    headerText: "#b8e8bc",
-    badgeBg: "#1e5c28",
-    badgeText: "#dcfce7",
+    border: "#5c9c63",
+    headerBg: "#edf7ee",
+    headerText: "#1b4332",
+    badgeBg: "#c8e6c9",
+    badgeText: "#2e7d32",
     label: "Menu",
     Icon: ClipboardList,
   },
   complete: {
-    border: "#92ff00",
-    headerBg: "#112a14",
-    headerText: "#c8ffb0",
-    badgeBg: "#2d6b1f",
-    badgeText: "#e8ffe0",
+    border: "#2d7a36",
+    headerBg: "#e8f5e9",
+    headerText: "#1b5e20",
+    badgeBg: "#a5d6a7",
+    badgeText: "#1b5e20",
     label: "Conclusão",
     Icon: CheckCircle,
+  },
+  transfer: {
+    border: "#4f46e5",
+    headerBg: "#eef2ff",
+    headerText: "#312e81",
+    badgeBg: "#c7d2fe",
+    badgeText: "#3730a3",
+    label: "Transferir",
+    Icon: Link2,
   },
 };
 
@@ -131,6 +140,7 @@ type BaseCardProps = {
   children?: React.ReactNode;
   showTargetHandle?: boolean;
   showSourceHandle?: boolean;
+  isOrphan?: boolean;
 };
 
 function BaseCard({
@@ -143,6 +153,7 @@ function BaseCard({
   children,
   showTargetHandle = true,
   showSourceHandle = true,
+  isOrphan = false,
 }: BaseCardProps) {
   const { onUpdate, onDelete } = useContext(FlowNodeCallbacksContext);
   const [hovered, setHovered] = useState(false);
@@ -156,10 +167,14 @@ function BaseCard({
     <div
       style={{
         ...cardBase,
-        border: `1px solid ${selected ? "#334155" : `${theme.border}88`}`,
-        boxShadow: selected
-          ? `0 0 0 2px ${theme.border}55, 0 12px 34px #02061799`
-          : "0 8px 24px #02061780",
+        border: isOrphan
+          ? "2px solid #f85149"
+          : `1px solid ${selected ? theme.border : "#dcebd8"}`,
+        boxShadow: isOrphan
+          ? "0 0 0 2px rgba(248, 81, 73, 0.25), 0 8px 24px rgba(248, 81, 73, 0.12)"
+          : selected
+            ? `0 0 0 2px ${theme.border}44, 0 8px 24px rgba(11, 34, 16, 0.12)`
+            : "0 4px 16px rgba(11, 34, 16, 0.08)",
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -264,14 +279,14 @@ function BaseCard({
 export function MessageNode({ id, data, selected, isConnectable }: NodeProps<Node<FlowVisualNodeData>>) {
   return (
     <BaseCard id={id} kind="message" title={data.title} content={data.content}
-      selected={selected} isConnectable={isConnectable} />
+      selected={selected} isConnectable={isConnectable} isOrphan={data.isOrphan === true} />
   );
 }
 
 export function InputNode({ id, data, selected, isConnectable }: NodeProps<Node<FlowVisualNodeData>>) {
   return (
     <BaseCard id={id} kind="input" title={data.title} content={data.content}
-      selected={selected} isConnectable={isConnectable} />
+      selected={selected} isConnectable={isConnectable} isOrphan={data.isOrphan === true} />
   );
 }
 
@@ -299,9 +314,11 @@ export function MenuNode({ id, data, selected, isConnectable }: NodeProps<Node<F
     setAddingOption(false);
   }
 
+  const handleCount = Math.max(options.length, 1);
+
   return (
     <BaseCard id={id} kind="menu" title={data.title} content={data.content}
-      selected={selected} isConnectable={isConnectable}>
+      selected={selected} isConnectable={isConnectable} showSourceHandle={false} isOrphan={data.isOrphan === true}>
       <div style={optionsSection}>
         <span style={optionsSectionLabel}>Opções do menu</span>
         {options.map((opt, idx) => (
@@ -334,6 +351,23 @@ export function MenuNode({ id, data, selected, isConnectable }: NodeProps<Node<F
           </button>
         )}
       </div>
+      {options.map((opt, idx) => {
+        const leftPct = ((idx + 1) / (handleCount + 1)) * 100;
+        return (
+          <Handle
+            key={opt.id}
+            type="source"
+            id={opt.id}
+            position={Position.Bottom}
+            isConnectable={isConnectable}
+            style={{
+              ...handleStyle(KIND_THEME.menu.border, "bottom"),
+              left: `${leftPct}%`,
+              transform: "translate(-50%, 50%)",
+            }}
+          />
+        );
+      })}
     </BaseCard>
   );
 }
@@ -369,31 +403,53 @@ function OptionRow({ option, index, onUpdate, onRemove }: OptionRowProps) {
 export function CompleteNode({ id, data, selected, isConnectable }: NodeProps<Node<FlowVisualNodeData>>) {
   return (
     <BaseCard id={id} kind="complete" title={data.title} content={data.content}
-      selected={selected} isConnectable={isConnectable} showSourceHandle={false} />
+      selected={selected} isConnectable={isConnectable} isOrphan={data.isOrphan === true} />
   );
 }
 
-// ─── nodeTypes registry ───────────────────────────────────────────────────────
+export function TransferNode({ id, data, selected, isConnectable }: NodeProps<Node<FlowVisualNodeData>>) {
+  const phone = data.notifyPhone?.trim();
+  return (
+    <BaseCard id={id} kind="transfer" title={data.title} content={data.content}
+      selected={selected} isConnectable={isConnectable} isOrphan={data.isOrphan === true}>
+      <p style={transferHintStyle}>
+        {phone ? (
+          <>
+            Consultor: <strong>{phone}</strong>
+          </>
+        ) : (
+          <span style={{ color: "#b45309" }}>Configure o WhatsApp do consultor</span>
+        )}
+      </p>
+    </BaseCard>
+  );
+}
 
 export const FLOW_NODE_TYPES = {
   message: MessageNode,
   input: InputNode,
   menu: MenuNode,
   complete: CompleteNode,
+  transfer: TransferNode,
 };
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const cardBase: CSSProperties = {
   width: 300,
   minWidth: 300,
   maxWidth: 300,
-  background: "#101f14",
+  background: "#ffffff",
   borderRadius: 14,
   overflow: "visible",
   cursor: "default",
   position: "relative",
   fontFamily: "inherit",
+};
+
+const transferHintStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 10.5,
+  color: "#4338ca",
+  lineHeight: 1.4,
 };
 
 const headerBase: CSSProperties = {
@@ -402,7 +458,7 @@ const headerBase: CSSProperties = {
   flexDirection: "column",
   gap: 6,
   borderRadius: "13px 13px 0 0",
-  borderBottom: "1px solid #22314a",
+  borderBottom: "1px solid #e8f0e6",
 };
 
 const badgeRow: CSSProperties = {
@@ -428,17 +484,17 @@ const idTag: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 4,
-  color: "#94a3b8",
-  background: "#0b1220",
-  border: "1px solid #334155",
+  color: "#5d7a67",
+  background: "#f4faf2",
+  border: "1px solid #dcebd8",
   borderRadius: 999,
   padding: "2px 7px",
 };
 
 const idCode: CSSProperties = {
   fontSize: 9.5,
-  color: "#cbd5e1",
-  fontFamily: "monospace",
+  color: "#2d4a35",
+  fontFamily: "inherit",
   lineHeight: 1,
   flexShrink: 1,
   maxWidth: 94,
@@ -461,10 +517,10 @@ const titleDisplay: CSSProperties = {
 const titleInput: CSSProperties = {
   fontSize: 12.5,
   fontWeight: 600,
-  background: "#0f172a",
-  border: "1px solid #60a5fa",
+  background: "#ffffff",
+  border: "1px solid #3f9848",
   borderRadius: 6,
-  color: "#e2e8f0",
+  color: "#0b2210",
   padding: "5px 7px",
   outline: "none",
   width: "100%",
@@ -481,7 +537,7 @@ const bodyBase: CSSProperties = {
 const legendText: CSSProperties = {
   margin: 0,
   fontSize: 10,
-  color: "#7b8da7",
+  color: "#7a9a7e",
   letterSpacing: 0.2,
   lineHeight: 1.35,
 };
@@ -489,24 +545,24 @@ const legendText: CSSProperties = {
 const contentDisplay: CSSProperties = {
   margin: 0,
   fontSize: 12,
-  color: "#cbd5e1",
+  color: "#2d4a35",
   lineHeight: 1.55,
   cursor: "text",
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
   borderRadius: 8,
   padding: "7px 8px",
-  background: "#111b2f",
-  border: "1px solid #2c3e5d",
+  background: "#f4faf2",
+  border: "1px solid #dcebd8",
   minHeight: 42,
 };
 
 const contentTextarea: CSSProperties = {
   fontSize: 12,
-  color: "#e2e8f0",
+  color: "#0b2210",
   lineHeight: 1.55,
-  background: "#0f172a",
-  border: "1px solid #60a5fa",
+  background: "#ffffff",
+  border: "1px solid #3f9848",
   borderRadius: 8,
   padding: "7px 8px",
   resize: "vertical",
@@ -523,10 +579,10 @@ const deleteBtn: CSSProperties = {
   right: 9,
   width: 22,
   height: 22,
-  border: "1px solid #ef444488",
+  border: "1px solid #ef9a9a",
   borderRadius: "50%",
-  background: "#2a1313",
-  color: "#fca5a5",
+  background: "#ffebee",
+  color: "#c62828",
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
@@ -541,9 +597,9 @@ function handleStyle(color: string, pos: "top" | "bottom"): CSSProperties {
     width: 14,
     height: 14,
     background: color,
-    border: "2px solid #0b1220",
+    border: "2px solid #ffffff",
     borderRadius: "50%",
-    boxShadow: "0 0 0 3px #0f172a",
+    boxShadow: "0 0 0 2px #dcebd8",
   };
 }
 
@@ -553,14 +609,14 @@ const optionsSection: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 5,
-  borderTop: "1px solid #22314a",
+  borderTop: "1px solid #e8f0e6",
   paddingTop: 8,
 };
 
 const optionsSectionLabel: CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
-  color: "#94a3b8",
+  color: "#5d7a67",
   letterSpacing: 0.5,
   textTransform: "uppercase",
   marginBottom: 1,
@@ -570,8 +626,8 @@ const optRow: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 6,
-  background: "#111b2f",
-  border: "1px solid #2c3e5d",
+  background: "#f4faf2",
+  border: "1px solid #dcebd8",
   borderRadius: 7,
   padding: "4px 7px",
   minHeight: 27,
@@ -580,7 +636,7 @@ const optRow: CSSProperties = {
 const optNum: CSSProperties = {
   fontSize: 9.5,
   fontWeight: 700,
-  color: "#7c3aed",
+  color: "#6d4c9a",
   minWidth: 14,
   textAlign: "center",
 };
@@ -588,7 +644,7 @@ const optNum: CSSProperties = {
 const optLabel: CSSProperties = {
   flex: 1,
   fontSize: 11,
-  color: "#cbd5e1",
+  color: "#2d4a35",
   cursor: "text",
   lineHeight: 1.4,
   wordBreak: "break-word",
@@ -597,7 +653,7 @@ const optLabel: CSSProperties = {
 const optInput: CSSProperties = {
   flex: 1,
   fontSize: 10.5,
-  color: "#e2e8f0",
+  color: "#0b2210",
   background: "transparent",
   border: "none",
   outline: "none",
@@ -607,7 +663,7 @@ const optInput: CSSProperties = {
 
 const optRemove: CSSProperties = {
   fontSize: 9.5,
-  color: "#94a3b8",
+  color: "#7a9a7e",
   background: "none",
   border: "none",
   cursor: "pointer",
@@ -618,9 +674,9 @@ const optRemove: CSSProperties = {
 
 const addOptBtn: CSSProperties = {
   fontSize: 10.5,
-  color: "#c4b5fd",
-  background: "#1f1638",
-  border: "1px dashed #a78bfa",
+  color: "#5c4d8a",
+  background: "#f3f0fa",
+  border: "1px dashed #b39ddb",
   borderRadius: 7,
   padding: "6px 8px",
   cursor: "pointer",
@@ -640,9 +696,9 @@ const addOptRow: CSSProperties = {
 const addOptInput: CSSProperties = {
   flex: 1,
   fontSize: 10.5,
-  color: "#e2e8f0",
-  background: "#0f172a",
-  border: "1px solid #a78bfa",
+  color: "#0b2210",
+  background: "#ffffff",
+  border: "1px solid #b39ddb",
   borderRadius: 7,
   padding: "5px 7px",
   outline: "none",
@@ -650,9 +706,9 @@ const addOptInput: CSSProperties = {
 };
 
 const addOptConfirm: CSSProperties = {
-  color: "#bbf7d0",
-  background: "#123322",
-  border: "1px solid #166534",
+  color: "#2e7d32",
+  background: "#e8f5e9",
+  border: "1px solid #a5d6a7",
   borderRadius: 6,
   cursor: "pointer",
   width: 24,
@@ -663,9 +719,9 @@ const addOptConfirm: CSSProperties = {
 };
 
 const addOptCancel: CSSProperties = {
-  color: "#94a3b8",
-  background: "#111b2f",
-  border: "1px solid #334155",
+  color: "#5d7a67",
+  background: "#f4faf2",
+  border: "1px solid #dcebd8",
   borderRadius: 6,
   cursor: "pointer",
   width: 24,

@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import { AgenteAvatar } from "@/components/crm/AgenteAvatar";
 import { AgenteCiclosOperacaoList } from "@/components/crm/AgenteCiclosOperacaoList";
 import { AgentePerformancePanel } from "@/components/crm/AgentePerformancePanel";
@@ -1011,7 +1012,8 @@ export default function AgentePage() {
                 <div>
                   <h2 style={{ ...sectionHeadingStyle, marginBottom: 8 }}>Integrações</h2>
                   <p style={{ fontSize: 12, color: "#3d5c48", margin: 0, lineHeight: 1.5 }}>
-                    Canal de atendimento (WhatsApp ou e-mail) e ferramentas disponíveis para este agente.
+                    Canal de atendimento (WhatsApp{isEmailChannelEnabledClient() ? " ou e-mail" : ""}) e ferramentas
+                    disponíveis para este agente.
                   </p>
                 </div>
                 {agente.modo_operacao === "canal_whatsapp" ? (
@@ -1066,7 +1068,7 @@ export default function AgentePage() {
                     }}
                   />
                 ) : null}
-                {agente.modo_operacao === "canal_email" ? (
+                {isEmailChannelEnabledClient() && agente.modo_operacao === "canal_email" ? (
                   <AgenteEmailConnectBlock
                     agenteSlug={slug}
                     agenteNome={agente.nome}
@@ -1114,7 +1116,8 @@ export default function AgentePage() {
                     typeof agente.mistral_agent_sync_erro === "string" ? agente.mistral_agent_sync_erro : null
                   }
                   destacarWhatsApp={
-                    agente.modo_operacao === "canal_whatsapp" || agente.modo_operacao === "canal_email"
+                    agente.modo_operacao === "canal_whatsapp" ||
+                    (isEmailChannelEnabledClient() && agente.modo_operacao === "canal_email")
                   }
                 />
                 <button
@@ -1210,6 +1213,10 @@ export default function AgentePage() {
           onClose={() => setBriefingOpen(false)}
           agenteSlug={slug}
           agenteNome={agente.nome}
+          agenteCargo={typeof agente.cargo === "string" ? agente.cargo : null}
+          modoOperacao={
+            typeof agente.modo_operacao === "string" ? agente.modo_operacao : null
+          }
         />
       ) : null}
       {calibracaoOpen ? (

@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Brain,
+  BriefcaseBusiness,
   Cloud,
   Cpu,
   FileCode2,
@@ -101,6 +102,7 @@ const ICONE_FERRAMENTA: Record<HubAgenteFerramentaId, LucideIcon> = {
   hub_registar_nota_lead: StickyNote,
   hub_whatsapp_menu: ListOrdered,
   hub_atualizar_lead: UserPen,
+  hub_criar_negocio: BriefcaseBusiness,
 };
 
 function ToggleSwitch({

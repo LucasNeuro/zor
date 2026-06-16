@@ -45,6 +45,7 @@ import {
   playbookFlowReady,
 } from "@/lib/playbook/playbook-flow-ui";
 import { PLAYBOOK_EXEMPLO_ARQUIVO, PLAYBOOK_EXEMPLO_MD_URL } from "@/lib/playbook/playbook-exemplo";
+import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import {
   RAG_ACCEPT_ATTR,
   RAG_EXEMPLO_MD_URL,
@@ -57,6 +58,7 @@ import { prefixoMercadoParaGravacao } from "@/lib/crm/mercado-agente";
 import {
   AGENTE_WIZARD_STEP_INTRO,
   agenteWizardPasso8Descricao,
+  agenteWizardPasso8Intro,
   modoInstrucaoWizardResumo,
   modoOperacaoWizardResumo,
 } from "@/lib/hub/agente-wizard-copy";
@@ -527,6 +529,12 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   }, [agenteSlugCriado]);
 
   useEffect(() => {
+    if (!isEmailChannelEnabledClient() && modoOperacao === "canal_email") {
+      setModoOperacao("canal_whatsapp");
+    }
+  }, [modoOperacao]);
+
+  useEffect(() => {
     if (passo === 8 && !agenteEhModoCanal(modoOperacao)) {
       setPasso(7);
     }
@@ -545,7 +553,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       setSyncCanalLoading(false);
       if (!ok) return;
       if (modoOperacao === "canal_whatsapp") await refreshSnapshotUazapi();
-      if (modoOperacao === "canal_email") await refreshSnapshotEmail();
+      if (isEmailChannelEnabledClient() && modoOperacao === "canal_email") await refreshSnapshotEmail();
     })();
     return () => {
       cancel = true;
@@ -1247,6 +1255,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   });
 
   function selecionarModoOperacao(id: ModoOperacaoAgente) {
+    if (id === "canal_email" && !isEmailChannelEnabledClient()) return;
     setModoOperacao(id);
     if (agenteEhModoCanal(id)) setModoExecucao("interacao");
     else if (modoExecucao === "interacao") setModoExecucao("agenda");
@@ -1991,7 +2000,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   Tipo de agente <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <p style={{ color: wzMuted, fontSize: 12, margin: "0 0 12px", lineHeight: 1.5 }}>
-                  Atendimento fala com clientes no WhatsApp ou e-mail. Interno executa tarefas e ciclos no escritório,
+                  Atendimento fala com clientes no WhatsApp
+                  {isEmailChannelEnabledClient() ? " ou e-mail" : ""}. Interno executa tarefas e ciclos no escritório,
                   sem fila ao vivo.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2004,13 +2014,17 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         texto: MODO_OPERACAO_DESCRICAO.canal_whatsapp,
                         badge: null,
                       },
-                      {
-                        id: "canal_email" as const,
-                        Icon: Mail,
-                        titulo: MODO_OPERACAO_LABEL.canal_email,
-                        texto: MODO_OPERACAO_DESCRICAO.canal_email,
-                        badge: null,
-                      },
+                      ...(isEmailChannelEnabledClient()
+                        ? [
+                            {
+                              id: "canal_email" as const,
+                              Icon: Mail,
+                              titulo: MODO_OPERACAO_LABEL.canal_email,
+                              texto: MODO_OPERACAO_DESCRICAO.canal_email,
+                              badge: null,
+                            },
+                          ]
+                        : []),
                       {
                         id: "jobs_internos" as const,
                         Icon: Zap,
@@ -2089,8 +2103,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   1. Conhecimento estruturado (playbook)
                 </h3>
                 <p style={{ color: wzMuted, fontSize: 12, margin: "0 0 14px", lineHeight: 1.55 }}>
-                  Texto curto por seção — grava em <code style={{ fontSize: 11 }}>hub_agente_conhecimento</code> e
-                  compõe o playbook ao criar o agente. O cargo já traz saudação e fluxo base.
+                  Texto curto por seção — compõe o playbook ao criar o agente. O cargo já traz saudação e fluxo base.
                 </p>
 
               {cargoSelecionado ? (
@@ -2176,16 +2189,15 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div>
                     <h3 style={{ color: wzStrong, fontSize: 14, fontWeight: 800, margin: "0 0 6px" }}>
-                      2. Documentos RAG (consulta na conversa)
+                      2. Documentos deste assistente (consulta na conversa)
                     </h3>
                     <p style={{ color: wzMuted, fontSize: 12, margin: "0 0 12px", lineHeight: 1.55 }}>
                       Opcional — só para material <strong style={{ color: wzStrong }}>específico desta função</strong>{" "}
                       (scripts, POPs exclusivos, checklists). Catálogo, políticas e informação geral da empresa ficam em{" "}
                       <strong style={{ color: wzStrong }}>CRM → Conhecimento</strong> e são consultados por{" "}
                       <strong style={{ color: wzStrong }}>todos os agentes</strong> na conversa. Até{" "}
-                      <strong style={{ color: wzStrong }}>{RAG_DOCS_LIMIT} ficheiros</strong> nesta fila local — upload
-                      e indexação em <code style={{ fontSize: 11 }}>hub_agente_rag_*</code> ao criar o agente (Revisão →
-                      Ferramentas), ou «Processar embeddings agora». Formatos:{" "}
+                      <strong style={{ color: wzStrong }}>{RAG_DOCS_LIMIT} ficheiros</strong> nesta fila — são
+                      preparados ao criar o agente ou ao clicar em «Preparar documentos agora». Formatos:{" "}
                       <strong style={{ color: wzStrong }}>{RAG_FORMATOS_RESUMO}</strong>.
                     </p>
                   </div>
@@ -2257,10 +2269,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   }}
                 >
                   {ragPreparando
-                    ? "A enviar e indexar..."
+                    ? "A preparar documentos..."
                     : ragPreparados
-                      ? "Reprocessar embeddings"
-                      : "Processar embeddings agora"}
+                      ? "Preparar novamente"
+                      : "Preparar documentos agora"}
                 </button>
 
                 {ragPendenteErro ? (
@@ -2322,7 +2334,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         : ragPendentes.some((i) => i.status === "concluido")
                           ? "Documentos indexados no servidor."
                           : ragPendentes.every((i) => i.status === "na_fila")
-                            ? "Na fila local — serão enviados ao criar o agente ou ao clicar em «Processar embeddings agora»."
+                            ? "Na fila — serão enviados ao criar o agente ou ao clicar em «Preparar documentos agora»."
                             : "Aguardando processamento."}
                     </p>
                   </div>
@@ -2686,7 +2698,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Próximo</strong>.
                   </div>
                 ) : null}
-                {modoOperacao === "canal_email" ? (
+                {isEmailChannelEnabledClient() && modoOperacao === "canal_email" ? (
                   <div style={{ ...wizardInfoBox(), marginBottom: 14 }}>
                     <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Canal E-mail:</strong> no passo{" "}
                     <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Canal</strong> configure remetente
@@ -2709,19 +2721,16 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 >
                   {modoOperacao === "jobs_internos" ? (
                     <>
-                      O modelo será salvo como{" "}
-                      <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>jobs_internos</strong> e já
-                      provisiona um ciclo padrão em{" "}
-                      <code style={{ color: wzMuted }}>hub_ciclos_ia</code>.
+                      O modelo será salvo como <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>agente interno</strong>{" "}
+                      e já provisiona um ciclo de trabalho automático.
                     </>
                   ) : agenteEhModoCanal(modoOperacao) ? (
                     <>
                       O modelo será salvo como{" "}
-                      <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>{modoOperacao}</strong> — modo{" "}
-                      <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>atendimento no canal</strong> — e
+                      <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>atendimento no canal</strong> e
                       provisiona ciclo de{" "}
                       <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>gatilho por interação</strong>{" "}
-                      (cada mensagem no webhook).
+                      (cada mensagem recebida).
                     </>
                   ) : null}
                 </p>
@@ -2888,7 +2897,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     <p style={{ color: wzMuted, fontSize: 12, margin: 0 }}>A carregar ciclos…</p>
                   ) : hubCiclosLista.length === 0 ? (
                     <p style={{ color: wzMuted, fontSize: 12, margin: 0 }}>
-                      Nenhum ciclo em hub_ciclos_ia. Crie-os em CRM → Ciclos IA.
+                      Nenhum ciclo configurado. Crie ciclos em CRM → Ciclos IA.
                     </p>
                   ) : (
                     <div
@@ -3218,7 +3227,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <h2 style={wzH2}>{AGENTE_WIZARD_STEP_INTRO[8].titulo}</h2>
-                <p style={wzP}>{agenteWizardPasso8Descricao(modoOperacao)}</p>
+                <p style={wzP}>
+                  {agenteWizardPasso8Descricao(modoOperacao, isEmailChannelEnabledClient())}
+                </p>
               </div>
 
               {ragPosCriacaoAviso ? (
@@ -3286,7 +3297,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   }
                 />
               ) : null}
-              {modoOperacao === "canal_email" ? (
+              {isEmailChannelEnabledClient() && modoOperacao === "canal_email" ? (
                 <AgenteEmailConnectBlock
                   layout="painel"
                   agenteNome={nome.trim() || agenteSlugCriado}
@@ -3383,7 +3394,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       >
         <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
           {precisaPassoCanal
-            ? "O agente já foi criado. Pode configurar o canal (WhatsApp ou e-mail), gerar playbook e ajustar integrações mais tarde na ficha do modelo."
+            ? `O agente já foi criado. Pode configurar o canal (WhatsApp${isEmailChannelEnabledClient() ? " ou e-mail" : ""}), gerar playbook e ajustar integrações mais tarde na ficha do modelo.`
             : "O agente já foi criado. Pode gerar o playbook e ajustar ciclos mais tarde na ficha do modelo."}
         </p>
       </CrmConfirmDialog>

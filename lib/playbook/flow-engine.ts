@@ -77,9 +77,14 @@ export type FlowBranchImobSubStep = BaseStep & {
   invalid_prompt?: string;
 };
 
+import type { FlowCompleteTransfer } from "@/lib/playbook/flow-transfer-actions";
+
 export type FlowCompleteStep = BaseStep & {
   type: "complete";
   text?: string;
+  /** Permite encadear mensagem ou outro passo após conclusão/transferência. */
+  next_step?: string;
+  transfer?: FlowCompleteTransfer;
 };
 
 export type FlowEngineStep =
@@ -495,6 +500,16 @@ export async function executeFlowEngine(
         }
         if (adapter.onStepComplete) {
           await adapter.onStepComplete(currentStepId, answers);
+        }
+        if (step.next_step?.trim()) {
+          await adapter.persistState({
+            step: step.next_step.trim(),
+            answers,
+            active: true,
+            complete: false,
+          });
+          currentStepId = step.next_step.trim();
+          continue;
         }
         await adapter.persistState({
           step: "concluido",

@@ -4,9 +4,7 @@
 // ============================================================
 import { createClient } from "@supabase/supabase-js";
 import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
-import { buscarTrechosRag } from "@/lib/hub/rag";
 import {
-  buscarTrechosConhecimentoTenant,
   formatarAnaliseNegocioParaPrompt,
   formatarTrechosConhecimentoParaPrompt,
   lerAnaliseNegocioTenant,
@@ -15,6 +13,7 @@ import { defaultTenantId } from "@/lib/tenant-default";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
 import { blocoRegrasFluxoSequencialPlaybook } from "@/lib/ia/playbook-mari-runtime";
+import { agenteUsaPlaybookLegadoMari } from "@/lib/whatsapp/playbook-flow-runtime";
 import { cutoffSessaoConversaMs } from "@/lib/ia/sessao-conversa-ttl";
 import { resolverCargoCatalogoParaAgente } from "@/lib/hub/resolver-cargo-catalogo";
 import {
@@ -28,6 +27,22 @@ import {
   isPlaybookOnlyAgent,
 } from "@/lib/hub/agente-instrucao-modo";
 import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
+import {
+  buscarContextoDocumentosAgenteParaPrompt,
+  buscarContextoDocumentosEmpresaParaPrompt,
+} from "@/lib/ia/contexto-documentos-prompt";
+import { listarServicosCatalogo } from "@/lib/crm/servicos-catalogo";
+import {
+  formatarEstagiosPipelineParaPrompt,
+  listarEstagiosPipelineParaIa,
+} from "@/lib/crm/pipeline-estagios-ia";
+import {
+  blocoRaciocinioAtendimentoFluido,
+  carregarContextoLeadCrmParaPrompt,
+  clienteExpressouFrustracaoRepeticao,
+  extrairResumoProblemaCliente,
+  formatarBlocoContextoLeadCrm,
+} from "@/lib/ia/atendimento-fluido";
 
 function db() {
   return createClient(
@@ -88,6 +103,9 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
 
   if (!agente) return null;
 
+  const nomeAgente = String(agente.nome ?? params.agenteSlug).trim() || params.agenteSlug;
+  const isMariLegado = agenteUsaPlaybookLegadoMari(params.agenteSlug);
+
   const playbookPublicado = await loadPublishedPlaybookRuntimeSource(supabase, params.agenteSlug, {
     playbook_generated_at: typeof agente.playbook_generated_at === "string" ? agente.playbook_generated_at : null,
     playbook_object_path: typeof agente.playbook_object_path === "string" ? agente.playbook_object_path : null,
@@ -136,6 +154,15 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     memoriasAgenteTexto = "";
   }
 
+  let contextoLeadCrm: Awaited<ReturnType<typeof carregarContextoLeadCrmParaPrompt>> = null;
+  if (params.leadId && !params.sessaoReiniciada) {
+    try {
+      contextoLeadCrm = await carregarContextoLeadCrmParaPrompt(supabase, params.leadId);
+    } catch {
+      contextoLeadCrm = null;
+    }
+  }
+
   // 4. Busca regras de IA do agente
   const { data: regras } = usarPlaybookPublicado
     ? { data: null }
@@ -154,6 +181,11 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
 
   // CAMADA 1 — FONTE PRINCIPAL ESTÁTICA
   if (usarPlaybookPublicado) {
+    secoes.push(`═══ IDENTIDADE DESTE AGENTE (obrigatório) ═══
+- Seu nome é **${nomeAgente}**. Nunca se apresente com outro nome de assistente do sistema.
+- Sua função é exclusivamente a descrita no playbook abaixo — não misture papéis de outros agentes (ex.: SDR de triagem vs analista de CRM).
+- Se o cliente perguntar o que você faz, responda conforme **este** playbook e cargo, não como outro assistente.`);
+
     secoes.push(`═══ PLAYBOOK PUBLICADO (FONTE PRINCIPAL) ═══
 Siga o conteúdo abaixo como a fonte principal das instruções estáticas deste agente.
 Origem publicada: ${playbookPublicado.path}
@@ -166,10 +198,21 @@ ${playbookPublicado.prompt}`);
 - Nunca use nomes de rodapé, responsável técnico ou metadados do documento do playbook como nome do cliente.
 - Os marcadores [Nome] nos exemplos do playbook são modelos — não são o nome real de quem está a escrever agora.
 - Se o cliente só disse «Olá», «Oi» ou equivalente e ainda não confirmou o nome nesta conversa, NÃO invente nem assuma um nome na saudação.
-- Siga o playbook: apresente a Mari, acolha e pergunte o nome («Me fale qual é o seu nome, por gentileza?») antes de personalizar.
+- Siga o playbook: apresente-se como **${nomeAgente}**, acolha e pergunte o nome quando o playbook exigir, antes de personalizar.
 - Só use nome na saudação se vier confirmado em «DADOS DO CANAL (WhatsApp → CRM)» para este número ou se o cliente tiver dito o nome nesta sessão.`);
 
-    secoes.push(blocoRegrasFluxoSequencialPlaybook(playbookPublicado.flowHints));
+    if (isMariLegado) {
+      secoes.push(blocoRegrasFluxoSequencialPlaybook(playbookPublicado.flowHints));
+    } else if (playbookPublicado.flowHints?.trim()) {
+      secoes.push(
+        `═══ FLUXO DO PLAYBOOK (resumo deste agente) ═══\n${playbookPublicado.flowHints.trim()}`
+      );
+    } else {
+      secoes.push(`═══ REGRAS DE FLUXO ═══
+- Siga apenas o playbook publicado de **${nomeAgente}** — não use fluxos de triagem ou saudação de outros assistentes.
+- Uma pergunta por mensagem quando estiver coletando dados.
+- Não repita saudação nem menu já respondidos no histórico.`);
+    }
 
     const tomWizard = String(agente.personalidade ?? "").trim();
     if (tomWizard) {
@@ -213,12 +256,26 @@ ${personalidade?.descricao_comportamento || ""}`);
     : [];
   const usarPerguntasCargo =
     cargoCatalogo?.usar_perguntas_essenciais === true && perguntasEssenciaisCargo.length > 0;
+  const evitarRepetirQualificacao = contextoLeadCrm?.evitarRepetirQualificacao === true;
 
   const proximaPerguntaEssencial = usarPerguntasCargo
-    ? obterProximaPerguntaEssencial(perguntasEssenciaisCargo, turnosConversa, ordemPerguntasCargo)
+    ? obterProximaPerguntaEssencial(perguntasEssenciaisCargo, turnosConversa, ordemPerguntasCargo, {
+        evitarRepetirQualificacao,
+      })
     : null;
 
-  if (canalWhatsapp && !usarPerguntasCargo) {
+  const frustracaoRepeticao = clienteExpressouFrustracaoRepeticao(turnosConversa);
+  const resumoProblemaCliente = extrairResumoProblemaCliente(turnosConversa);
+
+  if (canalWhatsapp) {
+    secoes.push(blocoRaciocinioAtendimentoFluido(true));
+  }
+
+  if (contextoLeadCrm) {
+    secoes.push(formatarBlocoContextoLeadCrm(contextoLeadCrm));
+  }
+
+  if (canalWhatsapp && !usarPerguntasCargo && isMariLegado) {
     secoes.push(
       blocoFluxoPrimeiroAtendimentoWhatsapp(turnosAnteriores, {
         playbookPublicado: usarPlaybookPublicado,
@@ -228,9 +285,10 @@ ${personalidade?.descricao_comportamento || ""}`);
 
   if (params.sessaoReiniciada && canalWhatsapp) {
     secoes.push(`═══ NOVA SESSÃO (INACTIVIDADE) ═══
-Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta conversa:
-- Não retome assuntos antigos (imóveis, orçamentos ou fluxos anteriores) salvo se o cliente mencionar agora.
-- Siga o POP: saudação, pedir nome se faltar, menu de triagem quando aplicável.`);
+Passou o prazo sem mensagens nesta conversa. Trate como **retorno** — não como lead novo:
+- Use o bloco **CLIENTE NO CRM** e ferramentas **hub_lead_resumo** / **hub_atualizar_lead** antes de repetir perguntas.
+- Só requalifique nome e dados se passou mais de uma semana sem contacto ou todos os negócios foram concluídos.
+- Não retome assuntos antigos salvo se o cliente mencionar agora.`);
   }
 
   if (params.blocoContextoFluxoPlaybook?.trim()) {
@@ -242,7 +300,6 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
     const linhas: string[] = [];
     const saudacao = String(cargoCatalogo.saudacao_cliente ?? "").trim();
     const comprimentoPadrao = String(cargoCatalogo.comprimento_padrao ?? "").trim();
-    const nomeAgente = String(agente.nome ?? params.agenteSlug);
 
     if (usarPlaybookPublicado) {
       linhas.push(
@@ -254,9 +311,9 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
     }
 
     if (usarPerguntasCargo) {
-      if (!conversaEmAndamento) {
+      if (!conversaEmAndamento && !evitarRepetirQualificacao) {
         linhas.push(
-          "- **Prioridade na 1ª mensagem:** use a saudação e a pergunta obrigatória desta camada; não substitua por cumprimento genérico («Olá! Tudo certo? Como posso ajudar?»)."
+          "- **1ª mensagem:** saudação curta do cargo; pergunte só o que o cliente ainda não disse (veja CRM e histórico)."
         );
       }
       linhas.push(
@@ -269,6 +326,7 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
           comprimentoPadrao: comprimentoPadrao || undefined,
           conversaEmAndamento,
           proximaPergunta: proximaPerguntaEssencial,
+          evitarRepetirQualificacao,
         })
       );
     } else if (conversaEmAndamento) {
@@ -285,7 +343,23 @@ Passou o prazo sem mensagens deste lead. Trate como **primeiro contacto** nesta 
 
     if (canalWhatsapp && usarPerguntasCargo) {
       linhas.push(
-        "- WhatsApp: máximo 2 frases curtas; uma pergunta por mensagem; avance como na simulação interna do CRM."
+        "- WhatsApp: máximo 2 frases curtas; uma pergunta por mensagem — **somente** se faltar dado para avançar."
+      );
+    }
+
+    if (frustracaoRepeticao) {
+      linhas.push(
+        "- O cliente indicou que **já respondeu**: peça desculpas em uma linha, **não** repita a pergunta, use o que ele disse e avance (orçamento/solução)."
+      );
+    }
+
+    if (resumoProblemaCliente) {
+      linhas.push(`- Problema/pedido já informado pelo cliente: «${resumoProblemaCliente}» — trate como dado confirmado.`);
+    }
+
+    if (conversaEmAndamento && !proximaPerguntaEssencial) {
+      linhas.push(
+        "- Qualificação essencial concluída ou cliente não pode informar dado opcional (ex.: IMEI): **passe ao orçamento ou próximo passo comercial** usando CATÁLOGO DE SERVIÇOS e DOCUMENTOS DA EMPRESA — não fique só em agendamento genérico se houver preço na base."
       );
     }
 
@@ -316,54 +390,67 @@ ${perfilEmpresa}`);
     }
   }
 
-  const mensagemConsulta = params.mensagemAtual?.trim() ?? "";
-  if (mensagemConsulta) {
-    let trechosEmpresa = await buscarTrechosConhecimentoTenant(supabase, tenantId, mensagemConsulta, {
-      limit: 5,
-      threshold: 0.65,
-    });
-    if (trechosEmpresa.length === 0) {
-      trechosEmpresa = await buscarTrechosConhecimentoTenant(supabase, tenantId, mensagemConsulta, {
-        limit: 4,
-        threshold: 0.55,
-      });
-    }
-    if (trechosEmpresa.length > 0) {
-      secoes.push(`═══ DOCUMENTOS DA EMPRESA (CONHECIMENTO) ═══
+  const trechosEmpresa = await buscarContextoDocumentosEmpresaParaPrompt(supabase, tenantId, {
+    mensagemAtual: params.mensagemAtual,
+    turnosConversa: params.turnosConversa,
+  });
+  if (trechosEmpresa.length > 0) {
+    secoes.push(`═══ DOCUMENTOS DA EMPRESA (CONHECIMENTO) ═══
 Fonte principal para fatos do negócio (produtos, preços, políticas, garantias, horários, POPs gerais).
 Se estes trechos conflitarem com playbook genérico ou documentos só deste agente, **priorize a empresa**.
 Se não houver evidência suficiente, diga que vai verificar — nunca invente.
 
 ${formatarTrechosConhecimentoParaPrompt(trechosEmpresa)}`);
-    }
   }
 
   // CAMADA 2.5 — RAG específico do agente (documentos anexados no wizard)
-  if (mensagemConsulta) {
-    let trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, mensagemConsulta, {
-      limit: 4,
-      threshold: 0.68,
-    });
-    // Fallback: em perguntas curtas/ambíguas, reduz threshold para não perder contexto útil.
-    if (trechosRag.length === 0) {
-      trechosRag = await buscarTrechosRag(supabase, params.agenteSlug, mensagemConsulta, {
-        limit: 3,
-        threshold: 0.56,
-      });
-    }
-    if (trechosRag.length > 0) {
-      const ragTexto = trechosRag
-        .map((t, i) => {
-          const conteudo = t.conteudo.length > 1_200 ? `${t.conteudo.slice(0, 1_200)}...` : t.conteudo;
-          return `[Trecho ${i + 1} — ${t.nomeArquivo} — relevância ${t.similarity.toFixed(2)}]\n${conteudo}`;
-        })
-        .join("\n\n");
-      secoes.push(`═══ DOCUMENTOS DESTE AGENTE (RAG ESPECÍFICO) ═══
+  const trechosRag = await buscarContextoDocumentosAgenteParaPrompt(supabase, params.agenteSlug, {
+    mensagemAtual: params.mensagemAtual,
+    turnosConversa: params.turnosConversa,
+  });
+  if (trechosRag.length > 0) {
+    const ragTexto = trechosRag
+      .map((t, i) => {
+        const conteudo = t.conteudo.length > 1_200 ? `${t.conteudo.slice(0, 1_200)}...` : t.conteudo;
+        return `[Trecho ${i + 1} — ${t.nomeArquivo} — relevância ${t.similarity.toFixed(2)}]\n${conteudo}`;
+      })
+      .join("\n\n");
+    secoes.push(`═══ DOCUMENTOS DESTE AGENTE (RAG ESPECÍFICO) ═══
 Material específico desta função (scripts, checklists, manuais exclusivos). Para fatos gerais do negócio, priorize «DOCUMENTOS DA EMPRESA» acima.
 Use estes trechos para procedimentos da função; se conflitar com a empresa em preço/política/serviço, priorize a empresa.
 
 ${ragTexto}`);
+  }
+
+  // CAMADA 2.6 — Catálogo de serviços/preços (CRM)
+  try {
+    const catalogo = await listarServicosCatalogo(supabase, tenantId);
+    const textoCatalogo = formatarServicosCatalogoParaPrompt(catalogo);
+    if (textoCatalogo) {
+      secoes.push(`═══ CATÁLOGO DE SERVIÇOS E PREÇOS (CRM) ═══
+Tabela oficial de referência do negócio. Use para orçamentos quando o cliente pedir valor, reparo ou serviço.
+Cite valores **somente** daqui ou de DOCUMENTOS DA EMPRESA — nunca invente. Se não houver item exato, informe faixa ou diga que confirma na loja.
+Quando o cliente **aceitar** orçamento ou pedir proposta formal, chame **hub_criar_negocio** com \`servico_nome\` e \`valor_estimado\` deste catálogo.
+
+${textoCatalogo}`);
     }
+  } catch {
+    /* tabela opcional até migração aplicada */
+  }
+
+  // CAMADA 2.7 — Pipelines e estágios CRM (configuráveis por empresa)
+  try {
+    const estagiosLead = await listarEstagiosPipelineParaIa(supabase, tenantId, "lead");
+    const textoPipelines = formatarEstagiosPipelineParaPrompt(estagiosLead);
+    if (textoPipelines) {
+      secoes.push(`═══ PIPELINES CRM — ESTÁGIOS COMERCIAIS (LEADS) ═══
+Use estes slugs em **hub_atualizar_lead** quando mover o lead no funil.
+Não use estágios de fechamento (ganho/perdido) — só humanos no CRM.
+
+${textoPipelines}`);
+    }
+  } catch {
+    /* pipelines opcionais */
   }
 
   // CAMADA 3 — MERCADO ATUAL
@@ -423,7 +510,8 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
     "Nunca mencione que é IA a menos que seja perguntado diretamente",
     "Se não souber, diga que vai verificar — nunca invente",
     "Nunca encerre sem indicar o próximo passo",
-    "Para fatos do negócio (preço, garantia, horário, serviço), priorize DOCUMENTOS DA EMPRESA; use RAG deste agente só para procedimentos da função",
+    "Para fatos do negócio (preço, garantia, horário, serviço), priorize DOCUMENTOS DA EMPRESA e CATÁLOGO DE SERVIÇOS; use RAG deste agente só para procedimentos da função",
+    "Quando o cliente pedir orçamento ou valor e houver preço na base, informe de forma clara (serviço + valor); não adie só por faltar dado opcional",
   ];
   if (usarPlaybookPublicado) {
     regrasUniversais.unshift("Considere o playbook publicado acima como a fonte principal das regras estáticas.");

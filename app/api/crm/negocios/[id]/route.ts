@@ -7,7 +7,7 @@ import { tenantIdFromRequest } from "@/lib/tenant-default";
 type Params = { params: Promise<{ id: string }> };
 
 const NEGOCIO_SELECT =
-  "id, codigo, titulo, descricao, tipo, prefixo_mercado, lead_id, pessoa_id, empresa_id, pipeline_id, valor_estimado, valor_fechado, percentual_comissao, status, etapa, motivo_perda, proxima_acao, data_previsao_fechamento, data_fechamento, tenant_id, criado_em, atualizado_em";
+  "id, codigo, titulo, descricao, tipo, prefixo_mercado, lead_id, pessoa_id, empresa_id, pipeline_id, servico_catalogo_id, valor_estimado, valor_fechado, percentual_comissao, status, etapa, motivo_perda, proxima_acao, data_previsao_fechamento, data_entrada, data_entrega, data_fechamento, tenant_id, criado_em, atualizado_em";
 
 export async function GET(_request: NextRequest, { params }: Params) {
   const configErr = crmConfigError();
@@ -20,7 +20,10 @@ export async function GET(_request: NextRequest, { params }: Params) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!negocio) return NextResponse.json({ error: "Negócio não encontrado" }, { status: 404 });
 
-  const [{ data: atividades }, { data: notas }, { data: lead }, { data: pessoa }, { data: propostas }] =
+  const servicoId =
+    negocio.servico_catalogo_id != null ? String(negocio.servico_catalogo_id) : "";
+
+  const [{ data: atividades }, { data: notas }, { data: lead }, { data: pessoa }, { data: propostas }, servicoRes] =
     await Promise.all([
       supabase.from("hub_atividades").select("*").eq("negocio_id", id).order("criado_em", { ascending: false }).limit(50),
       supabase.from("hub_notas").select("*").eq("negocio_id", id).order("criado_em", { ascending: false }).limit(30),
@@ -31,12 +34,22 @@ export async function GET(_request: NextRequest, { params }: Params) {
         ? supabase.from("hub_pessoas").select("id, codigo, nome, email, telefone").eq("id", negocio.pessoa_id).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase.from("hub_propostas").select("*").eq("negocio_id", id).order("criado_em", { ascending: false }),
+      servicoId
+        ? supabase
+            .from("hub_tenant_servicos_catalogo")
+            .select("id, nome, preco_referencia")
+            .eq("id", servicoId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
+
+  const servico = servicoRes.data ?? null;
 
   return NextResponse.json({
     data: negocio,
     lead: lead ?? null,
     pessoa: pessoa ?? null,
+    servico,
     timeline: atividades ?? [],
     notas: notas ?? [],
     propostas: propostas ?? [],
@@ -116,6 +129,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     "motivo_perda",
     "proxima_acao",
     "data_previsao_fechamento",
+    "data_entrada",
+    "data_entrega",
     "data_fechamento",
   ] as const;
 

@@ -1,14 +1,17 @@
 "use client";
 
 import type {
+  PlaybookFlowHandoffTarget,
   PlaybookFlowInputType,
   PlaybookFlowJourney,
   PlaybookFlowDefinition,
   PlaybookFlowStep,
   PlaybookFlowStepKind,
+  PlaybookFlowTransferKind,
 } from "@/lib/playbook/flow-definition-types";
 
-export type FlowNodeKind = Extract<PlaybookFlowStepKind, "message" | "input" | "menu" | "complete">;
+/** Tipos visuais no React Flow (transfer serializa como complete no JSON). */
+export type FlowNodeKind = Extract<PlaybookFlowStepKind, "message" | "input" | "menu" | "complete"> | "transfer";
 
 export type FlowMenuOption = {
   id: string;
@@ -26,6 +29,14 @@ export type FlowVisualNodeData = Record<string, unknown> & {
   menuOptions?: FlowMenuOption[];
   /** Step id for stable reference */
   stepId?: string;
+  /** Não alcançável a partir do passo de entrada */
+  isOrphan?: boolean;
+  /** Nó transfer — mapeado para complete.handoff + metadata */
+  transferKind?: PlaybookFlowTransferKind;
+  handoffTo?: PlaybookFlowHandoffTarget;
+  notifyPhone?: string;
+  notifyEmail?: string;
+  agentSlug?: string;
 };
 
 export type FlowCanvasSnapshot = {
@@ -39,6 +50,7 @@ const DEFAULT_CONTENT: Record<FlowNodeKind, string> = {
   input: "Pergunta para captar um dado do lead.",
   menu: "Escolha uma opção para continuar.",
   complete: "Fluxo concluído.",
+  transfer: "Transferir atendimento. Resumo e contato do lead vão para o WhatsApp do consultor; conversa segue no CRM.",
 };
 
 export function summarizeNodeContent(content: string, max = 64): string {
@@ -57,6 +69,7 @@ export function createDefaultNodeData(kind: FlowNodeKind, order: number): FlowVi
     field: kind === "input" ? `${id}_value` : kind === "menu" ? id : undefined,
     inputType: kind === "input" ? "text" : undefined,
     menuOptions: kind === "menu" ? [{ id: "opcao_1", label: "Opção 1" }] : undefined,
+    transferKind: kind === "transfer" ? "whatsapp_card" : undefined,
   };
 }
 
@@ -92,12 +105,48 @@ export function toVisualNodeData(step: PlaybookFlowStep): FlowVisualNodeData {
       stepId: step.id,
     };
   }
+  if (step.kind === "complete") {
+    const meta = step.complete.crm_patch?.metadata;
+    const notifyPhone =
+      meta && typeof meta === "object" && typeof (meta as Record<string, unknown>).notify_phone === "string"
+        ? String((meta as Record<string, unknown>).notify_phone)
+        : undefined;
+    const transferKind =
+      meta && typeof meta === "object" && typeof (meta as Record<string, unknown>).transfer_kind === "string"
+        ? ((meta as Record<string, unknown>).transfer_kind as PlaybookFlowTransferKind)
+        : undefined;
+    if (transferKind || notifyPhone || step.complete.handoff_to) {
+      return {
+        kind: "transfer",
+        title: step.title,
+        content: step.complete.summary ?? "Transferência",
+        stepId: step.id,
+        transferKind: notifyPhone ? "whatsapp_card" : transferKind ?? "whatsapp_card",
+        handoffTo: step.complete.handoff_to,
+        notifyPhone,
+        notifyEmail:
+          typeof (meta as Record<string, unknown> | undefined)?.notify_email === "string"
+            ? String((meta as Record<string, unknown>).notify_email)
+            : undefined,
+        agentSlug:
+          typeof (meta as Record<string, unknown> | undefined)?.agent_slug === "string"
+            ? String((meta as Record<string, unknown>).agent_slug)
+            : undefined,
+      };
+    }
+    return {
+      kind: step.kind,
+      title: step.title,
+      content: step.complete.summary ?? "Fluxo concluído",
+      stepId: step.id,
+    };
+  }
+  const fallbackId = (step as PlaybookFlowStep).id ?? "step_unknown";
   return {
-    kind: step.kind,
-    title: step.title,
-    content: step.complete.summary ?? "Fluxo concluído",
-    journey: step.journey,
-    stepId: step.id,
+    kind: "complete",
+    title: (step as PlaybookFlowStep).title,
+    content: "Fluxo concluído",
+    stepId: fallbackId,
   };
 }
 

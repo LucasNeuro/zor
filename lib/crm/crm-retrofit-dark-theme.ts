@@ -19,6 +19,16 @@ export const RF_ACCENT = BRAND_GREEN_BRIGHT;
 export const RF_ACCENT_SOFT = "#3f9848";
 export const RF_OVERLAY = "rgba(11, 31, 16, 0.55)";
 
+/** Tema claro para sideovers de configuração (ex.: editor visual do fluxo). */
+export const RF_LIGHT_BG = "#f8fcf6";
+export const RF_LIGHT_PANEL = "#ffffff";
+export const RF_LIGHT_BORDER = "#dcebd8";
+export const RF_LIGHT_BORDER_STRONG = "#b8d4bc";
+export const RF_LIGHT_TEXT_PRIMARY = "#0b2210";
+export const RF_LIGHT_TEXT_SECONDARY = "#2d4a35";
+export const RF_LIGHT_TEXT_MUTED = "#5d7a67";
+export const RF_LIGHT_OVERLAY = "rgba(11, 34, 16, 0.35)";
+
 /**
  * Objeto curto para drawers que usam tokens nomeados (ex.: OB).
  * `verde` / `panel` = fundo — nunca usar como `color` de texto.
@@ -82,6 +92,26 @@ export const RF_LABEL_STYLE: CSSProperties = {
   marginBottom: 6,
 };
 
+export const RF_LIGHT_INPUT_STYLE: CSSProperties = {
+  width: "100%",
+  background: "#ffffff",
+  border: `1px solid ${RF_LIGHT_BORDER_STRONG}`,
+  color: RF_LIGHT_TEXT_PRIMARY,
+  borderRadius: 8,
+  padding: "9px 11px",
+  fontSize: 13,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+export const RF_LIGHT_LABEL_STYLE: CSSProperties = {
+  color: RF_LIGHT_TEXT_SECONDARY,
+  fontSize: 12,
+  fontWeight: 700,
+  display: "block",
+  marginBottom: 6,
+};
+
 export const RF_SECTION_STYLE: CSSProperties = {
   marginTop: 4,
   paddingTop: 14,
@@ -96,19 +126,26 @@ export function rfLabelStyle(): CSSProperties {
   return { ...RF_LABEL_STYLE };
 }
 
-export function rfOverlayStyle(zIndex = 210): CSSProperties {
+export type CrmSideoverTheme = "light" | "dark";
+
+export function rfOverlayStyle(zIndex = 210, theme: CrmSideoverTheme = "dark"): CSSProperties {
   return {
     position: "fixed",
     inset: 0,
     zIndex,
-    background: RF_OVERLAY,
+    background: theme === "light" ? RF_LIGHT_OVERLAY : RF_OVERLAY,
     border: "none",
     padding: 0,
     cursor: "pointer",
   };
 }
 
-export function rfAsideStyle(width: string | number = 480, zIndex = 211): CSSProperties {
+export function rfAsideStyle(
+  width: string | number = 480,
+  zIndex = 211,
+  theme: CrmSideoverTheme = "dark"
+): CSSProperties {
+  const isLight = theme === "light";
   return {
     position: "fixed",
     top: 0,
@@ -120,17 +157,18 @@ export function rfAsideStyle(width: string | number = 480, zIndex = 211): CSSPro
     display: "flex",
     flexDirection: "column",
     minHeight: 0,
-    background: RF_BG_DEEP,
-    borderLeft: `1px solid ${RF_BORDER_STRONG}`,
-    boxShadow: "-12px 0 32px rgba(0,0,0,0.55)",
+    background: isLight ? RF_LIGHT_BG : RF_BG_DEEP,
+    borderLeft: `1px solid ${isLight ? RF_LIGHT_BORDER_STRONG : RF_BORDER_STRONG}`,
+    boxShadow: isLight ? "-12px 0 32px rgba(11, 34, 16, 0.12)" : "-12px 0 32px rgba(0,0,0,0.55)",
   };
 }
 
-export function rfAsideHeaderStyle(): CSSProperties {
+export function rfAsideHeaderStyle(theme: CrmSideoverTheme = "dark"): CSSProperties {
+  const isLight = theme === "light";
   return {
-    borderBottom: `1px solid ${RF_BORDER}`,
+    borderBottom: `1px solid ${isLight ? RF_LIGHT_BORDER : RF_BORDER}`,
     padding: 16,
-    background: RF_BG_PANEL,
+    background: isLight ? RF_LIGHT_PANEL : RF_BG_PANEL,
     flexShrink: 0,
   };
 }
@@ -144,24 +182,26 @@ export function rfAsideBodyStyle(): CSSProperties {
   };
 }
 
-export function rfAsideFooterStyle(): CSSProperties {
+export function rfAsideFooterStyle(theme: CrmSideoverTheme = "dark"): CSSProperties {
+  const isLight = theme === "light";
   return {
     flexShrink: 0,
     padding: "14px 20px",
-    borderTop: `1px solid ${RF_BORDER}`,
+    borderTop: `1px solid ${isLight ? RF_LIGHT_BORDER : RF_BORDER}`,
     display: "flex",
     gap: 10,
     justifyContent: "flex-end",
     flexWrap: "wrap",
-    background: RF_BG_PANEL,
+    background: isLight ? RF_LIGHT_PANEL : RF_BG_PANEL,
   };
 }
 
-export function rfCloseButtonStyle(): CSSProperties {
+export function rfCloseButtonStyle(theme: CrmSideoverTheme = "dark"): CSSProperties {
+  const isLight = theme === "light";
   return {
-    border: `1px solid ${RF_BORDER_STRONG}`,
-    background: "rgba(6, 13, 8, 0.6)",
-    color: RF_ACCENT,
+    border: `1px solid ${isLight ? RF_LIGHT_BORDER_STRONG : RF_BORDER_STRONG}`,
+    background: isLight ? RF_LIGHT_BG : "rgba(6, 13, 8, 0.6)",
+    color: isLight ? RF_LIGHT_TEXT_SECONDARY : RF_ACCENT,
     borderRadius: 8,
     width: 34,
     height: 34,

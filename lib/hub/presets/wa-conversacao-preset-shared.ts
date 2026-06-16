@@ -52,6 +52,8 @@ export const CONHECIMENTO_PRESET: Partial<Record<ConhecimentoSecaoId, string>> =
     "- Seja proativo: sempre indique o que vem a seguir.",
     "- Use hub_whatsapp_menu para triagem e decisões binárias.",
     "- Registe dados com hub_atualizar_lead assim que souber (nome, interesse, cidade, prazo).",
+    "- Quando o cliente aceitar orçamento ou confirmar proposta, **obrigatoriamente** chame hub_criar_negocio com servico_nome e valor_estimado do catálogo (não basta dizer que registrou — use a ferramenta).",
+    "- Antes de citar preço, consulte o catálogo de serviços no contexto; ao fechar, vincule o negócio ao lead desta conversa.",
     "- Baseie respostas na documentação da empresa; se não souber, diga e ofereça encaminhar ao time.",
   ].join("\n"),
   proibicoes: [

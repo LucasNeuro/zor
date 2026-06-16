@@ -6,6 +6,8 @@ import { CRM_LIST_SECTION_LABEL, crmListSearchStyle, crmListSelectStyle } from "
 import { CrmSegmentedPills } from "@/components/crm/CrmSegmentedPills";
 import type { PipelineTabItem } from "@/components/crm/pipelines/PipelineTabsBar";
 
+export type CrmPipelineViewMode = "kanban" | "lista" | "atendimentos";
+
 export type CrmPipelineStageOption = { id: string; label: string };
 
 type Props = {
@@ -13,12 +15,14 @@ type Props = {
   activePipelineId: string | null;
   onSelectPipeline: (id: string) => void;
   pipelineCount?: (pipelineId: string) => number | undefined;
-  view: "kanban" | "lista";
-  onViewChange: (view: "kanban" | "lista") => void;
+  view: CrmPipelineViewMode;
+  onViewChange: (view: CrmPipelineViewMode) => void;
   onOpenStages?: () => void;
   onCreatePipeline?: () => void;
   /** Oculta tabs de pipeline e botão + Pipeline (ex.: Negócios = funil único). */
   hidePipelines?: boolean;
+  /** Exibe botão «Atendimentos» (tabela de fila de atendimento). */
+  showAtendimentosView?: boolean;
   sectionLabel?: string;
   /** Busca e filtro de estágio (modo lista). */
   showListFilters?: boolean;
@@ -44,6 +48,7 @@ export function CrmPipelinePageToolbar({
   onOpenStages,
   onCreatePipeline,
   hidePipelines = false,
+  showAtendimentosView = false,
   sectionLabel = "LISTA",
   showListFilters = false,
   searchValue = "",
@@ -109,6 +114,16 @@ export function CrmPipelinePageToolbar({
           items={[
             { key: "kanban", label: "Kanban", active: view === "kanban", onClick: () => onViewChange("kanban") },
             { key: "lista", label: "Lista", active: view === "lista", onClick: () => onViewChange("lista") },
+            ...(showAtendimentosView
+              ? [
+                  {
+                    key: "atendimentos",
+                    label: "Atendimentos",
+                    active: view === "atendimentos",
+                    onClick: () => onViewChange("atendimentos"),
+                  },
+                ]
+              : []),
           ]}
           aria-label="Visualização"
         />

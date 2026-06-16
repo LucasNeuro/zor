@@ -59,36 +59,75 @@ function LoginForm() {
     e.preventDefault();
     setLoading(true);
     setMsg(null);
-    let data: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"];
+
+    let access_token: string | undefined;
+    let refresh_token: string | undefined;
+    let expires_in: number | undefined;
+
     try {
-      const result = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      const proxyRes = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
       });
-      if (result.error) {
+      const proxyBody = (await proxyRes.json().catch(() => ({}))) as {
+        error?: string;
+        access_token?: string;
+        refresh_token?: string;
+        expires_in?: number;
+      };
+
+      if (proxyRes.ok && proxyBody.access_token) {
+        access_token = proxyBody.access_token;
+        refresh_token = proxyBody.refresh_token;
+        expires_in = proxyBody.expires_in;
+      } else if (proxyRes.status === 502 || proxyRes.status === 500) {
+        // Fallback: tentar direto no browser se o servidor não alcançar o Supabase
+        const result = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (result.error) {
+          setLoading(false);
+          setMsg(result.error.message);
+          return;
+        }
+        access_token = result.data.session?.access_token;
+        refresh_token = result.data.session?.refresh_token;
+        expires_in = result.data.session?.expires_in;
+      } else {
         setLoading(false);
-        setMsg(result.error.message);
+        setMsg(proxyBody.error ?? `Não foi possível iniciar sessão (código ${proxyRes.status}).`);
         return;
       }
-      data = result.data;
     } catch (err) {
       setLoading(false);
       setMsg(messageForAuthRequestFailure(err));
       return;
     }
-    const access_token = data.session?.access_token;
+
     if (!access_token) {
       setLoading(false);
       setMsg("Sessão indisponível. Tente novamente.");
       return;
     }
+
+    if (refresh_token) {
+      try {
+        await supabase.auth.setSession({ access_token, refresh_token });
+      } catch {
+        /* cookie CRM abaixo é suficiente para o backoffice */
+      }
+    }
+
     const sync = await fetch("/api/auth/crm-session", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         access_token,
-        expires_in: data.session.expires_in,
+        expires_in,
       }),
     });
     const raw = await sync.text();

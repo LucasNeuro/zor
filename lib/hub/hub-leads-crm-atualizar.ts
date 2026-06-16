@@ -31,6 +31,11 @@ export type BuildLeadPatchResult =
   | { ok: true; patch: Record<string, unknown>; estagioAnterior?: string; estagioNovo?: string }
   | { ok: false; erro: string; codigo?: string };
 
+export type EstagioPipelinePatchRef = {
+  slug: string;
+  tipo_fecho: string;
+};
+
 function normStr(v: unknown, max: number): string | undefined {
   if (typeof v !== "string") return undefined;
   const t = v.trim();
@@ -67,7 +72,8 @@ function mergeJsonObject(
 /** Monta PATCH para Supabase; não inclui campos vazios. */
 export function buildHubLeadsCrmPatch(
   args: Record<string, unknown>,
-  leadAtual: Record<string, unknown> | null
+  leadAtual: Record<string, unknown> | null,
+  opts?: { estagiosPipeline?: EstagioPipelinePatchRef[] }
 ): BuildLeadPatchResult {
   const patch: Record<string, unknown> = {};
   let estagioAnterior: string | undefined;
@@ -75,10 +81,22 @@ export function buildHubLeadsCrmPatch(
 
   const est = normStr(args.estagio, 40)?.toLowerCase();
   if (est) {
-    if (!HUB_LEADS_CRM_ESTAGIOS.includes(est as HubLeadsCrmEstagio)) {
+    const pipelineRefs = opts?.estagiosPipeline?.filter(Boolean);
+    if (pipelineRefs && pipelineRefs.length > 0) {
+      const hit = pipelineRefs.find((e) => e.slug === est);
+      if (!hit) {
+        return { ok: false, erro: "estagio_invalido", codigo: "estagio_invalido" };
+      }
+      if (hit.tipo_fecho === "ganho" || hit.tipo_fecho === "perdido") {
+        return {
+          ok: false,
+          erro: `estagio_${est}_requer_humano`,
+          codigo: "estagio_bloqueado_ia",
+        };
+      }
+    } else if (!HUB_LEADS_CRM_ESTAGIOS.includes(est as HubLeadsCrmEstagio)) {
       return { ok: false, erro: "estagio_invalido", codigo: "estagio_invalido" };
-    }
-    if (HUB_LEADS_CRM_ESTAGIOS_BLOQUEADOS_IA.has(est)) {
+    } else if (HUB_LEADS_CRM_ESTAGIOS_BLOQUEADOS_IA.has(est)) {
       return {
         ok: false,
         erro: `estagio_${est}_requer_humano`,

@@ -375,7 +375,14 @@ export async function GET(request: NextRequest) {
       fallbackQuery = fallbackQuery.or(`titulo.ilike.%${busca}%,codigo.ilike.%${busca}%`);
     }
 
-    ({ data, error, count } = await fallbackQuery);
+    const fb = await fallbackQuery;
+    data = (fb.data ?? []).map((row) => ({
+      ...row,
+      data_entrada: null,
+      data_entrega: null,
+    }));
+    error = fb.error;
+    count = fb.count;
   }
 
   if (error) {

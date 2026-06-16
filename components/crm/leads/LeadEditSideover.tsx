@@ -627,7 +627,7 @@ export function LeadEditSideover({
                 </div>
                 <div
                   className="mt-4 flex flex-wrap gap-3 text-xs"
-                  style={{ color: RF_TEXT_MUTED }}
+                  style={{ color: RF_LIGHT_TEXT_MUTED }}
                 >
                   <span>Criado: {new Date(lead.criado_em).toLocaleDateString("pt-BR")}</span>
                   <span>Atualizado: {new Date(lead.atualizado_em).toLocaleDateString("pt-BR")}</span>

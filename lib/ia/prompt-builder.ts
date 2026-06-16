@@ -32,6 +32,7 @@ import {
   buscarContextoDocumentosEmpresaParaPrompt,
 } from "@/lib/ia/contexto-documentos-prompt";
 import { listarServicosCatalogo } from "@/lib/crm/servicos-catalogo";
+import { formatarServicosCatalogoParaPrompt } from "@/lib/crm/servicos-catalogo-prompt";
 import {
   formatarEstagiosPipelineParaPrompt,
   listarEstagiosPipelineParaIa,

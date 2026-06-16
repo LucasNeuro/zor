@@ -4,6 +4,8 @@ import { MessageSquare, X } from "lucide-react";
 import { LeadChatTab } from "@/components/crm/leads/LeadChatTab";
 import {
   RF_ACCENT,
+  RF_BG_DEEP,
+  RF_BORDER,
   RF_BORDER_STRONG,
   RF_LIGHT_BORDER,
   RF_LIGHT_BORDER_STRONG,

@@ -173,8 +173,8 @@ async function carregarFluxoCaixaFallback(supabase: SupabaseClient): Promise<Que
   );
 
   const rows: Record<string, unknown>[] = [
-    ...receber.rows.map((r) => ({ tipo: "receber", ...r })),
-    ...(pagar.rows ?? []).map((r) => ({ tipo: "pagar", ...r })),
+    ...receber.rows.map((r) => ({ tipo: "receber", ...r } as Record<string, unknown>)),
+    ...(pagar.rows ?? []).map((r) => ({ tipo: "pagar", ...r } as Record<string, unknown>)),
   ].sort((a, b) => {
     const da = String(a.vencimento ?? "");
     const db = String(b.vencimento ?? "");

@@ -82,7 +82,6 @@ function scheduleViewportFit(
     duration: attempt > 0 ? 200 : 0,
     minZoom: READABLE_MIN_ZOOM,
     maxZoom: 1.2,
-    includeHiddenNodes: true,
   });
   const zoom = instance.getZoom?.() ?? 1;
   // Só amplia fluxos pequenos; não força zoom alto em fluxos grandes (evita board “quebrado”).

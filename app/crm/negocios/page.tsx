@@ -6,7 +6,7 @@ import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { NegocioFormDrawer } from "@/components/crm/NegocioFormDrawer";
 import { PipelineConfigSideover } from "@/components/crm/leads/PipelineConfigSideover";
-import { CrmPipelinePageToolbar } from "@/components/crm/pipelines/CrmPipelinePageToolbar";
+import { CrmPipelinePageToolbar, type CrmPipelineViewMode } from "@/components/crm/pipelines/CrmPipelinePageToolbar";
 import { CrmKanbanBoardScroll } from "@/components/crm/pipelines/CrmKanbanBoardScroll";
 import { CrmKanbanColumn } from "@/components/crm/pipelines/CrmKanbanColumn";
 import type { CrmResizableColumn } from "@/components/crm/CrmResizableDataTable";
@@ -127,7 +127,7 @@ export default function NegociosPage() {
   const narrow = useNarrowViewport();
   const isMobile = narrow !== false;
 
-  const [view, setView] = useState<"kanban" | "lista">("kanban");
+  const [view, setView] = useState<CrmPipelineViewMode>("kanban");
   const [negocios, setNegocios] = useState<Negocio[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);

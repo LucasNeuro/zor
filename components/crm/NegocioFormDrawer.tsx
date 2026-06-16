@@ -348,7 +348,7 @@ export function NegocioFormDrawer({
               value={dataEntrega}
               onChange={(e) => setDataEntrega(e.target.value)}
             />
-            <span className="mt-1 block text-[11px]" style={{ color: RF_TEXT_MUTED }}>
+            <span className="mt-1 block text-[11px]" style={{ color: RF_LIGHT_TEXT_MUTED }}>
               Usada como previsão de recebimento no financeiro.
             </span>
           </label>

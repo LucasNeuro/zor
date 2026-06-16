@@ -934,7 +934,7 @@ export function LeadChatTab({
               onChange={(e) => setInput(e.target.value)}
               placeholder={
                 assumido
-                  ? "Escreva a mensagem — será enviada com tag Consultor + nome do negócio"
+                  ? "Escreva a mensagem — será enviada com a tag Waje + seu nome"
                   : "Assuma o atendimento para enviar mensagens…"
               }
               rows={2}
@@ -966,7 +966,7 @@ export function LeadChatTab({
           </div>
           <p className="mt-2 text-center text-[10px]" style={{ color: CHAT.muted }}>
             {assumido
-              ? "Enter envia · a tag *[Consultor seu nome — negócio]* é acrescentada automaticamente"
+              ? "Enter envia · a tag *[Waje · seu nome]* é acrescentada automaticamente"
               : "Enter envia · Shift+Enter nova linha"}
           </p>
         </div>

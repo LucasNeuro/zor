@@ -26,50 +26,6 @@ function erroEnvioWhatsapp(status: number | undefined, error: string): string {
   return error;
 }
 
-/** Nome do negócio/empresa para a tag — negócio do lead, tenant ou agente. */
-async function resolverNomeNegocioParaTag(
-  supabase: SupabaseClient,
-  leadId: string,
-  tenantId: string,
-  agenteSlug: string | null
-): Promise<string> {
-  try {
-    const { data: negocio } = await supabase
-      .from("hub_negocios")
-      .select("titulo")
-      .eq("lead_id", leadId)
-      .neq("status", "perdido")
-      .order("atualizado_em", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const titulo = typeof negocio?.titulo === "string" ? negocio.titulo.trim() : "";
-    if (titulo) return titulo;
-  } catch {
-    /* tabela pode não existir em ambientes antigos */
-  }
-
-  const { data: tenant } = await supabase
-    .from("hub_tenants")
-    .select("nome_exibicao")
-    .eq("id", tenantId)
-    .maybeSingle();
-  const nomeTenant =
-    typeof tenant?.nome_exibicao === "string" ? tenant.nome_exibicao.trim() : "";
-  if (nomeTenant) return nomeTenant;
-
-  if (agenteSlug) {
-    const { data: agente } = await supabase
-      .from("hub_agente_identidade")
-      .select("nome")
-      .eq("agente_slug", agenteSlug)
-      .maybeSingle();
-    const nomeAgente = typeof agente?.nome === "string" ? agente.nome.trim() : "";
-    if (nomeAgente) return nomeAgente;
-  }
-
-  return "";
-}
-
 export type AssumirAtendimentoHumanoOpts = {
   leadId: string;
   humanoSlug: string;
@@ -212,12 +168,10 @@ export async function enviarMensagemAtendimentoHumano(
     typeof lead.agente_responsavel === "string" ? lead.agente_responsavel.trim() : null;
 
   const consultorNome = formatHumanoDisplayName(humano || opts.feitoPor || opts.operadorSlug);
-  const negocioNome = await resolverNomeNegocioParaTag(supabase, opts.leadId, tenantId, agenteSlug);
   const textoOriginal = opts.texto.trim();
   const textoWhatsapp = formatarMensagemConsultorWhatsapp({
     texto: textoOriginal,
     consultorNome,
-    negocioNome,
   });
 
   let { token: instanceToken, origem: tokenOrigem } = await resolverTokenInstanciaWhatsapp(

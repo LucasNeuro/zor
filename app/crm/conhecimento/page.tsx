@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import {
   AlertCircle,
   BookOpen,
+  Building2,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -19,6 +20,7 @@ import {
   type CrmResizableColumn,
 } from "@/components/crm/CrmResizableDataTable";
 import { ContaSectionTabs } from "@/components/crm/ContaSectionTabs";
+import { CrmConhecimentoEmpresaSideover } from "@/components/crm/CrmConhecimentoEmpresaSideover";
 import { CrmConhecimentoGerirSideover } from "@/components/crm/CrmConhecimentoGerirSideover";
 import { CrmConhecimentoSideover } from "@/components/crm/CrmConhecimentoSideover";
 import { useCrmConfirm, useCrmToast } from "@/lib/crm/crm-feedback";
@@ -27,6 +29,8 @@ import type {
   TenantConhecimentoAnaliseNegocio,
   TenantConhecimentoDocumento,
 } from "@/lib/hub/tenant-conhecimento-rag";
+import type { TenantEmpresaCadastral } from "@/lib/hub/tenant-empresa-cadastral";
+import { nomeComercialEmpresa } from "@/lib/hub/tenant-empresa-cadastral";
 import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
 import { sparklineFromCounts, sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import { MAX_DOCUMENTOS_CONHECIMENTO_POR_TENANT } from "@/lib/hub/tenant-conhecimento-rag";
@@ -110,6 +114,9 @@ export default function ConhecimentoPage() {
   const [sectionTab, setSectionTab] = useState<SectionTab>("documentos");
   const [page, setPage] = useState(1);
   const [gerirOpen, setGerirOpen] = useState(false);
+  const [empresaSideoverOpen, setEmpresaSideoverOpen] = useState(false);
+  const [empresaCadastral, setEmpresaCadastral] = useState<TenantEmpresaCadastral | null>(null);
+  const [nomeExibicaoTenant, setNomeExibicaoTenant] = useState<string | null>(null);
   const [sideover, setSideover] = useState<TenantConhecimentoDocumento | null>(null);
   const [analise, setAnalise] = useState<TenantConhecimentoAnaliseNegocio | null>(null);
   const [analiseGeradoEm, setAnaliseGeradoEm] = useState<string | null>(null);
@@ -122,15 +129,24 @@ export default function ConhecimentoPage() {
     setErro("");
     setLoading(true);
     try {
-      const r = await fetch("/api/hub/conhecimento", { headers: await crmApiHeaders() });
-      const json = (await r.json()) as {
+      const [rDocs, rEmp] = await Promise.all([
+        fetch("/api/hub/conhecimento", { headers: await crmApiHeaders() }),
+        fetch("/api/hub/conhecimento/empresa", { headers: await crmApiHeaders() }),
+      ]);
+      const json = (await rDocs.json()) as {
         documentos?: TenantConhecimentoDocumento[];
         aviso?: string;
         error?: string;
       };
-      if (!r.ok) throw new Error(json.error || "Falha ao listar documentos.");
+      const jsonEmp = (await rEmp.json()) as {
+        empresa?: TenantEmpresaCadastral | null;
+        nome_exibicao?: string | null;
+      };
+      if (!rDocs.ok) throw new Error(json.error || "Falha ao listar documentos.");
       setDocumentos(json.documentos ?? []);
       setAviso(json.aviso ?? null);
+      setEmpresaCadastral(jsonEmp.empresa ?? null);
+      setNomeExibicaoTenant(jsonEmp.nome_exibicao ?? null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar conhecimento.");
       setDocumentos([]);
@@ -503,6 +519,8 @@ export default function ConhecimentoPage() {
     URL.revokeObjectURL(url);
   }, [filteredDocs]);
 
+  const nomeEmpresaConfigurado = nomeComercialEmpresa(empresaCadastral, nomeExibicaoTenant);
+
   if (loading) {
     return (
       <div className="flex h-72 items-center justify-center">
@@ -575,7 +593,19 @@ export default function ConhecimentoPage() {
 
           {sectionTab === "documentos" ? (
             <>
-              <div className="flex items-center justify-end border-b border-[#eef5ec] px-4 py-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#eef5ec] px-4 py-2">
+                <button
+                  type="button"
+                  onClick={() => setEmpresaSideoverOpen(true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold"
+                  style={{ borderColor: "#d4ecd0", color: "#1e4a24", background: "#fff" }}
+                >
+                  <Building2 size={13} />
+                  Dados da empresa
+                  {nomeEmpresaConfigurado ? (
+                    <span className="font-semibold text-[#5d7a67]">· {nomeEmpresaConfigurado}</span>
+                  ) : null}
+                </button>
                 <button
                   type="button"
                   onClick={() => setGerirOpen(true)}
@@ -735,6 +765,12 @@ export default function ConhecimentoPage() {
           )}
         </div>
       </div>
+
+      <CrmConhecimentoEmpresaSideover
+        open={empresaSideoverOpen}
+        onClose={() => setEmpresaSideoverOpen(false)}
+        onSaved={(emp) => setEmpresaCadastral(emp)}
+      />
 
       <CrmConhecimentoGerirSideover
         open={gerirOpen}

@@ -62,12 +62,20 @@ export function obterProximaPerguntaEssencial(
   return null;
 }
 
-export function substituirPlaceholdersSaudacao(saudacao: string, nomeAgente: string): string {
+export function substituirPlaceholdersSaudacao(
+  saudacao: string,
+  nomeAgente: string,
+  nomeEmpresa?: string | null
+): string {
   const nome = nomeAgente.trim() || "Maria";
+  const empresa = nomeEmpresa?.trim() || "";
   return saudacao
     .replace(/\[Seu\s*Nome\]/gi, nome)
     .replace(/\[Nome\]/gi, nome)
     .replace(/\[nome\]/g, nome)
+    .replace(/\[Nome\s*da\s*Empresa\]/gi, empresa || "nossa empresa")
+    .replace(/\[Empresa\]/gi, empresa || "nossa empresa")
+    .replace(/\[empresa\]/g, empresa || "nossa empresa")
     .trim();
 }
 
@@ -85,6 +93,7 @@ export function blocoPerguntasEssenciaisCargo(params: {
   ordem: "inicio" | "final";
   saudacao?: string;
   nomeAgente: string;
+  nomeEmpresa?: string | null;
   comprimentoPadrao?: string;
   conversaEmAndamento: boolean;
   proximaPergunta: string | null;
@@ -112,7 +121,7 @@ export function blocoPerguntasEssenciaisCargo(params: {
   if (!params.conversaEmAndamento) {
     if (params.saudacao) {
       linhas.push(
-        `- **Só na 1ª mensagem** — tom desta saudação (adapte com naturalidade, não copie literal): «${substituirPlaceholdersSaudacao(params.saudacao, params.nomeAgente)}»`
+        `- **Só na 1ª mensagem** — tom desta saudação (adapte com naturalidade, não copie literal): «${substituirPlaceholdersSaudacao(params.saudacao, params.nomeAgente, params.nomeEmpresa)}»`
       );
     }
     if (params.comprimentoPadrao) {

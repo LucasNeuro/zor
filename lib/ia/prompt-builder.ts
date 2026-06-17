@@ -9,6 +9,11 @@ import {
   formatarTrechosConhecimentoParaPrompt,
   lerAnaliseNegocioTenant,
 } from "@/lib/hub/tenant-conhecimento-rag";
+import {
+  formatarEmpresaCadastralParaPrompt,
+  lerEmpresaCadastralTenant,
+  nomeComercialEmpresa,
+} from "@/lib/hub/tenant-empresa-cadastral";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
@@ -105,6 +110,11 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
   if (!agente) return null;
 
   const nomeAgente = String(agente.nome ?? params.agenteSlug).trim() || params.agenteSlug;
+  const tenantId =
+    (typeof agente.tenant_id === "string" && agente.tenant_id.trim()) || defaultTenantId();
+  const { cadastral: empresaCadastral, nome_exibicao: tenantNomeExibicao } =
+    await lerEmpresaCadastralTenant(supabase, tenantId);
+  const nomeEmpresaComercial = nomeComercialEmpresa(empresaCadastral, tenantNomeExibicao);
   const isMariLegado = agenteUsaPlaybookLegadoMari(params.agenteSlug);
 
   const playbookPublicado = await loadPublishedPlaybookRuntimeSource(supabase, params.agenteSlug, {
@@ -324,6 +334,7 @@ Passou o prazo sem mensagens nesta conversa. Trate como **retorno** — não com
           ordem: ordemPerguntasCargo,
           saudacao: saudacao || undefined,
           nomeAgente,
+          nomeEmpresa: nomeEmpresaComercial || undefined,
           comprimentoPadrao: comprimentoPadrao || undefined,
           conversaEmAndamento,
           proximaPergunta: proximaPerguntaEssencial,
@@ -336,7 +347,7 @@ Passou o prazo sem mensagens nesta conversa. Trate como **retorno** — não com
     } else {
       if (saudacao) {
         linhas.push(
-          `- Saudação (só na 1ª mensagem): «${substituirPlaceholdersSaudacao(saudacao, nomeAgente)}»`
+          `- Saudação (só na 1ª mensagem): «${substituirPlaceholdersSaudacao(saudacao, nomeAgente, nomeEmpresaComercial)}»`
         );
       }
       if (comprimentoPadrao) linhas.push(`- Comprimento padrão: ${comprimentoPadrao}`);
@@ -367,8 +378,14 @@ Passou o prazo sem mensagens nesta conversa. Trate como **retorno** — não com
     secoes.push(`═══ EXECUÇÃO DESTE TURNO ═══\n${linhas.join("\n")}`);
   }
 
-  const tenantId =
-    (typeof agente.tenant_id === "string" && agente.tenant_id.trim()) || defaultTenantId();
+  // CAMADA 2.3 — Identidade cadastral da empresa (CNPJ / Conhecimento)
+  if (empresaCadastral) {
+    const blocoCadastral = formatarEmpresaCadastralParaPrompt(empresaCadastral, tenantNomeExibicao);
+    if (blocoCadastral) {
+      secoes.push(`═══ IDENTIDADE DA EMPRESA (CADASTRO CRM) ═══
+${blocoCadastral}`);
+    }
+  }
 
   // CAMADA 2.4 — Base de conhecimento da empresa (todos os agentes do tenant)
   const { count: docsConhecimentoProntos } = await supabase

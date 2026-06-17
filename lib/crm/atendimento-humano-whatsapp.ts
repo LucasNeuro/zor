@@ -6,7 +6,14 @@ import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsap
 import { formatHumanoDisplayName } from "@/lib/crm/resolve-crm-actor";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { cancelarJobsIaPendentesTelefone } from "@/lib/whatsapp/human-handoff-from-device";
-import { whatsappConfigured, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
+import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
+import {
+  base64ParaUazapiFile,
+  placeholderMidiaEnviada,
+  tipoMidiaChatDeMime,
+  uazapiTipoDeMime,
+  type MidiaAnexoEnviar,
+} from "@/lib/crm/atendimento-midia-envio";
 
 function onlyDigits(s: string): string {
   return s.replace(/\D/g, "");
@@ -120,7 +127,8 @@ export async function assumirAtendimentoHumanoLead(
 
 export type EnviarMensagemHumanoOpts = {
   leadId: string;
-  texto: string;
+  texto?: string;
+  midia?: MidiaAnexoEnviar;
   feitoPor: string;
   operadorSlug: string;
   actorId?: string | null;
@@ -168,11 +176,26 @@ export async function enviarMensagemAtendimentoHumano(
     typeof lead.agente_responsavel === "string" ? lead.agente_responsavel.trim() : null;
 
   const consultorNome = formatHumanoDisplayName(humano || opts.feitoPor || opts.operadorSlug);
-  const textoOriginal = opts.texto.trim();
-  const textoWhatsapp = formatarMensagemConsultorWhatsapp({
-    texto: textoOriginal,
-    consultorNome,
-  });
+  const textoOriginal = (opts.texto ?? "").trim();
+  const midia = opts.midia;
+
+  if (!textoOriginal && !midia) {
+    return { ok: false, error: "Informe texto ou anexe um arquivo.", status: 400 };
+  }
+
+  const legendaOriginal = midia?.legenda?.trim() || textoOriginal;
+  const textoWhatsapp = legendaOriginal
+    ? formatarMensagemConsultorWhatsapp({ texto: legendaOriginal, consultorNome })
+    : formatarMensagemConsultorWhatsapp({ texto: "", consultorNome }).trim();
+
+  const tipoMidiaChat = midia ? tipoMidiaChatDeMime(midia.mimeType) : null;
+  const uazapiTipo = midia ? uazapiTipoDeMime(midia.mimeType) : null;
+  const conteudoGravacao = midia
+    ? legendaOriginal || placeholderMidiaEnviada(tipoMidiaChat!)
+    : textoWhatsapp;
+  const previewConversa = midia
+    ? legendaOriginal.slice(0, 100) || placeholderMidiaEnviada(tipoMidiaChat!)
+    : textoOriginal;
 
   let { token: instanceToken, origem: tokenOrigem } = await resolverTokenInstanciaWhatsapp(
     supabase,
@@ -182,8 +205,22 @@ export async function enviarMensagemAtendimentoHumano(
   let sendSkipped = false;
   let sendInfo: { skipped?: boolean; status?: number; body?: unknown; provider?: string } = {};
 
-  async function tentarEnvio(token: string | null | undefined) {
+  async function tentarEnvioTexto(token: string | null | undefined) {
     return whatsappSendText(telefone, textoWhatsapp, { instanceToken: token });
+  }
+
+  async function tentarEnvioMidia(token: string | null | undefined) {
+    if (!midia || !uazapiTipo) {
+      return { ok: false as const, error: "Tipo de mídia inválido." };
+    }
+    return whatsappSendMedia(telefone, {
+      type: uazapiTipo,
+      file: base64ParaUazapiFile(midia.base64, midia.mimeType),
+      caption: textoWhatsapp || undefined,
+      docName: midia.nomeArquivo,
+      mimetype: midia.mimeType,
+      instanceToken: token,
+    });
   }
 
   if (!whatsappConfigured({ instanceToken })) {
@@ -198,11 +235,13 @@ export async function enviarMensagemAtendimentoHumano(
     sendSkipped = true;
     sendInfo = { skipped: true };
   } else {
-    let envio = await tentarEnvio(instanceToken);
+    let envio = midia ? await tentarEnvioMidia(instanceToken) : await tentarEnvioTexto(instanceToken);
     if (!envio.ok && envio.status === 401) {
       const fallback = await resolverTokenInstanciaWhatsapp(supabase, null);
       if (fallback.token && fallback.token !== instanceToken) {
-        envio = await tentarEnvio(fallback.token);
+        envio = midia
+          ? await tentarEnvioMidia(fallback.token)
+          : await tentarEnvioTexto(fallback.token);
         if (envio.ok) {
           instanceToken = fallback.token;
           tokenOrigem = `${tokenOrigem}|fallback:${fallback.origem}`;
@@ -226,8 +265,20 @@ export async function enviarMensagemAtendimentoHumano(
     canal: "whatsapp",
     tenantId,
     pessoaId: typeof lead.pessoa_id === "string" ? lead.pessoa_id : null,
-    preview: textoOriginal,
+    preview: previewConversa,
   });
+
+  const metadataComum = {
+    texto_original: legendaOriginal || textoOriginal || null,
+    tag_consultor: consultorNome,
+    ...(midia
+      ? {
+          tipo_midia: tipoMidiaChat,
+          nome_arquivo: midia.nomeArquivo,
+          mime_type: midia.mimeType,
+        }
+      : {}),
+  };
 
   if (conversaId) {
     await gravarMensagemSaidaConversa(supabase, {
@@ -235,13 +286,11 @@ export async function enviarMensagemAtendimentoHumano(
       leadId: opts.leadId,
       tenantId,
       canal: "whatsapp",
-      conteudo: textoWhatsapp,
+      conteudo: conteudoGravacao,
       feitoPor: opts.feitoPor,
-      metadata: {
-        texto_original: textoOriginal,
-        tag_consultor: consultorNome,
-        tag_negocio: negocioNome || null,
-      },
+      tipoConteudo: tipoMidiaChat ?? "texto",
+      nomeArquivo: midia?.nomeArquivo ?? null,
+      metadata: metadataComum,
     });
 
     await supabase
@@ -273,7 +322,7 @@ export async function enviarMensagemAtendimentoHumano(
     agente_id: humano || opts.operadorSlug,
     canal: "whatsapp",
     direcao: "saida",
-    conteudo: textoWhatsapp,
+    conteudo: conteudoGravacao,
     status: sendSkipped ? "pendente" : "enviado",
     tenant_id: tenantId,
     resposta_enviada: !sendSkipped,
@@ -282,11 +331,14 @@ export async function enviarMensagemAtendimentoHumano(
       ...filaMetadata,
       feito_por_tipo: "humano",
       feito_por: opts.feitoPor,
-      texto_original: textoOriginal,
-      tag_consultor: consultorNome,
-      tag_negocio: negocioNome || null,
+      ...metadataComum,
     },
   };
+
+  if (midia && tipoMidiaChat) {
+    filaRow.tipo_conteudo = tipoMidiaChat;
+    filaRow.nome_arquivo = midia.nomeArquivo;
+  }
 
   let filaIns = await supabase.from("hub_fila_mensagens").insert(filaRow);
   if (filaIns.error && isMissingPgColumn(filaIns.error, "conversa_id")) {
@@ -311,7 +363,7 @@ export async function enviarMensagemAtendimentoHumano(
   await supabase.from("hub_atividades").insert({
     lead_id: opts.leadId,
     tipo: "mensagem",
-    descricao: textoOriginal.slice(0, 500),
+    descricao: (legendaOriginal || previewConversa).slice(0, 500),
     feito_por: opts.feitoPor,
     feito_por_tipo: "humano",
     tenant_id: tenantId,
@@ -319,7 +371,7 @@ export async function enviarMensagemAtendimentoHumano(
       origem: "crm_atendimento",
       actor_id: opts.actorId ?? null,
       tag_consultor: consultorNome,
-      tag_negocio: negocioNome || null,
+      ...(midia ? { tipo_midia: tipoMidiaChat, nome_arquivo: midia.nomeArquivo } : {}),
     },
   });
 
@@ -327,7 +379,7 @@ export async function enviarMensagemAtendimentoHumano(
     .from("hub_leads_crm")
     .update({
       ultimo_contato: agora,
-      ultima_mensagem: textoOriginal.slice(0, 200),
+      ultima_mensagem: previewConversa.slice(0, 200),
       atualizado_em: agora,
     })
     .eq("id", opts.leadId);

@@ -149,6 +149,9 @@ export async function gravarMensagemSaidaConversa(
     canal: CanalConversa;
     conteudo: string;
     feitoPor: string;
+    tipoConteudo?: string;
+    urlMidia?: string | null;
+    nomeArquivo?: string | null;
     emailSubject?: string | null;
     emailMessageId?: string | null;
     emailInReplyTo?: string | null;
@@ -163,8 +166,10 @@ export async function gravarMensagemSaidaConversa(
     conversa_id: opts.conversaId,
     lead_id: opts.leadId,
     remetente: "humano",
-    tipo_conteudo: "texto",
+    tipo_conteudo: opts.tipoConteudo ?? "texto",
     conteudo: opts.conteudo,
+    url_midia: opts.urlMidia ?? null,
+    nome_arquivo: opts.nomeArquivo ?? null,
     email_subject: opts.emailSubject ?? null,
     email_message_id: opts.emailMessageId ?? null,
     email_in_reply_to: opts.emailInReplyTo ?? null,

@@ -1,4 +1,8 @@
 import { uazapiSendText } from "@/lib/whatsapp/uazapi-send";
+import {
+  uazapiSendMedia,
+  type UazapiMediaType,
+} from "@/lib/whatsapp/uazapi-send-media";
 
 export type WhatsappSendTextResult =
   | { ok: true; status: number; body?: unknown; provider: "uazapi" }
@@ -33,6 +37,49 @@ export async function whatsappSendText(
       };
     }
     const r = await uazapiSendText(numero, text, opts?.instanceToken ?? undefined);
+    if (r.ok) return { ok: true, status: r.status, body: r.body, provider: "uazapi" };
+    return { ok: false, status: r.status, body: r.body, error: r.error, provider: "uazapi" };
+  }
+  return {
+    ok: false,
+    error: "WhatsApp não configurado: defina UAZAPI_BASE_URL e token da instância",
+  };
+}
+
+export type WhatsappSendMediaOpts = {
+  type: UazapiMediaType;
+  file: string;
+  caption?: string;
+  docName?: string;
+  mimetype?: string;
+  instanceToken?: string | null;
+};
+
+/** Envia imagem, documento ou vídeo via UAZAPI /send/media. */
+export async function whatsappSendMedia(
+  numero: string,
+  opts: WhatsappSendMediaOpts
+): Promise<WhatsappSendTextResult> {
+  const provider = whatsappProvider();
+  if (provider === "uazapi") {
+    if (!whatsappConfigured({ instanceToken: opts.instanceToken })) {
+      return {
+        ok: false,
+        error:
+          "WhatsApp não configurado: defina UAZAPI_BASE_URL e token da instância (agente ligado à UAZAPI ou UAZAPI_INSTANCE_TOKEN)",
+      };
+    }
+    const r = await uazapiSendMedia(
+      numero,
+      {
+        type: opts.type,
+        file: opts.file,
+        text: opts.caption,
+        docName: opts.docName,
+        mimetype: opts.mimetype,
+      },
+      opts.instanceToken ?? undefined
+    );
     if (r.ok) return { ok: true, status: r.status, body: r.body, provider: "uazapi" };
     return { ok: false, status: r.status, body: r.body, error: r.error, provider: "uazapi" };
   }

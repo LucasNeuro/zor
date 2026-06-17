@@ -23,6 +23,16 @@ export function conteudoEhPlaceholderMidia(conteudo: string, tipo: TipoMidiaChat
   return /^\[(audio|imagem|documento|video|ptt)(\s|])/.test(t);
 }
 
+export function inferirTipoMidiaDeConteudo(conteudo: string): TipoMidiaChat | null {
+  const t = conteudo.trim().toLowerCase();
+  if (!t) return null;
+  if (t.includes("[audio") || t === "[audio recebido]") return "audio";
+  if (t.includes("[imagem") || t.includes("[image")) return "imagem";
+  if (t.includes("[documento") || t.includes("[document")) return "documento";
+  if (t.includes("[video") || t.includes("[vídeo")) return "video";
+  return null;
+}
+
 export function parseMidiaFromRow(row: Record<string, unknown>): MidiaMensagemChat {
   const meta = metaRecordMidia(row);
   const tipoRaw = String(
@@ -39,8 +49,9 @@ export function parseMidiaFromRow(row: Record<string, unknown>): MidiaMensagemCh
   else if (TIPOS_MIDIA.has(tipoRaw as TipoMidiaChat)) tipo = tipoRaw as TipoMidiaChat;
 
   const conteudo = String(row.conteudo ?? "").trim().toLowerCase();
-  if (tipo === "texto" && (conteudo.includes("[audio") || conteudo === "[audio recebido]")) {
-    tipo = "audio";
+  if (tipo === "texto") {
+    const inferido = inferirTipoMidiaDeConteudo(conteudo);
+    if (inferido) tipo = inferido;
   }
 
   const urlMidia =
@@ -48,7 +59,9 @@ export function parseMidiaFromRow(row: Record<string, unknown>): MidiaMensagemCh
   const nomeArquivo =
     String(row.nome_arquivo ?? meta.nome_arquivo ?? meta.file_name ?? "").trim() || null;
   const whatsappMessageId =
-    String(row.whatsapp_message_id ?? meta.message_id ?? "").trim() || null;
+    String(
+      row.whatsapp_message_id ?? meta.message_id ?? meta.whatsapp_message_id ?? ""
+    ).trim() || null;
 
   return { tipo, urlMidia, nomeArquivo, whatsappMessageId };
 }

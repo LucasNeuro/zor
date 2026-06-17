@@ -253,22 +253,48 @@ export function exportarTimelineCsv(events: LeadTimelineEvent[], leadNome?: stri
   URL.revokeObjectURL(url);
 }
 
-export function parseConversaTurnos(metadata: unknown): { role: string; content: string; at?: string }[] {
+export function parseConversaTurnos(metadata: unknown): {
+  role: string;
+  content: string;
+  at?: string;
+  messageId?: string;
+  metadata?: Record<string, unknown>;
+}[] {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return [];
   const raw = (metadata as Record<string, unknown>).conversa_turnos;
   if (!Array.isArray(raw)) return [];
 
-  const parsed: { role: string; content: string; at?: string }[] = [];
+  const parsed: {
+    role: string;
+    content: string;
+    at?: string;
+    messageId?: string;
+    metadata?: Record<string, unknown>;
+  }[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const o = item as Record<string, unknown>;
     const role = o.role === "assistant" ? "assistant" : o.role === "user" ? "user" : null;
     const content = typeof o.content === "string" ? o.content.trim() : "";
     if (!role || !content) continue;
+    const turnoMeta =
+      o.metadata && typeof o.metadata === "object" && !Array.isArray(o.metadata)
+        ? (o.metadata as Record<string, unknown>)
+        : undefined;
+    const messageId =
+      typeof o.message_id === "string"
+        ? o.message_id
+        : typeof o.whatsapp_message_id === "string"
+          ? o.whatsapp_message_id
+          : typeof turnoMeta?.message_id === "string"
+            ? turnoMeta.message_id
+            : undefined;
     parsed.push({
       role,
       content,
       at: typeof o.at === "string" ? o.at : undefined,
+      messageId,
+      metadata: turnoMeta,
     });
   }
   return parsed;

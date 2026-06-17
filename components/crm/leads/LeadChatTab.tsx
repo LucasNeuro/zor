@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Bot, Send, StickyNote, User, UserRound } from "lucide-react";
+import { Bot, Image as ImageIcon, Paperclip, Send, StickyNote, User, UserRound, X } from "lucide-react";
 import { ChatMensagemMidia } from "@/components/crm/leads/ChatMensagemMidia";
 import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
 import type { CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
 import {
   conteudoEhPlaceholderMidia,
+  inferirTipoMidiaDeConteudo,
   parseMidiaFromRow,
   type TipoMidiaChat,
 } from "@/lib/crm/chat-mensagem-midia";
+import { MAX_ANEXO_CHAT_BYTES } from "@/lib/crm/atendimento-midia-envio";
 import { textoExibicaoMensagemHumano } from "@/lib/crm/mensagem-consultor-whatsapp";
 import {
   effectiveHumanoResponsavel,
@@ -223,13 +225,23 @@ function mergeMensagens(
   for (const turno of parseConversaTurnos(metadata)) {
     const id = `turno-${turno.at ?? turno.content.slice(0, 16)}`;
     if (map.has(id)) continue;
+    const tipoInferido = inferirTipoMidiaDeConteudo(turno.content) ?? "texto";
+    const midiaTurno = parseMidiaFromRow({
+      conteudo: turno.content,
+      tipo_conteudo: tipoInferido,
+      metadata: turno.metadata,
+      whatsapp_message_id: turno.messageId,
+    });
     map.set(id, {
       id,
       conteudo: turno.content,
       autor: turno.role === "assistant" ? "ia" : "cliente",
       autorLabel: turno.role === "assistant" ? "Funcionário IA" : "Lead",
       criado_em: turno.at ?? new Date(0).toISOString(),
-      tipoMidia: "texto",
+      tipoMidia: midiaTurno.tipo,
+      urlMidia: midiaTurno.urlMidia,
+      nomeArquivo: midiaTurno.nomeArquivo,
+      whatsappMessageId: midiaTurno.whatsappMessageId,
     });
   }
 
@@ -520,8 +532,12 @@ export function LeadChatTab({
   const [assumindo, setAssumindo] = useState(false);
   const [humanoAtivoLocal, setHumanoAtivoLocal] = useState<string | null>(null);
   const [sessionActor, setSessionActor] = useState<{ id?: string; email?: string; name?: string }>({});
+  const [anexo, setAnexo] = useState<File | null>(null);
+  const [anexoPreview, setAnexoPreview] = useState<string | null>(null);
   const fimRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const humanoEfetivo =
     humanoAtivoLocal ?? effectiveHumanoResponsavel(humanoResponsavel);
@@ -733,7 +749,8 @@ export function LeadChatTab({
 
   async function enviarMensagem() {
     const texto = input.trim();
-    if (!texto || enviando) return;
+    const arquivo = anexo;
+    if ((!texto && !arquivo) || enviando) return;
     if (!podeEnviar) {
       setSendStrip({
         kind: "error",
@@ -741,22 +758,45 @@ export function LeadChatTab({
       });
       return;
     }
+    if (arquivo && arquivo.size > MAX_ANEXO_CHAT_BYTES) {
+      setSendStrip({
+        kind: "error",
+        text: `Arquivo excede ${Math.round(MAX_ANEXO_CHAT_BYTES / (1024 * 1024))} MB.`,
+      });
+      return;
+    }
     setEnviando(true);
     setSendStrip(null);
     setInput("");
+    limparAnexo();
     try {
-      const res = await fetch("/api/crm/atendimento/send", {
-        method: "POST",
-        credentials: "include",
-        headers: { ...(await atendimentoHeaders()), "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId, texto }),
-      });
+      let res: Response;
+      if (arquivo) {
+        const form = new FormData();
+        form.set("leadId", leadId);
+        if (texto) form.set("texto", texto);
+        form.set("file", arquivo);
+        res = await fetch("/api/crm/atendimento/send", {
+          method: "POST",
+          credentials: "include",
+          headers: await atendimentoHeaders(),
+          body: form,
+        });
+      } else {
+        res = await fetch("/api/crm/atendimento/send", {
+          method: "POST",
+          credentials: "include",
+          headers: { ...(await atendimentoHeaders()), "Content-Type": "application/json" },
+          body: JSON.stringify({ leadId, texto }),
+        });
+      }
       const json = (await res.json().catch(() => ({}))) as {
         error?: string;
         whatsappSkipped?: boolean;
       };
       if (!res.ok) {
         setInput(texto);
+        if (arquivo) selecionarAnexo(arquivo);
         setSendStrip({
           kind: "error",
           text: typeof json.error === "string" ? json.error : "Não foi possível enviar a mensagem.",
@@ -769,16 +809,50 @@ export function LeadChatTab({
           text: "Mensagem registada no CRM. WhatsApp em dry-run ou provedor não configurado.",
         });
       } else {
-        setSendStrip({ kind: "success", text: "Mensagem enviada." });
+        setSendStrip({
+          kind: "success",
+          text: arquivo ? "Arquivo enviado." : "Mensagem enviada.",
+        });
       }
       await carregar({ quiet: true });
     } catch {
       setInput(texto);
+      if (arquivo) selecionarAnexo(arquivo);
       setSendStrip({ kind: "error", text: "Erro de rede ao enviar." });
     } finally {
       setEnviando(false);
     }
   }
+
+  function limparAnexo() {
+    setAnexo(null);
+    if (anexoPreview) URL.revokeObjectURL(anexoPreview);
+    setAnexoPreview(null);
+  }
+
+  function selecionarAnexo(file: File) {
+    limparAnexo();
+    setAnexo(file);
+    if (file.type.startsWith("image/")) {
+      setAnexoPreview(URL.createObjectURL(file));
+    }
+  }
+
+  function onAnexoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_ANEXO_CHAT_BYTES) {
+      setSendStrip({
+        kind: "error",
+        text: `Arquivo excede ${Math.round(MAX_ANEXO_CHAT_BYTES / (1024 * 1024))} MB.`,
+      });
+      return;
+    }
+    selecionarAnexo(file);
+  }
+
+  const podeEnviarConteudo = Boolean(input.trim() || anexo);
 
   return (
     <div
@@ -920,8 +994,56 @@ export function LeadChatTab({
 
       {interactive ? (
         <div className="shrink-0 pt-3" style={{ borderTop: `1px solid ${CHAT.border}`, marginTop: 12 }}>
+          {anexo ? (
+            <div
+              className="mb-2 flex items-center gap-2 rounded-lg border px-3 py-2"
+              style={{ borderColor: CHAT.border, background: "#fff" }}
+            >
+              {anexoPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={anexoPreview}
+                  alt=""
+                  className="h-10 w-10 rounded object-cover"
+                />
+              ) : (
+                <Paperclip size={16} color={CHAT.muted} />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="m-0 truncate text-xs font-semibold" style={{ color: CHAT.text }}>
+                  {anexo.name}
+                </p>
+                <p className="m-0 text-[10px]" style={{ color: CHAT.muted }}>
+                  {(anexo.size / 1024).toFixed(0)} KB
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={limparAnexo}
+                aria-label="Remover anexo"
+                className="rounded p-1"
+                style={{ color: CHAT.muted }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : null}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar,application/*"
+            onChange={onAnexoChange}
+          />
+          <input
+            ref={imageInputRef}
+            type="file"
+            className="hidden"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={onAnexoChange}
+          />
           <div
-            className="flex items-end gap-2.5 rounded-xl border px-3 py-2"
+            className="flex items-center gap-2 rounded-xl border px-3 py-2"
             style={{
               borderColor: assumido ? "#86efac" : CHAT.borderStrong,
               background: assumido ? "#ffffff" : "#f9fafb",
@@ -934,7 +1056,9 @@ export function LeadChatTab({
               onChange={(e) => setInput(e.target.value)}
               placeholder={
                 assumido
-                  ? "Escreva a mensagem — será enviada com a tag Waje + seu nome"
+                  ? anexo
+                    ? "Legenda opcional para o anexo…"
+                    : "Escreva a mensagem — será enviada com a tag Waje + seu nome"
                   : "Assuma o atendimento para enviar mensagens…"
               }
               rows={2}
@@ -945,28 +1069,62 @@ export function LeadChatTab({
                   void enviarMensagem();
                 }
               }}
-              className="min-h-11 max-h-[120px] flex-1 resize-none border-0 bg-transparent text-[14px] font-medium leading-snug outline-none disabled:cursor-not-allowed"
+              className="min-h-10 max-h-[120px] min-w-0 flex-1 resize-none border-0 bg-transparent py-1 text-[14px] font-medium leading-snug outline-none disabled:cursor-not-allowed"
               style={{
                 color: assumido ? CHAT.textStrong : CHAT.muted,
               }}
             />
-            <button
-              type="button"
-              disabled={enviando || !input.trim() || !podeEnviar}
-              onClick={() => void enviarMensagem()}
-              aria-label="Enviar mensagem"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-0 disabled:cursor-not-allowed"
-              style={{
-                background: enviando || !input.trim() || !podeEnviar ? CHAT.border : CHAT.accent,
-                color: "#0b2210",
-              }}
+            <div
+              className="flex shrink-0 items-center gap-1.5"
+              role="group"
+              aria-label="Ações da mensagem"
             >
-              <Send size={20} />
-            </button>
+              <div
+                className="flex items-center overflow-hidden rounded-lg border"
+                style={{ borderColor: CHAT.border, background: "#fff" }}
+              >
+                <button
+                  type="button"
+                  disabled={enviando || !podeEnviar}
+                  onClick={() => imageInputRef.current?.click()}
+                  aria-label="Enviar foto"
+                  title="Enviar foto"
+                  className="flex h-9 w-9 items-center justify-center border-0 border-r disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ borderColor: CHAT.border, color: CHAT.secondary }}
+                >
+                  <ImageIcon size={17} />
+                </button>
+                <button
+                  type="button"
+                  disabled={enviando || !podeEnviar}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Enviar arquivo"
+                  title="Enviar arquivo"
+                  className="flex h-9 w-9 items-center justify-center border-0 disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ color: CHAT.secondary }}
+                >
+                  <Paperclip size={17} />
+                </button>
+              </div>
+              <button
+                type="button"
+                disabled={enviando || !podeEnviarConteudo || !podeEnviar}
+                onClick={() => void enviarMensagem()}
+                aria-label="Enviar mensagem"
+                title="Enviar"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  background: enviando || !podeEnviarConteudo || !podeEnviar ? CHAT.border : CHAT.accent,
+                  color: "#0b2210",
+                }}
+              >
+                <Send size={18} />
+              </button>
+            </div>
           </div>
           <p className="mt-2 text-center text-[10px]" style={{ color: CHAT.muted }}>
             {assumido
-              ? "Enter envia · a tag *[Waje · seu nome]* é acrescentada automaticamente"
+              ? "Fotos e arquivos até 12 MB · Enter envia · tag *[Waje · seu nome]* automática"
               : "Enter envia · Shift+Enter nova linha"}
           </p>
         </div>

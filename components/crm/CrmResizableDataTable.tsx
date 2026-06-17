@@ -83,15 +83,20 @@ export function CrmResizableDataTable<T>({
     minWidth: c.minWidth,
   }));
 
-  const { colStyle, cellTruncateClass, startResize, tableWidth } = useResizableTableColumns(
-    tableId,
-    defs
-  );
+  const { colStyle, cellTruncateClass, startResize, resetColumnWidth, tableWidth } =
+    useResizableTableColumns(tableId, defs);
+
+  const scrollStyle: CSSProperties | undefined =
+    maxHeight === "none"
+      ? undefined
+      : maxHeight === "100%"
+        ? { maxHeight: "100%", height: "100%", minHeight: 0 }
+        : { maxHeight, minHeight: 0 };
 
   return (
     <div
-      className={`w-full min-w-0 overflow-auto ${v.wrapper} ${className}`.trim()}
-      style={maxHeight === "none" ? undefined : { maxHeight }}
+      className={`w-full min-w-0 overflow-x-auto overflow-y-auto overscroll-contain ${v.wrapper} ${className}`.trim()}
+      style={scrollStyle}
     >
       <table
         className="table-fixed text-left"
@@ -110,6 +115,8 @@ export function CrmResizableDataTable<T>({
                 columnId={c.id}
                 widthStyle={colStyle(c.id)}
                 onResizeStart={startResize}
+                onResizeReset={resetColumnWidth}
+                variant={variant}
                 align={c.align}
                 className={`px-4 py-3 text-[11px] font-bold uppercase tracking-wider ${v.th} ${c.headerClassName ?? ""}`}
               >

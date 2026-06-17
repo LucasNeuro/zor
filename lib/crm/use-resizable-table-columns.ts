@@ -110,6 +110,12 @@ export function useResizableTableColumns(storageKey: string, columns: ResizableC
     setWidths(Object.fromEntries(columnsRef.current.map((c) => [c.id, c.defaultWidth])));
   }, []);
 
+  const resetColumnWidth = useCallback((id: string) => {
+    const col = columnsRef.current.find((c) => c.id === id);
+    if (!col) return;
+    setWidths((prev) => ({ ...prev, [id]: col.defaultWidth }));
+  }, []);
+
   const tableWidth = columnsRef.current.reduce(
     (sum, c) => sum + (widths[c.id] ?? c.defaultWidth),
     0
@@ -122,5 +128,6 @@ export function useResizableTableColumns(storageKey: string, columns: ResizableC
     cellTruncateClass,
     startResize,
     resetWidths,
+    resetColumnWidth,
   };
 }

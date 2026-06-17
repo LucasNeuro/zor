@@ -200,7 +200,7 @@ export function CrmPainelPage() {
 
         <CrmPainelMetricsRow kpis={kpis} loading={dash.loading} />
 
-        <div className="w-full min-w-0 rounded-2xl border border-[#dcebd8] bg-white shadow-[0_2px_8px_rgba(11,31,16,0.05)]">
+        <div className="flex w-full min-w-0 flex-col rounded-2xl border border-[#dcebd8] bg-white shadow-[0_2px_8px_rgba(11,31,16,0.05)]">
           <ContaSectionTabs
             tabs={PAINEL_TABS.map((t) => ({ id: t.id, label: t.label }))}
             activeId={tabAtiva}

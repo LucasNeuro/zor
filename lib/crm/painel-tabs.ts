@@ -50,7 +50,6 @@ export const PAINEL_TABS: PainelTabDef[] = [
     reports: [
       { id: "leads", label: "Leads" },
       { id: "negocios", label: "Negócios" },
-      { id: "empresas", label: "Empresas" },
     ],
     defaultReport: "leads",
   },
@@ -75,11 +74,10 @@ export const PAINEL_TABS: PainelTabDef[] = [
   {
     id: "financeiro",
     label: "Financeiro",
-    description: "Contas a pagar, a receber e visão financeira.",
+    description: "Resumo financeiro e contas a receber.",
     reports: [
       { id: "financeiro", label: "Resumo financeiro" },
       { id: "contas_receber", label: "Contas a receber" },
-      { id: "contas_pagar", label: "Contas a pagar" },
     ],
     defaultReport: "financeiro",
   },

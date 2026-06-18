@@ -1,6 +1,7 @@
 import { crmDb } from "@/lib/crm/supabase-server";
 import type { CoraEmitirBoletoInput } from "@/lib/cora/cora-client";
 import { emitirCoraCobranca, type CoraFormaPagamento } from "@/lib/cora/cora-cobranca";
+import { extrairPixEmvCora, extrairUrlBoletoCora } from "@/lib/cora/cora-client";
 import { persistirBoletoPdf } from "@/lib/ops/ops-boleto-storage";
 import {
   lerEmpresaCadastralTenant,

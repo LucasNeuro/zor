@@ -117,8 +117,49 @@ export type CoraBoletoEmitido = {
   total_amount: number;
   document_url?: string;
   bank_slip?: { url?: string };
+  payment_options?: {
+    bank_slip?: {
+      url?: string;
+      barcode?: string;
+      digitable?: string;
+      registered?: boolean;
+    };
+  };
   pix?: { emv?: string; url?: string };
 };
+
+type CoraApiErrorBody = {
+  message?: string;
+  error?: string;
+  code?: string;
+  errors?: Array<{ code?: string; message?: string }>;
+};
+
+export function formatarErroRespostaCora(json: CoraApiErrorBody, status: number): string {
+  const partes: string[] = [];
+  if (json.message) partes.push(json.message);
+  if (json.error && json.error !== json.message) partes.push(json.error);
+  if (Array.isArray(json.errors)) {
+    for (const e of json.errors) {
+      const bit = [e.code, e.message].filter(Boolean).join(": ");
+      if (bit) partes.push(bit);
+    }
+  }
+  if (partes.length) return partes.join(" · ");
+  return `Cora invoice falhou (${status}).`;
+}
+
+/** URL do PDF conforme resposta v2 (`payment_options.bank_slip.url`). */
+export function extrairUrlBoletoCora(invoice: CoraBoletoEmitido): string | null {
+  const fromPaymentOptions = invoice.payment_options?.bank_slip?.url?.trim();
+  if (fromPaymentOptions) return fromPaymentOptions;
+  const legacy = invoice.document_url?.trim() || invoice.bank_slip?.url?.trim();
+  return legacy || null;
+}
+
+export function extrairPixEmvCora(invoice: CoraBoletoEmitido): string | null {
+  return invoice.pix?.emv?.trim() || null;
+}
 
 export async function emitirBoletoCora(
   input: CoraEmitirBoletoInput,
@@ -133,16 +174,33 @@ export async function emitirBoletoCora(
     agent,
     headers: {
       Authorization: `Bearer ${token}`,
+      Accept: "application/json",
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
     },
     body: JSON.stringify(input),
   });
 
-  const json = (await res.json()) as CoraBoletoEmitido & { message?: string; error?: string };
-  if (!res.ok) {
-    throw new Error(json.message ?? json.error ?? `Cora invoice falhou (${res.status}).`);
+  const raw = await res.text();
+  let json: CoraBoletoEmitido & CoraApiErrorBody;
+  try {
+    json = JSON.parse(raw) as CoraBoletoEmitido & CoraApiErrorBody;
+  } catch {
+    console.error("[cora] invoice POST resposta não-JSON:", res.status, raw.slice(0, 500));
+    throw new Error(`Cora invoice falhou (${res.status}) — resposta inválida.`);
   }
+
+  if (!res.ok) {
+    const detalhe = formatarErroRespostaCora(json, res.status);
+    console.error("[cora] invoice POST falhou:", res.status, detalhe);
+    throw new Error(detalhe);
+  }
+
+  if (!json.id?.trim()) {
+    console.error("[cora] invoice sem id:", json);
+    throw new Error("Cora respondeu OK mas sem id da fatura (invoice).");
+  }
+
   return json;
 }
 

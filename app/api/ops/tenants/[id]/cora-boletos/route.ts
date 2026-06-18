@@ -74,12 +74,23 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
         `${resultado.criadas.length}/${parcelas} ok`,
       );
     }
+    if (resultado.erros.length) {
+      console.error(
+        "[ops/cora-boletos] falhas:",
+        resultado.erros.map((e) => `parcela ${e.parcela}: ${e.error}`).join(" | "),
+      );
+    }
 
     const status = resultado.criadas.length === 0 ? 502 : resultado.erros.length ? 207 : 201;
+    const primeiroErro = resultado.erros[0]?.error;
     return NextResponse.json(
       {
         data: resultado.criadas,
         erros: resultado.erros,
+        error:
+          resultado.criadas.length === 0 && primeiroErro
+            ? primeiroErro
+            : undefined,
         resumo: {
           emitidas: resultado.criadas.length,
           falhas: resultado.erros.length,

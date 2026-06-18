@@ -258,18 +258,18 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
         error?: string;
       };
 
+      const detalheErros =
+        json.erros?.map((e) => `Parcela ${e.parcela}: ${e.error}`).join(" · ") ?? "";
+
       if (!res.ok && !json.data?.length) {
-        throw new Error(json.error ?? "Falha ao gerar boletos.");
+        throw new Error(detalheErros || json.error || "Falha ao gerar boletos.");
       }
 
       const emitidas = json.resumo?.emitidas ?? json.data?.length ?? 0;
       const falhas = json.resumo?.falhas ?? json.erros?.length ?? 0;
 
       if (emitidas === 0) {
-        throw new Error(
-          json.erros?.map((e) => `Parcela ${e.parcela}: ${e.error}`).join(" · ") ??
-            "Nenhum boleto foi emitido.",
-        );
+        throw new Error(detalheErros || json.error || "Nenhum boleto foi emitido.");
       }
 
       if (falhas > 0) {

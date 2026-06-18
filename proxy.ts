@@ -21,7 +21,7 @@ function isPublicApiPath(pathname: string): boolean {
   return false;
 }
 
-async function getSessionUser(request: NextRequest) {
+async function getCrmSessionUser(request: NextRequest) {
   const token = request.cookies.get(CRM_ACCESS_COOKIE)?.value;
   if (!token) return null;
   try {
@@ -33,13 +33,22 @@ async function getSessionUser(request: NextRequest) {
   }
 }
 
+function mapLegacyOpsPath(pathname: string): string {
+  if (pathname === "/ops" || pathname === "/ops/") return "/crm/waje/tenants";
+  if (pathname === "/ops/login" || pathname.startsWith("/ops/login/")) return "/login";
+  if (pathname === "/ops/tenants" || pathname.startsWith("/ops/tenants/")) return "/crm/waje/tenants";
+  if (pathname === "/ops/agentes" || pathname.startsWith("/ops/agentes/")) return "/crm/waje/agentes";
+  if (pathname === "/ops/pagamentos" || pathname.startsWith("/ops/pagamentos/")) return "/crm/waje/pagamentos";
+  return "/crm/waje/tenants";
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const sessionUser = await getSessionUser(request);
+  const crmSessionUser = await getCrmSessionUser(request);
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
-    if (sessionUser) {
+    if (crmSessionUser) {
       const url = request.nextUrl.clone();
       const next = url.searchParams.get("next");
       url.pathname = getSafeReturnPath(next, "/crm");
@@ -49,8 +58,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (pathname === "/ops" || pathname.startsWith("/ops/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = mapLegacyOpsPath(pathname);
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   if (pathname === "/crm" || pathname.startsWith("/crm/")) {
-    if (!sessionUser) {
+    if (!crmSessionUser) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.search = "";
@@ -75,7 +91,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (sessionUser) {
+  if (crmSessionUser) {
     return NextResponse.next();
   }
 
@@ -99,6 +115,8 @@ export const config = {
     "/crm/:path*",
     "/login",
     "/login/:path*",
+    "/ops",
+    "/ops/:path*",
     "/api/:path*",
   ],
 };

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { crmDb } from "@/lib/crm/supabase-server";
 import { crmApiConfigError, requireInternalApiKey } from "@/lib/crm/crm-api-auth";
 import { normalizeUserRow } from "@/lib/crm/users-row";
+import { isOpsOwnerFlag } from "@/lib/auth/verify-ops-user";
+import { isMissingPgColumn } from "@/lib/tenant-default";
 
 export async function GET(request: NextRequest) {
   const config = crmApiConfigError();
@@ -14,11 +16,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Cabeçalho x-caller-auth-id obrigatório." }, { status: 403 });
   }
 
-  const { data: user, error } = await crmDb()
+  let userQuery = await crmDb()
     .from("users")
-    .select("id, role, status, access_role_id, tenant_id, name, email")
+    .select("id, role, status, access_role_id, tenant_id, name, email, owner")
     .eq("auth_id", authId)
     .maybeSingle();
+
+  if (userQuery.error && isMissingPgColumn(userQuery.error, "owner")) {
+    userQuery = await crmDb()
+      .from("users")
+      .select("id, role, status, access_role_id, tenant_id, name, email")
+      .eq("auth_id", authId)
+      .maybeSingle();
+  }
+
+  const { data: user, error } = userQuery;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!user) return NextResponse.json({ error: "Perfil não encontrado." }, { status: 404 });
@@ -43,6 +55,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const wajeOwner = isOpsOwnerFlag((user as { owner?: unknown }).owner);
+
   return NextResponse.json({
     data: {
       user: normalizeUserRow(user as Record<string, unknown>),
@@ -50,6 +64,7 @@ export async function GET(request: NextRequest) {
       access_role_id: user.access_role_id ?? null,
       cargo_nome,
       permissoes,
+      waje_owner: wajeOwner,
     },
   });
 }

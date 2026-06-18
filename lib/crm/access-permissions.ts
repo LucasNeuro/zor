@@ -1,5 +1,12 @@
 import type { CrmNavGroup } from "@/lib/crm-nav-groups";
 import { isCrmAdminRole } from "@/lib/crm-nav-groups";
+import { isWajeOwnerPath } from "@/lib/crm/waje-owner-nav";
+
+export type CrmAccessContext = {
+  baseRole: string;
+  permissoes: Record<string, boolean> | null;
+  wajeOwner?: boolean;
+};
 
 export type CrmPermissionKey =
   | "dashboard"
@@ -27,6 +34,7 @@ const PATH_PERMISSION_RULES: Array<{ prefix: string; key: CrmPermissionKey }> = 
   { prefix: "/crm/conhecimento", key: "automacoes" },
   { prefix: "/crm/ferramentas", key: "automacoes" },
   { prefix: "/crm/trafego", key: "leads" },
+  { prefix: "/crm/waje", key: "dashboard" },
   { prefix: "/crm/painel", key: "dashboard" },
   { prefix: "/crm/relatorios", key: "dashboard" },
   { prefix: "/crm/analytics", key: "dashboard" },
@@ -44,10 +52,11 @@ export function permissionKeyForPath(pathname: string): CrmPermissionKey | null 
   return null;
 }
 
-export function canAccessCrmPath(
-  pathname: string,
-  ctx: { baseRole: string; permissoes: Record<string, boolean> | null }
-): boolean {
+export function canAccessCrmPath(pathname: string, ctx: CrmAccessContext): boolean {
+  if (isWajeOwnerPath(pathname)) {
+    return Boolean(ctx.wajeOwner);
+  }
+
   if (isCrmAdminRole(ctx.baseRole)) return true;
 
   const key = permissionKeyForPath(pathname);
@@ -61,13 +70,17 @@ export function canAccessCrmPath(
 
 export function filterCrmNavGroupsForAccess(
   groups: CrmNavGroup[],
-  ctx: { baseRole: string; permissoes: Record<string, boolean> | null }
+  ctx: CrmAccessContext,
 ): CrmNavGroup[] {
+  const filtered = (() => {
   if (isCrmAdminRole(ctx.baseRole)) {
     return groups
       .map((g) => ({
         ...g,
-        items: g.items.filter((item) => !item.adminOnly || isCrmAdminRole(ctx.baseRole)),
+        items: g.items.filter((item) => {
+          if (item.wajeOwnerOnly) return Boolean(ctx.wajeOwner);
+          return !item.adminOnly || isCrmAdminRole(ctx.baseRole);
+        }),
       }))
       .filter((g) => g.items.length > 0);
   }
@@ -78,6 +91,7 @@ export function filterCrmNavGroupsForAccess(
     .map((g) => ({
       ...g,
       items: g.items.filter((item) => {
+        if (item.wajeOwnerOnly) return Boolean(ctx.wajeOwner);
         if (item.adminOnly) return false;
         const key = item.permission;
         if (!key) return true;
@@ -86,6 +100,9 @@ export function filterCrmNavGroupsForAccess(
       }),
     }))
     .filter((g) => g.items.length > 0);
+  })();
+
+  return filtered;
 }
 
 export function buildWajeAccessCopyText(

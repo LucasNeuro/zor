@@ -2,25 +2,24 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { canAccessCrmPath } from "@/lib/crm/access-permissions";
+import { canAccessCrmPath, type CrmAccessContext } from "@/lib/crm/access-permissions";
 
-type Props = {
-  baseRole: string;
-  permissoes: Record<string, boolean> | null;
+type Props = CrmAccessContext & {
   children: React.ReactNode;
 };
 
-export function CrmAccessGuard({ baseRole, permissoes, children }: Props) {
+export function CrmAccessGuard({ baseRole, permissoes, wajeOwner = false, children }: Props) {
   const pathname = usePathname();
   const router = useRouter();
+  const ctx = { baseRole, permissoes, wajeOwner };
 
   useEffect(() => {
-    if (!baseRole && !permissoes) return;
-    if (canAccessCrmPath(pathname, { baseRole, permissoes })) return;
+    if (!baseRole && !permissoes && !wajeOwner) return;
+    if (canAccessCrmPath(pathname, ctx)) return;
     router.replace("/crm");
-  }, [pathname, baseRole, permissoes, router]);
+  }, [pathname, baseRole, permissoes, wajeOwner, router]);
 
-  if (!canAccessCrmPath(pathname, { baseRole, permissoes })) {
+  if (!canAccessCrmPath(pathname, ctx)) {
     return (
       <div className="flex h-48 items-center justify-center px-4 text-center text-sm text-[#6b8a76]">
         Acesso restrito ao módulo. Contacte o administrador da conta.

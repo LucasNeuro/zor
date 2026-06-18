@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode, MouseEvent } from "react";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { useState } from "react";
+import { Eye, EyeOff, TrendingDown, TrendingUp } from "lucide-react";
 import {
   CRM_METRIC,
   crmMetricAccentColor,
@@ -35,6 +36,8 @@ type Props = {
   trend?: CrmMetricTrend;
   sparkline?: number[];
   progress?: CrmMetricProgress;
+  /** Mostra ícone de olho para ocultar o valor (útil em métricas financeiras). */
+  ocultavel?: boolean;
 };
 
 function MiniSparkline({ data, accent }: { data: number[]; accent: string }) {
@@ -119,8 +122,13 @@ export function CrmMetricCard({
   trend,
   sparkline,
   progress,
+  ocultavel = false,
 }: Props) {
+  const [oculto, setOculto] = useState(false);
+
   if (loading) return <CrmMetricCardSkeleton className={className} />;
+
+  const valorExibido = ocultavel && oculto ? "••••••" : valor;
 
   const accent = crmMetricAccentColor(tone, cor);
   const valueColor = crmMetricValueColor(tone, valor, cor);
@@ -131,21 +139,39 @@ export function CrmMetricCard({
         <p className="m-0 text-[11px] font-semibold" style={{ color: CRM_METRIC.label }}>
           {label}
         </p>
-        {trend ? (
-          <span
-            className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-bold tabular-nums"
-            style={{
-              color: trend.positive !== false ? CRM_METRIC.trendUp : CRM_METRIC.trendDown,
-            }}
-          >
-            {trend.positive !== false ? (
-              <TrendingUp size={11} strokeWidth={2.5} />
-            ) : (
-              <TrendingDown size={11} strokeWidth={2.5} />
-            )}
-            {trend.label}
-          </span>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1">
+          {ocultavel ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOculto((v) => !v);
+              }}
+              className="inline-flex rounded-md p-0.5 transition-colors hover:bg-[#eef7eb]"
+              style={{ color: CRM_METRIC.sub }}
+              aria-label={oculto ? "Mostrar valor" : "Ocultar valor"}
+              title={oculto ? "Mostrar valor" : "Ocultar valor"}
+            >
+              {oculto ? <EyeOff size={14} strokeWidth={2} /> : <Eye size={14} strokeWidth={2} />}
+            </button>
+          ) : null}
+          {trend ? (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-bold tabular-nums"
+              style={{
+                color: trend.positive !== false ? CRM_METRIC.trendUp : CRM_METRIC.trendDown,
+              }}
+            >
+              {trend.positive !== false ? (
+                <TrendingUp size={11} strokeWidth={2.5} />
+              ) : (
+                <TrendingDown size={11} strokeWidth={2.5} />
+              )}
+              {trend.label}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex items-end justify-between gap-3">
@@ -154,15 +180,17 @@ export function CrmMetricCard({
             className="m-0 text-2xl font-extrabold tabular-nums tracking-tight sm:text-[26px]"
             style={{ color: valueColor }}
           >
-            {valor}
+            {valorExibido}
           </p>
-          {sub && !progress ? (
+          {sub && !progress && !(ocultavel && oculto) ? (
             <p className="m-0 mt-0.5 text-[11px]" style={{ color: CRM_METRIC.sub }}>
               {sub}
             </p>
           ) : null}
         </div>
-        {sparkline && !progress ? <MiniSparkline data={sparkline} accent={accent} /> : null}
+        {sparkline && !progress && !(ocultavel && oculto) ? (
+          <MiniSparkline data={sparkline} accent={accent} />
+        ) : null}
       </div>
 
       {progress ? <MiniProgress progress={progress} accent={accent} /> : null}

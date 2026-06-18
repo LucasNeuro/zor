@@ -6,6 +6,7 @@ export type ResizableColumnDef = {
   id: string;
   defaultWidth: number;
   minWidth?: number;
+  maxWidth?: number;
 };
 
 const STORAGE_PREFIX = "crm-table-cols:";
@@ -21,7 +22,9 @@ function loadWidths(storageKey: string, columns: ResizableColumnDef[]): Record<s
     for (const col of columns) {
       const w = parsed[col.id];
       if (typeof w === "number" && Number.isFinite(w)) {
-        out[col.id] = Math.max(col.minWidth ?? 56, w);
+        const min = col.minWidth ?? 56;
+        const max = col.maxWidth ?? Number.POSITIVE_INFINITY;
+        out[col.id] = Math.min(max, Math.max(min, w));
       }
     }
     return out;
@@ -85,7 +88,8 @@ export function useResizableTableColumns(storageKey: string, columns: ResizableC
       if (!r) return;
       const col = columnsRef.current.find((c) => c.id === r.id);
       const min = col?.minWidth ?? 56;
-      const next = Math.max(min, r.startW + (e.clientX - r.startX));
+      const max = col?.maxWidth ?? Number.POSITIVE_INFINITY;
+      const next = Math.min(max, Math.max(min, r.startW + (e.clientX - r.startX)));
       setWidths((prev) => ({ ...prev, [r.id]: next }));
     };
 

@@ -12,6 +12,7 @@ export type CrmResizableColumn<T> = {
   label: ReactNode;
   defaultWidth: number;
   minWidth?: number;
+  maxWidth?: number;
   align?: "left" | "right" | "center";
   headerClassName?: string;
   cellClassName?: string;
@@ -33,6 +34,8 @@ type Props<T> = {
   rowCellClassName?: string;
   getRowStyle?: (row: T, index: number) => CSSProperties | undefined;
   onRowClick?: (row: T) => void;
+  /** Coluna vazia no fim absorve largura extra (evita esticar a última coluna de dados). */
+  fillExtraSpace?: boolean;
 };
 
 const VARIANT_STYLES = {
@@ -62,6 +65,8 @@ const VARIANT_STYLES = {
   },
 } as const;
 
+const FILL_COL_ID = "__fill";
+
 export function CrmResizableDataTable<T>({
   tableId,
   columns,
@@ -75,12 +80,14 @@ export function CrmResizableDataTable<T>({
   rowCellClassName = "px-4 py-4 align-top",
   getRowStyle,
   onRowClick,
+  fillExtraSpace = false,
 }: Props<T>) {
   const v = VARIANT_STYLES[variant];
   const defs: ResizableColumnDef[] = columns.map((c) => ({
     id: c.id,
     defaultWidth: c.defaultWidth,
     minWidth: c.minWidth,
+    maxWidth: c.maxWidth,
   }));
 
   const { colStyle, cellTruncateClass, startResize, resetColumnWidth, tableWidth } =
@@ -100,12 +107,17 @@ export function CrmResizableDataTable<T>({
     >
       <table
         className="table-fixed text-left"
-        style={{ width: Math.max(tableWidth, 640), minWidth: "100%" }}
+        style={
+          fillExtraSpace
+            ? { width: Math.max(tableWidth, 640), minWidth: "100%" }
+            : { width: Math.max(tableWidth, 640) }
+        }
       >
         <colgroup>
           {columns.map((c) => (
             <col key={c.id} style={colStyle(c.id)} />
           ))}
+          {fillExtraSpace ? <col key={FILL_COL_ID} style={{ width: "auto", minWidth: 0 }} /> : null}
         </colgroup>
         <thead className={`sticky top-0 z-10 ${v.thead}`}>
           <tr className={headerRowClassName}>
@@ -123,12 +135,23 @@ export function CrmResizableDataTable<T>({
                 {c.label}
               </CrmResizableTh>
             ))}
+            {fillExtraSpace ? (
+              <th
+                key={FILL_COL_ID}
+                aria-hidden
+                className={`px-0 py-3 ${v.th}`}
+                style={{ width: "auto", minWidth: 0 }}
+              />
+            ) : null}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className={`px-4 py-12 text-center text-sm ${v.empty}`}>
+              <td
+                colSpan={columns.length + (fillExtraSpace ? 1 : 0)}
+                className={`px-4 py-12 text-center text-sm ${v.empty}`}
+              >
                 {emptyMessage}
               </td>
             </tr>
@@ -149,6 +172,7 @@ export function CrmResizableDataTable<T>({
                     {c.render(row)}
                   </td>
                 ))}
+                {fillExtraSpace ? <td key={FILL_COL_ID} aria-hidden className="p-0" /> : null}
               </tr>
             ))
           )}

@@ -23,6 +23,8 @@ export type CrmNavItem = {
   navBadge?: string;
   /** Ocultar para utilizadores sem papel admin (owner/admin). */
   adminOnly?: boolean;
+  /** Só para equipe Waje (coluna users.owner = true). */
+  wajeOwnerOnly?: boolean;
   /** Módulo exigido em `hub_acesso_cargos.permissoes` (utilizadores com cargo). */
   permission?: CrmPermissionKey;
 };

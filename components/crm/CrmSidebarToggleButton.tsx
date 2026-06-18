@@ -5,19 +5,41 @@ import { useCrmShell } from "@/components/crm/CrmShellContext";
 
 type CrmSidebarToggleButtonProps = {
   className?: string;
-  /** `sidebar`: visível no pai (sidebar só desktop). `header`: barra do título (`hidden` em mobile). */
-  variant?: "sidebar" | "header";
+  /** `floating`: verde, à direita do sidebar na altura do logo (desktop). */
+  variant?: "sidebar" | "header" | "floating";
 };
 
 /** Botão circular de colapsar/expandir sidebar. */
 export function CrmSidebarToggleButton({
   className = "",
-  variant = "header",
+  variant = "floating",
 }: CrmSidebarToggleButtonProps) {
   const shell = useCrmShell();
   if (!shell) return null;
 
   const { sidebarExpanded, toggleSidebar } = shell;
+
+  if (variant === "floating") {
+    return (
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        className={`hidden md:flex h-7 w-7 flex-shrink-0 touch-manipulation items-center justify-center rounded-full border-0 bg-[#92ff00] text-[#0b1f10] transition-all duration-200 hover:brightness-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3f9848]/60 focus-visible:ring-offset-2 ${className}`.trim()}
+        style={{
+          boxShadow: "0 2px 10px rgba(11, 31, 16, 0.28)",
+        }}
+        title={sidebarExpanded ? "Recolher menu" : "Expandir menu"}
+        aria-expanded={sidebarExpanded}
+        aria-label={sidebarExpanded ? "Recolher menu lateral" : "Expandir menu lateral"}
+      >
+        {sidebarExpanded ? (
+          <ChevronLeft size={14} strokeWidth={2.5} className="shrink-0" aria-hidden />
+        ) : (
+          <ChevronRight size={14} strokeWidth={2.5} className="shrink-0" aria-hidden />
+        )}
+      </button>
+    );
+  }
 
   const visibility = variant === "sidebar" ? "flex" : "hidden md:flex";
 

@@ -29,6 +29,9 @@ export const CRM_CHROME_SOLID = "#f2f8ef";
 /** Faixa antiga (gradiente); mobile / páginas sem blend podem continuar a usar. */
 export const CRM_HEADER_BAR_GRADIENT = CRM_SIDEBAR_GRADIENT;
 
+/** Altura única da faixa logo (sidebar) + header desktop — bordas alinhadas. */
+export const CRM_CHROME_ROW_HEIGHT_PX = 60;
+
 /** Estilos inline para `app/crm/loading.tsx` e skeletons segmentados */
 export const CRM_LOADING_SHELL = {
   background: CRM_SURFACE_MAIN,

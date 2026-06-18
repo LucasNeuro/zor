@@ -101,6 +101,10 @@ export function defaultCrmHeaderForPath(pathname: string): CrmHeaderDefault {
       title: "Conhecimento",
       subtitle: "Base documental da empresa para cargos e agentes IA",
     },
+    waje: {
+      title: "Acesso Owner",
+      subtitle: "Gestão global da plataforma — tenants, agentes e mensalidades",
+    },
     contatos: {
       title: "Contatos de Notificação",
       subtitle: "Quem recebe alertas de novos leads e aprovações",

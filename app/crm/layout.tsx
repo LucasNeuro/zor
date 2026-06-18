@@ -8,6 +8,7 @@ import { Plus, X, ChevronRight, ChevronDown, Menu } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { CrmAccessGuard } from "@/components/crm/CrmAccessGuard";
 import { filterCrmNavGroupsForAccess } from "@/lib/crm/access-permissions";
+import { appendWajeOwnerNav } from "@/lib/crm/waje-owner-nav";
 import {
   CRM_NAV_GROUPS,
   findCrmNavGroupIdForPath,
@@ -27,6 +28,7 @@ import { CrmUniversalHeader } from "@/components/crm/CrmUniversalHeader";
 import { CrmShellProvider } from "@/components/crm/CrmShellContext";
 import { CrmSidebarToggleButton } from "@/components/crm/CrmSidebarToggleButton";
 import {
+  CRM_CHROME_ROW_HEIGHT_PX,
   CRM_CHROME_SOLID,
   CRM_SURFACE_ALT,
   CRM_SURFACE_CARD,
@@ -332,13 +334,18 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const [accessCtx, setAccessCtx] = useState<{
     baseRole: string;
     permissoes: Record<string, boolean> | null;
-  }>({ baseRole: "", permissoes: null });
+    wajeOwner: boolean;
+  }>({ baseRole: "", permissoes: null, wajeOwner: false });
   const [flyoutId, setFlyoutId] = useState<string | null>(null);
 
   const railRef = useRef<HTMLDivElement>(null);
 
   const navGroups = useMemo(
-    () => filterCrmNavGroupsForAccess(CRM_NAV_GROUPS, accessCtx),
+    () =>
+      filterCrmNavGroupsForAccess(
+        appendWajeOwnerNav(CRM_NAV_GROUPS, accessCtx.wajeOwner),
+        accessCtx,
+      ),
     [accessCtx],
   );
 
@@ -354,21 +361,22 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
       try {
         const res = await fetch("/api/crm/acessos/me", { headers: await crmApiHeaders() });
         const json = (await res.json().catch(() => ({}))) as {
-          data?: { role?: string; permissoes?: Record<string, boolean> | null };
+          data?: { role?: string; permissoes?: Record<string, boolean> | null; waje_owner?: boolean };
         };
         if (!cancelled && res.ok && json.data) {
           setAccessCtx({
             baseRole: String(json.data.role ?? ""),
             permissoes: json.data.permissoes ?? null,
+            wajeOwner: Boolean(json.data.waje_owner),
           });
         }
       } catch {
-        if (!cancelled) setAccessCtx({ baseRole: "", permissoes: null });
+        if (!cancelled) setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false });
       }
     }
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session?.user) void loadAccess();
-      else setAccessCtx({ baseRole: "", permissoes: null });
+      else setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false });
     });
     void supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) void loadAccess();
@@ -426,7 +434,11 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                 className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain"
                 style={{ background: CRM_SURFACE_MAIN, WebkitOverflowScrolling: "touch" }}
               >
-                <CrmAccessGuard baseRole={accessCtx.baseRole} permissoes={accessCtx.permissoes}>
+                <CrmAccessGuard
+                  baseRole={accessCtx.baseRole}
+                  permissoes={accessCtx.permissoes}
+                  wajeOwner={accessCtx.wajeOwner}
+                >
                   {children}
                 </CrmAccessGuard>
               </div>
@@ -449,7 +461,11 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                 className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain"
                 style={{ background: CRM_SURFACE_MAIN, WebkitOverflowScrolling: "touch" }}
             >
-              <CrmAccessGuard baseRole={accessCtx.baseRole} permissoes={accessCtx.permissoes}>
+              <CrmAccessGuard
+                baseRole={accessCtx.baseRole}
+                permissoes={accessCtx.permissoes}
+                wajeOwner={accessCtx.wajeOwner}
+              >
               {children}
               </CrmAccessGuard>
             </div>
@@ -487,7 +503,8 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   className="flex flex-shrink-0 items-center border-b"
                   style={{
                     borderColor: SB.border,
-                    minHeight: 60,
+                    height: CRM_CHROME_ROW_HEIGHT_PX,
+                    minHeight: CRM_CHROME_ROW_HEIGHT_PX,
                     padding: sidebarExpanded ? "0 12px" : "0",
                     justifyContent: sidebarExpanded ? "space-between" : "center",
                   }}
@@ -542,6 +559,18 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   />
                 );
               })()}
+
+              <div
+                className="pointer-events-none absolute right-0 top-0 z-30 hidden translate-x-1/2 md:block"
+                style={{ height: CRM_CHROME_ROW_HEIGHT_PX }}
+              >
+                <div
+                  className="pointer-events-auto flex h-full items-center"
+                  style={{ transform: "translateX(0)" }}
+                >
+                  <CrmSidebarToggleButton variant="floating" />
+                </div>
+              </div>
       </div>
 
             {/* ── Main content ───────────────────── */}
@@ -594,11 +623,13 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 
         {shouldHideCrmUniversalHeader(pathname) ? (
           <div
-                  className="relative z-[12] hidden min-h-[4rem] flex-shrink-0 items-center border-b px-3 md:flex"
-                  style={{ backgroundColor: CRM_CHROME_SOLID, borderColor: SB.border }}
-          >
-            <CrmSidebarToggleButton variant="header" />
-          </div>
+            className="relative z-[12] hidden flex-shrink-0 border-b md:block"
+            style={{
+              height: CRM_CHROME_ROW_HEIGHT_PX,
+              backgroundColor: CRM_CHROME_SOLID,
+              borderColor: SB.border,
+            }}
+          />
               ) : (
         <CrmUniversalHeader />
               )}
@@ -607,7 +638,11 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
-          <CrmAccessGuard baseRole={accessCtx.baseRole} permissoes={accessCtx.permissoes}>
+          <CrmAccessGuard
+            baseRole={accessCtx.baseRole}
+            permissoes={accessCtx.permissoes}
+            wajeOwner={accessCtx.wajeOwner}
+          >
           {children}
           </CrmAccessGuard>
         </div>

@@ -3,6 +3,7 @@ import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { isValidCnpj, isValidCpf, onlyDigits } from "@/lib/brasil-docs";
 import { isMissingPgColumn } from "@/lib/tenant-default";
 import { billingFieldsFromOnboarding } from "@/lib/hub/user-billing-cadastral";
+import { validarDocumentoClienteCora } from "@/lib/cora/cora-emissor";
 
 type Payload = {
   registrationType?: "PJ" | "PF";
@@ -50,6 +51,15 @@ export async function POST(request: NextRequest) {
   }
   if (registrationType === "PF" && !isValidCpf(cpf)) {
     return NextResponse.json({ ok: false, error: "CPF inválido." }, { status: 400 });
+  }
+
+  if (registrationType === "PJ") {
+    try {
+      validarDocumentoClienteCora(cnpj, "CNPJ");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "CNPJ não permitido para cadastro de cliente.";
+      return NextResponse.json({ ok: false, error: msg }, { status: 400 });
+    }
   }
 
   const companyName = String(body.companyName ?? "").trim();
@@ -160,6 +170,29 @@ export async function POST(request: NextRequest) {
   }
 
   if (authUserId) {
+    const { data: existingProfile } = await db
+      .from("users")
+      .select("owner, role")
+      .eq("auth_id", authUserId)
+      .maybeSingle();
+
+    const isPlatformTeam =
+      existingProfile?.owner === true ||
+      String(existingProfile?.role ?? "")
+        .trim()
+        .toLowerCase() === "platform_admin";
+
+    if (isPlatformTeam) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Este login é da equipe plataforma Waje (Onze). Use outro e-mail para cadastrar um cliente/tenant — o pagador Cora deve ser a empresa cliente, não a plataforma.",
+        },
+        { status: 409 },
+      );
+    }
+
     const billingFields = billingFieldsFromOnboarding({
       registrationType,
       companyName,

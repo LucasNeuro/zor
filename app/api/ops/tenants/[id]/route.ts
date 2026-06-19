@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { onlyDigits } from "@/lib/brasil-docs";
 import { crmDb } from "@/lib/crm/supabase-server";
 import {
   cadastroProntoParaCora,
@@ -7,6 +8,11 @@ import {
   avaliarEmissaoCoraTenant,
 } from "@/lib/ops/cora-mensalidade";
 import { lerEmpresaCadastralTenant } from "@/lib/hub/tenant-empresa-cadastral";
+import {
+  resolverPerfilCobrancaTenant,
+  resumoEnderecoPerfilCobranca,
+  sincronizarBillingDoTenant,
+} from "@/lib/hub/user-billing-cadastral";
 import { requireOpsApiAccess } from "@/lib/ops/ops-api-auth";
 
 function cnpjFromSettings(settings: unknown): string | null {
@@ -63,31 +69,63 @@ export async function GET(_request: NextRequest, ctx: RouteCtx) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Tenant não encontrado." }, { status: 404 });
 
-  const { cadastral } = await lerEmpresaCadastralTenant(crmDb(), tenantId);
-  const coraEmissao = avaliarEmissaoCoraTenant(cadastral?.cnpj ?? null);
+  const db = crmDb();
+  const { cadastral, nome_exibicao } = await lerEmpresaCadastralTenant(db, tenantId);
+  await sincronizarBillingDoTenant(db, tenantId, data.settings, nome_exibicao, cadastral);
+  const billing = await resolverPerfilCobrancaTenant(
+    db,
+    tenantId,
+    cadastral,
+    nome_exibicao,
+    data.settings,
+  );
+  const coraEmissao = avaliarEmissaoCoraTenant(
+    billing?.document ?? cadastral?.cnpj ?? null,
+    billing?.document_type ?? "CNPJ",
+  );
+  const pronto = cadastroProntoParaCora(billing, cadastral) && !coraEmissao.bloqueado;
+  const docLabel = billing
+    ? billing.document_type === "CPF"
+      ? billing.document.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
+      : formatarCnpj(billing.document) || billing.document
+    : formatarCnpj(cadastral?.cnpj ?? null) || null;
 
   return NextResponse.json({
     data: {
       ...mapTenantRow(data),
-      cadastro: cadastral
+      cadastro: billing || cadastral
         ? {
-            cnpj: formatarCnpj(cadastral.cnpj) || null,
-            razao_social: cadastral.razao_social || null,
-            nome_fantasia: cadastral.nome_fantasia || null,
-            email: cadastral.email || null,
-            telefone: cadastral.telefone || null,
-            endereco: resumoEnderecoCadastral(cadastral),
-            pronto_cora: cadastroProntoParaCora(cadastral) && !coraEmissao.bloqueado,
+            documento: docLabel,
+            documento_tipo: billing?.document_type ?? (cadastral?.cnpj ? "CNPJ" : null),
+            documento_raw: billing?.document ?? onlyDigits(cadastral?.cnpj ?? "") || null,
+            cnpj: docLabel,
+            razao_social: billing?.legal_name ?? cadastral?.razao_social ?? null,
+            nome_fantasia: cadastral?.nome_fantasia ?? null,
+            email: billing?.email ?? cadastral?.email ?? null,
+            telefone: billing?.phone ?? cadastral?.telefone ?? null,
+            endereco:
+              resumoEnderecoPerfilCobranca(billing) ?? resumoEnderecoCadastral(cadastral),
+            billing_cep: billing?.cep ?? cadastral?.cep ?? null,
+            billing_logradouro: billing?.logradouro ?? cadastral?.logradouro ?? null,
+            billing_numero: billing?.numero ?? cadastral?.numero ?? null,
+            billing_bairro: billing?.bairro ?? cadastral?.bairro ?? null,
+            billing_cidade: billing?.cidade ?? cadastral?.cidade ?? null,
+            billing_uf: billing?.uf ?? cadastral?.estado ?? null,
+            billing_fonte: billing?.fonte ?? null,
+            pronto_cora: pronto,
             cora_emissao_bloqueada: coraEmissao.bloqueado,
             cora_emissao_motivo: coraEmissao.motivo,
           }
         : {
+            documento: null,
+            documento_tipo: null,
             cnpj: null,
             razao_social: null,
             nome_fantasia: null,
             email: null,
             telefone: null,
             endereco: null,
+            billing_fonte: null,
             pronto_cora: false,
             cora_emissao_bloqueada: false,
             cora_emissao_motivo: null,

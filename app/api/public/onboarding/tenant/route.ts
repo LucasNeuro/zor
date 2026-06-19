@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { isValidCnpj, isValidCpf, onlyDigits } from "@/lib/brasil-docs";
 import { isMissingPgColumn } from "@/lib/tenant-default";
+import { billingFieldsFromOnboarding } from "@/lib/hub/user-billing-cadastral";
 
 type Payload = {
   registrationType?: "PJ" | "PF";
@@ -159,17 +160,56 @@ export async function POST(request: NextRequest) {
   }
 
   if (authUserId) {
+    const billingFields = billingFieldsFromOnboarding({
+      registrationType,
+      companyName,
+      tradeName: body.tradeName,
+      cpf,
+      cnpj,
+      cep: body.cep,
+      logradouro: body.logradouro,
+      numero: body.numero,
+      complemento: body.complemento,
+      bairro: body.bairro,
+      cidade: body.cidade,
+      uf: body.uf,
+      contactName,
+      contactEmail,
+      contactPhone: body.contactPhone,
+    });
+
     const userInsert = await db.from("users").upsert(
       {
         auth_id: authUserId,
         email: contactEmail,
-        name: contactName,
         role: "owner",
         status: "Ativo",
+        tenant_id: data.id,
+        owner: false,
+        ...billingFields,
       },
       { onConflict: "auth_id" },
     );
-    if (userInsert.error) {
+    if (userInsert.error && isMissingPgColumn(userInsert.error, "document")) {
+      const { document: _d, document_type: _t, billing_legal_name: _n, ...legacy } =
+        billingFields;
+      const fallback = await db.from("users").upsert(
+        {
+          auth_id: authUserId,
+          email: contactEmail,
+          name: contactName,
+          phone: onlyDigits(body.contactPhone ?? "") || null,
+          role: "owner",
+          status: "Ativo",
+          tenant_id: data.id,
+          owner: false,
+        },
+        { onConflict: "auth_id" },
+      );
+      if (fallback.error) {
+        console.error("[onboarding/tenant] failed to upsert public.users:", fallback.error);
+      }
+    } else if (userInsert.error) {
       console.error("[onboarding/tenant] failed to upsert public.users:", userInsert.error);
     }
   }

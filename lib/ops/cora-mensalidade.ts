@@ -5,13 +5,19 @@ import {
   extrairPixEmvCora,
   extrairUrlBoletoCora,
 } from "@/lib/cora/cora-client";
-import { humanizarErroCoraApi, validarCnpjClienteCora } from "@/lib/cora/cora-emissor";
+import { humanizarErroCoraApi, validarDocumentoClienteCora } from "@/lib/cora/cora-emissor";
 import { persistirBoletoPdf } from "@/lib/ops/ops-boleto-storage";
 import {
   lerEmpresaCadastralTenant,
-  nomeComercialEmpresa,
   type TenantEmpresaCadastral,
 } from "@/lib/hub/tenant-empresa-cadastral";
+import {
+  documentoProntoParaCora,
+  resolverPerfilCobrancaTenant,
+  resumoEnderecoPerfilCobranca,
+  sincronizarBillingDoTenant,
+  type UserBillingProfile,
+} from "@/lib/hub/user-billing-cadastral";
 
 export { avaliarEmissaoCoraTenant } from "@/lib/cora/cora-emissor";
 
@@ -24,6 +30,7 @@ export type TenantCobrancaContext = {
   id: string;
   nome_exibicao: string;
   cadastral: TenantEmpresaCadastral | null;
+  billing: UserBillingProfile | null;
 };
 
 export type MensalidadeDbRow = {
@@ -68,6 +75,20 @@ export function enderecoFromCadastral(cad: TenantEmpresaCadastral | null) {
   };
 }
 
+export function enderecoFromBillingProfile(profile: UserBillingProfile | null) {
+  const fallback = enderecoFromCadastral(null);
+  if (!profile) return fallback;
+  return {
+    street: (profile.logradouro || fallback.street).slice(0, 80),
+    number: (profile.numero || fallback.number).slice(0, 12),
+    district: (profile.bairro || fallback.district).slice(0, 60),
+    city: (profile.cidade || fallback.city).slice(0, 60),
+    state: (profile.uf || fallback.state).slice(0, 2).toUpperCase(),
+    complement: (profile.complemento || "N/A").slice(0, 40),
+    zip_code: onlyDigits(profile.cep || fallback.zip_code).padStart(8, "0").slice(0, 8),
+  };
+}
+
 export function resumoEnderecoCadastral(cad: TenantEmpresaCadastral | null): string | null {
   if (!cad) return null;
   const partes = [
@@ -80,25 +101,48 @@ export function resumoEnderecoCadastral(cad: TenantEmpresaCadastral | null): str
   return partes.length ? partes.join(", ") : null;
 }
 
-export function cadastroProntoParaCora(cad: TenantEmpresaCadastral | null): boolean {
-  if (!cad) return false;
-  return onlyDigits(cad.cnpj).length >= 14;
+export function cadastroProntoParaCora(
+  billing: UserBillingProfile | null,
+  cad?: TenantEmpresaCadastral | null,
+): boolean {
+  if (billing && documentoProntoParaCora(billing.document, billing.document_type)) {
+    return true;
+  }
+  if (cad) return onlyDigits(cad.cnpj).length >= 14;
+  return false;
 }
 
 export async function carregarTenantParaCobranca(tenantId: string): Promise<TenantCobrancaContext> {
-  const { data: tenant, error } = await crmDb()
+  const db = crmDb();
+  const { data: tenant, error } = await db
     .from("hub_tenants")
-    .select("id, nome_exibicao")
+    .select("id, nome_exibicao, settings")
     .eq("id", tenantId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!tenant) throw new Error("Tenant não encontrado.");
 
-  const { cadastral } = await lerEmpresaCadastralTenant(crmDb(), tenantId);
+  const { cadastral } = await lerEmpresaCadastralTenant(db, tenantId);
+  await sincronizarBillingDoTenant(
+    db,
+    tenantId,
+    tenant.settings,
+    tenant.nome_exibicao,
+    cadastral,
+  );
+  const billing = await resolverPerfilCobrancaTenant(
+    db,
+    tenantId,
+    cadastral,
+    tenant.nome_exibicao,
+    tenant.settings,
+  );
+
   return {
     id: tenant.id,
     nome_exibicao: tenant.nome_exibicao,
     cadastral,
+    billing,
   };
 }
 
@@ -106,12 +150,13 @@ export function montarInputCora(
   tenant: TenantCobrancaContext,
   pag: { id: string; competencia: string; valor_centavos: number; vencimento: string | null; parcela?: number; total_parcelas?: number },
 ): CoraEmitirBoletoInput {
-  const cad = tenant.cadastral;
-  const cnpj = onlyDigits(cad?.cnpj ?? "");
-  if (cnpj.length < 14) {
-    throw new Error("Tenant sem CNPJ no cadastro — complete o cadastro PJ antes de emitir na Cora.");
+  const billing = tenant.billing;
+  if (!billing || !documentoProntoParaCora(billing.document, billing.document_type)) {
+    throw new Error(
+      "Utilizador do tenant sem CPF/CNPJ — complete os dados cadastrais do owner em public.users antes de emitir na Cora.",
+    );
   }
-  validarCnpjClienteCora(cnpj);
+  validarDocumentoClienteCora(billing.document, billing.document_type);
 
   const valorCentavos = pag.valor_centavos ?? 0;
   if (valorCentavos < 500) {
@@ -128,16 +173,17 @@ export function montarInputCora(
       ? ` · parcela ${pag.parcela}/${pag.total_parcelas}`
       : "";
 
-  const nomeCliente = nomeComercialEmpresa(cad, tenant.nome_exibicao).slice(0, 60) || tenant.nome_exibicao.slice(0, 60);
-  const email = (cad?.email?.trim() || "financeiro@waje.com.br").slice(0, 60);
+  const nomeCliente =
+    billing.legal_name.slice(0, 60) || tenant.nome_exibicao.slice(0, 60);
+  const email = (billing.email?.trim() || "financeiro@waje.com.br").slice(0, 60);
 
   return {
     code: `waje-mensalidade-${pag.id}`,
     customer: {
       name: nomeCliente,
       email,
-      document: { identity: cnpj, type: "CNPJ" },
-      address: enderecoFromCadastral(cad),
+      document: { identity: billing.document, type: billing.document_type },
+      address: enderecoFromBillingProfile(billing),
     },
     services: [
       {
@@ -283,10 +329,14 @@ export async function gerarBoletosParcelados(
   }
 
   const tenant = await carregarTenantParaCobranca(tenantId);
-  if (!cadastroProntoParaCora(tenant.cadastral)) {
-    throw new Error("Cadastro PJ incompleto — CNPJ obrigatório para emitir na Cora.");
+  if (!cadastroProntoParaCora(tenant.billing, tenant.cadastral)) {
+    throw new Error(
+      "Cadastro incompleto — CPF/CNPJ do utilizador owner obrigatório para emitir na Cora.",
+    );
   }
-  validarCnpjClienteCora(tenant.cadastral?.cnpj);
+  if (tenant.billing) {
+    validarDocumentoClienteCora(tenant.billing.document, tenant.billing.document_type);
+  }
 
   const forma: CoraFormaPagamento = input.forma ?? "boleto_pix";
   const criadas: Array<Record<string, unknown>> = [];

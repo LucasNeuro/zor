@@ -55,16 +55,56 @@ export type TenantMensalidadeRow = {
 };
 
 type TenantCadastro = {
+  documento?: string | null;
+  documento_tipo?: "CPF" | "CNPJ" | null;
+  documento_raw?: string | null;
   cnpj: string | null;
   razao_social: string | null;
   nome_fantasia: string | null;
   email: string | null;
   telefone: string | null;
   endereco: string | null;
+  billing_cep?: string | null;
+  billing_logradouro?: string | null;
+  billing_numero?: string | null;
+  billing_bairro?: string | null;
+  billing_cidade?: string | null;
+  billing_uf?: string | null;
+  billing_fonte?: string | null;
   pronto_cora: boolean;
   cora_emissao_bloqueada?: boolean;
   cora_emissao_motivo?: string | null;
 };
+
+type BillingFormState = {
+  document_type: "CPF" | "CNPJ";
+  document: string;
+  billing_legal_name: string;
+  email: string;
+  phone: string;
+  billing_cep: string;
+  billing_logradouro: string;
+  billing_numero: string;
+  billing_bairro: string;
+  billing_cidade: string;
+  billing_uf: string;
+};
+
+function billingFormFromCadastro(c: TenantCadastro | null): BillingFormState {
+  return {
+    document_type: c?.documento_tipo === "CPF" ? "CPF" : "CNPJ",
+    document: c?.documento_raw ?? c?.documento ?? c?.cnpj ?? "",
+    billing_legal_name: c?.razao_social ?? "",
+    email: c?.email ?? "",
+    phone: c?.telefone ?? "",
+    billing_cep: c?.billing_cep ?? "",
+    billing_logradouro: c?.billing_logradouro ?? "",
+    billing_numero: c?.billing_numero ?? "",
+    billing_bairro: c?.billing_bairro ?? "",
+    billing_cidade: c?.billing_cidade ?? "",
+    billing_uf: c?.billing_uf ?? "",
+  };
+}
 
 type Props = {
   open: boolean;
@@ -114,6 +154,7 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
   const [mensalidades, setMensalidades] = useState<TenantMensalidadeRow[]>([]);
   const [maxMensalidades, setMaxMensalidades] = useState(12);
   const [cadastro, setCadastro] = useState<TenantCadastro | null>(null);
+  const [billingForm, setBillingForm] = useState<BillingFormState>(() => billingFormFromCadastro(null));
   const [valorPlano, setValorPlano] = useState("199");
   const [parcelas, setParcelas] = useState("12");
   const [primeiroVencimento, setPrimeiroVencimento] = useState(vencimentoPadrao);
@@ -163,7 +204,9 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
         error?: string;
       };
       if (!res.ok || !json.data) throw new Error(json.error ?? "Falha ao carregar cadastro.");
-      setCadastro(json.data.cadastro ?? null);
+      const c = json.data.cadastro ?? null;
+      setCadastro(c);
+      setBillingForm(billingFormFromCadastro(c));
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar cadastro.");
     } finally {
@@ -221,6 +264,34 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
     await patchTenant({ limpar_trial: true });
   }
 
+  async function salvarBilling() {
+    if (!tenant) return;
+    setSalvando(true);
+    setErro("");
+    setInfo("");
+    try {
+      const res = await fetch(`/api/ops/tenants/${tenant.id}/billing`, {
+        method: "PATCH",
+        headers: { ...(await opsApiHeaders()), "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(billingForm),
+      });
+      const json = (await res.json()) as {
+        data?: TenantCadastro;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok || !json.data) throw new Error(json.error ?? "Falha ao salvar faturamento.");
+      setCadastro(json.data);
+      setBillingForm(billingFormFromCadastro(json.data));
+      setInfo(json.message ?? "Dados de faturamento salvos.");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao salvar faturamento.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   async function gerarBoletosPlano() {
     if (!tenant) return;
     setSalvando(true);
@@ -242,7 +313,7 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
       if (!cadastro?.pronto_cora) {
         throw new Error(
           cadastro?.cora_emissao_motivo ??
-            "Cadastro PJ incompleto — CNPJ obrigatório para emitir cobranças.",
+            "Cadastro incompleto — preencha CPF/CNPJ e endereço do cliente abaixo e clique em Salvar faturamento.",
         );
       }
 
@@ -557,10 +628,10 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
                 ? "A carregar dados do cadastro…"
                 : cadastro?.cora_emissao_bloqueada
                   ? cadastro.cora_emissao_motivo ??
-                    "CNPJ igual ao da conta Cora emissora — não é possível emitir boleto."
+                    "Documento igual ao da conta Cora emissora — não é possível emitir boleto."
                   : cadastro?.pronto_cora
-                    ? "CNPJ e endereço serão usados na emissão dos boletos."
-                    : "Complete o cadastro PJ do tenant (CNPJ) para emitir cobranças."
+                    ? "CPF/CNPJ e endereço do utilizador owner serão usados na emissão (Cora API)."
+                    : "Complete CPF/CNPJ do owner em public.users para emitir cobranças."
             }
             statusLabel={
               cadastro?.cora_emissao_bloqueada
@@ -571,13 +642,136 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
             }
             statusActive={Boolean(cadastro?.pronto_cora) && !cadastro?.cora_emissao_bloqueada}
           >
-            <div className="space-y-1 pl-[54px] text-xs" style={rfBodyOnDarkStyle()}>
-              <p>CNPJ: {cadastro?.cnpj ?? tenant.cnpj ?? "—"}</p>
-              <p>Razão social: {cadastro?.razao_social ?? "—"}</p>
-              <p>E-mail: {cadastro?.email ?? "—"}</p>
-              <p>Telefone: {cadastro?.telefone ?? "—"}</p>
-              <p>Endereço: {cadastro?.endereco ?? "—"}</p>
+            <div className="grid gap-3 pl-[54px] sm:grid-cols-2">
+              <label style={RF_LABEL_STYLE}>
+                Tipo
+                <select
+                  value={billingForm.document_type}
+                  onChange={(e) =>
+                    setBillingForm((f) => ({
+                      ...f,
+                      document_type: e.target.value === "CPF" ? "CPF" : "CNPJ",
+                    }))
+                  }
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                >
+                  <option value="CNPJ">CNPJ (empresa)</option>
+                  <option value="CPF">CPF (pessoa física)</option>
+                </select>
+              </label>
+              <label style={RF_LABEL_STYLE}>
+                {billingForm.document_type === "CPF" ? "CPF" : "CNPJ"}
+                <input
+                  value={billingForm.document}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, document: e.target.value }))}
+                  placeholder={billingForm.document_type === "CPF" ? "000.000.000-00" : "00.000.000/0000-00"}
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE} className="sm:col-span-2">
+                Razão social / Nome
+                <input
+                  value={billingForm.billing_legal_name}
+                  onChange={(e) =>
+                    setBillingForm((f) => ({ ...f, billing_legal_name: e.target.value }))
+                  }
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE}>
+                E-mail cobrança
+                <input
+                  type="email"
+                  value={billingForm.email}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, email: e.target.value }))}
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE}>
+                Telefone
+                <input
+                  value={billingForm.phone}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, phone: e.target.value }))}
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE}>
+                CEP
+                <input
+                  value={billingForm.billing_cep}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, billing_cep: e.target.value }))}
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE}>
+                UF
+                <input
+                  value={billingForm.billing_uf}
+                  maxLength={2}
+                  onChange={(e) =>
+                    setBillingForm((f) => ({ ...f, billing_uf: e.target.value.toUpperCase() }))
+                  }
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE} className="sm:col-span-2">
+                Logradouro
+                <input
+                  value={billingForm.billing_logradouro}
+                  onChange={(e) =>
+                    setBillingForm((f) => ({ ...f, billing_logradouro: e.target.value }))
+                  }
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE}>
+                Número
+                <input
+                  value={billingForm.billing_numero}
+                  onChange={(e) =>
+                    setBillingForm((f) => ({ ...f, billing_numero: e.target.value }))
+                  }
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE}>
+                Bairro
+                <input
+                  value={billingForm.billing_bairro}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, billing_bairro: e.target.value }))}
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
+              <label style={RF_LABEL_STYLE}>
+                Cidade
+                <input
+                  value={billingForm.billing_cidade}
+                  onChange={(e) =>
+                    setBillingForm((f) => ({ ...f, billing_cidade: e.target.value }))
+                  }
+                  style={{ ...RF_INPUT_STYLE, marginTop: 4 }}
+                />
+              </label>
             </div>
+            <div className="flex flex-wrap items-center gap-2 pl-[54px] pt-3">
+              <WajeOwnerActionBtn variant="primary" disabled={salvando} onClick={() => void salvarBilling()}>
+                {salvando ? "A salvar…" : "Salvar faturamento"}
+              </WajeOwnerActionBtn>
+              {cadastro?.billing_fonte ? (
+                <span className="text-[10px]" style={{ color: "#b8d4bc" }}>
+                  Fonte: {cadastro.billing_fonte}
+                </span>
+              ) : null}
+            </div>
+            {cadastro?.pronto_cora && !cadastro.cora_emissao_bloqueada ? (
+              <div className="space-y-1 pl-[54px] pt-3 text-xs" style={rfBodyOnDarkStyle()}>
+                <p>
+                  {cadastro.documento_tipo === "CPF" ? "CPF" : "CNPJ"}:{" "}
+                  {cadastro.documento ?? cadastro.cnpj ?? "—"}
+                </p>
+                <p>Endereço: {cadastro.endereco ?? "—"}</p>
+              </div>
+            ) : null}
           </WajeOwnerRetrofitCard>
 
           <WajeOwnerSectionHeading icon={Banknote}>
@@ -627,7 +821,11 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
               <div className="flex flex-wrap items-center gap-2 pl-[54px] pt-2">
                 <WajeOwnerActionBtn
                   variant="primary"
-                  disabled={salvando || !cadastro?.pronto_cora}
+                  disabled={
+                    salvando ||
+                    !cadastro?.pronto_cora ||
+                    Boolean(cadastro?.cora_emissao_bloqueada)
+                  }
                   onClick={() => void gerarBoletosPlano()}
                 >
                   {salvando ? "A gerar…" : `Gerar ${parcelas} boleto(s)`}

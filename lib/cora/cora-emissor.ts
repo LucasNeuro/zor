@@ -26,6 +26,16 @@ export function validarCnpjClienteCora(clienteCnpj: string | null | undefined): 
   }
 }
 
+/** Valida documento do pagador (Cora: customer.document). CPF ignora check de emissor. */
+export function validarDocumentoClienteCora(
+  documento: string | null | undefined,
+  tipo: "CPF" | "CNPJ" = "CNPJ",
+): void {
+  if (tipo === "CNPJ") {
+    validarCnpjClienteCora(documento);
+  }
+}
+
 export function humanizarErroCoraApi(message: string): string {
   const m = message.trim();
   if (/own identity/i.test(m)) return ERRO_CORA_MESMO_CNPJ;
@@ -39,9 +49,12 @@ export type CoraEmissaoTenantCheck = {
   emissor_configurado: boolean;
 };
 
-export function avaliarEmissaoCoraTenant(clienteCnpj: string | null | undefined): CoraEmissaoTenantCheck {
+export function avaliarEmissaoCoraTenant(
+  clienteDocumento: string | null | undefined,
+  tipo: "CPF" | "CNPJ" = "CNPJ",
+): CoraEmissaoTenantCheck {
   const emissor_configurado = Boolean(getCoraEmissorCnpj());
-  if (cnpjMesmoEmissorCora(clienteCnpj)) {
+  if (tipo === "CNPJ" && cnpjMesmoEmissorCora(clienteDocumento)) {
     return { bloqueado: true, motivo: ERRO_CORA_MESMO_CNPJ, emissor_configurado };
   }
   return { bloqueado: false, motivo: null, emissor_configurado };

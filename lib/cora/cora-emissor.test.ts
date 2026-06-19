@@ -14,7 +14,7 @@ describe("cora-emissor", () => {
   it("bloqueia CNPJ igual ao emissor", () => {
     process.env.CORA_EMISSOR_CNPJ = "12.345.678/0001-99";
     expect(cnpjMesmoEmissorCora("12345678000199")).toBe(true);
-    expect(() => validarCnpjClienteCora("12345678000199")).toThrow(/mesmo da conta Cora/);
+    expect(() => validarCnpjClienteCora("12345678000199")).toThrow(/pagador.*credenciais Cora/s);
     expect(avaliarEmissaoCoraTenant("12345678000199").bloqueado).toBe(true);
   });
 
@@ -26,7 +26,7 @@ describe("cora-emissor", () => {
 
   it("traduz erro own identity da Cora", () => {
     expect(humanizarErroCoraApi("Cannot create invoice for own identity")).toMatch(
-      /mesmo da conta Cora/,
+      /pagador.*credenciais Cora/s,
     );
   });
 });

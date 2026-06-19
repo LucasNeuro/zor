@@ -112,3 +112,38 @@ export function isPlatformAdminRole(role: string): boolean {
 export function isOpsOwnerFlag(value: unknown): boolean {
   return isTruthyOwner(value);
 }
+
+/** Sidebar /crm/waje e APIs ops — alinhado com verifyOpsUserForAuth. */
+export function resolveWajePlatformOwner(
+  user: { role?: unknown; email?: unknown; owner?: unknown; status?: unknown } | null,
+  sessionEmail?: string | null,
+): boolean {
+  const allowlist = opsAllowedEmails();
+  const emailNorm =
+    typeof sessionEmail === "string"
+      ? sessionEmail.trim().toLowerCase()
+      : typeof user?.email === "string"
+        ? user.email.trim().toLowerCase()
+        : "";
+
+  if (allowlist.length > 0 && emailNorm && allowlist.includes(emailNorm)) {
+    return true;
+  }
+
+  if (!user) return false;
+
+  if (user.status != null && !isActiveStatus(user.status)) return false;
+
+  if (isTruthyOwner(user.owner)) return true;
+
+  const roleNorm = String(user.role ?? "")
+    .trim()
+    .toLowerCase();
+  if (roleNorm === OPS_ROLE_LEGACY) return true;
+
+  if (allowlist.length > 0 && emailNorm && allowlist.includes(emailNorm)) {
+    return true;
+  }
+
+  return false;
+}

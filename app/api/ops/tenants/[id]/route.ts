@@ -115,6 +115,11 @@ export async function GET(_request: NextRequest, ctx: RouteCtx) {
             pronto_cora: pronto,
             cora_emissao_bloqueada: coraEmissao.bloqueado,
             cora_emissao_motivo: coraEmissao.motivo,
+            cora_emissor_nome: coraEmissao.emissor_nome,
+            cora_emissor_cnpj: coraEmissao.emissor_cnpj ? formatarCnpj(coraEmissao.emissor_cnpj) : null,
+            cora_cliente_documento: coraEmissao.cliente_documento
+              ? formatarCnpj(coraEmissao.cliente_documento)
+              : null,
           }
         : {
             documento: null,
@@ -129,6 +134,9 @@ export async function GET(_request: NextRequest, ctx: RouteCtx) {
             pronto_cora: false,
             cora_emissao_bloqueada: false,
             cora_emissao_motivo: null,
+            cora_emissor_nome: null,
+            cora_emissor_cnpj: null,
+            cora_cliente_documento: null,
           },
     },
   });

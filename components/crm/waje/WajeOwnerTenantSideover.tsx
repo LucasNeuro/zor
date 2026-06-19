@@ -74,6 +74,9 @@ type TenantCadastro = {
   pronto_cora: boolean;
   cora_emissao_bloqueada?: boolean;
   cora_emissao_motivo?: string | null;
+  cora_emissor_nome?: string | null;
+  cora_emissor_cnpj?: string | null;
+  cora_cliente_documento?: string | null;
 };
 
 type BillingFormState = {
@@ -627,11 +630,18 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
               carregandoCadastro
                 ? "A carregar dados do cadastro…"
                 : cadastro?.cora_emissao_bloqueada
-                  ? cadastro.cora_emissao_motivo ??
-                    "Documento igual ao da conta Cora emissora — não é possível emitir boleto."
+                  ? [
+                      cadastro.cora_emissao_motivo,
+                      cadastro.cora_emissor_cnpj && cadastro.cora_cliente_documento
+                        ? `Emissor (credenciais Cora): ${cadastro.cora_emissor_nome ?? "—"} · ${cadastro.cora_emissor_cnpj} · Pagador (cadastro): ${cadastro.cora_cliente_documento}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") ||
+                    "Documento do pagador igual ao da conta Cora emissora."
                   : cadastro?.pronto_cora
-                    ? "CPF/CNPJ e endereço do utilizador owner serão usados na emissão (Cora API)."
-                    : "Complete CPF/CNPJ do owner em public.users para emitir cobranças."
+                    ? "Pagador = cadastro do cliente (SHEFA). Emissor = conta Cora das credenciais (ex.: Onze Tecnologia)."
+                    : "Preencha CPF/CNPJ do cliente no formulário abaixo e salve."
             }
             statusLabel={
               cadastro?.cora_emissao_bloqueada

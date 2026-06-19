@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { crmDb } from "@/lib/crm/supabase-server";
 import { getCrmActor, requireCrmApiAccess } from "@/lib/crm/crm-api-auth";
 import { normalizeUserRow } from "@/lib/crm/users-row";
-import { isOpsOwnerFlag } from "@/lib/auth/verify-ops-user";
+import { resolveWajePlatformOwner } from "@/lib/auth/verify-ops-user";
 import { isMissingPgColumn } from "@/lib/tenant-default";
 
 export async function GET(request: NextRequest) {
@@ -54,7 +54,10 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const wajeOwner = isOpsOwnerFlag((user as { owner?: unknown }).owner);
+  const wajeOwner = resolveWajePlatformOwner(
+    user as { role?: unknown; email?: unknown; owner?: unknown; status?: unknown },
+    (user as { email?: unknown }).email as string | undefined,
+  );
 
   return NextResponse.json({
     data: {

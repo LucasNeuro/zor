@@ -49,6 +49,7 @@ function formatRole(role: string): string {
   const r = role.trim().toLowerCase();
   if (r === "owner") return "Owner";
   if (r === "admin") return "Admin";
+  if (r === "platform_admin") return "Plataforma";
   if (r === "member") return "Membro";
   if (!r) return "";
   return role;

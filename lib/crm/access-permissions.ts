@@ -52,12 +52,17 @@ export function permissionKeyForPath(pathname: string): CrmPermissionKey | null 
   return null;
 }
 
+/** Acesso total ao CRM (menu + rotas): admin do tenant ou equipe plataforma Waje. */
+export function hasFullCrmAccess(ctx: CrmAccessContext): boolean {
+  return Boolean(ctx.wajeOwner) || isCrmAdminRole(ctx.baseRole);
+}
+
 export function canAccessCrmPath(pathname: string, ctx: CrmAccessContext): boolean {
   if (isWajeOwnerPath(pathname)) {
     return Boolean(ctx.wajeOwner);
   }
 
-  if (isCrmAdminRole(ctx.baseRole)) return true;
+  if (hasFullCrmAccess(ctx)) return true;
 
   const key = permissionKeyForPath(pathname);
   if (!key) return true;
@@ -93,13 +98,13 @@ export function filterCrmNavGroupsForAccess(
   ctx: CrmAccessContext,
 ): CrmNavGroup[] {
   const filtered = (() => {
-  if (isCrmAdminRole(ctx.baseRole)) {
+  if (hasFullCrmAccess(ctx)) {
     return groups
       .map((g) => ({
         ...g,
         items: g.items.filter((item) => {
           if (item.wajeOwnerOnly) return Boolean(ctx.wajeOwner);
-          return !item.adminOnly || isCrmAdminRole(ctx.baseRole);
+          return !item.adminOnly || hasFullCrmAccess(ctx);
         }),
       }))
       .filter((g) => g.items.length > 0);

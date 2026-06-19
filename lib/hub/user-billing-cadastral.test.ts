@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   documentoProntoParaCora,
+  escolherPerfilCobrancaBase,
   inferirTipoDocumento,
   mesclarPerfilCobranca,
   perfilCobrancaFromTenantCadastral,
@@ -9,6 +10,9 @@ import {
 } from "@/lib/hub/user-billing-cadastral";
 
 describe("user-billing-cadastral", () => {
+  afterEach(() => {
+    delete process.env.CORA_EMISSOR_CNPJ;
+  });
   it("infere CPF e CNPJ pelo tamanho", () => {
     expect(inferirTipoDocumento("12345678901")).toBe("CPF");
     expect(inferirTipoDocumento("12345678000199")).toBe("CNPJ");
@@ -119,5 +123,49 @@ describe("user-billing-cadastral", () => {
     expect(profile?.document).toBe("11222333000144");
     expect(profile?.email).toBe("maria@x.com");
     expect(profile?.logradouro).toBe("Av Paulista");
+  });
+
+  it("ignora CNPJ da emissora Cora em users quando tenant tem CNPJ do cliente", () => {
+    process.env.CORA_EMISSOR_CNPJ = "62.449.971/0001-70";
+
+    const emissor = "62449971000170";
+    const shefa = "65912793000160";
+
+    const fromUser = perfilCobrancaFromUserRow({
+      id: "u1",
+      name: "Errado",
+      email: "x@test.com",
+      document_type: "CNPJ",
+      document: emissor,
+      billing_legal_name: "Onze Tecnologia",
+    });
+    const fromSettings = perfilCobrancaFromTenantSettings(
+      { registration_type: "PJ", cnpj: shefa, trade_name: "SHEFA" },
+      "SHEFA",
+    );
+
+    const base = escolherPerfilCobrancaBase(fromUser, fromSettings, null);
+    expect(base?.document).toBe(shefa);
+
+    const merged = mesclarPerfilCobranca(fromUser, {
+      cnpj: shefa,
+      razao_social: "SHEFA COMERCIO TECH LTDA",
+      nome_fantasia: null,
+      situacao_cadastral: null,
+      email: null,
+      telefone: null,
+      cep: null,
+      logradouro: null,
+      numero: null,
+      complemento: null,
+      bairro: null,
+      cidade: null,
+      estado: null,
+      cnae_principal: null,
+      site: null,
+      descricao_curta: null,
+      atualizado_em: null,
+    });
+    expect(merged?.document).toBe(shefa);
   });
 });

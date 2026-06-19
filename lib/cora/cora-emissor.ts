@@ -21,12 +21,25 @@ export function cnpjMesmoEmissorCora(clienteCnpj: string | null | undefined): bo
   return cliente.length >= 14 && cliente === emissor;
 }
 
-export function mensagemErroMesmoCnpjEmissor(): string {
+function formatarCnpjDigits(digits: string): string {
+  const d = digits.replace(/\D/g, "");
+  if (d.length !== 14) return d;
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+}
+
+export function mensagemErroMesmoCnpjEmissor(clienteDocumento?: string | null): string {
   const emissor = getCoraEmissorNome();
+  const emissorCnpj = getCoraEmissorCnpj();
+  const cliente = normalizarCnpjCora(clienteDocumento);
+  const detalhe =
+    emissorCnpj && cliente.length >= 14
+      ? ` Pagador no cadastro: ${formatarCnpjDigits(cliente)} · Conta emissora (credenciais): ${formatarCnpjDigits(emissorCnpj)}.`
+      : "";
   return (
     `O CNPJ do pagador (cadastro do cliente/tenant) é igual ao CNPJ da ${emissor} ` +
-    `(conta das credenciais Cora). A Cora não permite emitir boleto para a própria empresa emissora. ` +
-    `No formulário de faturamento, use o CPF/CNPJ do cliente (ex.: SHEFA), não o da emissora.`
+    `(conta das credenciais Cora). A Cora não permite emitir boleto para a própria empresa emissora.` +
+    detalhe +
+    ` No formulário de faturamento, use o CPF/CNPJ do cliente (ex.: SHEFA 65.912.793/0001-60), não o da emissora (ex.: Onze 62.449.971/0001-70).`
   );
 }
 
@@ -34,7 +47,7 @@ export const ERRO_CORA_MESMO_CNPJ = mensagemErroMesmoCnpjEmissor();
 
 export function validarCnpjClienteCora(clienteCnpj: string | null | undefined): void {
   if (cnpjMesmoEmissorCora(clienteCnpj)) {
-    throw new Error(ERRO_CORA_MESMO_CNPJ);
+    throw new Error(mensagemErroMesmoCnpjEmissor(clienteCnpj));
   }
 }
 
@@ -75,7 +88,7 @@ export function avaliarEmissaoCoraTenant(
 
   return {
     bloqueado,
-    motivo: bloqueado ? mensagemErroMesmoCnpjEmissor() : null,
+    motivo: bloqueado ? mensagemErroMesmoCnpjEmissor(clienteDocumento) : null,
     emissor_configurado,
     emissor_cnpj,
     emissor_nome: emissor_configurado ? getCoraEmissorNome() : null,

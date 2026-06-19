@@ -149,10 +149,43 @@ export function escolherPerfilCobrancaBase(
   fromSettings: UserBillingProfile | null,
   fromCadastral: UserBillingProfile | null,
 ): UserBillingProfile | null {
-  const ordem = [fromUser, fromSettings, fromCadastral];
+  /** Cadastro do tenant (settings/cadastral) manda sobre users — linha users pode estar desatualizada. */
+  const ordem = [fromSettings, fromCadastral, fromUser];
   const valido = ordem.find((p) => p && !documentoPagadorBloqueadoCora(p));
   if (valido) return valido;
   return ordem.find(Boolean) ?? null;
+}
+
+function escolherCnpjTenantSettings(
+  s: Record<string, unknown>,
+  regType: string,
+): { document: string; document_type: CoraDocumentType } {
+  const isPf = regType === "PF";
+  const cpf = onlyDigits(str(s.cpf));
+  const cnpjDirect = onlyDigits(str(s.cnpj));
+  const ec =
+    s.empresa_cadastral && typeof s.empresa_cadastral === "object"
+      ? (s.empresa_cadastral as Record<string, unknown>)
+      : null;
+  const cnpjEc = onlyDigits(str(ec?.cnpj));
+
+  if (isPf && cpf.length === 11) {
+    return { document: cpf, document_type: "CPF" };
+  }
+
+  const cnpjCandidates = [cnpjDirect, cnpjEc].filter((d) => d.length === 14);
+  const cnpjValido =
+    cnpjCandidates.find((d) => !cnpjMesmoEmissorCora(d)) ?? cnpjCandidates[0] ?? "";
+
+  if (cnpjValido) {
+    return { document: cnpjValido, document_type: "CNPJ" };
+  }
+
+  if (cpf.length === 11) {
+    return { document: cpf, document_type: "CPF" };
+  }
+
+  return { document: "", document_type: "CNPJ" };
 }
 
 export function mesclarPerfilCobranca(
@@ -246,25 +279,14 @@ export function perfilCobrancaFromTenantSettings(
   if (!settings || typeof settings !== "object") return null;
   const s = settings as Record<string, unknown>;
   const regType = str(s.registration_type).toUpperCase();
-  const isPf = regType === "PF";
+  const { document, document_type } = escolherCnpjTenantSettings(s, regType);
 
-  const cpf = onlyDigits(str(s.cpf));
-  const cnpj = onlyDigits(str(s.cnpj));
-  let document = isPf ? cpf : cnpj;
-  let document_type: CoraDocumentType = isPf ? "CPF" : "CNPJ";
+  if (!documentoProntoParaCora(document, document_type)) return null;
 
   const ec =
     s.empresa_cadastral && typeof s.empresa_cadastral === "object"
       ? (s.empresa_cadastral as Record<string, unknown>)
       : null;
-  const cnpjEc = onlyDigits(str(ec?.cnpj));
-  if (!documentoProntoParaCora(document, document_type) && cnpjEc.length === 14) {
-    document = cnpjEc;
-    document_type = "CNPJ";
-  }
-
-  if (!documentoProntoParaCora(document, document_type)) return null;
-
   const address =
     s.address && typeof s.address === "object" ? (s.address as Record<string, unknown>) : {};
   const contact =
@@ -398,6 +420,20 @@ export async function resolverPerfilCobrancaTenant(
 
   profile = mesclarCamposPerfil(profile, fromCadastral);
   profile = mesclarCamposPerfil(profile, fromSettings);
+
+  if (documentoPagadorBloqueadoCora(profile)) {
+    for (const alt of [fromSettings, fromCadastral, fromUser]) {
+      if (alt && !documentoPagadorBloqueadoCora(alt)) {
+        profile = {
+          ...profile,
+          document: alt.document,
+          document_type: alt.document_type,
+          legal_name: profile.legal_name || alt.legal_name,
+        };
+        break;
+      }
+    }
+  }
 
   if (fromUser && (fromCadastral || fromSettings)) {
     profile = { ...profile, fonte: "merged" };
@@ -577,19 +613,21 @@ export async function sincronizarBillingDoTenant(
   nomeExibicao?: string | null,
   cadastral?: TenantEmpresaCadastral | null,
 ): Promise<void> {
-  const profile =
-    perfilCobrancaFromTenantSettings(settings, nomeExibicao) ??
-    perfilCobrancaFromTenantCadastral(cadastral ?? null, nomeExibicao);
-  if (!profile) return;
-
   const billingUser = await carregarUsuarioCobrancaTenant(supabase, tenantId, settings);
   if (!billingUser?.id) return;
 
-  const userRowProfile = perfilCobrancaFromUserRow(billingUser);
+  const fromUser = perfilCobrancaFromUserRow(billingUser);
+  const fromSettings = perfilCobrancaFromTenantSettings(settings, nomeExibicao);
+  const fromCadastral = perfilCobrancaFromTenantCadastral(cadastral ?? null, nomeExibicao);
+  const profile = escolherPerfilCobrancaBase(fromUser, fromSettings, fromCadastral);
+  if (!profile || documentoPagadorBloqueadoCora(profile)) return;
+
+  const docUser = onlyDigits(billingUser.document);
   const needsSync =
     !documentoProntoParaCora(billingUser.document, billingUser.document_type as CoraDocumentType) ||
     !str(billingUser.billing_legal_name) ||
-    documentoPagadorBloqueadoCora(userRowProfile);
+    documentoPagadorBloqueadoCora(fromUser) ||
+    docUser !== profile.document;
 
   if (!needsSync) return;
 
@@ -597,6 +635,7 @@ export async function sincronizarBillingDoTenant(
     .from("users")
     .update({
       tenant_id: tenantId,
+      owner: false,
       document_type: profile.document_type,
       document: profile.document,
       billing_legal_name: profile.legal_name,

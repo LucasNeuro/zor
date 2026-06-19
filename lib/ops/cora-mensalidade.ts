@@ -5,7 +5,7 @@ import {
   extrairPixEmvCora,
   extrairUrlBoletoCora,
 } from "@/lib/cora/cora-client";
-import { humanizarErroCoraApi, validarDocumentoClienteCora } from "@/lib/cora/cora-emissor";
+import { humanizarErroCoraApi, validarDocumentoClienteCora, exigirCoraEmissorCnpj } from "@/lib/cora/cora-emissor";
 import { persistirBoletoPdf } from "@/lib/ops/ops-boleto-storage";
 import {
   lerEmpresaCadastralTenant,
@@ -158,6 +158,8 @@ export function montarInputCora(
   }
   validarDocumentoClienteCora(billing.document, billing.document_type);
 
+  exigirCoraEmissorCnpj();
+
   const valorCentavos = pag.valor_centavos ?? 0;
   if (valorCentavos < 500) {
     throw new Error("Valor mínimo da cobrança Cora é R$ 5,00.");
@@ -233,7 +235,8 @@ export async function emitirMensalidadeNaCora(
     invoice = await emitirCoraCobranca(input, forma);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(humanizarErroCoraApi(msg));
+    const doc = input.customer.document.identity;
+    throw new Error(humanizarErroCoraApi(msg, doc));
   }
 
   const boletoUrl =
@@ -329,6 +332,7 @@ export async function gerarBoletosParcelados(
   }
 
   const tenant = await carregarTenantParaCobranca(tenantId);
+  exigirCoraEmissorCnpj();
   if (!cadastroProntoParaCora(tenant.billing, tenant.cadastral)) {
     throw new Error(
       "Cadastro incompleto — CPF/CNPJ do utilizador owner obrigatório para emitir na Cora.",

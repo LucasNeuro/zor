@@ -6,6 +6,19 @@ export function getCoraEmissorCnpj(): string | null {
   return digits.length >= 14 ? digits.slice(0, 14) : null;
 }
 
+/** Exige CORA_EMISSOR_CNPJ antes de emitir — validação de pagador vs emissor. */
+export function exigirCoraEmissorCnpj(): string {
+  const cnpj = getCoraEmissorCnpj();
+  if (!cnpj) {
+    throw new Error(
+      "CORA_EMISSOR_CNPJ não está definido no servidor. " +
+        "No Render, configure o CNPJ da conta Cora emissora (ex.: Onze 62.449.971/0001-70). " +
+        "Sem isso a plataforma não consegue validar pagador vs emissor.",
+    );
+  }
+  return cnpj;
+}
+
 export function getCoraEmissorNome(): string {
   return process.env.CORA_EMISSOR_NOME?.trim() || "conta Cora emissora";
 }
@@ -61,10 +74,12 @@ export function validarDocumentoClienteCora(
   }
 }
 
-export function humanizarErroCoraApi(message: string): string {
+export function humanizarErroCoraApi(message: string, clienteDocumento?: string | null): string {
   const m = message.trim();
-  if (/own identity/i.test(m)) return mensagemErroMesmoCnpjEmissor();
-  if (/cannot create invoice/i.test(m) && /identity/i.test(m)) return mensagemErroMesmoCnpjEmissor();
+  if (/own identity/i.test(m)) return mensagemErroMesmoCnpjEmissor(clienteDocumento);
+  if (/cannot create invoice/i.test(m) && /identity/i.test(m)) {
+    return mensagemErroMesmoCnpjEmissor(clienteDocumento);
+  }
   return m;
 }
 

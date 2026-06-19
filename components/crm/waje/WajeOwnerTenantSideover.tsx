@@ -193,9 +193,9 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
     [tenant?.id, onBillingChanged],
   );
 
-  const carregarCadastro = useCallback(async () => {
+  const carregarCadastro = useCallback(async (): Promise<TenantCadastro | null> => {
     const tenantId = tenant?.id;
-    if (!tenantId) return;
+    if (!tenantId) return null;
     setCarregandoCadastro(true);
     try {
       const res = await fetch(`/api/ops/tenants/${tenantId}`, {
@@ -210,8 +210,10 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
       const c = json.data.cadastro ?? null;
       setCadastro(c);
       setBillingForm(billingFormFromCadastro(c));
+      return c;
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar cadastro.");
+      return null;
     } finally {
       setCarregandoCadastro(false);
     }
@@ -313,9 +315,11 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
       if (numParcelas > parcelasDisponiveis) {
         throw new Error(`Máximo de ${parcelasDisponiveis} parcela(s) disponível(is).`);
       }
-      if (!cadastro?.pronto_cora) {
+
+      const cadAtual = await carregarCadastro();
+      if (!cadAtual?.pronto_cora) {
         throw new Error(
-          cadastro?.cora_emissao_motivo ??
+          cadAtual?.cora_emissao_motivo ??
             "Cadastro incompleto — preencha CPF/CNPJ e endereço do cliente abaixo e clique em Salvar faturamento.",
         );
       }

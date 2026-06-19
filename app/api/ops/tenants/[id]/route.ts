@@ -97,7 +97,7 @@ export async function GET(_request: NextRequest, ctx: RouteCtx) {
         ? {
             documento: docLabel,
             documento_tipo: billing?.document_type ?? (cadastral?.cnpj ? "CNPJ" : null),
-            documento_raw: billing?.document ?? onlyDigits(cadastral?.cnpj ?? "") || null,
+            documento_raw: billing?.document ?? (onlyDigits(cadastral?.cnpj ?? "") || null),
             cnpj: docLabel,
             razao_social: billing?.legal_name ?? cadastral?.razao_social ?? null,
             nome_fantasia: cadastral?.nome_fantasia ?? null,

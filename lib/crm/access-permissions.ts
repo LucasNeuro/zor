@@ -1,6 +1,7 @@
 import type { CrmNavGroup } from "@/lib/crm-nav-groups";
 import { CRM_NAV_GROUPS, isCrmAdminRole } from "@/lib/crm-nav-groups";
 import { appendWajeOwnerNav, isWajeOwnerPath } from "@/lib/crm/waje-owner-nav";
+import { isPlatformTeamRole } from "@/lib/auth/verify-ops-user";
 
 export type CrmAccessContext = {
   baseRole: string;
@@ -52,14 +53,23 @@ export function permissionKeyForPath(pathname: string): CrmPermissionKey | null 
   return null;
 }
 
-/** Acesso total ao CRM (menu + rotas): admin do tenant ou equipe plataforma Waje. */
+/** Acesso total ao CRM: admin do tenant ou equipe plataforma (owner / platform_admin). */
 export function hasFullCrmAccess(ctx: CrmAccessContext): boolean {
-  return Boolean(ctx.wajeOwner) || isCrmAdminRole(ctx.baseRole);
+  return (
+    Boolean(ctx.wajeOwner) ||
+    isCrmAdminRole(ctx.baseRole) ||
+    isPlatformTeamRole(ctx.baseRole)
+  );
+}
+
+/** Equipe plataforma — uma flag unificada (não confundir com role CRM owner do tenant). */
+export function isPlatformTeamAccess(ctx: CrmAccessContext): boolean {
+  return Boolean(ctx.wajeOwner) || isPlatformTeamRole(ctx.baseRole);
 }
 
 export function canAccessCrmPath(pathname: string, ctx: CrmAccessContext): boolean {
   if (isWajeOwnerPath(pathname)) {
-    return Boolean(ctx.wajeOwner);
+    return isPlatformTeamAccess(ctx);
   }
 
   if (hasFullCrmAccess(ctx)) return true;
@@ -75,16 +85,15 @@ export function canAccessCrmPath(pathname: string, ctx: CrmAccessContext): boole
   return Boolean(perms[key]);
 }
 
-/** Primeira rota permitida — evita loop /crm ↔ /crm/painel após login. */
+/** Primeira rota após login — equipe plataforma usa o mesmo painel que admin. */
 export function defaultCrmLandingPath(ctx: CrmAccessContext): string {
   const painel = "/crm/painel?tab=visao-geral&view=paineis";
 
-  if (ctx.wajeOwner) return "/crm/waje/tenants";
-  if (isCrmAdminRole(ctx.baseRole)) return painel;
+  if (hasFullCrmAccess(ctx)) return painel;
   if (canAccessCrmPath("/crm/painel", ctx)) return painel;
 
   const groups = filterCrmNavGroupsForAccess(
-    appendWajeOwnerNav(CRM_NAV_GROUPS, Boolean(ctx.wajeOwner)),
+    appendWajeOwnerNav(CRM_NAV_GROUPS, isPlatformTeamAccess(ctx)),
     ctx,
   );
   const first = groups.flatMap((g) => g.items)[0]?.href;
@@ -103,7 +112,7 @@ export function filterCrmNavGroupsForAccess(
       .map((g) => ({
         ...g,
         items: g.items.filter((item) => {
-          if (item.wajeOwnerOnly) return Boolean(ctx.wajeOwner);
+          if (item.wajeOwnerOnly) return isPlatformTeamAccess(ctx);
           return !item.adminOnly || hasFullCrmAccess(ctx);
         }),
       }))
@@ -116,7 +125,7 @@ export function filterCrmNavGroupsForAccess(
     .map((g) => ({
       ...g,
       items: g.items.filter((item) => {
-        if (item.wajeOwnerOnly) return Boolean(ctx.wajeOwner);
+        if (item.wajeOwnerOnly) return isPlatformTeamAccess(ctx);
         if (item.adminOnly) return false;
         const key = item.permission;
         if (!key) return true;

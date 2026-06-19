@@ -7,7 +7,7 @@ import type { LucideIcon } from "lucide-react";
 import { Plus, X, ChevronRight, ChevronDown, Menu } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { CrmAccessGuard } from "@/components/crm/CrmAccessGuard";
-import { filterCrmNavGroupsForAccess } from "@/lib/crm/access-permissions";
+import { filterCrmNavGroupsForAccess, isPlatformTeamAccess } from "@/lib/crm/access-permissions";
 import { appendWajeOwnerNav } from "@/lib/crm/waje-owner-nav";
 import {
   CRM_NAV_GROUPS,
@@ -343,7 +343,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const navGroups = useMemo(
     () =>
       filterCrmNavGroupsForAccess(
-        appendWajeOwnerNav(CRM_NAV_GROUPS, accessCtx.wajeOwner),
+        appendWajeOwnerNav(CRM_NAV_GROUPS, isPlatformTeamAccess(accessCtx)),
         accessCtx,
       ),
     [accessCtx],

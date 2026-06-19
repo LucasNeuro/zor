@@ -112,6 +112,7 @@ export function CrmSessionFooter({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
+  const [platformTeam, setPlatformTeam] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,18 +122,24 @@ export function CrmSessionFooter({
       setName(displayNameFromUser(u));
       const row = await supabase
         .from("users")
-        .select("name, role")
+        .select("name, role, owner")
         .eq("auth_id", u.id)
         .maybeSingle();
       if (cancelled) return;
       if (row.data?.name) setName(String(row.data.name).trim());
-      setRole(row.data?.role != null ? String(row.data.role) : "");
+      const r = row.data?.role != null ? String(row.data.role) : "";
+      const ownerFlag =
+        row.data?.owner === true ||
+        row.data?.owner === "true" ||
+        row.data?.owner === 1;
+      setPlatformTeam(ownerFlag || r.trim().toLowerCase() === "platform_admin");
+      setRole(r);
     }
 
     function onAuthUser(user: User | null) {
       if (cancelled) return;
       if (user) void loadProfile(user);
-      else { setName(""); setEmail(""); setRole(""); }
+      else { setName(""); setEmail(""); setRole(""); setPlatformTeam(false); }
     }
 
     const unsubscribe = subscribeSharedAuthProfile(onAuthUser);
@@ -140,7 +147,7 @@ export function CrmSessionFooter({
   }, []);
 
   const initials = getInitials(name || email || "—");
-  const rolePill = formatRole(role);
+  const rolePill = platformTeam ? "Plataforma" : formatRole(role);
   const showExpanded = expanded || variant === "drawer";
 
   /* ── Collapsed ──────────────────────────────────────────────────── */

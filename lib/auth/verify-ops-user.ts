@@ -3,6 +3,12 @@ import { isMissingPgColumn } from "@/lib/tenant-default";
 
 const OPS_ROLE_LEGACY = "platform_admin";
 
+export function isPlatformTeamRole(role: string | null | undefined): boolean {
+  return String(role ?? "")
+    .trim()
+    .toLowerCase() === OPS_ROLE_LEGACY;
+}
+
 /** E-mails autorizados via env (bootstrap antes de marcar owner no banco). */
 export function opsAllowedEmails(): string[] {
   const raw = process.env.WAJE_OPS_ALLOWED_EMAILS?.trim();

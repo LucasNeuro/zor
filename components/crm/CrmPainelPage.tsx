@@ -11,6 +11,7 @@ import { CrmPainelTabCharts } from "@/components/crm/painel/CrmPainelTabCharts";
 import { CrmPainelChartsSkeleton } from "@/components/crm/painel/CrmPainelSkeleton";
 import { CrmPainelViewToolbar } from "@/components/crm/painel/CrmPainelViewToolbar";
 import { useCrmDashboard } from "@/hooks/useCrmDashboard";
+import { useFinanceDashboard } from "@/hooks/useFinanceDashboard";
 import { useCrmPainelAnalytics } from "@/hooks/useCrmPainelAnalytics";
 import { FILTROS_PAINEL_VAZIOS, type CrmPainelFiltros } from "@/lib/crm/painel-filtros";
 import {
@@ -38,6 +39,7 @@ export function CrmPainelPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dash = useCrmDashboard();
+  const financeDash = useFinanceDashboard();
 
   const tabFromUrl = parsePainelTabId(searchParams.get("tab"));
   const [tabAtiva, setTabAtiva] = useState<PainelTabId>(tabFromUrl);
@@ -144,7 +146,18 @@ export function CrmPainelPage() {
     [router]
   );
 
-  const kpis = useMemo(() => kpisForPainelTab(tabAtiva, dash), [tabAtiva, dash]);
+  const kpis = useMemo(
+    () =>
+      kpisForPainelTab(
+        tabAtiva,
+        dash,
+        tabAtiva === "financeiro" && financeDash.carregado ? financeDash : null,
+      ),
+    [tabAtiva, dash, financeDash],
+  );
+
+  const kpisLoading =
+    tabAtiva === "financeiro" ? dash.loading || financeDash.loading : dash.loading;
 
   function persistirRelatorios(next: PainelRelatorioCustom[]) {
     setRelatoriosCustom(next);
@@ -198,7 +211,23 @@ export function CrmPainelPage() {
           </div>
         ) : null}
 
-        <CrmPainelMetricsRow kpis={kpis} loading={dash.loading} />
+        {tabAtiva === "financeiro" && financeDash.erro ? (
+          <div
+            className="mb-4 rounded-xl border border-[#f8514966] bg-[#fff5f5] px-4 py-3 text-sm text-[#b91c1c]"
+            role="alert"
+          >
+            {financeDash.erro}
+            <button
+              type="button"
+              onClick={() => financeDash.recarregar()}
+              className="ml-2 text-xs font-bold underline"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : null}
+
+        <CrmPainelMetricsRow kpis={kpis} loading={kpisLoading} />
 
         <div className="flex w-full min-w-0 flex-col rounded-2xl border border-[#dcebd8] bg-white shadow-[0_2px_8px_rgba(11,31,16,0.05)]">
           <ContaSectionTabs
@@ -215,8 +244,17 @@ export function CrmPainelPage() {
             periodo={periodo}
             onPeriodoChange={setPeriodo}
             showPeriodo={painelSuportaGraficos(tabAtiva)}
-            onRefresh={mostrarGraficos ? () => void analytics.recarregar() : undefined}
-            refreshing={analytics.carregando}
+            onRefresh={
+              mostrarGraficos
+                ? () => void analytics.recarregar()
+                : tabAtiva === "financeiro"
+                  ? () => {
+                      financeDash.recarregar();
+                      dash.recarregar();
+                    }
+                  : undefined
+            }
+            refreshing={mostrarGraficos ? analytics.carregando : tabAtiva === "financeiro" && financeDash.loading}
             dark={false}
           />
 

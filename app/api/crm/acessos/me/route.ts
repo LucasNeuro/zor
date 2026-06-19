@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crmDb } from "@/lib/crm/supabase-server";
-import { crmApiConfigError, requireInternalApiKey } from "@/lib/crm/crm-api-auth";
+import { getCrmActor, requireCrmApiAccess } from "@/lib/crm/crm-api-auth";
 import { normalizeUserRow } from "@/lib/crm/users-row";
 import { isOpsOwnerFlag } from "@/lib/auth/verify-ops-user";
 import { isMissingPgColumn } from "@/lib/tenant-default";
 
 export async function GET(request: NextRequest) {
-  const config = crmApiConfigError();
-  if (config) return config;
-  const keyErr = requireInternalApiKey(request);
-  if (keyErr) return keyErr;
+  const accessErr = await requireCrmApiAccess(request);
+  if (accessErr) return accessErr;
 
-  const authId = request.headers.get("x-caller-auth-id")?.trim();
+  const actor = await getCrmActor(request);
+  const authId = actor?.authId ?? request.headers.get("x-caller-auth-id")?.trim();
   if (!authId) {
-    return NextResponse.json({ error: "Cabeçalho x-caller-auth-id obrigatório." }, { status: 403 });
+    return NextResponse.json({ error: "Sessão CRM inválida ou expirada." }, { status: 403 });
   }
 
   let userQuery = await crmDb()

@@ -1,6 +1,7 @@
 import https from "node:https";
 import { randomUUID } from "node:crypto";
 import { getCoraConfig } from "@/lib/cora/cora-config";
+import { humanizarErroCoraApi } from "@/lib/cora/cora-emissor";
 
 type TokenCache = { accessToken: string; expiresAt: number };
 let tokenCache: TokenCache | null = null;
@@ -145,7 +146,7 @@ export function formatarErroRespostaCora(json: CoraApiErrorBody, status: number)
       if (bit) partes.push(bit);
     }
   }
-  if (partes.length) return partes.join(" · ");
+  if (partes.length) return humanizarErroCoraApi(partes.join(" · "));
   return `Cora invoice falhou (${status}).`;
 }
 

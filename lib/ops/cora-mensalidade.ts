@@ -1,13 +1,19 @@
 import { crmDb } from "@/lib/crm/supabase-server";
 import type { CoraEmitirBoletoInput } from "@/lib/cora/cora-client";
 import { emitirCoraCobranca, type CoraFormaPagamento } from "@/lib/cora/cora-cobranca";
-import { extrairPixEmvCora, extrairUrlBoletoCora } from "@/lib/cora/cora-client";
+import {
+  extrairPixEmvCora,
+  extrairUrlBoletoCora,
+} from "@/lib/cora/cora-client";
+import { humanizarErroCoraApi, validarCnpjClienteCora } from "@/lib/cora/cora-emissor";
 import { persistirBoletoPdf } from "@/lib/ops/ops-boleto-storage";
 import {
   lerEmpresaCadastralTenant,
   nomeComercialEmpresa,
   type TenantEmpresaCadastral,
 } from "@/lib/hub/tenant-empresa-cadastral";
+
+export { avaliarEmissaoCoraTenant } from "@/lib/cora/cora-emissor";
 
 export const MAX_MENSALIDADES_POR_TENANT = 12;
 
@@ -105,6 +111,7 @@ export function montarInputCora(
   if (cnpj.length < 14) {
     throw new Error("Tenant sem CNPJ no cadastro — complete o cadastro PJ antes de emitir na Cora.");
   }
+  validarCnpjClienteCora(cnpj);
 
   const valorCentavos = pag.valor_centavos ?? 0;
   if (valorCentavos < 500) {
@@ -175,7 +182,13 @@ export async function emitirMensalidadeNaCora(
 
   const tenant = tenantCtx ?? (await carregarTenantParaCobranca(pag.tenant_id));
   const input = montarInputCora(tenant, { ...pag, ...meta });
-  const invoice = await emitirCoraCobranca(input, forma);
+  let invoice;
+  try {
+    invoice = await emitirCoraCobranca(input, forma);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(humanizarErroCoraApi(msg));
+  }
 
   const boletoUrl =
     (invoice as { document_url?: string }).document_url ?? invoice.bank_slip?.url ?? null;
@@ -273,6 +286,7 @@ export async function gerarBoletosParcelados(
   if (!cadastroProntoParaCora(tenant.cadastral)) {
     throw new Error("Cadastro PJ incompleto — CNPJ obrigatório para emitir na Cora.");
   }
+  validarCnpjClienteCora(tenant.cadastral?.cnpj);
 
   const forma: CoraFormaPagamento = input.forma ?? "boleto_pix";
   const criadas: Array<Record<string, unknown>> = [];

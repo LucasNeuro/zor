@@ -1,5 +1,6 @@
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { isCrmAdminRole } from "@/lib/crm-nav-groups";
+import { CRM_ACCESS_COOKIE, fetchAuthUserFromAccessToken } from "@/lib/auth/crm-session";
 import { NextResponse } from "next/server";
 
 export function crmApiConfigError(): NextResponse | null {
@@ -90,7 +91,23 @@ export type CrmActor = {
 };
 
 export async function getCrmActor(request: Request): Promise<CrmActor | null> {
-  const authId = request.headers.get("x-caller-auth-id")?.trim();
+  let authId = request.headers.get("x-caller-auth-id")?.trim() ?? "";
+
+  if (!authId) {
+    const cookieHeader = request.headers.get("cookie") ?? "";
+    const escaped = CRM_ACCESS_COOKIE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`));
+    const token = match?.[1] ? decodeURIComponent(match[1]) : "";
+    if (token) {
+      try {
+        const authUser = await fetchAuthUserFromAccessToken(token);
+        authId = authUser?.id ?? "";
+      } catch {
+        authId = "";
+      }
+    }
+  }
+
   if (!authId) return null;
 
   const { data, error } = await crmDb()

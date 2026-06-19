@@ -70,6 +70,7 @@ export async function fetchCrmMetricas(
     agentes,
     parceiros,
     encRowsRes,
+    negPipeRes,
   ] = await Promise.all([
     safeCount(
       supabase
@@ -104,6 +105,11 @@ export async function fetchCrmMetricas(
       .from("hub_encaminhamentos")
       .select("lead_id")
       .gte("encaminhado_em", sinceIso),
+    supabase
+      .from("hub_negocios")
+      .select("valor_estimado")
+      .eq("tenant_id", tenantId)
+      .in("status", ["aberto", "em_negociacao"]),
   ]);
 
   const leadsRows = (leadsRowsRes.error ? [] : (leadsRowsRes.data ?? [])) as {
@@ -116,9 +122,15 @@ export async function fetchCrmMetricas(
   const aguardando = leadMetricas.aguardando;
   const terminaisSet = new Set<string>(ESTAGIOS_LEAD_TERMINAIS);
 
-  const receitaPotencial = leadsRows
+  const receitaLeads = leadsRows
     .filter((r) => !terminaisSet.has(String(legacyToFunil(r.estagio))))
     .reduce((s, r) => s + Number(r.valor_estimado ?? 0), 0);
+
+  const negRows = (negPipeRes.error ? [] : (negPipeRes.data ?? [])) as {
+    valor_estimado?: number | null;
+  }[];
+  const receitaNegocios = negRows.reduce((s, r) => s + Number(r.valor_estimado ?? 0), 0);
+  const receitaPotencial = receitaLeads + receitaNegocios;
 
   const encRows = encRowsRes.error ? [] : (encRowsRes.data ?? []) as { lead_id: string | null }[];
   const encaminhamentosHoje = encRows.length;

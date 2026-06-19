@@ -62,6 +62,8 @@ type TenantCadastro = {
   telefone: string | null;
   endereco: string | null;
   pronto_cora: boolean;
+  cora_emissao_bloqueada?: boolean;
+  cora_emissao_motivo?: string | null;
 };
 
 type Props = {
@@ -238,7 +240,10 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
         throw new Error(`Máximo de ${parcelasDisponiveis} parcela(s) disponível(is).`);
       }
       if (!cadastro?.pronto_cora) {
-        throw new Error("Cadastro PJ incompleto — CNPJ obrigatório para emitir cobranças.");
+        throw new Error(
+          cadastro?.cora_emissao_motivo ??
+            "Cadastro PJ incompleto — CNPJ obrigatório para emitir cobranças.",
+        );
       }
 
       const res = await fetch(`/api/ops/tenants/${tenant.id}/cora-boletos`, {
@@ -550,12 +555,21 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
             description={
               carregandoCadastro
                 ? "A carregar dados do cadastro…"
-                : cadastro?.pronto_cora
-                  ? "CNPJ e endereço serão usados na emissão dos boletos."
-                  : "Complete o cadastro PJ do tenant (CNPJ) para emitir cobranças."
+                : cadastro?.cora_emissao_bloqueada
+                  ? cadastro.cora_emissao_motivo ??
+                    "CNPJ igual ao da conta Cora emissora — não é possível emitir boleto."
+                  : cadastro?.pronto_cora
+                    ? "CNPJ e endereço serão usados na emissão dos boletos."
+                    : "Complete o cadastro PJ do tenant (CNPJ) para emitir cobranças."
             }
-            statusLabel={cadastro?.pronto_cora ? "OK" : "INCOMPLETO"}
-            statusActive={Boolean(cadastro?.pronto_cora)}
+            statusLabel={
+              cadastro?.cora_emissao_bloqueada
+                ? "BLOQUEADO"
+                : cadastro?.pronto_cora
+                  ? "OK"
+                  : "INCOMPLETO"
+            }
+            statusActive={Boolean(cadastro?.pronto_cora) && !cadastro?.cora_emissao_bloqueada}
           >
             <div className="space-y-1 pl-[54px] text-xs" style={rfBodyOnDarkStyle()}>
               <p>CNPJ: {cadastro?.cnpj ?? tenant.cnpj ?? "—"}</p>

@@ -1,4 +1,5 @@
 import type { CrmDashboardState } from "@/hooks/useCrmDashboard";
+import type { FinanceDashboardPayload } from "@/lib/crm/finance-dashboard-aggregate";
 import type { CrmPainelFiltros } from "@/lib/crm/painel-filtros";
 import { FILTROS_PAINEL_VAZIOS } from "@/lib/crm/painel-filtros";
 import type { CrmMetricTone } from "@/lib/crm/crm-metric-theme";
@@ -107,9 +108,14 @@ export type PainelKpiCard = {
   tone?: CrmMetricTone;
 };
 
-export function kpisForPainelTab(tabId: PainelTabId, dash: CrmDashboardState): PainelKpiCard[] {
+export function kpisForPainelTab(
+  tabId: PainelTabId,
+  dash: CrmDashboardState,
+  finance?: FinanceDashboardPayload | null,
+): PainelKpiCard[] {
   const m = dash;
   const receita = m.receitaPotencial > 0 ? moedaPipeline(m.receitaPotencial) : "R$ 0";
+  const fmt = (v: number) => (v > 0 ? moedaPipeline(v) : "R$ 0");
 
   switch (tabId) {
     case "visao-geral":
@@ -230,31 +236,40 @@ export function kpisForPainelTab(tabId: PainelTabId, dash: CrmDashboardState): P
               tone: "brand" as CrmMetricTone,
             }]),
       ];
-    case "financeiro":
+    case "financeiro": {
+      const fin = finance?.kpis;
+      const pipe = finance?.pipeline;
       return [
-        { key: "receita", label: "Receita potencial", valor: receita, sub: "CRM comercial", tone: "brand" },
         {
-          key: "neg-abertos",
-          label: "Negócios abertos",
-          valor: m.operacao.negociosAbertos,
-          sub: "base do pipeline",
+          key: "a-receber",
+          label: "A receber",
+          valor: fmt(fin?.aReceberAberto ?? 0),
+          sub: "contas pendentes",
+          tone: (fin?.aReceberAberto ?? 0) > 0 ? "success" : "muted",
+        },
+        {
+          key: "a-pagar",
+          label: "A pagar",
+          valor: fmt(fin?.aPagarAberto ?? 0),
+          sub: "contas pendentes",
+          tone: (fin?.aPagarAberto ?? 0) > 0 ? "warning" : "muted",
+        },
+        {
+          key: "saldo",
+          label: "Saldo projetado",
+          valor: fmt(fin?.saldoProjetado ?? 0),
+          sub: "receber − pagar",
+          tone: (fin?.saldoProjetado ?? 0) >= 0 ? "brand" : "warning",
+        },
+        {
+          key: "pipeline-neg",
+          label: "Pipeline negócios",
+          valor: fmt(pipe?.receitaPotencialNegocios ?? 0),
+          sub: `${m.operacao.negociosAbertos} negócio(s) aberto(s)`,
           tone: "brand",
         },
-        {
-          key: "leads-hoje",
-          label: "Leads hoje",
-          valor: m.leadsHoje,
-          sub: "entrada no funil",
-          tone: "muted",
-        },
-        {
-          key: "qualif",
-          label: "Taxa qualificação",
-          valor: `${m.taxaQualificacao}%`,
-          sub: "conversão inicial",
-          tone: "success",
-        },
       ];
+    }
     case "personalizado":
       return [];
     default:

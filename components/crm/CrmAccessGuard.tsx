@@ -2,7 +2,11 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { canAccessCrmPath, type CrmAccessContext } from "@/lib/crm/access-permissions";
+import {
+  canAccessCrmPath,
+  defaultCrmLandingPath,
+  type CrmAccessContext,
+} from "@/lib/crm/access-permissions";
 
 type Props = CrmAccessContext & {
   children: React.ReactNode;
@@ -16,7 +20,12 @@ export function CrmAccessGuard({ baseRole, permissoes, wajeOwner = false, childr
   useEffect(() => {
     if (!baseRole && !permissoes && !wajeOwner) return;
     if (canAccessCrmPath(pathname, ctx)) return;
-    router.replace("/crm");
+    const destino = defaultCrmLandingPath(ctx);
+    const destinoPath = destino.split("?")[0] ?? destino;
+    const currentPath = pathname.split("?")[0] ?? pathname;
+    if (destinoPath !== currentPath && !pathname.startsWith(`${destinoPath}/`)) {
+      router.replace(destino);
+    }
   }, [pathname, baseRole, permissoes, wajeOwner, router]);
 
   if (!canAccessCrmPath(pathname, ctx)) {

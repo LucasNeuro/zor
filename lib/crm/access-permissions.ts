@@ -1,6 +1,6 @@
 import type { CrmNavGroup } from "@/lib/crm-nav-groups";
-import { isCrmAdminRole } from "@/lib/crm-nav-groups";
-import { isWajeOwnerPath } from "@/lib/crm/waje-owner-nav";
+import { CRM_NAV_GROUPS, isCrmAdminRole } from "@/lib/crm-nav-groups";
+import { appendWajeOwnerNav, isWajeOwnerPath } from "@/lib/crm/waje-owner-nav";
 
 export type CrmAccessContext = {
   baseRole: string;
@@ -65,7 +65,27 @@ export function canAccessCrmPath(pathname: string, ctx: CrmAccessContext): boole
   const perms = ctx.permissoes;
   if (!perms) return key === "dashboard";
 
+  if (!(key in perms)) return false;
+
   return Boolean(perms[key]);
+}
+
+/** Primeira rota permitida — evita loop /crm ↔ /crm/painel após login. */
+export function defaultCrmLandingPath(ctx: CrmAccessContext): string {
+  const painel = "/crm/painel?tab=visao-geral&view=paineis";
+
+  if (ctx.wajeOwner) return "/crm/waje/tenants";
+  if (isCrmAdminRole(ctx.baseRole)) return painel;
+  if (canAccessCrmPath("/crm/painel", ctx)) return painel;
+
+  const groups = filterCrmNavGroupsForAccess(
+    appendWajeOwnerNav(CRM_NAV_GROUPS, ctx.wajeOwner),
+    ctx,
+  );
+  const first = groups.flatMap((g) => g.items)[0]?.href;
+  if (first && first !== "/crm") return first;
+
+  return "/crm/configuracoes";
 }
 
 export function filterCrmNavGroupsForAccess(

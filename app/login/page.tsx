@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { Eye, EyeOff, Zap } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { WajeBrand } from "@/components/brand/WajeBrand";
@@ -33,7 +33,6 @@ function messageForAuthRequestFailure(err: unknown): string {
 }
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -149,15 +148,9 @@ function LoginForm() {
     }
     setLoading(false);
     const next = searchParams.get("next");
-    const destino = getSafeReturnPath(next, "/crm");
-    router.push(destino);
-    router.refresh();
-    // Fallback se o router client não hidratar (ex.: chunks bloqueados pelo IP da rede).
-    window.setTimeout(() => {
-      if (window.location.pathname.startsWith("/login")) {
-        window.location.assign(destino);
-      }
-    }, 500);
+    const destino = getSafeReturnPath(next, "/crm/painel?tab=visao-geral&view=paineis");
+    // Navegação completa garante cookie httpOnly + carregamento estável do shell CRM (Render/produção).
+    window.location.assign(destino);
   }
 
   function alternarVisibilidadeSenha() {

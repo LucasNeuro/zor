@@ -4,6 +4,7 @@ import {
   cadastroProntoParaCora,
   formatarCnpj,
   resumoEnderecoCadastral,
+  avaliarEmissaoCoraTenant,
 } from "@/lib/ops/cora-mensalidade";
 import { lerEmpresaCadastralTenant } from "@/lib/hub/tenant-empresa-cadastral";
 import { requireOpsApiAccess } from "@/lib/ops/ops-api-auth";
@@ -63,6 +64,7 @@ export async function GET(_request: NextRequest, ctx: RouteCtx) {
   if (!data) return NextResponse.json({ error: "Tenant não encontrado." }, { status: 404 });
 
   const { cadastral } = await lerEmpresaCadastralTenant(crmDb(), tenantId);
+  const coraEmissao = avaliarEmissaoCoraTenant(cadastral?.cnpj ?? null);
 
   return NextResponse.json({
     data: {
@@ -75,7 +77,9 @@ export async function GET(_request: NextRequest, ctx: RouteCtx) {
             email: cadastral.email || null,
             telefone: cadastral.telefone || null,
             endereco: resumoEnderecoCadastral(cadastral),
-            pronto_cora: cadastroProntoParaCora(cadastral),
+            pronto_cora: cadastroProntoParaCora(cadastral) && !coraEmissao.bloqueado,
+            cora_emissao_bloqueada: coraEmissao.bloqueado,
+            cora_emissao_motivo: coraEmissao.motivo,
           }
         : {
             cnpj: null,
@@ -85,6 +89,8 @@ export async function GET(_request: NextRequest, ctx: RouteCtx) {
             telefone: null,
             endereco: null,
             pronto_cora: false,
+            cora_emissao_bloqueada: false,
+            cora_emissao_motivo: null,
           },
     },
   });

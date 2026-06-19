@@ -79,7 +79,7 @@ export function defaultCrmLandingPath(ctx: CrmAccessContext): string {
   if (canAccessCrmPath("/crm/painel", ctx)) return painel;
 
   const groups = filterCrmNavGroupsForAccess(
-    appendWajeOwnerNav(CRM_NAV_GROUPS, ctx.wajeOwner),
+    appendWajeOwnerNav(CRM_NAV_GROUPS, Boolean(ctx.wajeOwner)),
     ctx,
   );
   const first = groups.flatMap((g) => g.items)[0]?.href;

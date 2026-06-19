@@ -24,8 +24,16 @@ describe("cora-emissor", () => {
     expect(avaliarEmissaoCoraTenant("98765432000111").bloqueado).toBe(false);
   });
 
-  it("traduz erro own identity da Cora", () => {
-    expect(humanizarErroCoraApi("Cannot create invoice for own identity")).toMatch(
+  it("traduz erro own identity da Cora com credencial errada", () => {
+    process.env.CORA_EMISSOR_CNPJ = "62.449.971/0001-70";
+    const msg = humanizarErroCoraApi("Cannot create invoice for own identity", "65912793000160");
+    expect(msg).toMatch(/Documento enviado como pagador.*65\.912\.793/);
+    expect(msg).toMatch(/certificado\/client_id/i);
+  });
+
+  it("traduz erro own identity quando pagador = emissor env", () => {
+    process.env.CORA_EMISSOR_CNPJ = "62.449.971/0001-70";
+    expect(humanizarErroCoraApi("Cannot create invoice for own identity", "62449971000170")).toMatch(
       /pagador.*credenciais Cora/s,
     );
   });

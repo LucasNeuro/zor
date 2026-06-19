@@ -365,7 +365,22 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
 
       await carregarMensalidades({ syncParent: true });
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao gerar boletos.");
+      let msg = e instanceof Error ? e.message : "Erro ao gerar boletos.";
+      if (tenant?.id) {
+        try {
+          const dRes = await fetch(`/api/ops/tenants/${tenant.id}/cora-diagnostico`, {
+            headers: await opsApiHeaders(),
+            credentials: "include",
+          });
+          const dJson = (await dRes.json()) as { data?: { conclusao?: string; payload_pagador?: { document_identity?: string } } };
+          if (dRes.ok && dJson.data?.conclusao) {
+            msg = `${msg}\n\nDiagnóstico: ${dJson.data.conclusao}`;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      setErro(msg);
     } finally {
       setSalvando(false);
       setProgressoBoletos("");

@@ -76,8 +76,18 @@ export function validarDocumentoClienteCora(
 
 export function humanizarErroCoraApi(message: string, clienteDocumento?: string | null): string {
   const m = message.trim();
-  if (/own identity/i.test(m)) return mensagemErroMesmoCnpjEmissor(clienteDocumento);
-  if (/cannot create invoice/i.test(m) && /identity/i.test(m)) {
+  const cliente = normalizarCnpjCora(clienteDocumento);
+  const emissor = getCoraEmissorCnpj();
+
+  if (/own identity/i.test(m) || (/cannot create invoice/i.test(m) && /identity/i.test(m))) {
+    if (emissor && cliente.length >= 14 && cliente !== emissor) {
+      return (
+        `A Cora recusou a emissão (own identity). Documento enviado como pagador: ${formatarCnpjDigits(cliente)}. ` +
+        `CORA_EMISSOR_CNPJ no servidor: ${formatarCnpjDigits(emissor)} (${getCoraEmissorNome()}). ` +
+        `Como são diferentes, o certificado/client_id Cora provavelmente pertence a outra conta (não à Onze). ` +
+        `Confirme no Render que CORA_CLIENT_ID, CORA_CERT_PEM e CORA_PRIVATE_KEY_PEM são da conta Cora da Onze (62.449.971/0001-70).`
+      );
+    }
     return mensagemErroMesmoCnpjEmissor(clienteDocumento);
   }
   return m;

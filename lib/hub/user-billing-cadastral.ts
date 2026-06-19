@@ -365,8 +365,16 @@ export async function carregarUsuarioCobrancaTenant(
 
   if (error || !data?.length) return null;
 
-  const tenantUsers = data.filter((row) => row.owner !== true);
-  const pool = tenantUsers.length ? tenantUsers : data;
+  const tenantUsers = data.filter(
+    (row) =>
+      row.owner !== true &&
+      String(row.role ?? "")
+        .trim()
+        .toLowerCase() !== "platform_admin",
+  );
+  if (!tenantUsers.length) return null;
+
+  const pool = tenantUsers;
 
   const sorted = [...pool].sort(
     (a, b) => rolePriority(a.role as string) - rolePriority(b.role as string),
@@ -437,6 +445,10 @@ export async function resolverPerfilCobrancaTenant(
 
   if (fromUser && (fromCadastral || fromSettings)) {
     profile = { ...profile, fonte: "merged" };
+  }
+
+  if (documentoPagadorBloqueadoCora(profile)) {
+    return null;
   }
 
   return profile;

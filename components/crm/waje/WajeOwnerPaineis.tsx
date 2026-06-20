@@ -2,7 +2,10 @@
 
 import { CrmPainelChartShell } from "@/components/crm/painel/CrmPainelChartShell";
 import type { AgenteRow } from "@/components/crm/waje/WajeOwnerAgenteSideover";
+import type { LeadInteresseRow } from "@/components/crm/waje/WajeOwnerLeadSideover";
 import type { TenantRow } from "@/components/crm/waje/WajeOwnerTenantSideover";
+import type { UsuarioRow } from "@/components/crm/waje/WajeOwnerUsuarioSideover";
+import type { WajeOwnerTab } from "@/components/crm/waje/waje-owner-theme";
 
 type PagamentoRow = {
   id: string;
@@ -13,10 +16,12 @@ type PagamentoRow = {
 };
 
 type Props = {
-  tab: "tenants" | "agentes" | "pagamentos";
+  tab: WajeOwnerTab;
   tenants: TenantRow[];
   agentes: AgenteRow[];
   pagamentos: PagamentoRow[];
+  usuarios?: UsuarioRow[];
+  leads?: LeadInteresseRow[];
 };
 
 function StatLine({ label, value }: { label: string; value: string | number }) {
@@ -32,7 +37,7 @@ function StatLine({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export function WajeOwnerPaineis({ tab, tenants, agentes, pagamentos }: Props) {
+export function WajeOwnerPaineis({ tab, tenants, agentes, pagamentos, usuarios = [], leads = [] }: Props) {
   const ativosT = tenants.filter((t) => t.ativo).length;
   const waOk = agentes.filter((a) => a.whatsapp_conectado).length;
   const opsA = agentes.filter((a) => a.ativo && !a.arquivado_em).length;
@@ -112,6 +117,39 @@ export function WajeOwnerPaineis({ tab, tenants, agentes, pagamentos }: Props) {
               Nenhum agente.
             </p>
           ) : null}
+        </CrmPainelChartShell>
+      </div>
+    );
+  }
+
+  if (tab === "usuarios") {
+    return (
+      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+        <CrmPainelChartShell title="Utilizadores" subtitle={`${usuarios.length} conta(s)`}>
+          <StatLine label="Ativos" value={usuarios.filter((u) => u.status === "ativo" || u.status === "Ativo").length} />
+          <StatLine label="Plataforma" value={usuarios.filter((u) => u.owner).length} />
+          <StatLine label="Com tenant" value={usuarios.filter((u) => u.tenant_id).length} />
+        </CrmPainelChartShell>
+        <CrmPainelChartShell title="Recentes" subtitle="Últimos cadastros">
+          {usuarios.slice(0, 5).map((u) => (
+            <StatLine key={u.id} label={u.name} value={u.role} />
+          ))}
+        </CrmPainelChartShell>
+      </div>
+    );
+  }
+
+  if (tab === "leads") {
+    return (
+      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+        <CrmPainelChartShell title="Leads landing" subtitle={`${leads.length} interessado(s)`}>
+          <StatLine label="Com empresa" value={leads.filter((l) => l.empresa).length} />
+          <StatLine label="Com telefone" value={leads.filter((l) => l.telefone).length} />
+        </CrmPainelChartShell>
+        <CrmPainelChartShell title="Recentes" subtitle="Últimos envios">
+          {leads.slice(0, 5).map((l) => (
+            <StatLine key={l.id} label={l.nome} value={l.empresa ?? l.email} />
+          ))}
         </CrmPainelChartShell>
       </div>
     );

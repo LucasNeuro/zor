@@ -96,7 +96,7 @@ export const CRM_NAV_GROUPS: CrmNavGroup[] = [
 
 export function isCrmAdminRole(role: string): boolean {
   const r = role.trim().toLowerCase();
-  return r === "owner" || r === "admin";
+  return r === "owner" || r === "admin" || r === "commercial";
 }
 
 export function filterCrmNavGroupsForRole(groups: CrmNavGroup[], role: string): CrmNavGroup[] {

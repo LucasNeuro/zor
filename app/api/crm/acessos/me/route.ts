@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
     data: {
       user: normalizeUserRow(user as Record<string, unknown>),
       role: String(user.role ?? ""),
+      tenant_id: user.tenant_id ?? null,
       access_role_id: user.access_role_id ?? null,
       cargo_nome,
       permissoes,

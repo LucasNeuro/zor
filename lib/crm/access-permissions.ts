@@ -7,6 +7,7 @@ export type CrmAccessContext = {
   baseRole: string;
   permissoes: Record<string, boolean> | null;
   wajeOwner?: boolean;
+  tenantId?: string | null;
 };
 
 export type CrmPermissionKey =
@@ -53,12 +54,18 @@ export function permissionKeyForPath(pathname: string): CrmPermissionKey | null 
   return null;
 }
 
-/** Acesso total ao CRM: admin do tenant ou equipe plataforma (owner / platform_admin). */
+/** Cadastro / owner do tenant: ligado a um tenant sem cargo customizado. */
+export function isTenantRegistrantFullAccess(ctx: CrmAccessContext): boolean {
+  return Boolean(ctx.tenantId) && ctx.permissoes == null;
+}
+
+/** Acesso total ao CRM: admin do tenant, cadastro público ou equipe plataforma. */
 export function hasFullCrmAccess(ctx: CrmAccessContext): boolean {
   return (
     Boolean(ctx.wajeOwner) ||
     isCrmAdminRole(ctx.baseRole) ||
-    isPlatformTeamRole(ctx.baseRole)
+    isPlatformTeamRole(ctx.baseRole) ||
+    isTenantRegistrantFullAccess(ctx)
   );
 }
 

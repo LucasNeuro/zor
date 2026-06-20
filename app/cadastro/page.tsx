@@ -309,8 +309,10 @@ export default function CadastroPage() {
           }),
         });
         if (sync.ok) {
-          router.push(getSafeReturnPath("/crm", "/crm"));
-          router.refresh();
+          window.location.href = getSafeReturnPath(
+            "/crm/painel?tab=visao-geral&view=paineis",
+            "/crm/painel?tab=visao-geral&view=paineis",
+          );
           return;
         }
       }

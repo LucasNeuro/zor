@@ -22,4 +22,4 @@ export const WO = {
   metricBg: "rgba(6, 13, 8, 0.75)",
 } as const;
 
-export type WajeOwnerTab = "tenants" | "agentes" | "pagamentos";
+export type WajeOwnerTab = "tenants" | "agentes" | "pagamentos" | "usuarios" | "leads";

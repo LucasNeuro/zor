@@ -50,4 +50,16 @@ describe("defaultCrmLandingPath", () => {
     expect(hasFullCrmAccess(ctx)).toBe(true);
     expect(canAccessCrmPath("/crm/leads", ctx)).toBe(true);
   });
+
+  it("cadastro tenant sem cargo customizado tem CRM completo", () => {
+    const ctx = {
+      baseRole: "owner",
+      permissoes: null,
+      wajeOwner: false,
+      tenantId: "00000000-0000-4000-8000-000000000099",
+    };
+    expect(hasFullCrmAccess(ctx)).toBe(true);
+    expect(canAccessCrmPath("/crm/leads", ctx)).toBe(true);
+    expect(canAccessCrmPath("/crm/waje", ctx)).toBe(false);
+  });
 });

@@ -10,15 +10,20 @@ import {
 import { CrmIconButtonGroup } from "@/components/crm/CrmIconButtonGroup";
 import { OpsStatusBadge } from "@/components/ops/OpsStatusBadge";
 import type { AgenteRow } from "@/components/crm/waje/WajeOwnerAgenteSideover";
+import type { LeadInteresseRow } from "@/components/crm/waje/WajeOwnerLeadSideover";
 import type { PagamentoRow } from "@/components/crm/waje/WajeOwnerPagamentoSideover";
 import type { TenantRow } from "@/components/crm/waje/WajeOwnerTenantSideover";
+import type { UsuarioRow } from "@/components/crm/waje/WajeOwnerUsuarioSideover";
+import type { WajeOwnerTab } from "@/components/crm/waje/waje-owner-theme";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
 
 type Props = {
-  tab: "tenants" | "agentes" | "pagamentos";
+  tab: WajeOwnerTab;
   tenants: TenantRow[];
   agentes: AgenteRow[];
   pagamentos: PagamentoRow[];
+  usuarios: UsuarioRow[];
+  leads: LeadInteresseRow[];
   search: string;
   onSearchChange: (v: string) => void;
   filtroTenant: "todos" | "ativos" | "inativos";
@@ -26,7 +31,10 @@ type Props = {
   loading: boolean;
   onRefresh: () => void;
   schemaPagamentos: boolean;
+  schemaLeads: boolean;
   onGerirTenant?: (row: TenantRow) => void;
+  onGerirUsuario?: (row: UsuarioRow) => void;
+  onGerirLead?: (row: LeadInteresseRow) => void;
   onPagamentosChange?: () => void;
 };
 
@@ -75,6 +83,8 @@ export function WajeOwnerTabela({
   tenants,
   agentes,
   pagamentos,
+  usuarios,
+  leads,
   search,
   onSearchChange,
   filtroTenant,
@@ -82,7 +92,10 @@ export function WajeOwnerTabela({
   loading,
   onRefresh,
   schemaPagamentos,
+  schemaLeads,
   onGerirTenant,
+  onGerirUsuario,
+  onGerirLead,
   onPagamentosChange,
 }: Props) {
   const [enviandoWa, setEnviandoWa] = useState<string | null>(null);
@@ -117,6 +130,30 @@ export function WajeOwnerTabela({
     if (!q) return pagamentos;
     return pagamentos.filter((p) => (p.tenant_nome ?? "").toLowerCase().includes(q));
   }, [pagamentos, search]);
+
+  const usuariosFiltrados = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return usuarios;
+    return usuarios.filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.tenant_nome ?? "").toLowerCase().includes(q) ||
+        u.role.toLowerCase().includes(q),
+    );
+  }, [usuarios, search]);
+
+  const leadsFiltrados = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return leads;
+    return leads.filter(
+      (l) =>
+        l.nome.toLowerCase().includes(q) ||
+        l.email.toLowerCase().includes(q) ||
+        (l.empresa ?? "").toLowerCase().includes(q) ||
+        (l.interesse_principal ?? "").toLowerCase().includes(q),
+    );
+  }, [leads, search]);
 
   const urlBoleto = useCallback((p: PagamentoRow) => {
     return p.boleto_arquivo_url?.trim() || p.cora_boleto_url?.trim() || null;
@@ -384,12 +421,71 @@ export function WajeOwnerTabela({
     [apagandoId, enviandoWa, urlBoleto],
   );
 
+  const usuarioColumns = useMemo<CrmResizableColumn<UsuarioRow>[]>(
+    () => [
+      { id: "nome", label: "Nome", defaultWidth: 160, render: (r) => r.name },
+      { id: "email", label: "E-mail", defaultWidth: 180, render: (r) => r.email },
+      { id: "tenant", label: "Tenant", defaultWidth: 140, render: (r) => r.tenant_nome ?? "—" },
+      { id: "role", label: "Papel", defaultWidth: 90, render: (r) => r.role },
+      {
+        id: "status",
+        label: "Status",
+        defaultWidth: 88,
+        render: (r) => (
+          <OpsStatusBadge variant={r.status === "ativo" || r.status === "Ativo" ? "ativo" : "inativo"} />
+        ),
+      },
+      {
+        id: "plat",
+        label: "Plat.",
+        defaultWidth: 64,
+        render: (r) => (r.owner ? <OpsStatusBadge variant="ativo" label="Sim" /> : "—"),
+      },
+      {
+        id: "criado",
+        label: "Criado",
+        defaultWidth: 96,
+        render: (r) => formatarData(r.criado_em),
+      },
+      acoesCol<UsuarioRow>((r) => onGerirUsuario?.(r), "Gerir utilizador"),
+    ],
+    [acoesCol, onGerirUsuario],
+  );
+
+  const leadColumns = useMemo<CrmResizableColumn<LeadInteresseRow>[]>(
+    () => [
+      { id: "nome", label: "Nome", defaultWidth: 140, render: (r) => r.nome },
+      { id: "email", label: "E-mail", defaultWidth: 160, render: (r) => r.email },
+      { id: "empresa", label: "Empresa", defaultWidth: 130, render: (r) => r.empresa ?? "—" },
+      { id: "tel", label: "Telefone", defaultWidth: 110, render: (r) => r.telefone ?? "—" },
+      {
+        id: "interesse",
+        label: "Interesse",
+        defaultWidth: 120,
+        render: (r) => r.interesse_principal ?? "—",
+      },
+      { id: "origem", label: "Origem", defaultWidth: 100, render: (r) => r.origem },
+      {
+        id: "criado",
+        label: "Criado",
+        defaultWidth: 96,
+        render: (r) => formatarData(r.criado_em),
+      },
+      acoesCol<LeadInteresseRow>((r) => onGerirLead?.(r), "Gerir lead"),
+    ],
+    [acoesCol, onGerirLead],
+  );
+
   const rows =
     tab === "tenants"
       ? tenantsFiltrados
       : tab === "agentes"
         ? agentesFiltrados
-        : pagamentosFiltrados;
+        : tab === "usuarios"
+          ? usuariosFiltrados
+          : tab === "leads"
+            ? leadsFiltrados
+            : pagamentosFiltrados;
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -447,6 +543,11 @@ export function WajeOwnerTabela({
             Execute <code className="text-xs">waje-ops-platform.sql</code> no Supabase para habilitar
             mensalidades.
           </p>
+        ) : tab === "leads" && !schemaLeads ? (
+          <p className="py-12 text-center text-sm text-[#5d7a67]">
+            Aplique a migração <code className="text-xs">20260710100000_waje_landing_interesse.sql</code> no
+            Supabase.
+          </p>
         ) : rows.length === 0 ? (
           <p className="py-12 text-center text-sm text-[#5d7a67]">Nenhum registo encontrado.</p>
         ) : (
@@ -489,6 +590,34 @@ export function WajeOwnerTabela({
                 className="border-t-0 text-xs"
                 rowCellClassName="px-3 py-2 align-top text-[#0b2210]"
                 getRowStyle={() => ({ borderBottom: "1px solid #eef7eb" })}
+              />
+            ) : null}
+            {tab === "usuarios" ? (
+              <CrmResizableDataTable
+                tableId="waje-owner-usuarios"
+                variant="waje"
+                columns={usuarioColumns}
+                rows={usuariosFiltrados}
+                rowKey={(r) => r.id}
+                maxHeight={TABLE_SCROLL_MAX}
+                className="border-t-0 text-xs"
+                rowCellClassName="px-3 py-2 align-top text-[#0b2210]"
+                getRowStyle={() => ({ borderBottom: "1px solid #eef7eb" })}
+                onRowClick={onGerirUsuario}
+              />
+            ) : null}
+            {tab === "leads" ? (
+              <CrmResizableDataTable
+                tableId="waje-owner-leads"
+                variant="waje"
+                columns={leadColumns}
+                rows={leadsFiltrados}
+                rowKey={(r) => r.id}
+                maxHeight={TABLE_SCROLL_MAX}
+                className="border-t-0 text-xs"
+                rowCellClassName="px-3 py-2 align-top text-[#0b2210]"
+                getRowStyle={() => ({ borderBottom: "1px solid #eef7eb" })}
+                onRowClick={onGerirLead}
               />
             ) : null}
           </div>

@@ -3,6 +3,7 @@ import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { isValidCnpj, isValidCpf, onlyDigits } from "@/lib/brasil-docs";
 import { isMissingPgColumn } from "@/lib/tenant-default";
 import { billingFieldsFromOnboarding } from "@/lib/hub/user-billing-cadastral";
+import { upsertUserByAuthId } from "@/lib/crm/users-row";
 
 type Payload = {
   registrationType?: "PJ" | "PF";
@@ -178,23 +179,21 @@ export async function POST(request: NextRequest) {
       contactPhone: body.contactPhone,
     });
 
-    const userInsert = await db.from("users").upsert(
-      {
-        auth_id: authUserId,
-        email: contactEmail,
-        role: "owner",
-        status: "Ativo",
-        tenant_id: data.id,
-        owner: false,
-        ...billingFields,
-      },
-      { onConflict: "auth_id" },
-    );
-    if (userInsert.error && isMissingPgColumn(userInsert.error, "document")) {
-      const { document: _d, document_type: _t, billing_legal_name: _n, ...legacy } =
-        billingFields;
-      const fallback = await db.from("users").upsert(
-        {
+    const userResult = await upsertUserByAuthId(db, {
+      auth_id: authUserId,
+      email: contactEmail,
+      role: "owner",
+      status: "Ativo",
+      tenant_id: data.id,
+      owner: false,
+      ...billingFields,
+    });
+
+    if (userResult.error) {
+      if (isMissingPgColumn(userResult.error.message, "document")) {
+        const { document: _d, document_type: _t, billing_legal_name: _n, ...legacy } =
+          billingFields;
+        const fallback = await upsertUserByAuthId(db, {
           auth_id: authUserId,
           email: contactEmail,
           name: contactName,
@@ -203,14 +202,21 @@ export async function POST(request: NextRequest) {
           status: "Ativo",
           tenant_id: data.id,
           owner: false,
-        },
-        { onConflict: "auth_id" },
-      );
-      if (fallback.error) {
-        console.error("[onboarding/tenant] failed to upsert public.users:", fallback.error);
+        });
+        if (fallback.error) {
+          console.error("[onboarding/tenant] failed to upsert public.users:", fallback.error);
+          return NextResponse.json(
+            { ok: false, error: "Conta criada, mas falhou ao gravar perfil do utilizador." },
+            { status: 500 },
+          );
+        }
+      } else {
+        console.error("[onboarding/tenant] failed to upsert public.users:", userResult.error);
+        return NextResponse.json(
+          { ok: false, error: "Conta criada, mas falhou ao gravar perfil do utilizador." },
+          { status: 500 },
+        );
       }
-    } else if (userInsert.error) {
-      console.error("[onboarding/tenant] failed to upsert public.users:", userInsert.error);
     }
   }
 

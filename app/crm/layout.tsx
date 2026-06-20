@@ -348,7 +348,8 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     baseRole: string;
     permissoes: Record<string, boolean> | null;
     wajeOwner: boolean;
-  }>({ baseRole: "", permissoes: null, wajeOwner: false });
+    tenantId: string | null;
+  }>({ baseRole: "", permissoes: null, wajeOwner: false, tenantId: null });
   const [accessLoaded, setAccessLoaded] = useState(false);
   const [flyoutId, setFlyoutId] = useState<string | null>(null);
 
@@ -372,25 +373,35 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadAccess() {
+    async function loadAccess(attempt = 0) {
       try {
         const res = await fetch("/api/crm/acessos/me", {
           headers: await crmApiHeaders(),
           credentials: "include",
         });
         const json = (await res.json().catch(() => ({}))) as {
-          data?: { role?: string; permissoes?: Record<string, boolean> | null; waje_owner?: boolean };
+          data?: {
+            role?: string;
+            permissoes?: Record<string, boolean> | null;
+            waje_owner?: boolean;
+            tenant_id?: string | null;
+          };
         };
+        if (!cancelled && res.status === 404 && attempt < 6) {
+          await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+          return loadAccess(attempt + 1);
+        }
         if (!cancelled && res.ok && json.data) {
           setAccessCtx({
             baseRole: String(json.data.role ?? ""),
             permissoes: json.data.permissoes ?? null,
             wajeOwner: Boolean(json.data.waje_owner),
+            tenantId: json.data.tenant_id ?? null,
           });
         }
       } catch {
         if (!cancelled) {
-          setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false });
+          setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false, tenantId: null });
         }
       } finally {
         if (!cancelled) setAccessLoaded(true);
@@ -401,7 +412,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") {
-        setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false });
+        setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false, tenantId: null });
         setAccessLoaded(true);
         return;
       }
@@ -465,6 +476,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   baseRole={accessCtx.baseRole}
                   permissoes={accessCtx.permissoes}
                   wajeOwner={accessCtx.wajeOwner}
+                  tenantId={accessCtx.tenantId}
                 >
                   {children}
                 </CrmAccessGuard>
@@ -492,6 +504,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                 baseRole={accessCtx.baseRole}
                 permissoes={accessCtx.permissoes}
                 wajeOwner={accessCtx.wajeOwner}
+                tenantId={accessCtx.tenantId}
               >
               {children}
               </CrmAccessGuard>
@@ -669,6 +682,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
             baseRole={accessCtx.baseRole}
             permissoes={accessCtx.permissoes}
             wajeOwner={accessCtx.wajeOwner}
+            tenantId={accessCtx.tenantId}
           >
           {children}
           </CrmAccessGuard>

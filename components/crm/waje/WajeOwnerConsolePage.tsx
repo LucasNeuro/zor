@@ -13,10 +13,21 @@ import {
   WajeOwnerTenantSideover,
   type TenantRow,
 } from "@/components/crm/waje/WajeOwnerTenantSideover";
-import type { WajeOwnerTab } from "@/components/crm/waje/waje-owner-theme";
+import type { LeadInteresseRow } from "@/components/crm/waje/WajeOwnerLeadSideover";
+import { WajeOwnerLeadSideover } from "@/components/crm/waje/WajeOwnerLeadSideover";
+import type { UsuarioRow } from "@/components/crm/waje/WajeOwnerUsuarioSideover";
+import { WajeOwnerUsuarioSideover } from "@/components/crm/waje/WajeOwnerUsuarioSideover";
 import { sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import type { PainelViewMode } from "@/lib/crm/painel-view";
+import type { WajeOwnerTab } from "@/components/crm/waje/waje-owner-theme";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
+
+const VALID_TABS: WajeOwnerTab[] = ["tenants", "agentes", "pagamentos", "usuarios", "leads"];
+
+function parseTab(v: string | null): WajeOwnerTab {
+  if (v && (VALID_TABS as string[]).includes(v)) return v as WajeOwnerTab;
+  return "tenants";
+}
 
 const TAB_COPY: Record<WajeOwnerTab, { label: string; description: string }> = {
   tenants: {
@@ -31,6 +42,14 @@ const TAB_COPY: Record<WajeOwnerTab, { label: string; description: string }> = {
     label: "Pagamentos",
     description: "Mensalidades SaaS cobradas de cada tenant.",
   },
+  usuarios: {
+    label: "Utilizadores",
+    description: "Contas em public.users — papéis, tenant e acesso à plataforma.",
+  },
+  leads: {
+    label: "Leads landing",
+    description: "Interessados captados na landing (waje_landing_interesse).",
+  },
 };
 
 function formatarMoeda(v: number) {
@@ -42,9 +61,7 @@ export function WajeOwnerConsolePage() {
   const tabParam = searchParams.get("tab");
   const viewParam = searchParams.get("view");
 
-  const [tab, setTab] = useState<WajeOwnerTab>(
-    tabParam === "agentes" || tabParam === "pagamentos" ? tabParam : "tenants",
-  );
+  const [tab, setTab] = useState<WajeOwnerTab>(parseTab(tabParam));
   const [viewMode, setViewMode] = useState<PainelViewMode>(
     viewParam === "tabela" ? "tabela" : "paineis",
   );
@@ -52,7 +69,10 @@ export function WajeOwnerConsolePage() {
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [agentes, setAgentes] = useState<AgenteRow[]>([]);
   const [pagamentos, setPagamentos] = useState<PagamentoRow[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioRow[]>([]);
+  const [leads, setLeads] = useState<LeadInteresseRow[]>([]);
   const [schemaPagamentos, setSchemaPagamentos] = useState(true);
+  const [schemaLeads, setSchemaLeads] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -61,21 +81,31 @@ export function WajeOwnerConsolePage() {
   const [filtroTenant, setFiltroTenant] = useState<"todos" | "ativos" | "inativos">("todos");
 
   const [tenantSideover, setTenantSideover] = useState<TenantRow | null>(null);
+  const [usuarioSideover, setUsuarioSideover] = useState<UsuarioRow | null>(null);
+  const [leadSideover, setLeadSideover] = useState<LeadInteresseRow | null>(null);
 
   const carregar = useCallback(async (opts?: { silent?: boolean }) => {
     if (opts?.silent) setRefreshing(true);
     else setLoading(true);
     setErro("");
     try {
-      const [rT, rA, rP] = await Promise.all([
+      const [rT, rA, rP, rU, rL] = await Promise.all([
         fetch("/api/ops/tenants", { headers: await opsApiHeaders(), credentials: "include" }),
         fetch("/api/ops/agentes", { headers: await opsApiHeaders(), credentials: "include" }),
         fetch("/api/ops/pagamentos", { headers: await opsApiHeaders(), credentials: "include" }),
+        fetch("/api/ops/users", { headers: await opsApiHeaders(), credentials: "include" }),
+        fetch("/api/ops/landing-interesse", { headers: await opsApiHeaders(), credentials: "include" }),
       ]);
       const jT = (await rT.json()) as { data?: TenantRow[]; error?: string };
       const jA = (await rA.json()) as { data?: AgenteRow[]; error?: string };
       const jP = (await rP.json()) as {
         data?: PagamentoRow[];
+        schema_ready?: boolean;
+        error?: string;
+      };
+      const jU = (await rU.json()) as { data?: UsuarioRow[]; error?: string };
+      const jL = (await rL.json()) as {
+        data?: LeadInteresseRow[];
         schema_ready?: boolean;
         error?: string;
       };
@@ -85,12 +115,17 @@ export function WajeOwnerConsolePage() {
       setTenants(nextTenants);
       setAgentes(jA.data ?? []);
       setPagamentos(jP.data ?? []);
+      setUsuarios(jU.data ?? []);
+      setLeads(jL.data ?? []);
       setSchemaPagamentos(jP.schema_ready !== false);
+      setSchemaLeads(jL.schema_ready !== false);
       setTenantSideover((prev) => {
         if (!prev) return prev;
         return nextTenants.find((t) => t.id === prev.id) ?? prev;
       });
       if (!rP.ok && jP.error) setErro(jP.error);
+      if (!rU.ok && jU.error) setErro(jU.error);
+      if (!rL.ok && jL.error) setErro(jL.error);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
     } finally {
@@ -126,8 +161,8 @@ export function WajeOwnerConsolePage() {
   }, [carregar]);
 
   useEffect(() => {
-    if (tabParam === "agentes" || tabParam === "pagamentos" || tabParam === "tenants") {
-      setTab(tabParam);
+    if (VALID_TABS.includes(tabParam as WajeOwnerTab)) {
+      setTab(tabParam as WajeOwnerTab);
     }
     if (viewParam === "paineis" || viewParam === "tabela") {
       setViewMode(viewParam);
@@ -171,6 +206,47 @@ export function WajeOwnerConsolePage() {
         },
       ];
     }
+    if (tab === "usuarios") {
+      const ativos = usuarios.filter((u) => u.status === "ativo" || u.status === "Ativo").length;
+      return [
+        { label: "Total utilizadores", valor: usuarios.length, tone: "brand" as const, seed: 13 },
+        { label: "Ativos", valor: ativos, tone: "success" as const, seed: 14 },
+        {
+          label: "Plataforma",
+          valor: usuarios.filter((u) => u.owner).length,
+          tone: "warning" as const,
+          seed: 15,
+        },
+        {
+          label: "Com tenant",
+          valor: usuarios.filter((u) => u.tenant_id).length,
+          tone: "muted" as const,
+          seed: 16,
+        },
+      ];
+    }
+    if (tab === "leads") {
+      const ultimos7 = leads.filter((l) => {
+        const t = new Date(l.criado_em).getTime();
+        return t > Date.now() - 7 * 86_400_000;
+      }).length;
+      return [
+        { label: "Total leads", valor: leads.length, tone: "brand" as const, seed: 17 },
+        { label: "Últimos 7 dias", valor: ultimos7, tone: "success" as const, seed: 18 },
+        {
+          label: "Com empresa",
+          valor: leads.filter((l) => l.empresa).length,
+          tone: "brand" as const,
+          seed: 19,
+        },
+        {
+          label: "Origem landing",
+          valor: leads.filter((l) => l.origem.includes("landing")).length,
+          tone: "muted" as const,
+          seed: 20,
+        },
+      ];
+    }
     const aReceber = pagamentos
       .filter((p) => p.status === "pendente" || p.status === "atrasado")
       .reduce((s, p) => s + p.valor_reais, 0);
@@ -205,7 +281,7 @@ export function WajeOwnerConsolePage() {
         ocultavel: true,
       },
     ];
-  }, [tab, tenants, agentes, pagamentos]);
+  }, [tab, tenants, agentes, pagamentos, usuarios, leads]);
 
   if (loading && !hasLoadedOnce) {
     return (
@@ -279,6 +355,8 @@ export function WajeOwnerConsolePage() {
               tenants={tenants}
               agentes={agentes}
               pagamentos={pagamentos}
+              usuarios={usuarios}
+              leads={leads}
             />
           ) : (
             <WajeOwnerTabela
@@ -286,6 +364,8 @@ export function WajeOwnerConsolePage() {
               tenants={tenants}
               agentes={agentes}
               pagamentos={pagamentos}
+              usuarios={usuarios}
+              leads={leads}
               search={search}
               onSearchChange={setSearch}
               filtroTenant={filtroTenant}
@@ -293,7 +373,10 @@ export function WajeOwnerConsolePage() {
               loading={refreshing}
               onRefresh={() => void carregar({ silent: true })}
               schemaPagamentos={schemaPagamentos}
+              schemaLeads={schemaLeads}
               onGerirTenant={setTenantSideover}
+              onGerirUsuario={setUsuarioSideover}
+              onGerirLead={setLeadSideover}
               onPagamentosChange={() => void atualizarPagamentosGlobais()}
             />
           )}
@@ -309,6 +392,35 @@ export function WajeOwnerConsolePage() {
           setTenantSideover(t);
         }}
         onBillingChanged={() => void atualizarPagamentosGlobais()}
+      />
+
+      <WajeOwnerUsuarioSideover
+        open={Boolean(usuarioSideover)}
+        usuario={usuarioSideover}
+        tenants={tenants}
+        onClose={() => setUsuarioSideover(null)}
+        onUpdated={(u) => {
+          setUsuarios((prev) => prev.map((x) => (x.id === u.id ? u : x)));
+          setUsuarioSideover(u);
+        }}
+        onDeleted={(id) => {
+          setUsuarios((prev) => prev.filter((x) => x.id !== id));
+          setUsuarioSideover(null);
+        }}
+      />
+
+      <WajeOwnerLeadSideover
+        open={Boolean(leadSideover)}
+        lead={leadSideover}
+        onClose={() => setLeadSideover(null)}
+        onUpdated={(l) => {
+          setLeads((prev) => prev.map((x) => (x.id === l.id ? l : x)));
+          setLeadSideover(l);
+        }}
+        onDeleted={(id) => {
+          setLeads((prev) => prev.filter((x) => x.id !== id));
+          setLeadSideover(null);
+        }}
       />
     </div>
   );

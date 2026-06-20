@@ -12,13 +12,19 @@ type Props = CrmAccessContext & {
   children: React.ReactNode;
 };
 
-export function CrmAccessGuard({ baseRole, permissoes, wajeOwner = false, children }: Props) {
+export function CrmAccessGuard({
+  baseRole,
+  permissoes,
+  wajeOwner = false,
+  tenantId = null,
+  children,
+}: Props) {
   const pathname = usePathname();
   const router = useRouter();
-  const ctx = { baseRole, permissoes, wajeOwner };
+  const ctx = { baseRole, permissoes, wajeOwner, tenantId };
 
   useEffect(() => {
-    if (!baseRole && !permissoes && !wajeOwner) return;
+    if (!baseRole && !permissoes && !wajeOwner && !tenantId) return;
     if (canAccessCrmPath(pathname, ctx)) return;
     const destino = defaultCrmLandingPath(ctx);
     const destinoPath = destino.split("?")[0] ?? destino;
@@ -26,7 +32,7 @@ export function CrmAccessGuard({ baseRole, permissoes, wajeOwner = false, childr
     if (destinoPath !== currentPath && !pathname.startsWith(`${destinoPath}/`)) {
       router.replace(destino);
     }
-  }, [pathname, baseRole, permissoes, wajeOwner, router]);
+  }, [pathname, baseRole, permissoes, wajeOwner, tenantId, router]);
 
   if (!canAccessCrmPath(pathname, ctx)) {
     return (

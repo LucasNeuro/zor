@@ -1,36 +1,51 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { ensureAuthUserWithPassword } from "@/lib/crm/auth-admin-user";
+import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 
 function mapAuthError(message: string): string {
   const m = message.toLowerCase();
-  if (m.includes("rate limit") || m.includes("email rate limit")) {
-    return "Limite de envio de e-mail do Supabase atingido. Aguarde alguns minutos e tente de novo, ou desative a confirmação por e-mail em Authentication → Providers → Email (só para testes).";
-  }
-  if (m.includes("already registered") || m.includes("already been registered")) {
-    return "Este e-mail já está cadastrado. Use outro e-mail ou entre em Login.";
+  if (
+    m.includes("already registered") ||
+    m.includes("already been registered") ||
+    m.includes("user already registered") ||
+    m.includes("already exists")
+  ) {
+    return "Este e-mail já está cadastrado. Entre em Login ou use outro e-mail.";
   }
   if (m.includes("invalid") && m.includes("email")) {
-    return "E-mail recusado pelo Supabase. Verifique o endereço ou as regras do projeto.";
+    return "E-mail inválido. Verifique o endereço informado.";
   }
-  return message;
+  if (m.includes("password") && (m.includes("weak") || m.includes("short") || m.includes("least"))) {
+    return "A senha deve ter pelo menos 6 caracteres.";
+  }
+  console.error("[signup/auth]", message);
+  return "Não foi possível criar a conta agora. Tente novamente em alguns instantes.";
 }
 
-function supabaseConfigError(): string | null {
+function anonConfigError(): string | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
-  if (!url || !anonKey) {
-    return "Supabase não configurado no servidor (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY).";
-  }
-  if (url.includes("env-ausente.invalid")) {
-    return "URL do Supabase inválida no .env.local.";
-  }
+  if (!url || !anonKey) return "anon_missing";
+  if (url.includes("env-ausente.invalid")) return "url_invalid";
   return null;
 }
 
 export async function POST(request: NextRequest) {
-  const cfgErr = supabaseConfigError();
+  const cfgErr = crmConfigError();
   if (cfgErr) {
-    return NextResponse.json({ ok: false, error: cfgErr }, { status: 503 });
+    console.error("[signup/config]", cfgErr);
+    return NextResponse.json(
+      { ok: false, error: "Cadastro temporariamente indisponível. Tente novamente em alguns instantes." },
+      { status: 503 },
+    );
+  }
+  if (anonConfigError()) {
+    console.error("[signup/config] anon key ausente ou inválida");
+    return NextResponse.json(
+      { ok: false, error: "Cadastro temporariamente indisponível. Tente novamente em alguns instantes." },
+      { status: 503 },
+    );
   }
 
   let body: { email?: string; password?: string; fullName?: string };
@@ -51,33 +66,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "A senha deve ter pelo menos 6 caracteres." }, { status: 400 });
   }
 
-  const supabase = createClient(
+  const ensured = await ensureAuthUserWithPassword(crmDb(), {
+    email,
+    password,
+    name: fullName || email,
+  });
+
+  if (!ensured.ok) {
+    return NextResponse.json({ ok: false, error: mapAuthError(ensured.error) }, { status: 400 });
+  }
+
+  const anon = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!.trim(),
   );
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: fullName ? { data: { full_name: fullName } } : undefined,
-  });
-
-  if (error) {
-    return NextResponse.json({ ok: false, error: mapAuthError(error.message) }, { status: 400 });
+  const { data: signIn, error: signInErr } = await anon.auth.signInWithPassword({ email, password });
+  if (signInErr) {
+    console.error("[signup/sign-in]", signInErr.message);
+    return NextResponse.json({
+      ok: true,
+      user: { id: ensured.authId, email },
+      session: null,
+    });
   }
 
-  const user = data.user;
-  if (!user?.id) {
-    return NextResponse.json(
-      { ok: false, error: "Não foi possível criar o usuário no Supabase Auth." },
-      { status: 500 },
-    );
-  }
-
-  const session = data.session;
+  const session = signIn.session;
   return NextResponse.json({
     ok: true,
-    user: { id: user.id, email: user.email },
+    user: { id: signIn.user?.id ?? ensured.authId, email },
     session: session
       ? {
           access_token: session.access_token,

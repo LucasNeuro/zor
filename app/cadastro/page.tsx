@@ -240,13 +240,27 @@ export default function CadastroPage() {
         session?: { access_token: string; expires_in: number } | null;
       };
       if (!authRes.ok || !authData.ok) {
-        setError(authData.error || "Não foi possível criar a conta no Supabase.");
+        setError(authData.error || "Não foi possível criar a conta.");
         return;
       }
       const authUserId = authData.user?.id;
       if (!authUserId) {
         setError("Não foi possível obter o ID do usuário no Supabase Auth.");
         return;
+      }
+
+      let session = authData.session;
+      if (!session?.access_token) {
+        const { data: clientSignIn } = await supabase.auth.signInWithPassword({
+          email: form.contactEmail.trim().toLowerCase(),
+          password: form.password,
+        });
+        if (clientSignIn.session?.access_token) {
+          session = {
+            access_token: clientSignIn.session.access_token,
+            expires_in: clientSignIn.session.expires_in ?? 3600,
+          };
+        }
       }
 
       const res = await fetch("/api/public/onboarding/tenant", {
@@ -267,15 +281,15 @@ export default function CadastroPage() {
         return;
       }
 
-      const session = authData.session;
-      if (session?.access_token) {
+      const sessionToken = session;
+      if (sessionToken?.access_token) {
         const sync = await fetch("/api/auth/crm-session", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            access_token: session.access_token,
-            expires_in: session.expires_in,
+            access_token: sessionToken.access_token,
+            expires_in: sessionToken.expires_in,
           }),
         });
         if (sync.ok) {
@@ -286,7 +300,7 @@ export default function CadastroPage() {
       }
 
       setSuccess(
-        `${data.tenant?.nome_exibicao ?? "Tenant"} criado com sucesso (${data.tenant?.slug ?? "-"}). Verifique seu e-mail para confirmar o acesso e depois entre no login.`,
+        `${data.tenant?.nome_exibicao ?? "Conta"} criada com sucesso. Entre em Login com seu e-mail e senha.`,
       );
       setForm(INITIAL_FORM);
     } catch (err) {

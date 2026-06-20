@@ -1,3 +1,5 @@
+import { X509Certificate } from "node:crypto";
+
 export type CoraEnvironment = "production" | "stage";
 
 const BASE_URLS: Record<CoraEnvironment, { token: string; api: string }> = {
@@ -10,6 +12,32 @@ const BASE_URLS: Record<CoraEnvironment, { token: string; api: string }> = {
     api: "https://matls-clients.api.cora.com.br",
   },
 };
+
+function extractClientIdFromCertPem(cert: string): string | null {
+  try {
+    const subject = new X509Certificate(cert).subject;
+    const m = subject.match(/CN\s*=\s*(int-[A-Za-z0-9]+)/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Falha cedo se CORA_CLIENT_ID ≠ CN do certificado (par de credenciais misturado). */
+export function validarParCredenciaisCora(clientId: string, cert: string): void {
+  const fromCert = extractClientIdFromCertPem(cert);
+  if (fromCert && fromCert !== clientId) {
+    throw new Error(
+      `CORA_CLIENT_ID (${clientId}) não corresponde ao certificado (${fromCert}). ` +
+        "Baixe cert_key_cora_production_*.zip no Cora Web (ONNZE) e configure client_id + cert + key do mesmo zip no Render.",
+    );
+  }
+}
+
+export function clientIdDoCertificadoCora(certPem: string | undefined): string | null {
+  const cert = normalizePem(certPem);
+  return cert ? extractClientIdFromCertPem(cert) : null;
+}
 
 function normalizePem(value: string | undefined): string | null {
   const raw = value?.trim();
@@ -37,6 +65,8 @@ export function getCoraConfig() {
       "Cora não configurada. Defina CORA_CLIENT_ID, CORA_CERT_PEM e CORA_PRIVATE_KEY_PEM.",
     );
   }
+
+  validarParCredenciaisCora(clientId, cert);
 
   return {
     clientId,

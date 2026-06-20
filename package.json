@@ -29,7 +29,10 @@
     "open:dev": "node scripts/open-dev-url.cjs",
     "verify:mistral": "node scripts/verify-mistral-key.cjs",
     "ensure:buckets": "node scripts/ensure-agent-storage-buckets.cjs",
-    "check:waje-schema": "node scripts/check-waje-schema.mjs"
+    "check:waje-schema": "node scripts/check-waje-schema.mjs",
+    "test:cora-boleto": "node scripts/test-cora-boleto.cjs",
+    "test:cora-token": "node scripts/test-cora-boleto.cjs --token-only",
+    "cora:pem-from-zip": "node scripts/cora-pem-from-zip.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

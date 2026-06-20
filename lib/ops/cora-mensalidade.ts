@@ -5,7 +5,7 @@ import {
   extrairPixEmvCora,
   extrairUrlBoletoCora,
 } from "@/lib/cora/cora-client";
-import { humanizarErroCoraApi, validarDocumentoClienteCora, exigirCoraEmissorCnpj } from "@/lib/cora/cora-emissor";
+import { humanizarErroCoraApi, exigirCoraEmissorCnpj } from "@/lib/cora/cora-emissor";
 import { persistirBoletoPdf } from "@/lib/ops/ops-boleto-storage";
 import {
   lerEmpresaCadastralTenant,
@@ -156,8 +156,6 @@ export function montarInputCora(
       "Utilizador do tenant sem CPF/CNPJ — complete os dados cadastrais do owner em public.users antes de emitir na Cora.",
     );
   }
-  validarDocumentoClienteCora(billing.document, billing.document_type);
-
   exigirCoraEmissorCnpj();
 
   const valorCentavos = pag.valor_centavos ?? 0;
@@ -338,10 +336,6 @@ export async function gerarBoletosParcelados(
       "Cadastro incompleto — CPF/CNPJ do utilizador owner obrigatório para emitir na Cora.",
     );
   }
-  if (tenant.billing) {
-    validarDocumentoClienteCora(tenant.billing.document, tenant.billing.document_type);
-  }
-
   const forma: CoraFormaPagamento = input.forma ?? "boleto_pix";
   const criadas: Array<Record<string, unknown>> = [];
   const erros: Array<{ parcela: number; error: string }> = [];

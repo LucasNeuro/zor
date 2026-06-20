@@ -11,11 +11,12 @@ describe("cora-emissor", () => {
     delete process.env.CORA_EMISSOR_CNPJ;
   });
 
-  it("bloqueia CNPJ igual ao emissor", () => {
+  it("detecta CNPJ igual ao emissor sem bloquear emissão", () => {
     process.env.CORA_EMISSOR_CNPJ = "12.345.678/0001-99";
     expect(cnpjMesmoEmissorCora("12345678000199")).toBe(true);
-    expect(() => validarCnpjClienteCora("12345678000199")).toThrow(/pagador.*credenciais Cora/s);
-    expect(avaliarEmissaoCoraTenant("12345678000199").bloqueado).toBe(true);
+    expect(() => validarCnpjClienteCora("12345678000199")).not.toThrow();
+    expect(avaliarEmissaoCoraTenant("12345678000199").bloqueado).toBe(false);
+    expect(avaliarEmissaoCoraTenant("12345678000199").motivo).toMatch(/pagador.*credenciais Cora/s);
   });
 
   it("permite CNPJ diferente do emissor", () => {

@@ -125,7 +125,7 @@ describe("user-billing-cadastral", () => {
     expect(profile?.logradouro).toBe("Av Paulista");
   });
 
-  it("ignora CNPJ da emissora Cora em users quando tenant tem CNPJ do cliente", () => {
+  it("prefere CNPJ do tenant settings sobre users", () => {
     process.env.CORA_EMISSOR_CNPJ = "62.449.971/0001-70";
 
     const emissor = "62449971000170";
@@ -166,10 +166,10 @@ describe("user-billing-cadastral", () => {
       descricao_curta: null,
       atualizado_em: null,
     });
-    expect(merged?.document).toBe(shefa);
+    expect(merged?.document).toBe(emissor);
   });
 
-  it("prefere CNPJ do tenant settings quando users tem CNPJ da emissora (sem depender de env)", () => {
+  it("prefere settings.cnpj quando tenant e users divergem", () => {
     delete process.env.CORA_EMISSOR_CNPJ;
 
     const emissor = "62449971000170";
@@ -197,7 +197,7 @@ describe("user-billing-cadastral", () => {
     expect(base?.document).toBe(shefa);
   });
 
-  it("ignora settings.cnpj emissor e usa empresa_cadastral.cnpj do cliente", () => {
+  it("usa settings.cnpj mesmo quando empresa_cadastral tem outro CNPJ", () => {
     process.env.CORA_EMISSOR_CNPJ = "62.449.971/0001-70";
 
     const profile = perfilCobrancaFromTenantSettings(
@@ -210,6 +210,6 @@ describe("user-billing-cadastral", () => {
       "SHEFA",
     );
 
-    expect(profile?.document).toBe("65912793000160");
+    expect(profile?.document).toBe("62449971000170");
   });
 });

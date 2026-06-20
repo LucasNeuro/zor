@@ -58,21 +58,14 @@ export function mensagemErroMesmoCnpjEmissor(clienteDocumento?: string | null): 
 
 export const ERRO_CORA_MESMO_CNPJ = mensagemErroMesmoCnpjEmissor();
 
-export function validarCnpjClienteCora(clienteCnpj: string | null | undefined): void {
-  if (cnpjMesmoEmissorCora(clienteCnpj)) {
-    throw new Error(mensagemErroMesmoCnpjEmissor(clienteCnpj));
-  }
-}
+/** @deprecated Validação removida — emissão sempre via conta ONNZE; erros vêm da API Cora. */
+export function validarCnpjClienteCora(_clienteCnpj: string | null | undefined): void {}
 
-/** Valida documento do pagador (Cora: customer.document). CPF ignora check de emissor. */
+/** @deprecated Validação removida — cadastro e faturamento não bloqueiam CNPJ do emissor. */
 export function validarDocumentoClienteCora(
-  documento: string | null | undefined,
-  tipo: "CPF" | "CNPJ" = "CNPJ",
-): void {
-  if (tipo === "CNPJ") {
-    validarCnpjClienteCora(documento);
-  }
-}
+  _documento: string | null | undefined,
+  _tipo: "CPF" | "CNPJ" = "CNPJ",
+): void {}
 
 export function humanizarErroCoraApi(message: string, clienteDocumento?: string | null): string {
   const m = message.trim();
@@ -109,11 +102,11 @@ export function avaliarEmissaoCoraTenant(
   const emissor_cnpj = getCoraEmissorCnpj();
   const emissor_configurado = Boolean(emissor_cnpj);
   const cliente = normalizarCnpjCora(clienteDocumento);
-  const bloqueado = tipo === "CNPJ" && cnpjMesmoEmissorCora(clienteDocumento);
+  const mesmoEmissor = tipo === "CNPJ" && cnpjMesmoEmissorCora(clienteDocumento);
 
   return {
-    bloqueado,
-    motivo: bloqueado ? mensagemErroMesmoCnpjEmissor(clienteDocumento) : null,
+    bloqueado: false,
+    motivo: mesmoEmissor ? mensagemErroMesmoCnpjEmissor(clienteDocumento) : null,
     emissor_configurado,
     emissor_cnpj,
     emissor_nome: emissor_configurado ? getCoraEmissorNome() : null,

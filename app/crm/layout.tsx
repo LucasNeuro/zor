@@ -150,6 +150,19 @@ function ExpandedSidebar({
     }
   }, [activeGroupId]);
 
+  // repopulate accordion when nav loads after auth (evita sidebar vazio pós-login)
+  useEffect(() => {
+    if (navGroups.length === 0) return;
+    setOpenIds((prev) => {
+      const hasValid = [...prev].some((id) => navGroups.some((g) => g.id === id));
+      if (hasValid) return prev;
+      const initial = navGroups.find((g) =>
+        g.items.some((i) => isCrmNavPathActive(pathname, i.href)),
+      );
+      return new Set([initial?.id ?? navGroups[0]?.id ?? ""]);
+    });
+  }, [navGroups, pathname]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-3 px-2">
       {navGroups.map((group, gi) => {
@@ -336,17 +349,18 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     permissoes: Record<string, boolean> | null;
     wajeOwner: boolean;
   }>({ baseRole: "", permissoes: null, wajeOwner: false });
+  const [accessLoaded, setAccessLoaded] = useState(false);
   const [flyoutId, setFlyoutId] = useState<string | null>(null);
 
   const railRef = useRef<HTMLDivElement>(null);
 
   const navGroups = useMemo(
-    () =>
-      filterCrmNavGroupsForAccess(
-        appendWajeOwnerNav(CRM_NAV_GROUPS, isPlatformTeamAccess(accessCtx)),
-        accessCtx,
-      ),
-    [accessCtx],
+    () => {
+      const groups = appendWajeOwnerNav(CRM_NAV_GROUPS, isPlatformTeamAccess(accessCtx));
+      if (!accessLoaded) return groups;
+      return filterCrmNavGroupsForAccess(groups, accessCtx);
+    },
+    [accessCtx, accessLoaded],
   );
 
   const activeGroupId = useMemo(
@@ -354,12 +368,16 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     [navGroups, pathname],
   );
 
-  /* cargos + permissões efectivas */
+  /* cargos + permissões efectivas — cookie CRM basta; não depender só do Supabase client */
   useEffect(() => {
     let cancelled = false;
+
     async function loadAccess() {
       try {
-        const res = await fetch("/api/crm/acessos/me", { headers: await crmApiHeaders() });
+        const res = await fetch("/api/crm/acessos/me", {
+          headers: await crmApiHeaders(),
+          credentials: "include",
+        });
         const json = (await res.json().catch(() => ({}))) as {
           data?: { role?: string; permissoes?: Record<string, boolean> | null; waje_owner?: boolean };
         };
@@ -371,16 +389,25 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           });
         }
       } catch {
-        if (!cancelled) setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false });
+        if (!cancelled) {
+          setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false });
+        }
+      } finally {
+        if (!cancelled) setAccessLoaded(true);
       }
     }
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+
+    void loadAccess();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false });
+        setAccessLoaded(true);
+        return;
+      }
       if (session?.user) void loadAccess();
-      else setAccessCtx({ baseRole: "", permissoes: null, wajeOwner: false });
     });
-    void supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) void loadAccess();
-    });
+
     return () => {
       cancelled = true;
       subscription.unsubscribe();

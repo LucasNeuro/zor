@@ -237,7 +237,11 @@ export default function CadastroPage() {
         ok?: boolean;
         error?: string;
         user?: { id: string };
-        session?: { access_token: string; expires_in: number } | null;
+        session?: {
+          access_token: string;
+          refresh_token?: string;
+          expires_in: number;
+        } | null;
       };
       if (!authRes.ok || !authData.ok) {
         setError(authData.error || "Não foi possível criar a conta.");
@@ -258,8 +262,20 @@ export default function CadastroPage() {
         if (clientSignIn.session?.access_token) {
           session = {
             access_token: clientSignIn.session.access_token,
+            refresh_token: clientSignIn.session.refresh_token,
             expires_in: clientSignIn.session.expires_in ?? 3600,
           };
+        }
+      }
+
+      if (session?.access_token && session.refresh_token) {
+        try {
+          await supabase.auth.setSession({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          });
+        } catch {
+          /* cookie CRM abaixo é suficiente para o backoffice */
         }
       }
 

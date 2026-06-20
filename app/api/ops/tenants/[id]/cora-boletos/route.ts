@@ -3,6 +3,7 @@ import { coraConfigurado } from "@/lib/cora/cora-config";
 import { getCoraEmissorCnpj } from "@/lib/cora/cora-emissor";
 import type { CoraFormaPagamento } from "@/lib/cora/cora-cobranca";
 import { gerarBoletosParcelados } from "@/lib/ops/cora-mensalidade";
+import { diagnosticarCoraTenant } from "@/lib/cora/cora-diagnostico";
 import { requireOpsApiAccess, getOpsActor } from "@/lib/ops/ops-api-auth";
 
 type RouteCtx = { params: Promise<{ id: string }> };
@@ -95,6 +96,14 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
 
     const status = resultado.criadas.length === 0 ? 502 : resultado.erros.length ? 207 : 201;
     const primeiroErro = resultado.erros[0]?.error;
+    let diagnostico: Awaited<ReturnType<typeof diagnosticarCoraTenant>> | undefined;
+    if (resultado.criadas.length === 0 && primeiroErro) {
+      try {
+        diagnostico = await diagnosticarCoraTenant(tenantId);
+      } catch {
+        /* ignore */
+      }
+    }
     return NextResponse.json(
       {
         data: resultado.criadas,
@@ -103,6 +112,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
           resultado.criadas.length === 0 && primeiroErro
             ? primeiroErro
             : undefined,
+        diagnostico,
         resumo: {
           emitidas: resultado.criadas.length,
           falhas: resultado.erros.length,

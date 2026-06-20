@@ -138,7 +138,7 @@ export function WajeOwnerLeadSideover({ open, lead, onClose, onUpdated, onDelete
           <Loader2 className="animate-spin" style={{ color: RF_ACCENT }} size={22} />
         </div>
       ) : (
-        <div className="space-y-4" style={rfBodyOnDarkStyle}>
+        <div className="space-y-4" style={rfBodyOnDarkStyle()}>
           {erro ? <p className="text-sm text-[#f87171]">{erro}</p> : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nome">

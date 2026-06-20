@@ -171,7 +171,7 @@ export function WajeOwnerUsuarioSideover({
           <Loader2 className="animate-spin" style={{ color: RF_ACCENT }} size={22} />
         </div>
       ) : (
-        <div className="space-y-4" style={rfBodyOnDarkStyle}>
+        <div className="space-y-4" style={rfBodyOnDarkStyle()}>
           <div className="flex flex-wrap gap-2">
             <WajeOwnerStatusBadge
               variant={form.status === "ativo" || form.status === "Ativo" ? "ativo" : "inativo"}

@@ -3,16 +3,35 @@ import { crmDb } from "@/lib/crm/supabase-server";
 import { normalizeUserRow, toDbRecordStatus } from "@/lib/crm/users-row";
 import { requireOpsApiAccess } from "@/lib/ops/ops-api-auth";
 
+const USER_SELECT_EN =
+  "id, auth_id, email, name, phone, role, status, tenant_id, owner, access_role_id, document_type, document, billing_legal_name, created_at, updated_at";
+
+const USER_SELECT_PT =
+  "id, auth_id, email, name, phone, role, status, tenant_id, owner, access_role_id, document_type, document, billing_legal_name, criado_em, atualizado_em";
+
+async function listUsers() {
+  const en = await crmDb()
+    .from("users")
+    .select(USER_SELECT_EN)
+    .order("created_at", { ascending: false });
+
+  if (!en.error) return en;
+
+  if (/criado_em|created_at|does not exist|schema cache/i.test(en.error.message)) {
+    return crmDb()
+      .from("users")
+      .select(USER_SELECT_PT)
+      .order("criado_em", { ascending: false });
+  }
+
+  return en;
+}
+
 export async function GET(request: NextRequest) {
   const denied = await requireOpsApiAccess(request);
   if (denied) return denied;
 
-  const { data: users, error } = await crmDb()
-    .from("users")
-    .select(
-      "id, auth_id, email, name, phone, role, status, tenant_id, owner, access_role_id, document_type, document, billing_legal_name, created_at, updated_at, criado_em, atualizado_em",
-    )
-    .order("created_at", { ascending: false });
+  const { data: users, error } = await listUsers();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,23 +53,24 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = (users ?? []).map((u) => {
-    const norm = normalizeUserRow(u as Record<string, unknown>);
+    const raw = u as Record<string, unknown>;
+    const norm = normalizeUserRow(raw);
     return {
-      id: String(norm?.id ?? u.id),
-      auth_id: u.auth_id ?? null,
-      email: String(u.email ?? ""),
-      name: String(u.name ?? ""),
-      phone: u.phone ?? null,
-      role: String(u.role ?? ""),
-      status: String(norm?.status ?? u.status ?? "ativo"),
-      tenant_id: u.tenant_id ?? null,
-      tenant_nome: u.tenant_id ? tenantMap.get(u.tenant_id) ?? null : null,
-      owner: u.owner === true,
-      access_role_id: u.access_role_id ?? null,
-      document_type: u.document_type ?? null,
-      document: u.document ?? null,
-      billing_legal_name: u.billing_legal_name ?? null,
-      criado_em: norm?.criado_em ?? u.created_at ?? null,
+      id: String(norm?.id ?? raw.id),
+      auth_id: raw.auth_id ?? null,
+      email: String(raw.email ?? ""),
+      name: String(raw.name ?? ""),
+      phone: (raw.phone as string | null) ?? null,
+      role: String(raw.role ?? ""),
+      status: String(norm?.status ?? raw.status ?? "ativo"),
+      tenant_id: (raw.tenant_id as string | null) ?? null,
+      tenant_nome: raw.tenant_id ? tenantMap.get(String(raw.tenant_id)) ?? null : null,
+      owner: raw.owner === true,
+      access_role_id: (raw.access_role_id as string | null) ?? null,
+      document_type: (raw.document_type as string | null) ?? null,
+      document: (raw.document as string | null) ?? null,
+      billing_legal_name: (raw.billing_legal_name as string | null) ?? null,
+      criado_em: norm?.criado_em ?? raw.created_at ?? null,
     };
   });
 

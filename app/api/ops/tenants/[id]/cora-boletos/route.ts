@@ -78,12 +78,16 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
 
     const actor = await getOpsActor(request);
     if (actor?.email) {
+      const ids = resultado.criadas
+        .map((r) => (r as { cora_invoice_id?: string }).cora_invoice_id)
+        .filter(Boolean);
       console.info(
         "[ops/cora-boletos] tenant",
         tenantId,
         "por",
         actor.email,
         `${resultado.criadas.length}/${parcelas} ok`,
+        ids.length ? `invoice_ids=${ids.join(",")}` : "",
       );
     }
     if (resultado.erros.length) {

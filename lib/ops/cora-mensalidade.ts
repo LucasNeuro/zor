@@ -237,9 +237,8 @@ export async function emitirMensalidadeNaCora(
     throw new Error(humanizarErroCoraApi(msg, doc));
   }
 
-  const boletoUrl =
-    (invoice as { document_url?: string }).document_url ?? invoice.bank_slip?.url ?? null;
-  const pixEmv = invoice.pix?.emv ?? null;
+  const boletoUrl = extrairUrlBoletoCora(invoice);
+  const pixEmv = extrairPixEmvCora(invoice);
 
   let boletoStoragePath: string | null = null;
   let boletoArquivoUrl: string | null = null;
@@ -274,6 +273,8 @@ export async function emitirMensalidadeNaCora(
         parcela: meta?.parcela ?? null,
         total_parcelas: meta?.total_parcelas ?? null,
         cora_invoice_id: invoice.id,
+        customer_name: input.customer.name,
+        customer_document: input.customer.document.identity,
       },
     })
     .eq("id", pag.id)

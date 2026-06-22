@@ -360,7 +360,11 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
         setErro(detalhe ?? `${falhas} parcela(s) falharam.`);
       }
       if (emitidas > 0) {
-        setInfo(`${emitidas} boleto(s) emitido(s) com boleto + Pix.`);
+        setInfo(
+          `${emitidas} boleto(s) emitido(s) com boleto + Pix. ` +
+            `No app Cora (ONNZE), abra Gestão de boletos → «A receber» ou «Todos» — ` +
+            `não aparecem em «Atrasados» se o vencimento for futuro.`,
+        );
       }
 
       await carregarMensalidades({ syncParent: true });
@@ -422,6 +426,43 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
       await carregarMensalidades({ syncParent: true });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao emitir cobrança.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function verificarNaCora(id: string) {
+    setSalvando(true);
+    setErro("");
+    setInfo("");
+    try {
+      const res = await fetch(`/api/ops/pagamentos/${id}/cora-verificar`, {
+        headers: await opsApiHeaders(),
+        credentials: "include",
+      });
+      const json = (await res.json()) as {
+        data?: {
+          cora_invoice_id: string;
+          status: string;
+          customer_name: string | null;
+          cora_ambiente: string;
+          cora_client_id: string;
+          dica_painel_cora: string;
+        };
+        error?: string;
+        dica?: string;
+      };
+      if (!res.ok || !json.data) {
+        throw new Error([json.error, json.dica].filter(Boolean).join(" "));
+      }
+      const d = json.data;
+      setInfo(
+        `Cora confirmou a fatura ${d.cora_invoice_id} (${d.status}) — cliente «${d.customer_name ?? "?"}» ` +
+          `· ambiente ${d.cora_ambiente} · client_id ${d.cora_client_id}. ` +
+          d.dica_painel_cora,
+      );
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao verificar na Cora.");
     } finally {
       setSalvando(false);
     }
@@ -910,7 +951,11 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
                     key={m.id}
                     icon={temCora ? QrCode : Receipt}
                     title={`${formatarData(m.competencia)} · ${formatarMoeda(m.valor_reais)}`}
-                    description={`Venc. ${formatarData(m.vencimento)} · ${m.status}`}
+                    description={
+                      temCora
+                        ? `Venc. ${formatarData(m.vencimento)} · ${m.status} · Cora ${m.cora_invoice_id?.slice(0, 8)}…`
+                        : `Venc. ${formatarData(m.vencimento)} · ${m.status}`
+                    }
                     statusLabel={pago ? "PAGO" : temCora ? "COBRANÇA" : "PENDENTE"}
                     statusActive={pago}
                   >
@@ -951,6 +996,14 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
                           }}
                         >
                           Copiar Pix
+                        </WajeOwnerActionBtn>
+                      ) : null}
+                      {temCora ? (
+                        <WajeOwnerActionBtn
+                          disabled={salvando}
+                          onClick={() => void verificarNaCora(m.id)}
+                        >
+                          Verificar Cora
                         </WajeOwnerActionBtn>
                       ) : null}
                       {!pago && m.status !== "cancelado" ? (

@@ -205,6 +205,44 @@ export async function emitirBoletoCora(
   return json;
 }
 
+/** Consulta fatura na Cora pelo id gravado em hub_tenant_mensalidades.cora_invoice_id. */
+export async function consultarCobrancaCora(invoiceId: string): Promise<CoraBoletoEmitido> {
+  const id = invoiceId?.trim();
+  if (!id) throw new Error("invoice_id obrigatório.");
+
+  const cfg = getCoraConfig();
+  const agent = coraHttpsAgent(cfg.cert, cfg.key);
+  const token = await obterCoraAccessToken();
+
+  const res = await coraFetch(`${cfg.urls.api}/v2/invoices/${encodeURIComponent(id)}`, {
+    method: "GET",
+    agent,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  const raw = await res.text();
+  let json: CoraBoletoEmitido & CoraApiErrorBody;
+  try {
+    json = JSON.parse(raw) as CoraBoletoEmitido & CoraApiErrorBody;
+  } catch {
+    throw new Error(`Cora GET invoice falhou (${res.status}) — resposta inválida.`);
+  }
+
+  if (!res.ok) {
+    const detalhe = formatarErroRespostaCora(json, res.status);
+    throw new Error(detalhe);
+  }
+
+  if (!json.id?.trim()) {
+    throw new Error("Cora não devolveu dados da fatura.");
+  }
+
+  return json;
+}
+
 /** Baixa PDF/documento da Cora (mTLS + Bearer; fallback HTTP simples). */
 export async function baixarArquivoCora(url: string): Promise<Buffer> {
   const cfg = getCoraConfig();

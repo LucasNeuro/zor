@@ -148,6 +148,14 @@ export function formatarBlocoContextoLeadCrm(ctx: ContextoLeadCrmPrompt): string
   return linhas.join("\n");
 }
 
+/** Pré-texto compartilhado: produção WhatsApp + simulação de canal (mesmo raciocínio). */
+export const WHATSAPP_CANAL_PREAMBLE = `### ATENDIMENTO WHATSAPP (funcionário IA)
+- **Raciocínio primeiro:** responda ao que o cliente disse; fluxo e playbook são **guia**, não script fixo.
+- Use **DOCUMENTOS DA EMPRESA**, **catálogo**, **playbook**, **CRM** e **ferramentas** — Mistral é só o motor de linguagem.
+- Se pedirem **cardápio**, **preço** ou **pedido**, use a base de conhecimento **antes** de insistir em endereço ou checklist.
+- Lead retornante: não repita nome nem perguntas já respondidas; avance o pedido.
+- Respostas naturais e curtas (2–4 linhas); quando houver preço ou item na base, informe de forma clara.`;
+
 export function blocoRaciocinioAtendimentoFluido(canalWhatsapp: boolean): string {
   const linhas = [
     "═══ RACIOCÍNIO DO ATENDIMENTO (prioridade sobre roteiro) ═══",
@@ -155,12 +163,13 @@ export function blocoRaciocinioAtendimentoFluido(canalWhatsapp: boolean): string
     "",
     "**Decida nesta ordem:**",
     "1. O que o cliente **acabou de dizer** (e o histórico) — responda isso primeiro.",
-    "2. **DOCUMENTOS DA EMPRESA** / catálogo — para preço, serviço, política.",
+    "2. **DOCUMENTOS DA EMPRESA** / catálogo — cardápio, preço, horário, política, pratos.",
     "3. **CRM** (bloco acima + ferramentas) — nome, interesse, negócios já gravados.",
     "4. **Roteiro/fluxo** — só para o que **ainda falta** e não foi dito; pule passos já cobertos.",
     "",
     "**Proibido:**",
     "- Repetir pergunta se o cliente já respondeu (mesmo com outras palavras: «quebrou a tela» = defeito informado).",
+    "- Ignorar pedido de **cardápio**, **menu** ou **preço** para só pedir endereço ou qualificação.",
     "- Ignorar «já disse» / «falei isso» — peça desculpas breves e avance.",
     "- Seguir checklist quando já tem dados para orçar ou resolver.",
     "- Mencionar passo, motor, simulação ou «pergunta obrigatória».",

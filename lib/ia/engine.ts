@@ -84,6 +84,12 @@ export interface ResultadoEngine {
   erro?: string;
   logId?: string;
   motor?: "playbook_ia" | "playbook_flow" | "llm_prompt";
+  contextoFontes?: {
+    docsEmpresa: number;
+    docsAgente: number;
+    temCatalogo: boolean;
+    temAnaliseEmpresa: boolean;
+  };
 }
 
 // ── PROCESSAMENTO PRINCIPAL ───────────────────────────────────
@@ -244,6 +250,10 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     }
 
     let systemPrompt = promptData.systemPrompt;
+    if (ctx.canal === "whatsapp") {
+      const { WHATSAPP_CANAL_PREAMBLE } = await import("@/lib/ia/atendimento-fluido");
+      systemPrompt = `${WHATSAPP_CANAL_PREAMBLE}\n\n${systemPrompt}`;
+    }
     const linhasContexto =
       ctx.canal === "whatsapp" && turnosCrm.length > 0
         ? turnosCrm.map((t) => ({ role: t.role, content: t.content }))
@@ -268,6 +278,14 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     const estimativa = Math.ceil((systemPrompt.length + ctx.mensagem.length) / 4);
     if (estimativa > 4000) {
       console.warn(`[ENGINE] Prompt grande: ~${estimativa} tokens`);
+    }
+    if (ctx.canal === "whatsapp" && promptData.contextoFontes) {
+      console.info("[ENGINE] prompt_context", {
+        agente: agente.slug,
+        motor: motorPlaybook ?? (blocoContextoFluxoPlaybook ? "playbook_ia" : "llm_prompt"),
+        ...promptData.contextoFontes,
+        playbook_publicado: promptData.playbookPublicado === true,
+      });
     }
 
     // ETAPA 7: Chama a IA
@@ -478,7 +496,9 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         modelo: modeloLog,
         latencia,
         feito_por: "engine",
+        feito_por_tipo: "ia",
         motor: motorPlaybook ?? (blocoContextoFluxoPlaybook ? "playbook_ia" : "llm_prompt"),
+        contexto_fontes: promptData.contextoFontes ?? null,
       },
     };
     if (ctx.tenantId) filaSaida.tenant_id = ctx.tenantId;
@@ -524,6 +544,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       latencia,
       logId: logData?.id,
       motor: motorPlaybook ?? (blocoContextoFluxoPlaybook ? "playbook_ia" : "llm_prompt"),
+      contextoFontes: promptData.contextoFontes,
     };
 
   } catch (erro) {

@@ -1,5 +1,5 @@
 ﻿import type { SupabaseClient } from "@supabase/supabase-js";
-import { defaultTenantId } from "@/lib/tenant-default";
+import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 
 export type CanalConversa = "whatsapp" | "email";
 
@@ -156,13 +156,14 @@ export async function gravarMensagemSaidaConversa(
     emailMessageId?: string | null;
     emailInReplyTo?: string | null;
     emailStatus?: string | null;
+    whatsappMessageId?: string | null;
     metadata?: Record<string, unknown>;
   }
-): Promise<void> {
+): Promise<boolean> {
   const tenantId = opts.tenantId?.trim() || defaultTenantId();
   const agora = new Date().toISOString();
 
-  const { error } = await supabase.from("hub_mensagens").insert({
+  const row: Record<string, unknown> = {
     conversa_id: opts.conversaId,
     lead_id: opts.leadId,
     remetente: "humano",
@@ -180,13 +181,45 @@ export async function gravarMensagemSaidaConversa(
       canal: opts.canal,
       feito_por: opts.feitoPor,
       feito_por_tipo: "humano",
+      ...(opts.whatsappMessageId
+        ? { whatsapp_message_id: opts.whatsappMessageId, message_id: opts.whatsappMessageId }
+        : {}),
       ...(opts.metadata ?? {}),
     },
-  });
+  };
+
+  if (opts.whatsappMessageId?.trim()) {
+    row.whatsapp_message_id = opts.whatsappMessageId.trim();
+  }
+
+  let current: Record<string, unknown> = { ...row };
+  const optionalCols = ["whatsapp_message_id", "url_midia", "nome_arquivo", "tenant_id"] as const;
+
+  let error: { message: string } | null = null;
+  for (let attempt = 0; attempt <= optionalCols.length; attempt++) {
+    const res = await supabase.from("hub_mensagens").insert(current);
+    error = res.error;
+    if (!error) break;
+
+    if (!isMissingPgColumn(error)) break;
+
+    const msg = (error.message ?? "").toLowerCase();
+    let stripped = false;
+    for (const col of optionalCols) {
+      if (col in current && msg.includes(col.toLowerCase())) {
+        const next = { ...current };
+        delete next[col];
+        current = next;
+        stripped = true;
+        break;
+      }
+    }
+    if (!stripped) break;
+  }
 
   if (error) {
     console.error(`[conversa-canal] gravarMensagemSaida ${opts.canal}:`, error.message);
-    return;
+    return false;
   }
 
   await supabase
@@ -197,4 +230,6 @@ export async function gravarMensagemSaidaConversa(
       atualizado_em: agora,
     })
     .eq("id", opts.conversaId);
+
+  return true;
 }

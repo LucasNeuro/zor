@@ -27,6 +27,7 @@ import type { FerramentaIntegradorDefMistral } from "@/lib/hub/agente-ferramenta
 import { defaultTenantId } from "@/lib/tenant-default";
 import { blocoDadosCanalWhatsappCrm } from "@/lib/crm/sincronizar-contato-whatsapp";
 import { blocoIsolamentoConversaWhatsapp } from "@/lib/crm/isolamento-conversa-lead";
+import { WHATSAPP_CANAL_PREAMBLE } from "@/lib/ia/atendimento-fluido";
 import { garantirLeadSimulacaoCanal } from "@/lib/simulacao-canal/lead-simulacao";
 import { agenteEhCopilotoInterno, isModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { blocoEscopoFuncaoCopilotoInterno } from "@/lib/hub/copiloto-interno-escopo";
@@ -72,14 +73,11 @@ ${escopoExtra?.trim() ? `\n${escopoExtra.trim()}` : ""}`;
 }
 
 /** Pré-texto para o modo que espelha o system prompt de produção (prompt-builder), sem snapshot operacional. */
-export const SIMULACAO_CANAL_PREAMBLE = `### MODO SIMULAÇÃO DE CANAL (espelha WhatsApp real)
-Você é o **atendente IA da empresa** falando com um cliente/lead — mesmo motor da produção (cargo, conhecimento, catálogo, RAG, ferramentas CRM).
-- **Raciocínio primeiro:** responda ao que o cliente disse; fluxo e perguntas do cargo são **guia**, não roteiro fixo.
-- Use **base de conhecimento**, **catálogo de preços**, **playbook**, **CRM** e **ferramentas** como no WhatsApp.
-- Lead retornante: **não** repita nome nem perguntas já respondidas (CRM + histórico); use **hub_atualizar_lead** para dados novos.
+export const SIMULACAO_CANAL_PREAMBLE = `${WHATSAPP_CANAL_PREAMBLE}
+
+### SIMULAÇÃO INTERNA (painel CRM)
 - Não diga que está em simulação, briefing ou teste interno.
-- **WhatsApp real não envia mensagens** neste painel — menus ficam simulados; ferramentas CRM funcionam no lead de teste.
-- Respostas naturais, curtas (2–4 linhas); quando tiver dados ou preço na base, **dê orçamento** como funcionário da loja.`;
+- WhatsApp real não envia mensagens neste painel — menus ficam simulados; ferramentas CRM funcionam no lead de teste.`;
 
 export type BriefingModoSessao = "briefing_interno" | "simulacao_canal";
 

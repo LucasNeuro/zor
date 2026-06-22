@@ -16,6 +16,7 @@ import {
   resolverChoiceId,
 } from "@/lib/whatsapp/playbook-flow-runtime";
 import { mensagemEhSaudacaoSimples } from "@/lib/whatsapp/menu-triagem-uazapi";
+import { mensagemJaIndicaIntentTriagem, mensagemPedeCardapioOuPreco } from "@/lib/whatsapp/menu-intent";
 import type { TurnoMinimo } from "@/lib/ia/perguntas-essenciais-cargo";
 import {
   clienteExpressouFrustracaoRepeticao,
@@ -148,7 +149,8 @@ export function buildBlocoContextoFluxoParaLlm(
   state: SimFlowState,
   mensagemCliente?: string,
   menuUazapiEnhancement?: boolean,
-  turnos?: TurnoMinimo[]
+  turnos?: TurnoMinimo[],
+  apresentacao?: { nomeAgente?: string; nomeEmpresa?: string }
 ): string {
   const stepId = state.step || definition.start_step;
   const step = definition.steps[stepId];
@@ -179,6 +181,36 @@ export function buildBlocoContextoFluxoParaLlm(
 
   if (mensagemCliente?.trim()) {
     linhas.push("", `Última mensagem do cliente: «${mensagemCliente.trim().slice(0, 500)}»`);
+  }
+
+  if (mensagemCliente?.trim() && mensagemPedeCardapioOuPreco(mensagemCliente)) {
+    linhas.push(
+      "",
+      "**Pedido de cardápio/preço (prioridade neste turno):**",
+      "- Responda com itens, preços ou link da **DOCUMENTOS DA EMPRESA** / catálogo.",
+      "- **Não** repita só pedido de endereço ou CEP — atenda o cardápio primeiro; endereço vem depois do interesse no pedido."
+    );
+  } else if (mensagemCliente?.trim() && mensagemJaIndicaIntentTriagem(mensagemCliente)) {
+    linhas.push(
+      "",
+      "**Cliente já expressou intenção de pedido:** conduza o pedido (itens, delivery/retirada); qualificação/endereço só quando fizer sentido, sem menu genérico."
+    );
+  }
+
+  const nomeAgente = apresentacao?.nomeAgente?.trim();
+  const nomeEmpresa = apresentacao?.nomeEmpresa?.trim();
+  const passosApresentacao = new Set(["inicio_saudacao", "inicio_apresentacao", "inicio_nome"]);
+  if (nomeAgente && passosApresentacao.has(stepId) && !passoCoberto) {
+    linhas.push(
+      "",
+      "**Apresentação obrigatória neste turno:**",
+      `- Identifique-se como **${nomeAgente}**${nomeEmpresa ? `, da **${nomeEmpresa}**` : ""}.`,
+      "- Estrutura: saudação + seu nome + empresa + pergunta do passo, **por gentileza**.",
+      nomeEmpresa
+        ? `- Exemplo de tom: «Olá! Sou ${nomeAgente}, da ${nomeEmpresa}. [pergunta do passo], por gentileza?»`
+        : `- Exemplo de tom: «Olá! Sou ${nomeAgente}. [pergunta do passo], por gentileza?»`,
+      `- **Proibido** citar só a empresa (${nomeEmpresa ?? "nome comercial"}) sem seu nome (${nomeAgente}).`
+    );
   }
 
   const turnosEfetivos =
@@ -214,11 +246,11 @@ export function buildBlocoContextoFluxoParaLlm(
       ? passoCoberto
         ? ["- Nome já conhecido: **não** peça de novo; avance ao próximo tema útil."]
         : [
-            "- Se faltar nome: faça **somente** a pergunta pelo nome — sem «como posso ajudar» nem menu.",
+            "- Se faltar nome: apresente-se (seu nome + empresa) e peça **somente** o nome — sem «como posso ajudar» nem menu, **por gentileza**.",
           ]
       : passoCoberto
         ? ["- Tema deste passo já coberto: avance (orçamento, agendamento ou solução)."]
-        : ["- Se faltar dado deste passo: uma pergunta curta com suas palavras."]),
+        : ["- Se faltar dado deste passo: uma pergunta curta — **depois** de responder o que o cliente acabou de pedir (ex.: cardápio)."]),
     "- Se o cliente sair do roteiro: responda com conhecimento e retome só o que ainda falta.",
     "- Não invente preços, prazos ou políticas fora da documentação.",
     "- Não mencione «passo», «motor», «playbook-flow» nem «simulação»."

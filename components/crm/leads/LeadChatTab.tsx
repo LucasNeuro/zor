@@ -538,6 +538,8 @@ export function LeadChatTab({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  /** Evita reutilizar legenda já enviada ao anexar novo ficheiro. */
+  const ultimoTextoEnviadoRef = useRef("");
 
   const humanoEfetivo =
     humanoAtivoLocal ?? effectiveHumanoResponsavel(humanoResponsavel);
@@ -793,21 +795,39 @@ export function LeadChatTab({
       const json = (await res.json().catch(() => ({}))) as {
         error?: string;
         whatsappSkipped?: boolean;
+        aviso?: string;
       };
       if (!res.ok) {
-        setInput(texto);
-        if (arquivo) selecionarAnexo(arquivo);
+        const partialWhatsapp =
+          typeof json.error === "string" && /enviada ao whatsapp/i.test(json.error);
+        if (!partialWhatsapp) {
+          setInput(texto);
+          if (arquivo) selecionarAnexo(arquivo);
+        } else {
+          ultimoTextoEnviadoRef.current = texto;
+          setInput("");
+          limparAnexo();
+          await carregar({ quiet: true });
+        }
         setSendStrip({
-          kind: "error",
-          text: typeof json.error === "string" ? json.error : "Não foi possível enviar a mensagem.",
+          kind: partialWhatsapp ? "info" : "error",
+          text:
+            typeof json.error === "string"
+              ? json.error
+              : "Não foi possível enviar a mensagem.",
         });
         return;
       }
+      ultimoTextoEnviadoRef.current = texto;
+      setInput("");
+      limparAnexo();
       if (json.whatsappSkipped) {
         setSendStrip({
           kind: "info",
           text: "Mensagem registada no CRM. WhatsApp em dry-run ou provedor não configurado.",
         });
+      } else if (typeof json.aviso === "string" && json.aviso.trim()) {
+        setSendStrip({ kind: "info", text: json.aviso.trim() });
       } else {
         setSendStrip({
           kind: "success",
@@ -832,6 +852,10 @@ export function LeadChatTab({
 
   function selecionarAnexo(file: File) {
     limparAnexo();
+    const textoAtual = input.trim();
+    if (textoAtual && textoAtual === ultimoTextoEnviadoRef.current) {
+      setInput("");
+    }
     setAnexo(file);
     if (file.type.startsWith("image/")) {
       setAnexoPreview(URL.createObjectURL(file));

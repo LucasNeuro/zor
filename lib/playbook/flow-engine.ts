@@ -1,10 +1,52 @@
 import { mensagemEhSaudacaoSimples } from "@/lib/whatsapp/menu-triagem-uazapi";
+import { mensagemJaIndicaIntentTriagem } from "@/lib/whatsapp/menu-intent";
+
+function menuTypeForStep(step: FlowMenuStep): "list" | "button" {
+  if (step.menu_type === "button" || step.menu_type === "list") return step.menu_type;
+  return step.choices.length <= 3 ? "button" : "list";
+}
+
+/** Tenta mapear texto livre do cliente a uma opção do menu (ex.: «quero fazer pedido» → delivery). */
+function resolverEscolhaMenuPorTexto(mensagem: string, choices: FlowMenuChoice[]): string | null {
+  const t = mensagem.trim().toLowerCase();
+  if (!t) return null;
+
+  const byPattern = (pred: (c: FlowMenuChoice) => boolean) => choices.find(pred)?.id ?? null;
+
+  if (mensagemJaIndicaIntentTriagem(t)) {
+    const pedido = byPattern(
+      (c) =>
+        /pedido|delivery|entrega|card[aá]pio|encomenda/i.test(c.label) ||
+        /pedido|delivery|cardapio|encomenda/i.test(c.id)
+    );
+    if (pedido) return pedido;
+  }
+
+  if (/\bretirar\b|\bbalc[aã]o\b|\bbuscar\b/.test(t)) {
+    const ret = byPattern((c) => /retirada|balc[aã]o|buscar/i.test(c.label) || /retirada|balcao/i.test(c.id));
+    if (ret) return ret;
+  }
+
+  if (/\batendente\b|\bhumano\b|\bpessoa\b/.test(t)) {
+    const humano = byPattern((c) => /atendente|humano|pessoa/i.test(c.label) || /humano|atendente/i.test(c.id));
+    if (humano) return humano;
+  }
+
+  for (const c of choices) {
+    const lab = c.label.trim().toLowerCase();
+    if (lab.length >= 4 && t.includes(lab)) return c.id;
+  }
+
+  return null;
+}
 
 export type FlowPendingMenu = {
   text: string;
   menuType: "list" | "button";
   choices: string[];
   listButton?: string;
+  /** Rodapé UAZAPI — nome comercial do tenant (ex.: Cantina Nova). */
+  footerText?: string;
 };
 
 export type FlowEngineResult =
@@ -358,10 +400,16 @@ export async function executeFlowEngine(
       }
 
       case "menu": {
+        const selectedFromText =
+          canResolveFromMessage && !choiceId
+            ? resolverEscolhaMenuPorTexto(texto, step.choices)
+            : null;
         const selected =
           canResolveFromMessage && choiceId
             ? step.choices.find((c) => c.id === choiceId)
-            : null;
+            : selectedFromText
+              ? step.choices.find((c) => c.id === selectedFromText)
+              : null;
         if (selected) {
           const key = step.answer_key;
           if (key) answers[key] = selected.id;
@@ -386,10 +434,11 @@ export async function executeFlowEngine(
         }
 
         const menuChoices = step.choices.map((c) => `${c.label}|${c.id}`);
+        const resolvedMenuType = menuTypeForStep(step);
         const pendingMenu: FlowPendingMenu = {
           text: step.text,
-          menuType: step.menu_type || "list",
-          listButton: step.list_button,
+          menuType: resolvedMenuType,
+          listButton: resolvedMenuType === "list" ? step.list_button || "Ver opções" : undefined,
           choices: menuChoices,
         };
 
@@ -413,8 +462,8 @@ export async function executeFlowEngine(
         }
         const menu = await adapter.sendMenu({
           text: step.text,
-          menuType: step.menu_type || "list",
-          listButton: step.list_button,
+          menuType: resolvedMenuType,
+          listButton: resolvedMenuType === "list" ? step.list_button || "Ver opções" : undefined,
           choices: menuChoices,
         });
         if (!menu.ok && menu.erro) {

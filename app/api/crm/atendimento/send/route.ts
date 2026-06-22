@@ -112,5 +112,6 @@ export async function POST(request: NextRequest) {
     whatsappSkipped: result.whatsappSkipped,
     whatsapp: result.whatsapp,
     tokenOrigem: result.tokenOrigem,
+    ...(result.aviso ? { aviso: result.aviso } : {}),
   });
 }

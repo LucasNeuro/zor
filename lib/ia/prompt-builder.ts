@@ -94,6 +94,13 @@ export interface PromptCompleto {
   fluxoAtual?: string;
   /** Playbook no bucket hub-agent-playbooks (ex.: maria.md). */
   playbookPublicado?: boolean;
+  /** Quantidade de trechos RAG / catálogo injetados no prompt (diagnóstico). */
+  contextoFontes?: {
+    docsEmpresa: number;
+    docsAgente: number;
+    temCatalogo: boolean;
+    temAnaliseEmpresa: boolean;
+  };
 }
 
 export async function construirPrompt(params: PromptParams): Promise<PromptCompleto | null> {
@@ -189,6 +196,10 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
 
   // 6. Monta o prompt em camadas
   const secoes: string[] = [];
+  const turnosAnteriores = params.sessaoReiniciada
+    ? 0
+    : Math.max(0, params.turnosAnteriores ?? 0);
+  const conversaEmAndamento = turnosAnteriores > 0;
 
   // CAMADA 1 — FONTE PRINCIPAL ESTÁTICA
   if (usarPlaybookPublicado) {
@@ -211,6 +222,16 @@ ${playbookPublicado.prompt}`);
 - Se o cliente só disse «Olá», «Oi» ou equivalente e ainda não confirmou o nome nesta conversa, NÃO invente nem assuma um nome na saudação.
 - Siga o playbook: apresente-se como **${nomeAgente}**, acolha e pergunte o nome quando o playbook exigir, antes de personalizar.
 - Só use nome na saudação se vier confirmado em «DADOS DO CANAL (WhatsApp → CRM)» para este número ou se o cliente tiver dito o nome nesta sessão.`);
+
+    if (!conversaEmAndamento) {
+      const empresaLabel = nomeEmpresaComercial || "nossa empresa";
+      secoes.push(`═══ APRESENTAÇÃO NA 1ª MENSAGEM (obrigatório) ═══
+- Você é **${nomeAgente}**, representando **${empresaLabel}**.
+- Na primeira resposta: saudação + **seu nome (${nomeAgente})** + **empresa (${empresaLabel})** + pergunta do roteiro, sempre **por gentileza**.
+- Exemplo de estrutura: «Olá! Sou ${nomeAgente}, da ${empresaLabel}. Qual é o seu nome, por gentileza?»
+- **Proibido** responder só com o nome da empresa sem se identificar como ${nomeAgente}.
+- **Proibido** pular para «Como posso te ajudar?» se o roteiro pede o nome do cliente primeiro.`);
+    }
 
     if (isMariLegado) {
       secoes.push(blocoRegrasFluxoSequencialPlaybook(playbookPublicado.flowHints));
@@ -253,10 +274,6 @@ ${personalidade?.descricao_comportamento || ""}`);
     }
   }
 
-  const turnosAnteriores = params.sessaoReiniciada
-    ? 0
-    : Math.max(0, params.turnosAnteriores ?? 0);
-  const conversaEmAndamento = turnosAnteriores > 0;
   const canalWhatsapp = (params.canal ?? "").toLowerCase() === "whatsapp";
 
   const turnosConversa = params.turnosConversa ?? [];
@@ -408,10 +425,15 @@ ${perfilEmpresa}`);
     }
   }
 
+  let docsEmpresaCount = 0;
+  let docsAgenteCount = 0;
+  let temCatalogo = false;
+
   const trechosEmpresa = await buscarContextoDocumentosEmpresaParaPrompt(supabase, tenantId, {
     mensagemAtual: params.mensagemAtual,
     turnosConversa: params.turnosConversa,
   });
+  docsEmpresaCount = trechosEmpresa.length;
   if (trechosEmpresa.length > 0) {
     secoes.push(`═══ DOCUMENTOS DA EMPRESA (CONHECIMENTO) ═══
 Fonte principal para fatos do negócio (produtos, preços, políticas, garantias, horários, POPs gerais).
@@ -426,6 +448,7 @@ ${formatarTrechosConhecimentoParaPrompt(trechosEmpresa)}`);
     mensagemAtual: params.mensagemAtual,
     turnosConversa: params.turnosConversa,
   });
+  docsAgenteCount = trechosRag.length;
   if (trechosRag.length > 0) {
     const ragTexto = trechosRag
       .map((t, i) => {
@@ -445,6 +468,7 @@ ${ragTexto}`);
     const catalogo = await listarServicosCatalogo(supabase, tenantId);
     const textoCatalogo = formatarServicosCatalogoParaPrompt(catalogo);
     if (textoCatalogo) {
+      temCatalogo = true;
       secoes.push(`═══ CATÁLOGO DE SERVIÇOS E PREÇOS (CRM) ═══
 Tabela oficial de referência do negócio. Use para orçamentos quando o cliente pedir valor, reparo ou serviço.
 Cite valores **somente** daqui ou de DOCUMENTOS DA EMPRESA — nunca invente. Se não houver item exato, informe faixa ou diga que confirma na loja.
@@ -559,6 +583,12 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
     agenteNome: agente.nome as string,
     fluxoAtual: params.etapaFluxo,
     playbookPublicado: usarPlaybookPublicado,
+    contextoFontes: {
+      docsEmpresa: docsEmpresaCount,
+      docsAgente: docsAgenteCount,
+      temCatalogo,
+      temAnaliseEmpresa: Boolean(analiseEmpresa?.analise),
+    },
   };
 }
 

@@ -91,8 +91,26 @@ function inferirOpcoesTriagem(params: {
   const imob = /imobili|obra|arquitet|projeto|reforma|constru|incorpor|corretor/.test(corpus);
   const comercial = /comercial|vendas|orçamento|orcamento|produto|serviço|servico/.test(corpus);
   const suporte = /suporte|assist[eê]ncia|sac|pós-venda|pos-venda|técnico|tecnico/.test(corpus);
+  const alimentacao =
+    /restaur|delivery|deliver|comida|alimenta|cantina|refei|card[aá]pio|lanchonete|pizz|hamburg|food|cozinha|marmita|ifood|entrega/.test(
+      corpus
+    ) ||
+    /restaur|delivery|comida|alimenta|cantina|food|refei/.test(String(nicho ?? "").toLowerCase());
 
-  if (imob) {
+  if (alimentacao) {
+    push("triagem_pedido_delivery", "Fazer pedido (delivery)", "ramo_qualificacao_0", {
+      interesse_principal: "pedido_delivery",
+      fluxo_ativo: "delivery",
+    });
+    push("triagem_pedido_retirada", "Retirar no balcão", "ramo_qualificacao_0", {
+      interesse_principal: "pedido_retirada",
+      fluxo_ativo: "retirada",
+    });
+    push("triagem_cardapio", "Ver cardápio", "ramo_qualificacao_0", {
+      interesse_principal: "cardapio",
+      fluxo_ativo: "comercial",
+    });
+  } else if (imob) {
     push("triagem_imobiliario", "Imóveis (comprar ou anunciar)", "ramo_qualificacao_0", {
       interesse_principal: "imobiliario",
       fluxo_ativo: "imobiliario",
@@ -135,9 +153,9 @@ function inferirOpcoesTriagem(params: {
     });
   }
 
-  if (nicho && opts.length < 3) {
+  if (nicho && opts.length < 3 && !alimentacao) {
     const n = nicho.trim();
-    if (n.length > 3 && !usedLabels.has(n.toLowerCase())) {
+    if (n.length > 3 && n.length <= 48 && !usedLabels.has(n.toLowerCase())) {
       push("triagem_nicho", `Sobre ${n}`, "ramo_qualificacao_0", {
         interesse_principal: slugId(n),
         fluxo_ativo: "comercial",
@@ -145,9 +163,13 @@ function inferirOpcoesTriagem(params: {
     }
   }
 
-  for (const seg of segmentos.slice(0, 2)) {
-    if (opts.length >= 4) break;
-    push(`triagem_seg_${slugId(seg)}`, seg, "ramo_qualificacao_0");
+  if (!alimentacao) {
+    for (const seg of segmentos.slice(0, 2)) {
+      if (opts.length >= 4) break;
+      const segTrim = seg.trim();
+      if (segTrim.length < 4 || segTrim.length > 48) continue;
+      push(`triagem_seg_${slugId(seg)}`, segTrim, "ramo_qualificacao_0");
+    }
   }
 
   if (opts.length === 0) {
@@ -286,7 +308,7 @@ export function buildPlaybookFlowFromSnapshot(
       id: "triagem_inicial_menu",
       kind: "menu",
       journey: "triagem",
-      prompt: `Como posso te ajudar hoje com a ${empresaLabel}?`,
+      prompt: `Como posso te ajudar hoje${empresaLabel ? ` na ${empresaLabel}` : ""}?`,
       field: "intencao_inicial",
       options: menuOptions,
     },

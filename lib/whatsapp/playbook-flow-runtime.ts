@@ -38,6 +38,13 @@ import {
   resolverRoteamentoPlaybookAgente,
   type HubAgenteIdentidadePlaybookRow,
 } from "@/lib/hub/agente-playbook-routing";
+import {
+  lerEmpresaCadastralTenant,
+  nomeComercialEmpresa,
+} from "@/lib/hub/tenant-empresa-cadastral";
+import { defaultTenantId } from "@/lib/tenant-default";
+import { menuFooterEmpresa } from "@/lib/whatsapp/menu-footer";
+import { mensagemJaIndicaIntentTriagem } from "@/lib/whatsapp/menu-intent";
 import { temReferenciaPlaybookPublicado } from "@/lib/hub/agente-instrucao-modo";
 
 export type PlaybookStep =
@@ -105,7 +112,17 @@ export type PlaybookProcessResult =
 
 type PlaybookAnswers = Record<string, string>;
 
-const FOOTER = "HUB Obra 10+";
+async function rodapeMenuTenant(supabase: SupabaseClient, agenteSlug: string): Promise<string> {
+  const { data: row } = await supabase
+    .from("hub_agente_identidade")
+    .select("tenant_id")
+    .eq("agente_slug", agenteSlug.trim())
+    .maybeSingle();
+  const tenantId =
+    (typeof row?.tenant_id === "string" && row.tenant_id.trim()) || defaultTenantId();
+  const { cadastral, nome_exibicao } = await lerEmpresaCadastralTenant(supabase, tenantId);
+  return menuFooterEmpresa(nomeComercialEmpresa(cadastral, nome_exibicao));
+}
 
 const KNOWN_CHOICE_IDS = new Set([
   "triagem_arq",
@@ -289,8 +306,8 @@ export function convertStructuredFlowToEngine(definition: PlaybookFlowDefinition
         id: stepId,
         type: "menu",
         text: step.prompt.trim(),
-        menu_type: "list",
-        list_button: "Ver opções",
+        menu_type: choices.length <= 3 ? "button" : "list",
+        list_button: choices.length <= 3 ? undefined : "Ver opções",
         answer_key: menuField,
         invalid_prompt: "Escolha uma opção válida no menu para continuarmos.",
         choices,
@@ -530,7 +547,8 @@ async function enviarLista(
   instanceToken: string,
   texto: string,
   choices: string[],
-  listButton = "Ver opções"
+  listButton = "Ver opções",
+  footerText?: string
 ) {
   return enviarMenuUazapi({
     telefone,
@@ -539,18 +557,24 @@ async function enviarLista(
     tipo: "list",
     choices,
     listButton,
-    footerText: FOOTER,
+    footerText: menuFooterEmpresa(footerText),
   });
 }
 
-async function enviarBotoes(telefone: string, instanceToken: string, texto: string, choices: string[]) {
+async function enviarBotoes(
+  telefone: string,
+  instanceToken: string,
+  texto: string,
+  choices: string[],
+  footerText?: string
+) {
   return enviarMenuUazapi({
     telefone,
     instanceToken,
     texto,
     tipo: "button",
     choices,
-    footerText: FOOTER,
+    footerText: menuFooterEmpresa(footerText),
   });
 }
 
@@ -1585,16 +1609,37 @@ async function processarPlaybookInboundDynamic(params: {
 
   if (!avancado) return { handled: false, motivo: "runtime_indisponivel" };
 
+  const { data: agenteApresentacao } = await params.supabase
+    .from("hub_agente_identidade")
+    .select("nome, tenant_id")
+    .eq("agente_slug", params.agenteSlug)
+    .maybeSingle();
+  const nomeAgenteFluxo =
+    (typeof agenteApresentacao?.nome === "string" && agenteApresentacao.nome.trim()) ||
+    params.agenteSlug;
+  const tenantIdFluxo =
+    (typeof agenteApresentacao?.tenant_id === "string" && agenteApresentacao.tenant_id.trim()) ||
+    defaultTenantId();
+  const { cadastral: cadastralFluxo, nome_exibicao: nomeExibicaoFluxo } =
+    await lerEmpresaCadastralTenant(params.supabase, tenantIdFluxo);
+  const nomeEmpresaFluxo = nomeComercialEmpresa(cadastralFluxo, nomeExibicaoFluxo);
+
   const flowContext = buildBlocoContextoFluxoParaLlm(
     avancado.definition,
     avancado.flowState,
     params.mensagem,
-    playbookMenuUazapiEnhancementEnabled()
+    playbookMenuUazapiEnhancementEnabled(),
+    undefined,
+    { nomeAgente: nomeAgenteFluxo, nomeEmpresa: nomeEmpresaFluxo || undefined }
   );
 
-  const pendingMenu =
+  const pendingMenuRaw =
     playbookMenuUazapiEnhancementEnabled() && avancado.pendingMenu
       ? avancado.pendingMenu
+      : undefined;
+  const pendingMenu =
+    pendingMenuRaw && !mensagemJaIndicaIntentTriagem(params.mensagem)
+      ? { ...pendingMenuRaw, footerText: nomeEmpresaFluxo || pendingMenuRaw.footerText }
       : undefined;
 
   return {
@@ -1691,6 +1736,7 @@ async function processarPlaybookInboundDynamicLegacy(params: {
         await enviarTexto(params.telefone, text, params.instanceToken);
       },
       sendMenu: async ({ text, menuType, choices, listButton }) => {
+        const footer = await rodapeMenuTenant(params.supabase, params.agenteSlug);
         const out = await enviarMenuUazapi({
           telefone: params.telefone,
           instanceToken: params.instanceToken,
@@ -1698,7 +1744,7 @@ async function processarPlaybookInboundDynamicLegacy(params: {
           tipo: menuType,
           choices,
           listButton,
-          footerText: FOOTER,
+          footerText: footer,
         });
         if (out.ok) {
           await marcarMenuTriagemEnviado(params.supabase, params.leadId);

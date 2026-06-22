@@ -1,4 +1,5 @@
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
+import { menuFooterEmpresa } from "@/lib/whatsapp/menu-footer";
 
 /** Triagem inicial genérica Waje (fallback sem playbook publicado). */
 export const MENU_PLAYBOOK_TRIAGEM_INICIAL = [
@@ -78,7 +79,7 @@ export async function enviarMenuUazapi(params: EnviarMenuUazapiParams): Promise<
     type: params.tipo,
     text: params.texto.slice(0, 4000),
     choices: params.choices,
-    footerText: (params.footerText || "Atendimento").slice(0, 500),
+    footerText: menuFooterEmpresa(params.footerText).slice(0, 500),
   };
   if (params.tipo === "list") {
     body.listButton = (params.listButton || "Ver opções").slice(0, 120);

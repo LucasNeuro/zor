@@ -16,6 +16,9 @@
 #   UAZAPI_INSTANCE_TOKEN         — fallback global se agente sem token próprio (grupos/envio)
 #   WEBHOOK_SECRET                — mesmo valor em ?wh= na URL do webhook UAZAPI
 #   DEFAULT_TENANT_ID             — 00000000-0000-4000-8000-000000000001
+# Redis (opcional — cache tenant; se ausente usa memória local):
+#   REDIS_HOST, REDIS_PORT (6379), REDIS_USERNAME (Upstash: default), REDIS_PASSWORD
+#   WRONGPASS nos logs = credenciais erradas; remova REDIS_HOST ou corrija no Dashboard.
 # Supabase: aplicar migrações (incl. 20260605120000_ensure_hub_leads_crm_tenant.sql) antes do go-live.
 # WhatsApp: após deploy, abrir agente → QR/pareamento (sincroniza webhook para NEXT_PUBLIC_APP_URL/api/whatsapp/webhook).
 #

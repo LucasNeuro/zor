@@ -21,6 +21,30 @@ function snapshotMinimo(): AgentPlaybookSnapshotV1 {
 }
 
 describe("buildPlaybookFlowFromSnapshot", () => {
+  it("gera menu delivery com 3 opções para restaurante", () => {
+    const snap = snapshotMinimo();
+    snap.conhecimento = [
+      { secao: "empresa", conteudo: "Cantina Nova — restaurante com delivery" },
+      { secao: "servicos", conteudo: "- Delivery de refeições\n- Retirada no balcão" },
+      { secao: "atendimento", conteudo: "Atendimento por WhatsApp." },
+    ];
+    const { definition, resumo } = buildPlaybookFlowFromSnapshot(snap, {
+      nicho: "Restaurante e delivery",
+      segmentos: ["alimentação fora do lar"],
+      nome_empresa: "Cantina Nova",
+    });
+    const menu = definition.steps.find((s) => s.id === "triagem_inicial_menu");
+    expect(menu?.kind).toBe("menu");
+    if (menu?.kind === "menu") {
+      const labels = menu.options.map((o) => o.label);
+      expect(labels.some((l) => /pedido|delivery/i.test(l))).toBe(true);
+      expect(labels.some((l) => /balcão|retirar/i.test(l))).toBe(true);
+      expect(labels.some((l) => /cardápio/i.test(l))).toBe(true);
+      expect(labels.some((l) => /alimentação fora do lar/i.test(l))).toBe(false);
+    }
+    expect(resumo.opcoes_triagem.some((l) => /delivery/i.test(l))).toBe(true);
+  });
+
   it("não gera steps órfãos para ramos não usados no menu", () => {
     const { definition } = buildPlaybookFlowFromSnapshot(snapshotMinimo(), {
       nicho: "Serviços",

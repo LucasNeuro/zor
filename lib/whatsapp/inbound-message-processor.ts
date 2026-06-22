@@ -399,7 +399,12 @@ export async function processarMensagemInboundWhatsapp(params: {
           playbookMotor = playbookOut.motor === "playbook_flow" ? "playbook_flow" : "playbook_ia";
         }
         if (playbookOut.pendingMenu) {
-          playbookPendingMenu = playbookOut.pendingMenu;
+          const { mensagemJaIndicaIntentTriagem } = await import("@/lib/whatsapp/menu-intent");
+          if (!mensagemJaIndicaIntentTriagem(params.mensagemFinal)) {
+            playbookPendingMenu = playbookOut.pendingMenu;
+          } else {
+            log.info("wa.processor.playbook_menu_skip", { reason: "intent_ja_na_mensagem" });
+          }
         }
       } else if (playbookRouting.bloquearIa) {
         log.warn("wa.processor.playbook_unhandled_blocked_ia", {
@@ -522,6 +527,7 @@ export async function processarMensagemInboundWhatsapp(params: {
       precisa_aprovacao: Boolean(resultado.precisaAprovacao),
       resposta_chars: resultado.resposta.length,
       menu_ja_enviado: menuJaEnviado,
+      contexto_fontes: resultado.contextoFontes ?? null,
       tool_calls: Array.isArray(resultado.toolCallsExecutadas)
         ? resultado.toolCallsExecutadas.slice(0, 8).map((t) => ({ nome: t.nome, ok: t.ok }))
         : [],
@@ -612,6 +618,15 @@ export async function processarMensagemInboundWhatsapp(params: {
           const { enviarMenuUazapi, marcarMenuTriagemEnviado } = await import(
             "@/lib/whatsapp/menu-triagem-uazapi"
           );
+          const { menuFooterEmpresa } = await import("@/lib/whatsapp/menu-footer");
+          const { lerEmpresaCadastralTenant, nomeComercialEmpresa } = await import(
+            "@/lib/hub/tenant-empresa-cadastral"
+          );
+          let rodapeMenu = playbookPendingMenu.footerText?.trim();
+          if (!rodapeMenu) {
+            const { cadastral, nome_exibicao } = await lerEmpresaCadastralTenant(supabase, tenantId);
+            rodapeMenu = menuFooterEmpresa(nomeComercialEmpresa(cadastral, nome_exibicao));
+          }
           const menuPlaybook = await enviarMenuUazapi({
             telefone: params.telefone,
             instanceToken: tokenMenuPlaybook,
@@ -619,7 +634,7 @@ export async function processarMensagemInboundWhatsapp(params: {
             tipo: playbookPendingMenu.menuType,
             choices: playbookPendingMenu.choices,
             listButton: playbookPendingMenu.listButton,
-            footerText: "HUB Obra 10+",
+            footerText: rodapeMenu,
           });
           if (menuPlaybook.ok) {
             await marcarMenuTriagemEnviado(supabase, lead.id);
@@ -706,6 +721,12 @@ export async function processarMensagemInboundWhatsapp(params: {
               tipo_conteudo: "texto",
               conteudo: respostaTexto,
               enviada_em: new Date().toISOString(),
+              metadata: {
+                feito_por_tipo: "ia",
+                motor: resultado.motor ?? playbookMotor ?? "llm_prompt",
+                modelo: modeloUsado,
+                contexto_fontes: resultado.contextoFontes ?? null,
+              },
             },
           ]);
         }

@@ -195,6 +195,7 @@ function montarBioDoCargo(params: {
 }
 
 export async function GET(request: NextRequest) {
+  try {
   const supabase = db();
   const { searchParams } = new URL(request.url);
   const ativo = searchParams.get("ativo");
@@ -262,12 +263,18 @@ export async function GET(request: NextRequest) {
   }
 
   if (error) {
+    console.error("[hub/agentes] GET falhou", { tenantId, message: error.message });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const payload = (data ?? []).map((row) => sanitizarAgenteHubParaCliente(row as Record<string, unknown>));
   await setTenantCache(tenantId, cacheKey, payload, AGENTES_CACHE_TTL_SECONDS);
   return NextResponse.json(payload);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[hub/agentes] GET exceção", message);
+    return NextResponse.json({ error: message || "Erro interno ao carregar agentes." }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {

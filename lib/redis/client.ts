@@ -167,7 +167,125 @@ class IoredisCommandClient implements RedisCommandClient {
 
 let singleton: RedisCommandClient | null = null;
 let ioredisInstance: IoredisLike | null = null;
+let redisUnavailableReason: string | null = null;
 const memorySingleton = new MemoryRedisClient();
+
+function isRedisAuthOrConnError(message: string): boolean {
+  return /WRONGPASS|NOAUTH|invalid username-password|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i.test(message);
+}
+
+function markRedisUnavailable(reason: string): void {
+  if (redisUnavailableReason) return;
+  redisUnavailableReason = reason;
+  console.warn(
+    `[redis] ${reason} — usando cache em memória (dedupe/rate-limit não compartilham entre réplicas). Corrija REDIS_HOST/REDIS_USERNAME/REDIS_PASSWORD no Render.`
+  );
+  singleton = memorySingleton;
+  const raw = ioredisInstance as { disconnect?: () => void; removeAllListeners?: (e?: string) => void } | null;
+  if (raw) {
+    try {
+      raw.removeAllListeners?.("error");
+      raw.disconnect?.();
+    } catch {
+      /* ignore */
+    }
+  }
+  ioredisInstance = null;
+}
+
+function attachIoredisErrorHandlers(client: IoredisLike): void {
+  const raw = client as { on?: (event: string, cb: (err: Error) => void) => void };
+  raw.on?.("error", (err: Error) => {
+    const msg = err?.message ?? String(err);
+    if (isRedisAuthOrConnError(msg)) {
+      markRedisUnavailable(msg);
+    } else {
+      console.warn("[redis]", msg);
+    }
+  });
+}
+
+/** Wraps ioredis commands — on auth/conn failure, falls back to in-memory for that call. */
+class ResilientRedisClient implements RedisCommandClient {
+  readonly backend: RedisBackend;
+
+  constructor(
+    private readonly primary: RedisCommandClient,
+    private readonly fallback: MemoryRedisClient
+  ) {
+    this.backend = primary.backend;
+  }
+
+  private async exec<T>(op: () => Promise<T>, fallbackOp: () => Promise<T>): Promise<T> {
+    if (singleton === memorySingleton && this.primary !== memorySingleton) {
+      return fallbackOp();
+    }
+    try {
+      return await op();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isRedisAuthOrConnError(msg)) {
+        markRedisUnavailable(msg);
+        return fallbackOp();
+      }
+      throw err;
+    }
+  }
+
+  async set(
+    key: string,
+    value: string,
+    exMode: "EX",
+    ttlSec: number,
+    nxMode: "NX"
+  ): Promise<"OK" | null> {
+    return this.exec(
+      () => this.primary.set(key, value, exMode, ttlSec, nxMode),
+      () => this.fallback.set(key, value, exMode, ttlSec, nxMode)
+    );
+  }
+
+  async get(key: string): Promise<string | null> {
+    return this.exec(() => this.primary.get(key), () => this.fallback.get(key));
+  }
+
+  async setEx(key: string, value: string, ttlSec: number): Promise<void> {
+    await this.exec(
+      () => this.primary.setEx(key, value, ttlSec),
+      () => this.fallback.setEx(key, value, ttlSec)
+    );
+  }
+
+  async del(key: string): Promise<void> {
+    await this.exec(() => this.primary.del(key), () => this.fallback.del(key));
+  }
+
+  async delByPrefix(prefix: string): Promise<void> {
+    await this.exec(
+      () => this.primary.delByPrefix(prefix),
+      () => this.fallback.delByPrefix(prefix)
+    );
+  }
+
+  async incr(key: string): Promise<number> {
+    return this.exec(() => this.primary.incr(key), () => this.fallback.incr(key));
+  }
+
+  async expire(key: string, seconds: number): Promise<number> {
+    return this.exec(
+      () => this.primary.expire(key, seconds),
+      () => this.fallback.expire(key, seconds)
+    );
+  }
+
+  async lpush(key: string, value: string): Promise<number> {
+    return this.exec(() => this.primary.lpush(key, value), () => this.fallback.lpush(key, value));
+  }
+
+  async rpop(key: string): Promise<string | null> {
+    return this.exec(() => this.primary.rpop(key), () => this.fallback.rpop(key));
+  }
+}
 
 export function redisKeyPrefix(): string {
   return process.env.REDIS_KEY_PREFIX?.trim() || "waje:";
@@ -206,25 +324,41 @@ function buildIoredisClient(): IoredisLike | null {
   const username = process.env.REDIS_USERNAME?.trim();
   const password = process.env.REDIS_PASSWORD?.trim();
 
-  return new RedisCtor({
+  const client = new RedisCtor({
     host,
     port: Number.isFinite(port) ? port : 6379,
     username: username || undefined,
     password: password || undefined,
-    maxRetriesPerRequest: 2,
-    enableReadyCheck: true,
-    lazyConnect: false,
+    maxRetriesPerRequest: 1,
+    enableReadyCheck: false,
+    lazyConnect: true,
+    enableOfflineQueue: false,
+    retryStrategy: (times: number) => {
+      if (redisUnavailableReason) return null;
+      return times > 2 ? null : Math.min(times * 200, 600);
+    },
+    reconnectOnError(err: Error) {
+      const msg = err?.message ?? String(err);
+      if (isRedisAuthOrConnError(msg)) {
+        markRedisUnavailable(msg);
+        return false;
+      }
+      return true;
+    },
   });
+  attachIoredisErrorHandlers(client);
+  return client;
 }
 
 /** Shared Redis client (ioredis when REDIS_HOST is set, otherwise in-memory fallback). */
 export function getRedisClient(): RedisCommandClient {
   if (singleton) return singleton;
 
-  if (isRedisConfigured()) {
+  if (isRedisConfigured() && !redisUnavailableReason) {
     ioredisInstance = buildIoredisClient();
     if (ioredisInstance) {
-      singleton = new IoredisCommandClient(ioredisInstance);
+      const primary = new IoredisCommandClient(ioredisInstance);
+      singleton = new ResilientRedisClient(primary, memorySingleton);
       return singleton;
     }
   }
@@ -243,4 +377,5 @@ export function resetRedisClientForTests(): void {
 /** Test helper — force in-memory backend regardless of env. */
 export function useMemoryRedisForTests(): void {
   singleton = memorySingleton;
+  redisUnavailableReason = "test";
 }

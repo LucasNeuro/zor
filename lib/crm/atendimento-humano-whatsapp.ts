@@ -4,7 +4,9 @@ import { ensureConversaAtiva, gravarMensagemSaidaConversa } from "@/lib/crm/conv
 import { formatarMensagemConsultorWhatsapp } from "@/lib/crm/mensagem-consultor-whatsapp";
 import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsapp";
 import { formatHumanoDisplayName } from "@/lib/crm/resolve-crm-actor";
-import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
+import { defaultTenantId } from "@/lib/tenant-default";
+import { insertFilaMensagemCompat } from "@/lib/crm/insert-fila-mensagem-compat";
+import { extrairWhatsappMessageIdDeRespostaUazapi } from "@/lib/whatsapp/uazapi-response";
 import { cancelarJobsIaPendentesTelefone } from "@/lib/whatsapp/human-handoff-from-device";
 import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 import {
@@ -140,6 +142,7 @@ export type EnviarMensagemHumanoResult =
       whatsappSkipped: boolean;
       whatsapp: { skipped?: boolean; status?: number; body?: unknown; provider?: string };
       tokenOrigem?: string;
+      aviso?: string;
     }
   | { ok: false; error: string; status?: number };
 
@@ -258,6 +261,12 @@ export async function enviarMensagemAtendimentoHumano(
     sendInfo = { status: envio.status, body: envio.body, provider: envio.provider };
   }
 
+  const whatsappMessageId = extrairWhatsappMessageIdDeRespostaUazapi(sendInfo.body);
+  const urlMidiaPreview =
+    midia && midia.mimeType.startsWith("image/")
+      ? base64ParaUazapiFile(midia.base64, midia.mimeType)
+      : null;
+
   const agora = new Date().toISOString();
 
   const conversaId = await ensureConversaAtiva(supabase, {
@@ -271,17 +280,20 @@ export async function enviarMensagemAtendimentoHumano(
   const metadataComum = {
     texto_original: legendaOriginal || textoOriginal || null,
     tag_consultor: consultorNome,
+    ...(whatsappMessageId ? { whatsapp_message_id: whatsappMessageId, message_id: whatsappMessageId } : {}),
     ...(midia
       ? {
           tipo_midia: tipoMidiaChat,
           nome_arquivo: midia.nomeArquivo,
           mime_type: midia.mimeType,
+          ...(urlMidiaPreview ? { url_midia: urlMidiaPreview } : {}),
         }
       : {}),
   };
 
+  let hubMensagensGravada = false;
   if (conversaId) {
-    await gravarMensagemSaidaConversa(supabase, {
+    hubMensagensGravada = await gravarMensagemSaidaConversa(supabase, {
       conversaId,
       leadId: opts.leadId,
       tenantId,
@@ -290,6 +302,8 @@ export async function enviarMensagemAtendimentoHumano(
       feitoPor: opts.feitoPor,
       tipoConteudo: tipoMidiaChat ?? "texto",
       nomeArquivo: midia?.nomeArquivo ?? null,
+      urlMidia: urlMidiaPreview,
+      whatsappMessageId,
       metadata: metadataComum,
     });
 
@@ -327,6 +341,8 @@ export async function enviarMensagemAtendimentoHumano(
     tenant_id: tenantId,
     resposta_enviada: !sendSkipped,
     enviada_em: sendSkipped ? null : agora,
+    ...(whatsappMessageId ? { whatsapp_message_id: whatsappMessageId } : {}),
+    ...(urlMidiaPreview ? { url_midia: urlMidiaPreview } : {}),
     metadata: {
       ...filaMetadata,
       feito_por_tipo: "humano",
@@ -337,27 +353,24 @@ export async function enviarMensagemAtendimentoHumano(
 
   if (midia && tipoMidiaChat) {
     filaRow.tipo_conteudo = tipoMidiaChat;
+    filaRow.tipo_midia = tipoMidiaChat;
     filaRow.nome_arquivo = midia.nomeArquivo;
   }
 
-  let filaIns = await supabase.from("hub_fila_mensagens").insert(filaRow);
-  if (filaIns.error && isMissingPgColumn(filaIns.error, "conversa_id")) {
-    const { conversa_id: _c, ...semConversa } = filaRow;
-    filaIns = await supabase.from("hub_fila_mensagens").insert(semConversa);
-  }
-  if (filaIns.error && isMissingPgColumn(filaIns.error, "tenant_id")) {
-    const { tenant_id: _t, ...semTenant } = filaRow;
-    filaIns = await supabase.from("hub_fila_mensagens").insert(semTenant);
-  }
+  const filaIns = await insertFilaMensagemCompat(supabase, filaRow);
 
   if (filaIns.error) {
-    return {
-      ok: false,
-      error: sendSkipped
-        ? `Não foi possível gravar a mensagem na fila: ${filaIns.error.message}`
-        : `Mensagem enviada ao WhatsApp, mas falha ao gravar fila: ${filaIns.error.message}`,
-      status: 500,
-    };
+    if (hubMensagensGravada || sendSkipped) {
+      console.warn("[CRM][ATENDIMENTO] hub_fila_mensagens:", filaIns.error.message);
+    } else {
+      return {
+        ok: false,
+        error: sendSkipped
+          ? `Não foi possível gravar a mensagem na fila: ${filaIns.error.message}`
+          : `Mensagem enviada ao WhatsApp, mas falha ao gravar fila: ${filaIns.error.message}`,
+        status: 500,
+      };
+    }
   }
 
   await supabase.from("hub_atividades").insert({
@@ -389,6 +402,9 @@ export async function enviarMensagemAtendimentoHumano(
     whatsappSkipped: sendSkipped,
     whatsapp: sendInfo,
     tokenOrigem,
+    ...(filaIns.error
+      ? { aviso: "Mensagem registada no histórico; fila auxiliar não gravada (migração pendente)." }
+      : {}),
   };
 }
 

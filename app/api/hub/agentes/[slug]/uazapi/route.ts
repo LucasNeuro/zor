@@ -27,6 +27,7 @@ import {
   syncWebhooksUazapi,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
 import { deleteUazapiInstanceRemotely } from "@/lib/whatsapp/uazapi-delete-instance";
+import { resolverTokenCatalogoProxyCidades } from "@/lib/whatsapp/uazapi-proxy-cities-token";
 
 async function resolverQrRespostaUazapi(
   payload: unknown,

@@ -10,7 +10,7 @@ import {
   slugifyFerramentaCustomSlug,
   smartProviderValido,
 } from "@/lib/hub/ferramentas-custom-db";
-import { tenantIdFromRequest } from "@/lib/tenant-default";
+import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 
 function db() {
   return createClient(
@@ -21,7 +21,11 @@ function db() {
 
 export async function GET(request: NextRequest) {
   const supabase = db();
-  const tenantId = tenantIdFromRequest(request.headers);
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) {
+    return NextResponse.json([]);
+  }
+  const tenantId = tenantResolved.tenantId;
   const all = new URL(request.url).searchParams.get("all") === "true";
   let q = supabase.from("hub_ferramentas_custom").select("*").eq("tenant_id", tenantId).order("titulo");
   if (!all) q = q.eq("ativo", true);
@@ -34,7 +38,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const supabase = db();
-  const tenantId = tenantIdFromRequest(request.headers);
 
   let body: Record<string, unknown>;
   try {
@@ -42,6 +45,10 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Body JSON inválido." }, { status: 400 });
   }
+
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const tenantId = tenantResolved.tenantId;
 
   const titulo = String(body.titulo || "").trim();
   if (!titulo) return NextResponse.json({ error: "titulo é obrigatório." }, { status: 400 });

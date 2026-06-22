@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import { clearCrmApiHeadersCache } from "@/lib/internal-api-headers-client";
 import { getInitials } from "@/lib/utils/initials";
 
 /* ── Shared auth listener ───────────────────────────────────────────── */
@@ -60,6 +61,7 @@ async function signOutAndRedirect(
   onNavigate?: () => void,
 ) {
   onNavigate?.();
+  clearCrmApiHeadersCache();
   await fetch("/api/auth/crm-session", { method: "DELETE", credentials: "include" });
   await supabase.auth.signOut();
   router.push("/login");

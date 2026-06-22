@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { validateAndNormalizeCicloConfiguracoes } from "@/lib/hub-ciclos-configuracoes";
 import { repararCiclosAusentesParaAgentes } from "@/lib/hub/provision-hub-ciclo-padrao";
-import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 
 type CicloTipo = "continuo" | "programado" | "gatilho";
 
@@ -101,7 +101,9 @@ export async function POST(request: NextRequest) {
   }
   const configuracoes = parsedCfg.value;
 
-  const tenantId = tenantIdFromRequest(request.headers);
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const tenantId = tenantResolved.tenantId;
   const row: Record<string, unknown> = {
     agente_slug,
     nome,
@@ -111,7 +113,7 @@ export async function POST(request: NextRequest) {
     intervalo_minutos: intervalo,
     ativo: body.ativo === false ? false : true,
     configuracoes,
-    tenant_id: tenantId || defaultTenantId(),
+    tenant_id: tenantId,
   };
 
   const supabase = db();

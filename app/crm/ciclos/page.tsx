@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useSearchParams } from "next/navigation";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { invalidateHubCiclosList, useHubCiclosList } from "@/hooks/useCrmDataQueries";
@@ -276,7 +277,7 @@ export default function CiclosPage() {
   }, [ciclosTodos, modoLista, busca]);
 
   const carregarAuxiliar = useCallback(async () => {
-    const agRes = await fetch("/api/hub/agentes?todos=true", { headers: internalApiHeaders() });
+    const agRes = await fetch("/api/hub/agentes?todos=true", { headers: await hubApiHeaders() });
 
     if (agRes.ok) {
       const agJson = (await agRes.json()) as unknown;

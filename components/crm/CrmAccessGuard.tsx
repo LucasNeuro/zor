@@ -5,18 +5,31 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   canAccessCrmPath,
   defaultCrmLandingPath,
+  hasFullCrmAccess,
   type CrmAccessContext,
 } from "@/lib/crm/access-permissions";
 
 type Props = CrmAccessContext & {
   children: React.ReactNode;
+  /** Evita bloquear enquanto `/api/crm/acessos/me` ainda não respondeu. */
+  accessLoaded?: boolean;
 };
+
+function ctxLooksUninitialized(ctx: CrmAccessContext): boolean {
+  return (
+    !ctx.baseRole?.trim() &&
+    ctx.permissoes == null &&
+    !ctx.wajeOwner &&
+    !ctx.tenantId
+  );
+}
 
 export function CrmAccessGuard({
   baseRole,
   permissoes,
   wajeOwner = false,
   tenantId = null,
+  accessLoaded = true,
   children,
 }: Props) {
   const pathname = usePathname();
@@ -24,7 +37,8 @@ export function CrmAccessGuard({
   const ctx = { baseRole, permissoes, wajeOwner, tenantId };
 
   useEffect(() => {
-    if (!baseRole && !permissoes && !wajeOwner && !tenantId) return;
+    if (!accessLoaded) return;
+    if (ctxLooksUninitialized(ctx)) return;
     if (canAccessCrmPath(pathname, ctx)) return;
     const destino = defaultCrmLandingPath(ctx);
     const destinoPath = destino.split("?")[0] ?? destino;
@@ -32,7 +46,11 @@ export function CrmAccessGuard({
     if (destinoPath !== currentPath && !pathname.startsWith(`${destinoPath}/`)) {
       router.replace(destino);
     }
-  }, [pathname, baseRole, permissoes, wajeOwner, tenantId, router]);
+  }, [pathname, baseRole, permissoes, wajeOwner, tenantId, accessLoaded, router]);
+
+  if (!accessLoaded || ctxLooksUninitialized(ctx)) {
+    return <>{children}</>;
+  }
 
   if (!canAccessCrmPath(pathname, ctx)) {
     return (
@@ -44,3 +62,6 @@ export function CrmAccessGuard({
 
   return <>{children}</>;
 }
+
+/** Exportado para testes e diagnóstico. */
+export { hasFullCrmAccess };

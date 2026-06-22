@@ -477,6 +477,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   permissoes={accessCtx.permissoes}
                   wajeOwner={accessCtx.wajeOwner}
                   tenantId={accessCtx.tenantId}
+                  accessLoaded={accessLoaded}
                 >
                   {children}
                 </CrmAccessGuard>
@@ -505,6 +506,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                 permissoes={accessCtx.permissoes}
                 wajeOwner={accessCtx.wajeOwner}
                 tenantId={accessCtx.tenantId}
+                accessLoaded={accessLoaded}
               >
               {children}
               </CrmAccessGuard>
@@ -683,6 +685,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
             permissoes={accessCtx.permissoes}
             wajeOwner={accessCtx.wajeOwner}
             tenantId={accessCtx.tenantId}
+            accessLoaded={accessLoaded}
           >
           {children}
           </CrmAccessGuard>

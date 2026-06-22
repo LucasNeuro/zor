@@ -36,9 +36,14 @@ async function coraFetch(
         res.on("data", (c) => chunks.push(c));
         res.on("end", () => {
           const text = Buffer.concat(chunks).toString("utf8");
+          const status = res.statusCode ?? 500;
+          if (status === 204) {
+            resolve(new Response(null, { status: 204 }));
+            return;
+          }
           resolve(
             new Response(text, {
-              status: res.statusCode ?? 500,
+              status,
               headers: res.headers as HeadersInit,
             }),
           );

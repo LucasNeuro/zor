@@ -1,4 +1,4 @@
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 
 /** Linha típica de `hub_cargos_catalogo` no cliente — campos opcionais. */
 export type HubCargoCatalogRow = Record<string, unknown> & { slug?: string };
@@ -7,7 +7,7 @@ export async function fetchHubCargosCatalog(): Promise<
   { ok: true; cargos: HubCargoCatalogRow[] } | { ok: false; error: string }
 > {
   const r = await fetch("/api/hub/cargos?all=true", {
-    headers: internalApiHeaders(),
+    headers: await hubApiHeaders(),
     credentials: "same-origin",
   });
   const data = (await r.json().catch(() => ({}))) as unknown;

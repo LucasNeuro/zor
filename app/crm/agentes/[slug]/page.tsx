@@ -24,7 +24,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { CrmStickyTabs } from "@/components/crm/CrmStickyTabs";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import { AgenteAvatar } from "@/components/crm/AgenteAvatar";
 import { AgenteCiclosOperacaoList } from "@/components/crm/AgenteCiclosOperacaoList";
@@ -204,7 +204,7 @@ export default function AgentePage() {
     if (!slug) return;
     setCarregando(true);
     try {
-      const res = await fetch(`/api/hub/agentes/${slug}`, { headers: internalApiHeaders() });
+      const res = await fetch(`/api/hub/agentes/${slug}`, { headers: await hubApiHeaders() });
       if (res.ok) {
         const data = (await res.json()) as Agente;
         setAgente(data);
@@ -234,7 +234,7 @@ export default function AgentePage() {
   useEffect(() => {
     void (async () => {
       try {
-        const headers = internalApiHeaders();
+        const headers = await hubApiHeaders();
         const [r, externas, resInt] = await Promise.all([
           fetch("/api/hub/ferramentas-custom?all=true", { headers }),
           fetchHubFerramentasExternas(headers, false).catch(() => []),
@@ -303,7 +303,7 @@ export default function AgentePage() {
     void (async () => {
       try {
         const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/operacao`, {
-          headers: internalApiHeaders(),
+          headers: await hubApiHeaders(),
         });
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as OperacaoPayload;
@@ -336,7 +336,7 @@ export default function AgentePage() {
     setIncluirBriefingAoLimpar(true);
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/memorias`, {
-        headers: internalApiHeaders(),
+        headers: await hubApiHeaders(),
       });
       if (res.ok) {
         const data = (await res.json()) as {
@@ -363,7 +363,7 @@ export default function AgentePage() {
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/memorias`, {
         method: "DELETE",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ incluir_briefing: incluirBriefingAoLimpar }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -407,7 +407,7 @@ export default function AgentePage() {
     try {
       const res = await fetch(`/api/hub/agentes/${slug}/arquivar`, {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ motivo: motivoArquivamento.trim() }),
       });
       if (res.ok) {
@@ -432,7 +432,7 @@ export default function AgentePage() {
     try {
       const res = await fetch(`/api/hub/agentes/${slug}`, {
         method: "PATCH",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           nome,
           prefixo_mercado: MERCADO_PREFIXO_PADRAO,
@@ -473,7 +473,7 @@ export default function AgentePage() {
     try {
       const res = await fetch(`/api/hub/agentes/${slug}`, {
         method: "PATCH",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ ativo: proximo }),
       });
       if (res.ok) {
@@ -495,7 +495,7 @@ export default function AgentePage() {
     try {
       const res = await fetch(`/api/hub/agentes/${slug}/mistral-sync`, {
         method: "POST",
-        headers: internalApiHeaders(),
+        headers: await hubApiHeaders(),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; mistral_agent_id?: string };
       if (res.ok) {

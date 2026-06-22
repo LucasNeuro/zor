@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { Bot, Send, User, X } from "lucide-react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 import {
   agenteEhCopilotoInterno,
@@ -102,7 +102,7 @@ export function AgenteBriefingDrawer({
     try {
       const res = await fetch(base, {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           sessao_id: sessaoId,
           mensagem: t,

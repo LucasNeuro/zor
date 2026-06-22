@@ -26,7 +26,7 @@ import {
   RF_TEXT_SECONDARY,
   rfCloseButtonStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { normalizarSrcImagemQrUazapi } from "@/lib/whatsapp/qr-uazapi";
 import {
   formatUazapiDisconnectReasonForUi,
@@ -464,7 +464,7 @@ export function AgenteUazapiBlock({
       try {
         const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`, {
           method: "POST",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({ action, ...extra }),
         });
         const data = await lerCorpoApi(res);
@@ -608,6 +608,22 @@ export function AgenteUazapiBlock({
         setUltimaVerificacaoResultado("sucesso");
         if (typeof data.webhook_warning === "string" && data.webhook_warning.trim()) {
           setWebhookAviso(data.webhook_warning.trim());
+        } else if (action === "sync_webhook") {
+          const whDisplay =
+            typeof data.webhook_url_display === "string"
+              ? data.webhook_url_display.trim()
+              : typeof data.webhook_url === "string"
+                ? data.webhook_url.trim()
+                : "";
+          if (whDisplay) {
+            setWebhookAviso(
+              /localhost|127\.0\.0\.1/i.test(whDisplay)
+                ? `Webhook ainda em localhost (${whDisplay}). Abra o agente em https://waje.com.br e sincronize de novo.`
+                : `Webhook sincronizado: ${whDisplay}. Envie uma mensagem de teste.`,
+            );
+          } else {
+            setWebhookAviso("Webhook sincronizado. Envie uma mensagem de teste.");
+          }
         }
         if (typeof data.proxy_warning === "string" && data.proxy_warning.trim()) {
           setProxyAviso(data.proxy_warning.trim());

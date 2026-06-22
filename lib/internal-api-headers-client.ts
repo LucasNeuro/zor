@@ -8,13 +8,28 @@ export type CrmSessionActor = {
 };
 
 let cachedProfileTenantId: string | null | undefined;
+let cachedWajeOwner: boolean | undefined;
 
 /** Limpa cache de tenant (ex.: após logout). */
 export function clearCrmApiHeadersCache(): void {
   cachedProfileTenantId = undefined;
+  cachedWajeOwner = undefined;
 }
 
-/** Cabeçalhos para APIs CRM admin, incluindo auth_id do utilizador atual. */
+function readTenantIdFromAcessosPayload(json: {
+  data?: {
+    tenant_id?: string | null;
+    user?: { tenant_id?: string | null };
+  };
+}): string | null {
+  const top = json.data?.tenant_id;
+  if (typeof top === "string" && top.trim()) return top.trim();
+  const nested = json.data?.user?.tenant_id;
+  if (typeof nested === "string" && nested.trim()) return nested.trim();
+  return null;
+}
+
+/** Cabeçalhos para APIs CRM / Hub — sempre com sessão e tenant da conta quando existir. */
 export async function crmApiHeaders(): Promise<Record<string, string>> {
   const base = internalApiHeaders();
   const { data: { user } } = await supabase.auth.getUser();
@@ -22,17 +37,20 @@ export async function crmApiHeaders(): Promise<Record<string, string>> {
 
   if (cachedProfileTenantId === undefined) {
     cachedProfileTenantId = null;
+    cachedWajeOwner = false;
     if (user?.id) {
       try {
         const res = await fetch("/api/crm/acessos/me", { headers: base });
         if (res.ok) {
           const json = (await res.json().catch(() => ({}))) as {
-            data?: { user?: { tenant_id?: string | null } };
+            data?: {
+              tenant_id?: string | null;
+              waje_owner?: boolean;
+              user?: { tenant_id?: string | null };
+            };
           };
-          const tid = json.data?.user?.tenant_id;
-          if (typeof tid === "string" && tid.trim()) {
-            cachedProfileTenantId = tid.trim();
-          }
+          cachedProfileTenantId = readTenantIdFromAcessosPayload(json);
+          cachedWajeOwner = json.data?.waje_owner === true;
         }
       } catch {
         /* mantém null */
@@ -42,9 +60,18 @@ export async function crmApiHeaders(): Promise<Record<string, string>> {
 
   if (cachedProfileTenantId) {
     base["x-tenant-id"] = cachedProfileTenantId;
+  } else if (cachedWajeOwner) {
+    /* plataforma sem tenant: mantém x-tenant-id do env (internalApiHeaders) */
+  } else {
+    delete base["x-tenant-id"];
   }
 
   return base;
+}
+
+/** Alias semântico — rotas `/api/hub/*` devem usar estes cabeçalhos no browser. */
+export async function hubApiHeaders(): Promise<Record<string, string>> {
+  return crmApiHeaders();
 }
 
 /** Cabeçalhos CRM com identidade do utilizador para auditoria (exclusões, etc.). */

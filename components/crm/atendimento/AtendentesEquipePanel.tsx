@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Bot, Phone, Plus, Trash2, UserPlus } from "lucide-react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders, crmApiHeaders } from "@/lib/internal-api-headers-client";
 import type { AtendenteCrm } from "@/lib/crm/atendentes-crm";
 
 type HubAgenteOption = {
@@ -37,9 +37,11 @@ export function AtendentesEquipePanel({ variant = "atendimento", compact = false
     setLoading(true);
     setErro("");
     try {
+      const headers = await crmApiHeaders();
+      const hubHeaders = await hubApiHeaders();
       const [resAt, resAg] = await Promise.all([
-        fetch("/api/crm/atendentes?ativos=false", { headers: internalApiHeaders() }),
-        fetch("/api/hub/agentes?ativo=true", { headers: internalApiHeaders() }),
+        fetch("/api/crm/atendentes?ativos=false", { headers }),
+        fetch("/api/hub/agentes?ativo=true", { headers: hubHeaders }),
       ]);
       const jsonAt = await resAt.json().catch(() => ({}));
       const jsonAg = await resAg.json().catch(() => ({}));
@@ -73,10 +75,11 @@ export function AtendentesEquipePanel({ variant = "atendimento", compact = false
     }
     setSalvando(true);
     try {
+      const headers = await crmApiHeaders();
       const res = await fetch("/api/crm/atendentes", {
         method: "POST",
         credentials: "include",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({
           nome: nome.trim(),
           telefone: telefone.trim(),
@@ -110,7 +113,7 @@ export function AtendentesEquipePanel({ variant = "atendimento", compact = false
       const res = await fetch(`/api/crm/atendentes/${encodeURIComponent(id)}`, {
         method: "DELETE",
         credentials: "include",
-        headers: internalApiHeaders(),
+        headers: await crmApiHeaders(),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));

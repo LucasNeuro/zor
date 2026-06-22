@@ -12,37 +12,20 @@ function webhookSyncMode(): "global_only" | "instance_and_global" {
   return "global_only";
 }
 
-function isLocalhostHost(hostname: string): boolean {
+export function isLocalhostHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0";
 }
 
 function allowLocalhostWebhookOrigin(): boolean {
   return (
-    process.env.NODE_ENV === "development" || process.env.UAZAPI_ALLOW_LOCALHOST_WEBHOOK === "1"
+    process.env.NODE_ENV === "development" && process.env.UAZAPI_ALLOW_LOCALHOST_WEBHOOK !== "0"
   );
 }
 
-export function pickPublicAppOrigin(request: NextRequest): string | null {
-  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (fromEnv) {
-    try {
-      const u = new URL(fromEnv);
-      const h = u.hostname.toLowerCase();
-      if (!isLocalhostHost(h) || allowLocalhostWebhookOrigin()) {
-        u.pathname = "";
-        u.search = "";
-        u.hash = "";
-        return u.toString().replace(/\/+$/, "");
-      }
-    } catch {
-      /* fallthrough */
-    }
-  }
+function normalizeOriginUrl(raw: string): string | null {
   try {
-    const u = new URL(request.url);
-    const h = u.hostname.toLowerCase();
-    if (isLocalhostHost(h) && !allowLocalhostWebhookOrigin()) return null;
+    const u = new URL(raw);
     u.pathname = "";
     u.search = "";
     u.hash = "";
@@ -50,6 +33,53 @@ export function pickPublicAppOrigin(request: NextRequest): string | null {
   } catch {
     return null;
   }
+}
+
+function originFromForwardedHeaders(request: NextRequest): string | null {
+  const host = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  if (!host) return null;
+  const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
+  return normalizeOriginUrl(`${proto}://${host}`);
+}
+
+function acceptOriginCandidate(raw: string, isProd: boolean): string | null {
+  const normalized = normalizeOriginUrl(raw);
+  if (!normalized) return null;
+  try {
+    const h = new URL(normalized).hostname.toLowerCase();
+    if (isLocalhostHost(h)) {
+      if (isProd) return null;
+      if (!allowLocalhostWebhookOrigin()) return null;
+    }
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Origem pública para webhook WhatsApp (UAZAPI precisa alcançar esta URL).
+ * Em produção ignora localhost no env e prioriza o host real do pedido (Render/CDN).
+ */
+export function pickPublicAppOrigin(request: NextRequest): string | null {
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (isProd) {
+    const forwarded = originFromForwardedHeaders(request);
+    if (forwarded) return forwarded;
+  }
+
+  const envCandidates = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+    process.env.RENDER_EXTERNAL_URL,
+  ];
+  for (const raw of envCandidates) {
+    const accepted = raw?.trim() ? acceptOriginCandidate(raw.trim(), isProd) : null;
+    if (accepted) return accepted;
+  }
+
+  return acceptOriginCandidate(request.url, isProd);
 }
 
 function webhookBody(origin: string) {
@@ -69,7 +99,11 @@ export async function syncWebhookDaInstancia(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const origin = pickPublicAppOrigin(request);
   if (!origin) {
-    return { ok: false, error: "NEXT_PUBLIC_APP_URL ausente/inválido para webhook público" };
+    return {
+      ok: false,
+      error:
+        "URL pública indisponível. Defina NEXT_PUBLIC_APP_URL=https://waje.com.br no Render (sem localhost).",
+    };
   }
 
   const out = await uazapiFetchJson<Record<string, unknown>>("/webhook", {
@@ -121,7 +155,11 @@ export async function syncWebhookGlobal(
 
   const origin = pickPublicAppOrigin(request);
   if (!origin) {
-    return { ok: false, error: "NEXT_PUBLIC_APP_URL ausente/inválido para webhook público" };
+    return {
+      ok: false,
+      error:
+        "URL pública indisponível. Defina NEXT_PUBLIC_APP_URL=https://waje.com.br no Render (sem localhost).",
+    };
   }
 
   const out = await uazapiFetchJson<Record<string, unknown>>("/globalwebhook", {
@@ -156,7 +194,6 @@ export async function syncWebhooksUazapi(
     if (global.ok) {
       instance = await disableWebhookDaInstancia(request, instanceToken);
     } else {
-      // Fallback de segurança: mantém operação ativa em ambientes sem admin token.
       instance = await syncWebhookDaInstancia(request, instanceToken);
     }
   } else {
@@ -185,6 +222,15 @@ export function maskWebhookUrlForUi(url: string): string {
   const secret = process.env.WEBHOOK_SECRET?.trim();
   if (!secret || !url.includes(secret)) return url;
   return url.replace(secret, `${secret.slice(0, 4)}…`);
+}
+
+export function isWebhookUrlLocalhost(url: string | null | undefined): boolean {
+  if (!url?.trim()) return false;
+  try {
+    return isLocalhostHost(new URL(url.trim()).hostname);
+  } catch {
+    return /localhost|127\.0\.0\.1/i.test(url);
+  }
 }
 
 export function formatWebhookSyncWarnings(sync: Awaited<ReturnType<typeof syncWebhooksUazapi>>): string | undefined {

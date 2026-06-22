@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GitBranch, LayoutGrid, RefreshCw, Save, Wand2, X } from "lucide-react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import {
   PlaybookUploadAnalisePanel,
   type PlaybookAnaliseResultado,
@@ -267,7 +267,7 @@ export function AgentePlaybookCalibracaoDrawer({
     try {
       const res = await fetch(
         `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/conteudo`,
-        { headers: internalApiHeaders() }
+        { headers: await hubApiHeaders() }
       );
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
@@ -344,7 +344,7 @@ export function AgentePlaybookCalibracaoDrawer({
         `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/conteudo`,
         {
           method: "PUT",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({ markdown: trimmed }),
         }
       );
@@ -414,7 +414,7 @@ export function AgentePlaybookCalibracaoDrawer({
         `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/conteudo`,
         {
           method: "PUT",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({ markdown: markdownToPublish }),
         }
       );
@@ -454,7 +454,7 @@ export function AgentePlaybookCalibracaoDrawer({
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook`, {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ force: true }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -508,7 +508,7 @@ export function AgentePlaybookCalibracaoDrawer({
       form.append("file", file);
       const res = await fetch(
         `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/upload`,
-        { method: "POST", headers: internalApiHeaders(), body: form }
+        { method: "POST", headers: await hubApiHeaders(), body: form }
       );
       const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
@@ -547,7 +547,7 @@ export function AgentePlaybookCalibracaoDrawer({
         `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/analisar`,
         {
           method: "POST",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({ content: markdown }),
         }
       );
@@ -576,7 +576,7 @@ export function AgentePlaybookCalibracaoDrawer({
         `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/preset-wa`,
         {
           method: "POST",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({
             preset: "conversacao_universal",
             forcar_playbook: forcarPlaybook,
@@ -631,7 +631,7 @@ export function AgentePlaybookCalibracaoDrawer({
         `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/playbook/fluxo-empresa`,
         {
           method: "POST",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({ content: markdown }),
         }
       );

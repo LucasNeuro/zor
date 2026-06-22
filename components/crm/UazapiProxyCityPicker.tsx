@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MapPin, RefreshCw, Search } from "lucide-react";
 import { CRM_ACCENT } from "@/lib/crm/crm-button-styles";
 import { RF_BORDER_STRONG, RF_TEXT_MUTED, RF_TEXT_PRIMARY } from "@/lib/crm/crm-retrofit-dark-theme";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import {
   buildProxyCityApiSearch,
   filterProxyCitiesByQuery,
@@ -113,7 +113,7 @@ export function UazapiProxyCityPicker({
 
         const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+          headers: { "Content-Type": "application/json", ...(await hubApiHeaders()) },
           body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
@@ -147,7 +147,7 @@ export function UazapiProxyCityPicker({
 
             const retryRes = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+              headers: { "Content-Type": "application/json", ...(await hubApiHeaders()) },
               body: JSON.stringify(retryBody),
             });
             const retryData = await retryRes.json().catch(() => ({}));

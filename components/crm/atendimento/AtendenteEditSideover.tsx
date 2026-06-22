@@ -13,7 +13,7 @@ import {
   RF_LABEL_STYLE,
   RF_TEXT_MUTED,
 } from "@/lib/crm/crm-retrofit-dark-theme";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders, hubApiHeaders } from "@/lib/internal-api-headers-client";
 import type { AtendenteCrm } from "@/lib/crm/atendentes-crm";
 
 type HubAgenteOption = {
@@ -77,7 +77,8 @@ export function AtendenteEditSideover({ open, onClose, onSaved, atendente }: Pro
       setAgenteSlug("");
       setAtivo(true);
     }
-    void fetch("/api/hub/agentes?ativo=true", { headers: internalApiHeaders() })
+    void hubApiHeaders()
+      .then((headers) => fetch("/api/hub/agentes?ativo=true", { headers }))
       .then((r) => r.json())
       .then((json) => {
         const list = (Array.isArray(json) ? json : json?.agentes ?? []) as HubAgenteOption[];
@@ -94,6 +95,7 @@ export function AtendenteEditSideover({ open, onClose, onSaved, atendente }: Pro
     }
     setSalvando(true);
     try {
+      const headers = await crmApiHeaders();
       const payload = {
         nome: nome.trim(),
         telefone: telefone.trim(),
@@ -110,7 +112,7 @@ export function AtendenteEditSideover({ open, onClose, onSaved, atendente }: Pro
         {
           method: editando ? "PATCH" : "POST",
           credentials: "include",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...headers, "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }
       );
@@ -137,7 +139,7 @@ export function AtendenteEditSideover({ open, onClose, onSaved, atendente }: Pro
       const res = await fetch(`/api/crm/atendentes/${encodeURIComponent(atendente.id)}`, {
         method: "DELETE",
         credentials: "include",
-        headers: internalApiHeaders(),
+        headers: await crmApiHeaders(),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {

@@ -1,6 +1,10 @@
 import type { NextRequest } from "next/server";
 import { crmDb } from "@/lib/crm/supabase-server";
-import { isPlatformTeamRole } from "@/lib/auth/verify-ops-user";
+import {
+  isOpsOwnerFlag,
+  isPlatformTeamRole,
+  resolveWajePlatformOwner,
+} from "@/lib/auth/verify-ops-user";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
 export type TenantResolveResult =
@@ -21,7 +25,7 @@ function uuidValido(s: string): boolean {
 
 type CallerProfile = {
   tenantId: string | null;
-  isPlatformUser: boolean;
+  isWajePlatform: boolean;
 };
 
 async function loadCallerProfile(request: NextRequest): Promise<CallerProfile | null> {
@@ -30,7 +34,7 @@ async function loadCallerProfile(request: NextRequest): Promise<CallerProfile | 
 
   const { data: user } = await crmDb()
     .from("users")
-    .select("tenant_id, role, owner")
+    .select("tenant_id, role, owner, email, status")
     .eq("auth_id", callerAuthId)
     .maybeSingle();
 
@@ -39,15 +43,31 @@ async function loadCallerProfile(request: NextRequest): Promise<CallerProfile | 
   const rawTenant = user.tenant_id;
   const tenantId =
     typeof rawTenant === "string" && rawTenant.trim() ? rawTenant.trim() : null;
-  const role = String(user.role ?? "");
-  const isPlatformUser = isPlatformTeamRole(role) || user.owner === true;
 
-  return { tenantId, isPlatformUser };
+  const isWajePlatform = resolveWajePlatformOwner(
+    user as { role?: unknown; email?: unknown; owner?: unknown; status?: unknown },
+    request.headers.get("x-user-email"),
+  );
+
+  return { tenantId, isWajePlatform };
+}
+
+async function firstValidTenant(candidates: string[]): Promise<string | null> {
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const tid = candidate?.trim();
+    if (!tid || seen.has(tid)) continue;
+    seen.add(tid);
+    if (await tenantExistsInHub(tid)) return tid;
+  }
+  return null;
 }
 
 /**
- * Resolve tenant para escritas (criar agente, etc.) com validação em `hub_tenants`.
- * Prioridade: tenant do utilizador → tenant no body (plataforma) → header/env → default.
+ * Resolve tenant para Hub (agentes, ciclos, ferramentas) com validação em `hub_tenants`.
+ *
+ * Clientes com `users.tenant_id` usam **só** o tenant da conta — nunca o DEFAULT_TENANT_ID do servidor.
+ * Equipe plataforma (sem tenant) pode usar header/env ou `tenant_id` no body.
  */
 export async function resolveValidatedTenantId(
   request: NextRequest,
@@ -58,23 +78,10 @@ export async function resolveValidatedTenantId(
   const bodyTenantRaw = options?.bodyTenantId?.trim() ?? "";
   const bodyTenant = bodyTenantRaw && uuidValido(bodyTenantRaw) ? bodyTenantRaw : "";
 
-  const candidates: string[] = [];
-  if (caller?.tenantId) candidates.push(caller.tenantId);
-  if (bodyTenant && caller?.isPlatformUser) candidates.push(bodyTenant);
-  if (headerTenant) candidates.push(headerTenant);
-  candidates.push(defaultTenantId());
-
-  const seen = new Set<string>();
-  for (const candidate of candidates) {
-    const tid = candidate?.trim();
-    if (!tid || seen.has(tid)) continue;
-    seen.add(tid);
-    if (await tenantExistsInHub(tid)) {
-      return { ok: true, tenantId: tid };
-    }
-  }
-
   if (caller?.tenantId) {
+    if (await tenantExistsInHub(caller.tenantId)) {
+      return { ok: true, tenantId: caller.tenantId };
+    }
     return {
       ok: false,
       status: 400,
@@ -83,12 +90,31 @@ export async function resolveValidatedTenantId(
     };
   }
 
-  if (caller?.isPlatformUser) {
+  const fallbackCandidates: string[] = [];
+  if (bodyTenant && caller?.isWajePlatform) fallbackCandidates.push(bodyTenant);
+  if (headerTenant) fallbackCandidates.push(headerTenant);
+  fallbackCandidates.push(defaultTenantId());
+
+  const resolved = await firstValidTenant(fallbackCandidates);
+  if (resolved) {
+    return { ok: true, tenantId: resolved };
+  }
+
+  if (caller?.isWajePlatform) {
     return {
       ok: false,
       status: 400,
       error:
-        "Utilizador de plataforma sem tenant associado. Defina DEFAULT_TENANT_ID e NEXT_PUBLIC_TENANT_ID com um UUID válido de hub_tenants (ex.: tenant do cliente), ou aceda ao CRM com uma conta de cliente.",
+        "Utilizador de plataforma sem tenant associado. Defina DEFAULT_TENANT_ID e NEXT_PUBLIC_TENANT_ID com um UUID válido de hub_tenants, ou aceda ao CRM com uma conta de cliente.",
+    };
+  }
+
+  if (caller) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        "Conta sem empresa vinculada. Conclua o cadastro em /cadastro ou peça ao administrador para associar o seu utilizador a um tenant.",
     };
   }
 
@@ -96,8 +122,14 @@ export async function resolveValidatedTenantId(
     ok: false,
     status: 400,
     error:
-      "Tenant inválido ou não encontrado. Verifique o cadastro da empresa ou as variáveis DEFAULT_TENANT_ID / NEXT_PUBLIC_TENANT_ID no servidor.",
+      "Tenant inválido ou não encontrado. Inicie sessão no CRM ou verifique DEFAULT_TENANT_ID / NEXT_PUBLIC_TENANT_ID no servidor.",
   };
+}
+
+/** Atalho para rotas Hub: devolve tenant validado ou null. */
+export async function resolveHubTenantId(request: NextRequest): Promise<string | null> {
+  const resolved = await resolveValidatedTenantId(request);
+  return resolved.ok ? resolved.tenantId : null;
 }
 
 /** Tenant do utilizador CRM logado; valida existência em `hub_tenants` quando possível. */
@@ -131,4 +163,21 @@ export async function resolveTenantContextFromCaller(request: NextRequest): Prom
     tenantId,
     tenantSlug: slugSegmento(rawSlug || tenantId, "empresa"),
   };
+}
+
+/** Utilizário de equipe Waje (console plataforma), não confundir com role CRM `owner` do tenant. */
+export function isWajePlatformCaller(user: {
+  role?: unknown;
+  owner?: unknown;
+  tenant_id?: unknown;
+} | null): boolean {
+  if (!user) return false;
+  const hasTenant =
+    typeof user.tenant_id === "string" && user.tenant_id.trim().length > 0;
+  if (hasTenant) return false;
+  return (
+    resolveWajePlatformOwner(user) ||
+    isPlatformTeamRole(String(user.role ?? "")) ||
+    isOpsOwnerFlag(user.owner)
+  );
 }

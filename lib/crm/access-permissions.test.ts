@@ -60,6 +60,17 @@ describe("defaultCrmLandingPath", () => {
     };
     expect(hasFullCrmAccess(ctx)).toBe(true);
     expect(canAccessCrmPath("/crm/leads", ctx)).toBe(true);
+    expect(canAccessCrmPath("/crm/agentes", ctx)).toBe(true);
     expect(canAccessCrmPath("/crm/waje", ctx)).toBe(false);
+  });
+
+  it("plataforma sem tenant acede a agentes IA", () => {
+    const ctx = {
+      baseRole: "platform_admin",
+      permissoes: null,
+      wajeOwner: true,
+      tenantId: null,
+    };
+    expect(canAccessCrmPath("/crm/agentes", ctx)).toBe(true);
   });
 });

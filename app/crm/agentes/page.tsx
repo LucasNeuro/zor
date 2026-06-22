@@ -541,7 +541,13 @@ function AgentesView() {
         return;
       }
       setDialogExcluirAgente(null);
-      toastSuccess(`Agente «${agente.nome}» excluído.`);
+      const avisoUazapi =
+        typeof data?.uazapi_delete_warning === "string" ? data.uazapi_delete_warning.trim() : "";
+      toastSuccess(
+        avisoUazapi
+          ? `Agente «${agente.nome}» excluído. A instância UAZAPI pode ter ficado no servidor — apague manualmente no painel fitbot.`
+          : `Agente «${agente.nome}» excluído.`,
+      );
       removeHubAgenteFromCaches(queryClient, agente.agente_slug);
       if (selectedSlug === agente.agente_slug) {
         setSelectedSlug(null);

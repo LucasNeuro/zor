@@ -36,6 +36,10 @@ import {
   formatProxyCityDisplay,
   formatProxyCityLabel,
 } from "@/lib/whatsapp/uazapi-proxy-city-label";
+import {
+  UAZAPI_PAIRCODE_VALID_MS,
+  avisoTelefoneBrPareamento,
+} from "@/lib/whatsapp/uazapi-proxy-connect";
 import { UazapiProxyCityPicker } from "@/components/crm/UazapiProxyCityPicker";
 
 /** UAZAPI: QR expira em ~2 min (doc OpenAPI). */
@@ -309,7 +313,7 @@ async function lerCorpoApi(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
-const ACOES_COM_PATCH_PAI = new Set(["create", "save_proxy", "delete_remote", "disconnect"]);
+const ACOES_COM_PATCH_PAI = new Set(["create", "connect", "save_proxy", "delete_remote", "disconnect"]);
 
 function patchUazapiDoCorpo(
   data: Record<string, unknown>,
@@ -390,9 +394,10 @@ export function AgenteUazapiBlock({
   const [paircode, setPaircode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState("");
   const [pairingMode, setPairingMode] = useState<"qr" | "code">("qr");
-  const [qrGeradoEm, setQrGeradoEm] = useState<number | null>(null);
+  const [pareamentoGeradoEm, setPareamentoGeradoEm] = useState<number | null>(null);
+  const [pareamentoExpiradoUi, setPareamentoExpiradoUi] = useState(false);
   const [qrExpiradoUi, setQrExpiradoUi] = useState(false);
-  const [qrRelogio, setQrRelogio] = useState(0);
+  const [pareamentoRelogio, setPareamentoRelogio] = useState(0);
   const [uazapiDiag, setUazapiDiag] = useState<{
     lastDisconnectReason?: string;
     connectHint?: string;
@@ -499,7 +504,7 @@ export function AgenteUazapiBlock({
         if (data.qr_invalid === true) {
           setQrcode(null);
           setPaircode(null);
-          setQrGeradoEm(null);
+          setPareamentoGeradoEm(null);
           if (!opts?.silent) {
             setErr({
               titulo: "QR inválido",
@@ -516,12 +521,13 @@ export function AgenteUazapiBlock({
             setQrcode(norm);
             setPaircode(null);
             if (action === "connect") {
-              setQrGeradoEm(Date.now());
+              setPareamentoGeradoEm(Date.now());
               setQrExpiradoUi(false);
+              setPareamentoExpiradoUi(false);
             }
           } else if (!opts?.silent && action === "connect") {
             setQrcode(null);
-            setQrGeradoEm(null);
+            setPareamentoGeradoEm(null);
             setErr({
               titulo: "QR inválido",
               detalhes: ["O servidor enviou um QR que não é uma imagem PNG/JPEG válida. Gere outro código."],
@@ -529,14 +535,17 @@ export function AgenteUazapiBlock({
           }
         } else if (!opts?.silent && (action === "connect" || action === "status")) {
           setQrcode(null);
-          setQrGeradoEm(null);
+          setPareamentoGeradoEm(null);
         }
 
         if (typeof data.paircode === "string" && data.paircode.trim()) {
           setPaircode(data.paircode.trim());
           setQrcode(null);
-          setQrGeradoEm(null);
-          setQrExpiradoUi(false);
+          if (action === "connect") {
+            setPareamentoGeradoEm(Date.now());
+            setQrExpiradoUi(false);
+            setPareamentoExpiradoUi(false);
+          }
         } else if (!opts?.silent && (action === "connect" || action === "status")) {
           setPaircode(null);
         }
@@ -580,8 +589,9 @@ export function AgenteUazapiBlock({
         if (action === "disconnect") {
           setQrcode(null);
           setPaircode(null);
-          setQrGeradoEm(null);
+          setPareamentoGeradoEm(null);
           setQrExpiradoUi(false);
+          setPareamentoExpiradoUi(false);
           setUazapiDiag(null);
         }
         if (action === "connect" && typeof data.qrcode === "string" && data.qrcode.trim()) {
@@ -601,8 +611,9 @@ export function AgenteUazapiBlock({
         if (nextStatusRaw === "connected") {
           setQrcode(null);
           setPaircode(null);
-          setQrGeradoEm(null);
+          setPareamentoGeradoEm(null);
           setQrExpiradoUi(false);
+          setPareamentoExpiradoUi(false);
         }
         setUltimaVerificacaoAt(new Date().toISOString());
         setUltimaVerificacaoResultado("sucesso");
@@ -667,27 +678,30 @@ export function AgenteUazapiBlock({
   postActionRef.current = postAction;
 
   const syncPollRef = useRef(0);
+  const statusParaPoll = (statusTempoReal?.status ?? snapshot.uazapi_connection_status ?? "").toLowerCase();
+
   useEffect(() => {
     if (!temInstancia) return;
-    const s = (snapshot.uazapi_connection_status || "").toLowerCase();
-    if (s === "connected") return;
+    if (statusParaPoll === "connected") return;
 
     void postActionRef.current("status", undefined, { silent: true });
 
-    if (s !== "connecting") return;
+    const aguardando = Boolean(paircode?.trim() || qrcode);
+    if (statusParaPoll !== "connecting" && !aguardando) return;
 
     syncPollRef.current += 1;
     const gen = syncPollRef.current;
+    const intervalMs = aguardando ? 3000 : 6000;
     const id = window.setInterval(() => {
       if (gen !== syncPollRef.current) return;
       void postActionRef.current("status", undefined, { silent: true });
-    }, 6000);
+    }, intervalMs);
 
     return () => {
       syncPollRef.current += 1;
       window.clearInterval(id);
     };
-  }, [temInstancia, snapshot.uazapi_instance_id, snapshot.uazapi_connection_status]);
+  }, [temInstancia, snapshot.uazapi_instance_id, statusParaPoll, paircode, qrcode]);
 
   const fieldStyle: CSSProperties = darkSideover
     ? {
@@ -801,41 +815,66 @@ export function AgenteUazapiBlock({
     qrcode && (qrcode.startsWith("data:image") || /^https?:\/\//i.test(qrcode));
 
   useEffect(() => {
-    if (!qrGeradoEm || !qrcode) return;
-    const id = window.setInterval(() => setQrRelogio((n) => n + 1), 1000);
+    if (!pareamentoGeradoEm || (!qrcode && !paircode?.trim())) return;
+    const id = window.setInterval(() => setPareamentoRelogio((n) => n + 1), 1000);
     return () => window.clearInterval(id);
-  }, [qrGeradoEm, qrcode]);
+  }, [pareamentoGeradoEm, qrcode, paircode]);
 
   useEffect(() => {
-    if (!qrGeradoEm || !qrcode) return;
-    const restante = UAZAPI_QR_VALID_MS - (Date.now() - qrGeradoEm);
+    if (!pareamentoGeradoEm) return;
+    const temQr = Boolean(qrcode);
+    const temCode = Boolean(paircode?.trim());
+    if (!temQr && !temCode) return;
+
+    const validMs = temCode && !temQr ? UAZAPI_PAIRCODE_VALID_MS : UAZAPI_QR_VALID_MS;
+    const restante = validMs - (Date.now() - pareamentoGeradoEm);
     if (restante <= 0) {
-      setQrcode(null);
-      setQrExpiradoUi(true);
+      if (temQr) {
+        setQrcode(null);
+        setQrExpiradoUi(true);
+      }
+      if (temCode) {
+        setPaircode(null);
+        setPareamentoExpiradoUi(true);
+      }
       return;
     }
     const t = window.setTimeout(() => {
-      setQrcode(null);
-      setQrExpiradoUi(true);
+      if (temQr) {
+        setQrcode(null);
+        setQrExpiradoUi(true);
+      }
+      if (temCode) {
+        setPaircode(null);
+        setPareamentoExpiradoUi(true);
+      }
     }, restante);
     return () => window.clearTimeout(t);
-  }, [qrGeradoEm, qrcode]);
+  }, [pareamentoGeradoEm, qrcode, paircode]);
 
-  const qrRestanteMs =
-    qrGeradoEm != null ? UAZAPI_QR_VALID_MS - (Date.now() - qrGeradoEm) : null;
-  void qrRelogio;
-  const qrSegundosRestantes =
-    qrRestanteMs != null ? Math.max(0, Math.ceil(qrRestanteMs / 1000)) : null;
+  const pareamentoValidMs =
+    paircode?.trim() && !qrcode ? UAZAPI_PAIRCODE_VALID_MS : UAZAPI_QR_VALID_MS;
+  const pareamentoRestanteMs =
+    pareamentoGeradoEm != null ? pareamentoValidMs - (Date.now() - pareamentoGeradoEm) : null;
+  void pareamentoRelogio;
+  const pareamentoSegundosRestantes =
+    pareamentoRestanteMs != null ? Math.max(0, Math.ceil(pareamentoRestanteMs / 1000)) : null;
   const qrExpirado =
-    qrExpiradoUi || (qrGeradoEm != null && (qrRestanteMs ?? 0) <= 0);
+    qrExpiradoUi || (qrcode != null && pareamentoGeradoEm != null && (pareamentoRestanteMs ?? 0) <= 0);
+  const paircodeExpirado =
+    pareamentoExpiradoUi ||
+    (paircode != null && pareamentoGeradoEm != null && (pareamentoRestanteMs ?? 0) <= 0 && !qrcode);
   const mostrarQrAtivo = Boolean(mostrarQr && !qrExpirado);
-  const paircodeAtivo = Boolean(paircode?.trim());
+  const paircodeAtivo = Boolean(paircode?.trim() && !paircodeExpirado);
   const pairingPhoneDigits = pairingPhone.replace(/\D/g, "");
   const podeConectarPorCodigo = pairingPhoneDigits.length >= 10 && pairingPhoneDigits.length <= 15;
+  const avisoTelefoneBr = avisoTelefoneBrPareamento(pairingPhoneDigits);
   const precisaReconectar =
     temInstancia &&
     String(statusExibido).toLowerCase() !== "connected" &&
-    (qrExpirado || (String(statusExibido).toLowerCase() === "connecting" && !mostrarQrAtivo && !paircodeAtivo));
+    (qrExpirado ||
+      paircodeExpirado ||
+      (String(statusExibido).toLowerCase() === "connecting" && !mostrarQrAtivo && !paircodeAtivo));
   const conectarBloqueado =
     acoesOff ||
     loading === "connect" ||
@@ -918,6 +957,11 @@ export function AgenteUazapiBlock({
               {loading === "disconnect" ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}
               Desligar sessão
             </button>
+            <p style={{ margin: "8px 0 0", color: textMuted, fontSize: 10, lineHeight: 1.45, gridColumn: "1 / -1" }}>
+              <strong style={{ color: textStrong }}>Trocar número:</strong> use «Desligar sessão» e depois «Gerar QR/código» —
+              mantém a mesma instância. <strong style={{ color: textStrong }}>Eliminar ligação</strong> apaga a instância na
+              UAZAPI (libera vaga no plano).
+            </p>
           </div>
           {!conectado ? (
             <div
@@ -1279,6 +1323,11 @@ export function AgenteUazapiBlock({
                     Informe de 10 a 15 dígitos (ex.: 5511999999999).
                   </p>
                 ) : null}
+                {avisoTelefoneBr ? (
+                  <p style={{ margin: "6px 0 0", color: "#e6c06a", fontSize: 11, lineHeight: 1.45 }}>
+                    {avisoTelefoneBr}
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -1302,16 +1351,16 @@ export function AgenteUazapiBlock({
                 }}
               >
                 <p style={{ margin: 0, color: textMuted, fontSize: 11, fontWeight: 700 }}>QR WHATSAPP</p>
-                {qrSegundosRestantes != null && qrSegundosRestantes > 0 ? (
+                {pareamentoSegundosRestantes != null && pareamentoSegundosRestantes > 0 ? (
                   <span
                     style={{
                       fontSize: 11,
                       fontWeight: 800,
-                      color: qrSegundosRestantes <= 30 ? "#f85149" : "#58a6ff",
+                      color: pareamentoSegundosRestantes <= 30 ? "#f85149" : "#58a6ff",
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    Expira em {formatarContagemQr(qrSegundosRestantes)}
+                    Expira em {formatarContagemQr(pareamentoSegundosRestantes)}
                   </span>
                 ) : null}
               </div>
@@ -1346,7 +1395,29 @@ export function AgenteUazapiBlock({
                 textAlign: "center",
               }}
             >
-              <p style={{ margin: "0 0 8px", color: "#79c0ff", fontSize: 11, fontWeight: 700 }}>CÓDIGO DE PAREAMENTO</p>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 8,
+                  gap: 8,
+                }}
+              >
+                <p style={{ margin: 0, color: "#79c0ff", fontSize: 11, fontWeight: 700 }}>CÓDIGO DE PAREAMENTO</p>
+                {pareamentoSegundosRestantes != null && pareamentoSegundosRestantes > 0 ? (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: pareamentoSegundosRestantes <= 60 ? "#f85149" : "#58a6ff",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    Expira em {formatarContagemQr(pareamentoSegundosRestantes)}
+                  </span>
+                ) : null}
+              </div>
               <p
                 style={{
                   margin: "0 0 10px",
@@ -1360,7 +1431,8 @@ export function AgenteUazapiBlock({
                 {paircode}
               </p>
               <p style={{ margin: 0, color: textMuted, fontSize: 11, lineHeight: 1.5 }}>
-                WhatsApp → Aparelhos conectados → Conectar com número. Digite este código no app.
+                WhatsApp → Aparelhos conectados → Conectar com número de telefone. Digite o código acima (com ou sem
+                hífen). O estado muda para CONNECTED aqui automaticamente — não precisa clicar em Actualizar.
               </p>
             </div>
           ) : null}
@@ -1379,8 +1451,8 @@ export function AgenteUazapiBlock({
                 QR EXPIRADO OU SESSÃO PENDENTE
               </p>
               <p style={{ margin: "0 0 14px", color: textMuted, fontSize: 11, lineHeight: 1.55 }}>
-                O código anterior já não serve. Só funciona após gerar um <strong style={{ color: textStrong }}>novo QR</strong>{" "}
-                (o antigo deixa de ligar).
+                O código anterior já não serve. Gere um{" "}
+                <strong style={{ color: textStrong }}>novo código</strong> (válido ~5 min) ou use QR.
               </p>
               <button
                 type="button"
@@ -1522,7 +1594,11 @@ export function AgenteUazapiBlock({
         }}
       >
         <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
-          A ligação WhatsApp deste agente será removida.
+          A instância WhatsApp deste agente será apagada no servidor UAZAPI (fitbot). Use isto para libertar uma vaga do
+          plano ou antes de criar outra ligação do zero.
+        </p>
+        <p style={{ margin: "10px 0 0", color: "#9cb0c9", fontSize: 12, lineHeight: 1.5 }}>
+          Para só trocar o número no mesmo agente, prefira «Desligar sessão» + «Gerar QR/código» — não precisa eliminar.
         </p>
         <p style={{ margin: "10px 0 0", color: "#b3261e", fontWeight: 600, fontSize: 12 }}>
           Esta operação não pode ser desfeita.

@@ -106,3 +106,18 @@ export function persistPatchFromProxy(proxy: UazapiProxyConnectFields): Record<s
 
 export const UAZAPI_PROXY_SETUP_HINT =
   "Selecione e guarde a cidade do proxy (região do número WhatsApp) antes de «QR / pareamento». Cada agente pode ter uma cidade diferente.";
+
+/** UAZAPI OpenAPI: código de pareamento expira em ~5 min (QR ~2 min). */
+export const UAZAPI_PAIRCODE_VALID_MS = 300_000;
+
+/** Avisa quando o DDI 55 parece faltar o 9 do celular (12 dígitos). */
+export function avisoTelefoneBrPareamento(digits: string): string | null {
+  const d = digits.replace(/\D/g, "");
+  if (!d.startsWith("55") || d.length !== 12) return null;
+  const rest = d.slice(4);
+  if (rest.length === 8 && !rest.startsWith("9")) {
+    const ddd = d.slice(2, 4);
+    return `Celular no Brasil costuma ter 13 dígitos (ex.: 55${ddd}9${rest}). Confira se o número está completo.`;
+  }
+  return null;
+}

@@ -26,7 +26,7 @@ import {
   publicWebhookUrlFromRequest,
   syncWebhooksUazapi,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
-import { resolverTokenCatalogoProxyCidades } from "@/lib/whatsapp/uazapi-proxy-cities-token";
+import { deleteUazapiInstanceRemotely } from "@/lib/whatsapp/uazapi-delete-instance";
 
 async function resolverQrRespostaUazapi(
   payload: unknown,
@@ -396,17 +396,23 @@ export async function POST(
           global: webhookSync.global.ok || webhookSync.global.skipped === true,
         },
         ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
-        ...(qrPack.qr_invalid
+        ...(paircode
           ? {
               connect_hint:
-                "A UAZAPI devolveu dados que não são uma imagem QR válida. Use «Desligar sessão», guarde a região e «Gerar QR» de novo.",
+                "Código gerado. WhatsApp → Aparelhos conectados → Conectar com número. Digite o código no telefone; expira em ~5 minutos. A ligação aparece aqui automaticamente.",
+              paircode_valid_seconds: 300,
             }
-          : !qrPack.qrcode
+          : qrPack.qr_invalid
             ? {
                 connect_hint:
-                  "UAZAPI não devolveu QR. Tente «Gerar QR» de novo ou «Desligar sessão» antes. O código expira em ~2 minutos.",
+                  "A UAZAPI devolveu dados que não são uma imagem QR válida. Use «Desligar sessão», guarde a região e «Gerar QR» de novo.",
               }
-            : {}),
+            : !qrPack.qrcode
+              ? {
+                  connect_hint:
+                    "UAZAPI não devolveu QR. Tente «Gerar QR» de novo ou «Desligar sessão» antes. O código expira em ~2 minutos.",
+                }
+              : {}),
       });
     }
 
@@ -501,13 +507,12 @@ export async function POST(
     }
 
     if (action === "delete_remote") {
-      const out = await uazapiFetchJson<Record<string, unknown>>("/instance", {
-        method: "DELETE",
-        instanceToken: tokenInst,
-      });
-
-      if (!out.ok) {
-        return responderErroUazapi(action, out);
+      const del = await deleteUazapiInstanceRemotely(tokenInst);
+      if (!del.ok) {
+        return NextResponse.json(
+          { error: del.error, action: "delete_remote" },
+          { status: 502 }
+        );
       }
 
       await persistUazapi({

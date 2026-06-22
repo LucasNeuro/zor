@@ -260,5 +260,10 @@ export async function DELETE(
     return NextResponse.json({ error: msg }, { status: is404 ? 404 : 500 });
   }
 
-  return NextResponse.json({ ok: true, agente_slug: slug });
+  return NextResponse.json({
+    ok: true,
+    agente_slug: slug,
+    ...(result.uazapi_remote_deleted ? { uazapi_remote_deleted: true } : {}),
+    ...(result.uazapi_delete_warning ? { uazapi_delete_warning: result.uazapi_delete_warning } : {}),
+  });
 }

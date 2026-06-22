@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { apagarStorageRagAgente } from "@/lib/hub/delete-agente-rag-storage";
 import { PLAYBOOK_BUCKET, playbookAgentFolderPath, playbookObjectPath } from "@/lib/playbook/persist";
+import { deleteUazapiInstanceRemotely } from "@/lib/whatsapp/uazapi-delete-instance";
 
 function ignorable(msg: string): boolean {
   return /does not exist|schema cache|could not find/i.test(msg);
@@ -13,6 +14,7 @@ type IdentRow = {
   agente_slug?: string;
   tenant_id?: string | null;
   playbook_object_path?: string | null;
+  uazapi_instance_token?: string | null;
 };
 
 /** Carrega identidade com colunas mínimas — evita falso 404 quando migrações antigas faltam colunas. */
@@ -21,6 +23,7 @@ async function carregarIdentidadeAgente(
   slug: string
 ): Promise<{ row: IdentRow | null; error: string | null }> {
   const selects = [
+    "id, agente_slug, tenant_id, playbook_object_path, uazapi_instance_token",
     "id, agente_slug, tenant_id, playbook_object_path",
     "id, agente_slug, tenant_id",
     "id, agente_slug",
@@ -62,7 +65,10 @@ function erroRpcNaoInstalado(msg: string): boolean {
 export async function deleteAgenteHubCompleto(
   supabase: SupabaseClient,
   slug: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; uazapi_remote_deleted?: boolean; uazapi_delete_warning?: string }
+  | { ok: false; error: string }
+> {
   const trimmed = slug.trim();
   if (!trimmed) {
     return { ok: false, error: "agente_slug inválido" };
@@ -78,6 +84,16 @@ export async function deleteAgenteHubCompleto(
   }
 
   const tenantId = ident.tenant_id != null ? String(ident.tenant_id) : null;
+
+  let uazapiRemoteDeleted = false;
+  let uazapiDeleteWarning: string | undefined;
+  const uazapiDel = await deleteUazapiInstanceRemotely(ident.uazapi_instance_token);
+  if (uazapiDel.ok) {
+    uazapiRemoteDeleted = uazapiDel.deleted;
+  } else {
+    uazapiDeleteWarning = uazapiDel.error;
+    console.warn("[agente-delete] uazapi instance", trimmed, uazapiDel.error);
+  }
 
   const ragPaths: string[] = [];
   const { data: ragDocs, error: ragErr } = await supabase
@@ -154,5 +170,9 @@ export async function deleteAgenteHubCompleto(
     }
   }
 
-  return { ok: true };
+  return {
+    ok: true,
+    ...(uazapiRemoteDeleted ? { uazapi_remote_deleted: true } : {}),
+    ...(uazapiDeleteWarning ? { uazapi_delete_warning: uazapiDeleteWarning } : {}),
+  };
 }

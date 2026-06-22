@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  avisoTelefoneBrPareamento,
   buildUazapiInstanceConnectBody,
   mergeUazapiProxyFields,
   proxyFromStoredRow,
@@ -39,5 +40,10 @@ describe("uazapi-proxy-connect", () => {
     });
     expect(body.proxy_managed_city).toBe("rio");
     expect(uazapiProxyConfigured({ proxy_managed_city: "rio" })).toBe(true);
+  });
+
+  it("warns when BR mobile may be missing digit 9", () => {
+    expect(avisoTelefoneBrPareamento("551114589862")).toMatch(/13 dígitos/);
+    expect(avisoTelefoneBrPareamento("5511914589862")).toBeNull();
   });
 });

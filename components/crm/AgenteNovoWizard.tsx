@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Mail, MessageSquare, Webhook, Zap } from "lucide-react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import {
   MODO_OPERACAO_DESCRICAO,
   MODO_OPERACAO_LABEL,
@@ -421,7 +421,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   useEffect(() => {
     void (async () => {
       try {
-        const headers = internalApiHeaders();
+        const headers = await crmApiHeaders();
         const [r, externas, resInt] = await Promise.all([
           fetch("/api/hub/ferramentas-custom?all=true", { headers }),
           fetchHubFerramentasExternas(headers, false).catch(() => []),
@@ -487,7 +487,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     if (!agenteSlugCriado) return;
     try {
       const r = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}`, {
-        headers: internalApiHeaders(),
+        headers: await crmApiHeaders(),
       });
       const d = (await r.json().catch(() => ({}))) as Record<string, unknown>;
       if (!r.ok) return;
@@ -513,7 +513,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     if (!agenteSlugCriado) return;
     try {
       const r = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}/email`, {
-        headers: internalApiHeaders(),
+        headers: await crmApiHeaders(),
       });
       const d = (await r.json().catch(() => ({}))) as Record<string, unknown>;
       if (!r.ok) return;
@@ -568,7 +568,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     (async () => {
       try {
         const r = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}/playbook`, {
-          headers: internalApiHeaders(),
+          headers: await crmApiHeaders(),
         });
         const d = (await r.json().catch(() => ({}))) as Record<string, unknown>;
         if (cancel) return;
@@ -652,7 +652,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       try {
         const r = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/rag-documentos`, {
           method: "POST",
-          headers: internalApiHeaders(),
+          headers: await crmApiHeaders(),
           body: form,
         });
         const d = (await r.json().catch(() => ({}))) as { error?: string };
@@ -735,7 +735,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}/playbook`, {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ force: true }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -746,7 +746,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       setPlaybookMetaLoading(true);
       try {
         const r2 = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}/playbook`, {
-          headers: internalApiHeaders(),
+          headers: await crmApiHeaders(),
         });
         const d2 = (await r2.json().catch(() => ({}))) as Record<string, unknown>;
         if (r2.ok) {
@@ -876,7 +876,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       form.append("source", "wizard_upload");
       let uploadRes = await fetch(`/api/hub/agentes/${encodeURIComponent(slugAlvo)}/playbook/upload`, {
         method: "POST",
-        headers: internalApiHeaders(),
+        headers: await crmApiHeaders(),
         body: form,
       });
 
@@ -884,7 +884,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       if (uploadRes.status === 404 || uploadRes.status === 405) {
         uploadRes = await fetch(`/api/hub/agentes/${encodeURIComponent(slugAlvo)}/playbook`, {
           method: "POST",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({
             force: true,
             uploaded_markdown: texto,
@@ -993,7 +993,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
       const fetchOpts = {
         method: "POST" as const,
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: abort.signal,
       };
@@ -1024,7 +1024,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       if (agenteSlugCriado && (res.status === 404 || res.status === 405 || res.status >= 500)) {
         const syncRes = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlugCriado)}/mistral-sync`, {
           method: "POST",
-          headers: internalApiHeaders(),
+          headers: await crmApiHeaders(),
         });
         const syncData = (await syncRes.json().catch(() => ({}))) as { error?: string; mistral_agent_id?: string };
         const detalhes = syncRes.ok
@@ -1102,7 +1102,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     if (playbookUploadStatus === "enviando" || playbookAnaliseLoading) return;
     setPlaybookErro("");
     try {
-      const res = await fetch(PLAYBOOK_EXEMPLO_MD_URL, { headers: internalApiHeaders() });
+      const res = await fetch(PLAYBOOK_EXEMPLO_MD_URL, { headers: await crmApiHeaders() });
       if (!res.ok) {
         setPlaybookErro(`Falha ao carregar template Waje v1 (HTTP ${res.status}).`);
         return;
@@ -1196,7 +1196,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     if (hubCiclosLoadRef.current) return;
     hubCiclosLoadRef.current = true;
     setHubCiclosCarregando(true);
-    fetch("/api/hub/ciclos", { headers: internalApiHeaders() })
+    void crmApiHeaders()
+      .then((headers) => fetch("/api/hub/ciclos", { headers }))
       .then((r) => r.json())
       .then((d: { ciclos?: unknown[] }) => {
         const raw = Array.isArray(d?.ciclos) ? d.ciclos : [];
@@ -1222,7 +1223,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const carregarCargos = useCallback(() => {
     setCarregando(true);
     setErroCargos(false);
-    fetch("/api/hub/cargos", { headers: internalApiHeaders() })
+    void crmApiHeaders()
+      .then((headers) => fetch("/api/hub/cargos", { headers }))
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setCargos(data);
@@ -1293,7 +1295,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     const cicloExecucaoPadrao = agenteEhModoCanal(modoOperacao) ? "interacao" : modoExecucao;
     const syncRes = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}`, {
       method: "PATCH",
-      headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+      headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
       body: JSON.stringify({
         nome,
         prefixo_mercado: prefixoMercadoParaGravacao([]),
@@ -1380,7 +1382,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       }
       const res = await fetch("/api/hub/agentes", {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (res.ok) {

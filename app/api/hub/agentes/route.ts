@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse, after } from "next/server";
 import { runPlaybookPipeline } from "@/lib/playbook/orchestrate";
-import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+import { isTenantFkError } from "@/lib/tenant-default";
+import { resolveValidatedTenantId } from "@/lib/crm/resolve-tenant-from-caller";
 import {
   provisionHubCicloPadrao,
   type CicloExecucaoCliente,
@@ -184,7 +185,11 @@ export async function GET(request: NextRequest) {
   const todos = searchParams.get("todos") === "true";
   /** `somente` = linhas com arquivado_em preenchido (exclui ativos/inativos “de produção”). */
   const arquivados = searchParams.get("arquivados");
-  const tenantId = tenantIdFromRequest(request.headers);
+  const tenantResolved = await resolveValidatedTenantId(request);
+  if (!tenantResolved.ok) {
+    return NextResponse.json([]);
+  }
+  const tenantId = tenantResolved.tenantId;
 
   async function executarConsulta(aplicarTenant: boolean, filtrarArquivados: boolean) {
     let query = supabase
@@ -243,7 +248,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const supabase = db();
-  const tenantId = tenantIdFromRequest(request.headers);
 
   let body: Record<string, unknown>;
   try {
@@ -251,6 +255,14 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Body JSON inválido." }, { status: 400 });
   }
+
+  const bodyTenantId =
+    typeof body.tenant_id === "string" ? body.tenant_id : undefined;
+  const tenantResolved = await resolveValidatedTenantId(request, { bodyTenantId });
+  if (!tenantResolved.ok) {
+    return NextResponse.json({ error: tenantResolved.error }, { status: tenantResolved.status });
+  }
+  const tenantId = tenantResolved.tenantId;
 
   const {
     cargo_slug,
@@ -385,7 +397,7 @@ export async function POST(request: NextRequest) {
       horario_fim: horario_fim || "22:00:00",
       dias_semana: diasTexto.length > 0 ? diasTexto : ["seg", "ter", "qua", "qui", "sex"],
       ativo: true,
-      tenant_id: tenantId || defaultTenantId(),
+      tenant_id: tenantId,
     };
     if (playbookPath) row.playbook_object_path = playbookPath;
     if (playbookUrl) row.playbook_public_url = playbookUrl;
@@ -456,7 +468,7 @@ export async function POST(request: NextRequest) {
     horario_fim: horario_fim || "22:00:00",
     dias_semana: diasTexto.length > 0 ? diasTexto : ["seg", "ter", "qua", "qui", "sex"],
     ativo: true,
-    tenant_id: tenantId || defaultTenantId(),
+    tenant_id: tenantId,
   };
   }
 
@@ -554,14 +566,21 @@ export async function POST(request: NextRequest) {
   }
 
   if (error) {
+    if (isTenantFkError(error)) {
+      return NextResponse.json(
+        {
+          error:
+            "Tenant inválido para criar o agente. Verifique o cadastro da empresa ou as variáveis DEFAULT_TENANT_ID / NEXT_PUBLIC_TENANT_ID no servidor.",
+        },
+        { status: 400 },
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const created = data as { agente_slug: string; tenant_id?: string | null };
   const tenantCiclo =
-    (typeof created.tenant_id === "string" && created.tenant_id.trim()) ||
-    tenantId ||
-    defaultTenantId();
+    (typeof created.tenant_id === "string" && created.tenant_id.trim()) || tenantId;
 
   const rawConhecimentoBase =
     body.conhecimento_secoes && typeof body.conhecimento_secoes === "object" && !Array.isArray(body.conhecimento_secoes)

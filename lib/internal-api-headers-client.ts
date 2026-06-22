@@ -7,11 +7,43 @@ export type CrmSessionActor = {
   name?: string;
 };
 
+let cachedProfileTenantId: string | null | undefined;
+
+/** Limpa cache de tenant (ex.: após logout). */
+export function clearCrmApiHeadersCache(): void {
+  cachedProfileTenantId = undefined;
+}
+
 /** Cabeçalhos para APIs CRM admin, incluindo auth_id do utilizador atual. */
 export async function crmApiHeaders(): Promise<Record<string, string>> {
   const base = internalApiHeaders();
   const { data: { user } } = await supabase.auth.getUser();
   if (user?.id) base["x-caller-auth-id"] = user.id;
+
+  if (cachedProfileTenantId === undefined) {
+    cachedProfileTenantId = null;
+    if (user?.id) {
+      try {
+        const res = await fetch("/api/crm/acessos/me", { headers: base });
+        if (res.ok) {
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: { user?: { tenant_id?: string | null } };
+          };
+          const tid = json.data?.user?.tenant_id;
+          if (typeof tid === "string" && tid.trim()) {
+            cachedProfileTenantId = tid.trim();
+          }
+        }
+      } catch {
+        /* mantém null */
+      }
+    }
+  }
+
+  if (cachedProfileTenantId) {
+    base["x-tenant-id"] = cachedProfileTenantId;
+  }
+
   return base;
 }
 

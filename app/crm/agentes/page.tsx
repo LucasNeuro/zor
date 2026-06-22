@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useRef, useMemo, type ReactNode } from "
 import { useQueryClient } from "@tanstack/react-query";
 import { Activity, ChevronRight, Clock, MessageCircle, X, Zap } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { AgenteNovoWizard } from "@/components/crm/AgenteNovoWizard";
 import { CrmCargosCatalogDrawer } from "@/components/crm/CrmCargosCatalogDrawer";
@@ -489,7 +489,7 @@ function AgentesView() {
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agente.agente_slug)}`, {
         method: "PATCH",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ ativo: proximo }),
       });
       if (!res.ok) return;
@@ -524,7 +524,7 @@ function AgentesView() {
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agente.agente_slug)}`, {
         method: "DELETE",
-        headers: internalApiHeaders(),
+        headers: await crmApiHeaders(),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -559,7 +559,7 @@ function AgentesView() {
     try {
       const res = await fetch(`/api/hub/agentes/${encodeURIComponent(selectedSlug)}`, {
         method: "PATCH",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           nome: editNome.trim(),
           prefixo_mercado: MERCADO_PREFIXO_PADRAO,

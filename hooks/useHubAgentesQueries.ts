@@ -2,7 +2,7 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import {
   detailQueryDefaults,
   listQueryDefaults,
@@ -62,7 +62,7 @@ function urlParaModo(modo: HubAgentesListMode): string {
 }
 
 async function fetchHubAgentesList(modo: HubAgentesListMode): Promise<HubAgenteRow[]> {
-  const res = await fetch(urlParaModo(modo), { headers: internalApiHeaders() });
+  const res = await fetch(urlParaModo(modo), { headers: await crmApiHeaders() });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(typeof data?.error === "string" ? data.error : `Erro ${res.status} ao carregar agentes.`);
@@ -74,7 +74,7 @@ async function fetchHubAgentesList(modo: HubAgentesListMode): Promise<HubAgenteR
 
 export async function fetchHubAgenteDetail(slug: string): Promise<HubAgenteRow> {
   const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}`, {
-    headers: internalApiHeaders(),
+    headers: await crmApiHeaders(),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -85,7 +85,7 @@ export async function fetchHubAgenteDetail(slug: string): Promise<HubAgenteRow> 
 
 async function fetchHubAgenteLogs(slug: string): Promise<HubAgenteLogRow[]> {
   const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/logs?limit=80`, {
-    headers: internalApiHeaders(),
+    headers: await crmApiHeaders(),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -96,7 +96,7 @@ async function fetchHubAgenteLogs(slug: string): Promise<HubAgenteLogRow[]> {
 
 async function fetchHubAgenteOperacao(slug: string): Promise<HubAgenteOperacaoPayload> {
   const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/operacao`, {
-    headers: internalApiHeaders(),
+    headers: await crmApiHeaders(),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { clearCrmApiHeadersCache } from "@/lib/internal-api-headers-client";
 import { getInitials } from "@/lib/utils/initials";
+import { useCrmLogoutOverlay } from "@/lib/crm/logout-overlay-context";
 
 /* ── Shared auth listener ───────────────────────────────────────────── */
 type AuthProfileListener = (user: User | null) => void;
@@ -57,15 +57,15 @@ function formatRole(role: string): string {
 }
 
 async function signOutAndRedirect(
-  router: ReturnType<typeof useRouter>,
+  beginLogout: () => void,
   onNavigate?: () => void,
 ) {
+  beginLogout();
   onNavigate?.();
   clearCrmApiHeadersCache();
   await fetch("/api/auth/crm-session", { method: "DELETE", credentials: "include" });
   await supabase.auth.signOut();
-  router.push("/login");
-  router.refresh();
+  window.location.href = "/login";
 }
 
 /* ── Avatar ─────────────────────────────────────────────────────────── */
@@ -110,7 +110,7 @@ export function CrmSessionFooter({
   /** @deprecated não utilizado */
   primaryAction?: unknown;
 }) {
-  const router = useRouter();
+  const { isLoggingOut, beginLogout } = useCrmLogoutOverlay();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
@@ -163,13 +163,14 @@ export function CrmSessionFooter({
           type="button"
           title="Sair da conta"
           aria-label="Sair da conta"
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-colors"
+          disabled={isLoggingOut}
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-60"
           style={{
             background: "#fff2f1",
             border: "1px solid #f0c0bd",
             color: "#c0392b",
           }}
-          onClick={() => void signOutAndRedirect(router, onNavigate)}
+          onClick={() => void signOutAndRedirect(beginLogout, onNavigate)}
         >
           <LogOut size={14} strokeWidth={2} aria-hidden />
         </button>
@@ -241,13 +242,14 @@ export function CrmSessionFooter({
             type="button"
             title="Sair da conta"
             aria-label="Sair da conta"
-            onClick={() => void signOutAndRedirect(router, onNavigate)}
-            className="flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition-colors hover:bg-[#ffe8e6]"
+            disabled={isLoggingOut}
+            onClick={() => void signOutAndRedirect(beginLogout, onNavigate)}
+            className="flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition-colors hover:bg-[#ffe8e6] disabled:cursor-not-allowed disabled:opacity-60"
             style={{
               background: "#fff2f1",
               border: "1px solid #f0c0bd",
               color: "#c0392b",
-              cursor: "pointer",
+              cursor: isLoggingOut ? "not-allowed" : "pointer",
             }}
           >
             <LogOut size={13} strokeWidth={2} aria-hidden />

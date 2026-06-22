@@ -1,10 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { defaultTenantId } from "@/lib/tenant-default";
 
 export type LinhaWhatsAppWebhook =
   | {
       kind: "agent_instance";
       agenteSlug: string;
       instanceToken: string;
+      tenantId: string;
     }
   | { kind: "legacy_global_token" }
   | { kind: "ignored"; reason: string };
@@ -50,7 +52,10 @@ export function validarAgenteWaRowForWebhook(r: AgenteWaRow): LinhaWhatsAppWebho
     return { kind: "ignored", reason: "slug_agente_invalido" };
   }
 
-  return { kind: "agent_instance", agenteSlug: slug, instanceToken: token };
+  const tenantId =
+    typeof r.tenant_id === "string" && r.tenant_id.trim() ? r.tenant_id.trim() : defaultTenantId();
+
+  return { kind: "agent_instance", agenteSlug: slug, instanceToken: token, tenantId };
 }
 
 async function resolverPorLinhaHub(

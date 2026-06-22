@@ -65,8 +65,10 @@ async function enviarFallbackIA(params: {
   motivo: string;
   mensagemOriginal: string;
   waSendOpts?: { instanceToken?: string | null };
+  tenantId?: string;
 }) {
   const mensagem = "Recebi sua mensagem e já encaminhei para revisão do time. Retornaremos em breve por aqui.";
+  const tenantId = params.tenantId?.trim() || defaultTenantId();
 
   try {
     const filaRow = {
@@ -76,7 +78,7 @@ async function enviarFallbackIA(params: {
       direcao: "saida",
       conteudo: mensagem,
       status: "enviado",
-      tenant_id: defaultTenantId(),
+      tenant_id: tenantId,
       metadata: { feito_por: "fallback_ia", motivo: params.motivo },
     };
     let filaIns = await params.supabase.from("hub_fila_mensagens").insert(filaRow);
@@ -117,6 +119,7 @@ async function gravarMensagemInboundSemIa(params: {
   fromMe?: boolean;
   senderTelefone?: string | null;
   pushName?: string;
+  tenantId?: string;
 }) {
   const leadTel = String(params.lead.telefone ?? params.telefone ?? "");
   const senderTel = params.senderTelefone?.trim() || params.telefone;
@@ -172,7 +175,7 @@ async function gravarMensagemInboundSemIa(params: {
     status: "pendente",
     remetente_numero: remetenteNumero,
     whatsapp_message_id: params.messageId,
-    tenant_id: defaultTenantId(),
+    tenant_id: params.tenantId?.trim() || defaultTenantId(),
     enviada_em: params.timestamp,
     metadata,
   };
@@ -220,9 +223,16 @@ export async function processarMensagemInboundWhatsapp(params: {
   groupJid?: string | null;
   fromMe?: boolean;
   senderTelefone?: string | null;
+  tenantId?: string;
 }) {
   const { supabase, trace } = params;
   const log = trace.log;
+  const tenantId =
+    params.tenantId?.trim() ||
+    (typeof (params.lead as { tenant_id?: unknown }).tenant_id === "string"
+      ? String((params.lead as { tenant_id?: string }).tenant_id).trim()
+      : "") ||
+    defaultTenantId();
   const lead = params.lead as {
     id: string;
     pessoa_id?: string | null;
@@ -251,6 +261,7 @@ export async function processarMensagemInboundWhatsapp(params: {
       fromMe: params.fromMe,
       senderTelefone: params.senderTelefone,
       pushName: params.pushName,
+      tenantId,
     });
 
     try {
@@ -293,6 +304,7 @@ export async function processarMensagemInboundWhatsapp(params: {
       motivo,
       mensagemOriginal: params.mensagemFinal,
       waSendOpts: params.waSendOpts,
+      tenantId,
     });
     log.info("wa.processor.fallback_sent", { motivo });
     return;
@@ -403,6 +415,7 @@ export async function processarMensagemInboundWhatsapp(params: {
           motivo: playbookOut.motivo ?? "playbook_obrigatorio_sem_resposta",
           mensagemOriginal: params.mensagemFinal,
           waSendOpts: params.waSendOpts,
+          tenantId,
         });
         return;
       }
@@ -462,7 +475,7 @@ export async function processarMensagemInboundWhatsapp(params: {
       nome: params.pushName,
       segmento: params.mercado,
       agenteSlugHint: agenteSlug,
-      tenantId: defaultTenantId(),
+      tenantId: tenantId,
       pessoaId: lead.pessoa_id ?? null,
       statusFilaSaida: "pendente_envio",
       metadata: {
@@ -493,6 +506,7 @@ export async function processarMensagemInboundWhatsapp(params: {
         motivo: resultado.erro || "engine_sem_resposta",
         mensagemOriginal: params.mensagemFinal,
         waSendOpts: params.waSendOpts,
+        tenantId,
       });
       log.info("wa.processor.fallback_sent", { motivo: resultado.erro || "engine_sem_resposta" });
       return;
@@ -746,6 +760,7 @@ export async function processarMensagemInboundWhatsapp(params: {
       motivo: errMsg,
       mensagemOriginal: params.mensagemFinal,
       waSendOpts: params.waSendOpts,
+      tenantId,
     });
     log.info("wa.processor.fallback_sent", { motivo: errMsg });
   }

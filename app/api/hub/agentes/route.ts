@@ -45,6 +45,21 @@ import {
   EMAIL_CHANNEL_DISABLED_MESSAGE,
   isEmailChannelEnabled,
 } from "@/lib/feature-flags";
+import {
+  getTenantCache,
+  invalidateTenantCachePrefix,
+  setTenantCache,
+} from "@/lib/cache/tenant-cache";
+
+const AGENTES_CACHE_TTL_SECONDS = 60;
+
+function agentesListCacheKey(params: {
+  ativo: string | null;
+  todos: boolean;
+  arquivados: string | null;
+}): string {
+  return `agentes:list:${params.todos}:${params.ativo ?? "default"}:${params.arquivados ?? "default"}`;
+}
 
 function parseBoolFerr(v: unknown, defaultVal: boolean): boolean {
   if (v === true || v === "true") return true;
@@ -191,6 +206,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json([]);
   }
   const tenantId = tenantResolved.tenantId;
+  const cacheKey = agentesListCacheKey({ ativo, todos, arquivados });
+
+  const cached = await getTenantCache<Record<string, unknown>[]>(tenantId, cacheKey);
+  if (cached != null) {
+    return NextResponse.json(cached);
+  }
 
   async function executarConsulta(aplicarTenant: boolean, filtrarArquivados: boolean) {
     let query = supabase
@@ -244,7 +265,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json((data ?? []).map((row) => sanitizarAgenteHubParaCliente(row as Record<string, unknown>)));
+  const payload = (data ?? []).map((row) => sanitizarAgenteHubParaCliente(row as Record<string, unknown>));
+  await setTenantCache(tenantId, cacheKey, payload, AGENTES_CACHE_TTL_SECONDS);
+  return NextResponse.json(payload);
 }
 
 export async function POST(request: NextRequest) {
@@ -702,6 +725,8 @@ export async function POST(request: NextRequest) {
       ciclo_aviso = ciclo_aviso ? `${ciclo_aviso} ${msg}` : msg;
     }
   }
+
+  await invalidateTenantCachePrefix(tenantId, "agentes:");
 
   return NextResponse.json(
     {

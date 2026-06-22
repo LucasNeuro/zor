@@ -1,5 +1,6 @@
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { isAuthApiError } from "@supabase/auth-js";
+import { beginLogoutFromBridge } from "@/lib/crm/logout-overlay-bridge";
 
 const g = globalThis as unknown as {
   __obraCrmAuthBridge?: boolean;
@@ -63,6 +64,7 @@ async function recoverStaleAuth(client: SupabaseClient) {
   try {
     await clearCrmCookieAndLocalSession(client);
     if (shouldRedirectToLogin()) {
+      beginLogoutFromBridge();
       window.location.href = "/login?sessao=invalida";
     }
   } finally {

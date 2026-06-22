@@ -14,7 +14,12 @@ describe("validarAgenteWaRowForWebhook", () => {
 
   it("aceita agente conectado independente do tenant", () => {
     const r = validarAgenteWaRowForWebhook(base);
-    expect(r).toEqual({ kind: "agent_instance", agenteSlug: "dhe", instanceToken: "tok-abc" });
+    expect(r).toEqual({
+      kind: "agent_instance",
+      agenteSlug: "dhe",
+      instanceToken: "tok-abc",
+      tenantId: "b6556af6-acc5-4d07-8c48-2609734e43b2",
+    });
   });
 
   it("aceita status connecting", () => {

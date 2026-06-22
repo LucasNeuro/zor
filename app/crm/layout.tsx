@@ -20,6 +20,7 @@ import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { WajeLogoMark } from "@/components/brand/WajeLogoMark";
 import { WajeWordmark } from "@/components/brand/WajeWordmark";
 import { CrmQueryProvider } from "@/components/crm/CrmQueryProvider";
+import { CrmLogoutOverlayProvider } from "@/lib/crm/logout-overlay-context";
 import { CrmFeedbackProvider } from "@/components/crm/CrmFeedbackProvider";
 import { CrmListPrefetcher } from "@/components/crm/CrmListPrefetcher";
 import { CrmSessionFooter } from "@/components/crm/CrmSessionFooter";
@@ -464,6 +465,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   if (!layoutReady) {
     return (
       <CrmQueryProvider>
+        <CrmLogoutOverlayProvider>
         <CrmFeedbackProvider>
           <CrmListPrefetcher />
           <CrmHeaderProvider>
@@ -485,6 +487,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
             </CrmShellProvider>
           </CrmHeaderProvider>
         </CrmFeedbackProvider>
+        </CrmLogoutOverlayProvider>
       </CrmQueryProvider>
     );
   }
@@ -493,6 +496,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   if (slimMobile) {
     return (
       <CrmQueryProvider>
+        <CrmLogoutOverlayProvider>
         <CrmFeedbackProvider>
           <CrmListPrefetcher />
         <CrmHeaderProvider>
@@ -514,6 +518,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           </CrmShellProvider>
         </CrmHeaderProvider>
         </CrmFeedbackProvider>
+        </CrmLogoutOverlayProvider>
       </CrmQueryProvider>
     );
   }
@@ -521,6 +526,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   /* ── Desktop layout ────────────────────────────── */
   return (
     <CrmQueryProvider>
+    <CrmLogoutOverlayProvider>
     <CrmFeedbackProvider>
     <CrmListPrefetcher />
     <CrmHeaderProvider>
@@ -760,6 +766,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
       </CrmShellProvider>
     </CrmHeaderProvider>
     </CrmFeedbackProvider>
+    </CrmLogoutOverlayProvider>
     </CrmQueryProvider>
   );
 }

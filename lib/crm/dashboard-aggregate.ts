@@ -55,6 +55,21 @@ function inicioDiaUtcISO(): string {
   ).toISOString();
 }
 
+async function tenantAgentSlugs(
+  supabase: SupabaseClient,
+  tenantId: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("hub_agente_identidade")
+    .select("agente_slug")
+    .eq("tenant_id", tenantId);
+
+  if (error || !data) return [];
+  return data
+    .map((row) => String((row as { agente_slug?: string | null }).agente_slug ?? "").trim())
+    .filter(Boolean);
+}
+
 export async function fetchCrmMetricas(
   supabase: SupabaseClient,
   tenantId: string,
@@ -83,11 +98,18 @@ export async function fetchCrmMetricas(
       .from("hub_leads_crm")
       .select("estagio, valor_estimado")
       .eq("tenant_id", tenantId),
-    safeCount(supabase.from("hub_aprovacoes").select("id", { count: "exact", head: true }).eq("status", "pendente")),
+    safeCount(
+      supabase
+        .from("hub_aprovacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("status", "pendente")
+    ),
     safeCount(
       supabase
         .from("hub_fila_mensagens")
         .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
         .eq("direcao", "entrada")
         .eq("status", "pendente")
     ),
@@ -99,11 +121,16 @@ export async function fetchCrmMetricas(
         .eq("tenant_id", tenantId)
     ),
     safeCount(
-      supabase.from("hub_parceiros").select("id", { count: "exact", head: true }).eq("status", "homologado")
+      supabase
+        .from("hub_parceiros")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("status", "homologado")
     ),
     supabase
       .from("hub_encaminhamentos")
       .select("lead_id")
+      .eq("tenant_id", tenantId)
       .gte("encaminhado_em", sinceIso),
     supabase
       .from("hub_negocios")
@@ -162,21 +189,34 @@ export async function aggregateDashboard(
   since?: string
 ): Promise<DashboardPayload> {
   const metricas = await fetchCrmMetricas(supabase, tenantId, since);
+  const agentSlugs = await tenantAgentSlugs(supabase, tenantId);
+
+  let alertasQuery = supabase
+    .from("hub_alertas")
+    .select("id, titulo, tipo, criado_em")
+    .eq("lido", false)
+    .order("criado_em", { ascending: false })
+    .limit(5);
+
+  if (agentSlugs.length > 0) {
+    alertasQuery = alertasQuery.in("agente_slug", agentSlugs);
+  } else {
+    alertasQuery = alertasQuery.eq("agente_slug", "__no_tenant_agents__");
+  }
 
   const [alts, leads, cics, neg, obras, pedidos] = await Promise.all([
-    supabase
-      .from("hub_alertas")
-      .select("id, titulo, tipo, criado_em")
-      .eq("lido", false)
-      .order("criado_em", { ascending: false })
-      .limit(5),
+    alertasQuery,
     supabase
       .from("hub_leads_crm")
       .select("id, nome, estagio, criado_em, atualizado_em")
       .eq("tenant_id", tenantId)
       .order("atualizado_em", { ascending: false, nullsFirst: false })
       .limit(5),
-    supabase.from("hub_ciclos_ia").select("agente_slug, ultimo_status").eq("ativo", true),
+    supabase
+      .from("hub_ciclos_ia")
+      .select("agente_slug, ultimo_status")
+      .eq("tenant_id", tenantId)
+      .eq("ativo", true),
     safeCount(
       supabase
         .from("hub_negocios")

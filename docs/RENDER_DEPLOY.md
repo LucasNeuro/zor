@@ -59,6 +59,20 @@ No Render → serviço `escritorio-virtual` → **Environment**:
 | `NEXT_PUBLIC_INTERNAL_API_KEY` | **mesmo valor** que `INTERNAL_API_KEY` |
 | `NEXT_PUBLIC_TENANT_ID` | mesmo que `DEFAULT_TENANT_ID` |
 
+### Redis (webhook dedupe + fila de aprendizado)
+
+Ver `docs/env-redis.example`. Mínimo em produção:
+
+| Variável | Exemplo / notas |
+|----------|-----------------|
+| `REDIS_HOST` | hostname do Redis Render/Upstash |
+| `REDIS_PORT` | `6379` |
+| `REDIS_PASSWORD` | senha do serviço |
+| `REDIS_USERNAME` | opcional (ACL Redis 6+) |
+| `REDIS_KEY_PREFIX` | `waje:` |
+| `WEBHOOK_RATE_LIMIT_MAX` | opcional — ex. `120` eventos/janela |
+| `WEBHOOK_RATE_LIMIT_WINDOW_SEC` | opcional — padrão `60` |
+
 ### Worker `whatsapp-job-worker`
 
 Repetir: Supabase, `UAZAPI_BASE_URL`, `UAZAPI_INSTANCE_TOKEN`, `MISTRAL_API_KEY`, `DEFAULT_TENANT_ID`.

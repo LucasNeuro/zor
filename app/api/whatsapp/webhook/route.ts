@@ -29,10 +29,104 @@ import {
   findLeadByGroupJid,
   isLeadGroupTransferActive,
 } from "@/lib/whatsapp/lead-group-routing";
+import { checkAndSetWebhookIdempotency } from "@/lib/redis/idempotency";
+import { checkTenantRateLimit } from "@/lib/redis/rate-limit";
+import { enqueueTenantLearnJob } from "@/lib/redis/learn-queue";
 
 let warnedMissingWebhookSecret = false;
 const WEBHOOK_DEDUPE_TTL_MS = 2 * 60 * 1000;
 const webhookRecentKeys = new Map<string, number>();
+
+function webhookRateLimitConfig(): { max: number; windowSec: number } | null {
+  const maxRaw = process.env.WEBHOOK_RATE_LIMIT_MAX?.trim();
+  if (!maxRaw) return null;
+  const max = Number.parseInt(maxRaw, 10);
+  if (!Number.isFinite(max) || max <= 0) return null;
+  const windowSec = Number.parseInt(process.env.WEBHOOK_RATE_LIMIT_WINDOW_SEC || "60", 10);
+  return { max, windowSec: Number.isFinite(windowSec) && windowSec > 0 ? windowSec : 60 };
+}
+
+function tenantIdFromLinhaWa(linhaWa: import("@/lib/whatsapp/resolver-linha-whatsapp").LinhaWhatsAppWebhook): string {
+  if (linhaWa.kind === "agent_instance") return linhaWa.tenantId;
+  return defaultTenantId();
+}
+
+type WebhookRedisGuardLog = {
+  info: (event: string, fields?: Record<string, unknown>) => void;
+  warn: (event: string, fields?: Record<string, unknown>) => void;
+};
+
+async function aplicarGuardasRedisWebhook(
+  log: WebhookRedisGuardLog,
+  opts: { tenantId: string; messageId: string }
+): Promise<
+  | { blocked: true; reason: string; httpStatus?: number }
+  | { blocked: false }
+> {
+  const messageId = opts.messageId.trim();
+  if (!messageId) return { blocked: false };
+
+  try {
+    const duplicate = await checkAndSetWebhookIdempotency(opts.tenantId, messageId);
+    if (duplicate) {
+      log.info("wa.webhook.duplicate_ignored_redis", {
+        message_id: messageId,
+        tenant_id: opts.tenantId,
+      });
+      return { blocked: true, reason: "duplicate_message_id_redis" };
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.warn("wa.webhook.redis_idempotency_failed", { error: msg.slice(0, 200) });
+  }
+
+  const rateCfg = webhookRateLimitConfig();
+  if (rateCfg) {
+    try {
+      const rate = await checkTenantRateLimit(
+        opts.tenantId,
+        "whatsapp_webhook",
+        rateCfg.max,
+        rateCfg.windowSec
+      );
+      if (rate.limited) {
+        log.warn("wa.webhook.rate_limited", {
+          tenant_id: opts.tenantId,
+          count: rate.count,
+          retry_after_sec: rate.retryAfterSec,
+        });
+        return { blocked: true, reason: "rate_limited", httpStatus: 429 };
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn("wa.webhook.redis_rate_limit_failed", { error: msg.slice(0, 200) });
+    }
+  }
+
+  return { blocked: false };
+}
+
+function enfileirarRetroalimentacaoConversa(
+  log: WebhookRedisGuardLog,
+  opts: {
+    tenantId: string;
+    agenteSlug: string;
+    leadId: string;
+    snippet: string;
+    origem?: string;
+  }
+): void {
+  void enqueueTenantLearnJob({
+    tenantId: opts.tenantId,
+    agenteSlug: opts.agenteSlug,
+    leadId: opts.leadId,
+    snippet: opts.snippet.slice(0, 500),
+    origem: opts.origem ?? "whatsapp_webhook",
+  }).catch((e) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.warn("wa.webhook.learn_queue_failed", { error: msg.slice(0, 200) });
+  });
+}
 
 function limparDedupeExpirados(nowMs: number) {
   for (const [k, ts] of webhookRecentKeys.entries()) {
@@ -108,35 +202,45 @@ function db() {
   );
 }
 
-async function encontrarOuCriarPessoa(telefone: string, nome: string, origem: string) {
+async function encontrarOuCriarPessoa(telefone: string, nome: string, origem: string, tenantId: string) {
   const supabase = db();
 
-  const { data: pessoaExistente } = await supabase
-    .from("hub_pessoas")
-    .select("*")
-    .eq("telefone", telefone)
-    .maybeSingle();
+  let pessoaQuery = supabase.from("hub_pessoas").select("*").eq("telefone", telefone);
+  pessoaQuery = pessoaQuery.eq("tenant_id", tenantId);
+  const { data: pessoaExistente, error: pessoaErr } = await pessoaQuery.maybeSingle();
 
-  if (pessoaExistente) return pessoaExistente;
+  if (pessoaErr && isMissingPgColumn(pessoaErr, "tenant_id")) {
+    const { data: fallback } = await supabase
+      .from("hub_pessoas")
+      .select("*")
+      .eq("telefone", telefone)
+      .maybeSingle();
+    if (fallback) return fallback;
+  } else if (pessoaExistente) {
+    return pessoaExistente;
+  }
 
   const codigo = await gerarCodigoPessoa(supabase);
 
   const nomePessoa = pushNameParaNomeExibicao(nome) || nome?.trim() || "Lead WhatsApp";
 
-  const { data: novaPessoa } = await supabase
-    .from("hub_pessoas")
-    .insert({
-      codigo,
-      nome: nomePessoa,
-      telefone,
-      whatsapp_id: telefone,
-      tipo: "lead",
-      origem: origem || "whatsapp",
-    })
-    .select()
-    .single();
+  const row = {
+    codigo,
+    nome: nomePessoa,
+    telefone,
+    whatsapp_id: telefone,
+    tipo: "lead",
+    origem: origem || "whatsapp",
+    tenant_id: tenantId,
+  };
 
-  return novaPessoa;
+  let ins = await supabase.from("hub_pessoas").insert(row).select().single();
+  if (ins.error && isMissingPgColumn(ins.error, "tenant_id")) {
+    const { tenant_id: _t, ...semTenant } = row;
+    ins = await supabase.from("hub_pessoas").insert(semTenant).select().single();
+  }
+
+  return ins.data ?? null;
 }
 
 async function enviarMensagemWhatsApp(
@@ -189,20 +293,30 @@ async function mensagemWebhookJaProcessada(
   return Array.isArray(data) && data.length > 0;
 }
 
-async function encontrarOuCriarLead(telefone: string, nome: string, mercado: string, mensagem: string) {
+async function encontrarOuCriarLead(
+  telefone: string,
+  nome: string,
+  mercado: string,
+  mensagem: string,
+  tenantId: string
+) {
   const supabase = db();
   const tel = telefoneConversaId(telefone);
   if (tel.length < 10) {
     return { lead: null, isNovo: false as const, pessoaId: null as string | null };
   }
 
-  const pessoa = await encontrarOuCriarPessoa(tel, nome, "whatsapp");
+  const pessoa = await encontrarOuCriarPessoa(tel, nome, "whatsapp", tenantId);
 
-  const { data: leadExistente } = await supabase
-    .from("hub_leads_crm")
-    .select("*")
-    .eq("telefone", tel)
-    .maybeSingle();
+  let leadQuery = supabase.from("hub_leads_crm").select("*").eq("telefone", tel).eq("tenant_id", tenantId);
+  let { data: leadExistente, error: leadFindErr } = await leadQuery.maybeSingle();
+  if (leadFindErr && isMissingPgColumn(leadFindErr, "tenant_id")) {
+    ({ data: leadExistente } = await supabase
+      .from("hub_leads_crm")
+      .select("*")
+      .eq("telefone", tel)
+      .maybeSingle());
+  }
 
   if (leadExistente) {
     const waPatch = montarPatchContatoWhatsapp(leadExistente as Record<string, unknown>, {
@@ -213,7 +327,7 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
     const leadUpdate = {
       ...waPatch,
       pessoa_id: pessoa?.id ?? leadExistente.pessoa_id,
-      tenant_id: leadExistente.tenant_id || defaultTenantId(),
+      tenant_id: leadExistente.tenant_id || tenantId,
       metadata: mergeMetadataWhatsapp(
         {
           ...(typeof leadExistente.metadata === "object" && leadExistente.metadata !== null
@@ -270,7 +384,7 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
       valor_estimado: 0,
       agente_responsavel: agenteResponsavel,
       pessoa_id: pessoa?.id ?? null,
-      tenant_id: defaultTenantId(),
+      tenant_id: tenantId,
       metadata: mergeMetadataWhatsapp(
         {
           mercado,
@@ -300,6 +414,7 @@ async function encontrarOuCriarLead(telefone: string, nome: string, mercado: str
     descricao: `Contacto WhatsApp iniciado — mercado: ${mercado}`,
       feito_por: "sistema",
       feito_por_tipo: "ia",
+      tenant_id: tenantId,
       metadata: { telefone, mercado, primeira_mensagem: true },
   });
 
@@ -402,6 +517,10 @@ async function processarWhatsappInlineSeFilaIndisponivel(
     groupJid: typeof payload.groupJid === "string" ? payload.groupJid : null,
     fromMe: payload.fromMe === true,
     senderTelefone: typeof payload.senderTelefone === "string" ? payload.senderTelefone : null,
+    tenantId:
+      typeof payload.tenantId === "string" && payload.tenantId.trim()
+        ? payload.tenantId.trim()
+        : undefined,
   });
 }
 
@@ -415,6 +534,12 @@ async function despacharJobWhatsappAposEnqueue(
     agenteSlug: string;
     telefone: string;
     messageId: string;
+    learnJob?: {
+      tenantId: string;
+      agenteSlug: string;
+      leadId: string;
+      snippet: string;
+    };
   }
 ): Promise<{ httpStatus: number; body: Record<string, unknown>; outcome: string }> {
   const { log } = trace;
@@ -460,6 +585,9 @@ async function despacharJobWhatsappAposEnqueue(
   }
 
   if (enqueue.status === "accepted") {
+    if (ctx.learnJob) {
+      enfileirarRetroalimentacaoConversa(log, ctx.learnJob);
+    }
     if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
       dispararProcessamentoJobsWhatsapp(log);
     } else {
@@ -626,6 +754,31 @@ export async function POST(request: NextRequest) {
           return trace.json({ status: "ignored", reason: "missing_message_id" }, 200, "missing_message_id");
         }
 
+        const refs = extractWebhookInstanceRefs(body);
+        const instanceKey = outbound.instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);
+        const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey, {
+          instanceToken: refs.instanceToken,
+          instanceName: refs.instanceName,
+        });
+        const agenteSlugHint =
+          linhaWa.kind === "agent_instance"
+            ? linhaWa.agenteSlug
+            : typeof leadGrupo.agente_responsavel === "string" && leadGrupo.agente_responsavel.trim()
+              ? leadGrupo.agente_responsavel.trim()
+              : "sdr";
+        const tenantId = tenantIdFromLinhaWa(linhaWa);
+        const redisGuard = await aplicarGuardasRedisWebhook(log, {
+          tenantId,
+          messageId: messageIdParaFila,
+        });
+        if (redisGuard.blocked) {
+          return trace.json(
+            { status: "ignored", reason: redisGuard.reason },
+            redisGuard.httpStatus ?? 200,
+            redisGuard.reason === "rate_limited" ? "rate_limited" : "duplicate_ignored"
+          );
+        }
+
         if (marcarWebhookDedupe(messageIdParaFila, telefoneLead)) {
           return trace.json({ status: "ignored", reason: "duplicate_message_id_memory" }, 200, "duplicate_ignored");
         }
@@ -633,20 +786,8 @@ export async function POST(request: NextRequest) {
           return trace.json({ status: "ignored", reason: "duplicate_message_id" }, 200, "duplicate_ignored");
         }
 
-        const refs = extractWebhookInstanceRefs(body);
-        const instanceKey = outbound.instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);
-        const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey, {
-          instanceToken: refs.instanceToken,
-          instanceName: refs.instanceName,
-        });
         const waSendOpts =
           linhaWa.kind === "agent_instance" ? { instanceToken: linhaWa.instanceToken as string } : {};
-        const agenteSlugHint =
-          linhaWa.kind === "agent_instance"
-            ? linhaWa.agenteSlug
-            : typeof leadGrupo.agente_responsavel === "string" && leadGrupo.agente_responsavel.trim()
-              ? leadGrupo.agente_responsavel.trim()
-              : "sdr";
 
         const enqueuePayload = {
           telefone: telefoneLead,
@@ -673,7 +814,7 @@ export async function POST(request: NextRequest) {
         };
 
         const enqueueResult = await enqueueWhatsappJob(supabase, {
-          tenantId: defaultTenantId(),
+          tenantId,
           telefone: telefoneLead,
           leadId: leadGrupo.id,
           agenteSlug: agenteSlugHint,
@@ -687,6 +828,12 @@ export async function POST(request: NextRequest) {
           agenteSlug: agenteSlugHint,
           telefone: telefoneLead,
           messageId: messageIdParaFila,
+          learnJob: {
+            tenantId,
+            agenteSlug: agenteSlugHint,
+            leadId: leadGrupo.id,
+            snippet: outbound.mensagemFinal,
+          },
         });
 
         return trace.json(
@@ -806,6 +953,19 @@ export async function POST(request: NextRequest) {
         return trace.json({ status: "ignored", reason: "missing_message_id" }, 200, "missing_message_id");
       }
 
+      const tenantId = tenantIdFromLinhaWa(linhaWa);
+      const redisGuard = await aplicarGuardasRedisWebhook(log, {
+        tenantId,
+        messageId: messageIdParaFila,
+      });
+      if (redisGuard.blocked) {
+        return trace.json(
+          { status: "ignored", reason: redisGuard.reason },
+          redisGuard.httpStatus ?? 200,
+          redisGuard.reason === "rate_limited" ? "rate_limited" : "duplicate_ignored"
+        );
+      }
+
       if (marcarWebhookDedupe(messageIdParaFila, telefoneLead)) {
         return trace.json({ status: "ignored", reason: "duplicate_message_id_memory" }, 200, "duplicate_ignored");
       }
@@ -846,7 +1006,7 @@ export async function POST(request: NextRequest) {
       };
 
       const enqueueResult = await enqueueWhatsappJob(supabase, {
-        tenantId: defaultTenantId(),
+        tenantId,
         telefone: telefoneLead,
         leadId: leadGrupo.id,
         agenteSlug: agenteSlugHint,
@@ -867,6 +1027,12 @@ export async function POST(request: NextRequest) {
         agenteSlug: agenteSlugHint,
         telefone: telefoneLead,
         messageId: messageIdParaFila,
+        learnJob: {
+          tenantId,
+          agenteSlug: agenteSlugHint,
+          leadId: leadGrupo.id,
+          snippet: mensagemFinal,
+        },
       });
 
       return trace.json(
@@ -919,6 +1085,8 @@ export async function POST(request: NextRequest) {
         ? { instanceToken: linhaWa.instanceToken as string }
         : {};
 
+    const tenantId = tenantIdFromLinhaWa(linhaWa);
+
     log.info("wa.webhook.message_inbound", {
       telefone: trace.maskTelefone(telefone),
       push_name: pushName || null,
@@ -927,7 +1095,26 @@ export async function POST(request: NextRequest) {
       instance_id: instanceKey || null,
       linha_kind: linhaWa.kind,
       agente_slug: linhaWa.kind === "agent_instance" ? linhaWa.agenteSlug : null,
+      tenant_id: tenantId,
     });
+
+    const messageIdParaFila = (messageId || "").trim();
+    if (!messageIdParaFila) {
+      log.warn("wa.webhook.message_missing_id", { telefone: trace.maskTelefone(telefone) });
+      return trace.json({ status: "ignored", reason: "missing_message_id" }, 200, "missing_message_id");
+    }
+
+    const redisGuard = await aplicarGuardasRedisWebhook(log, {
+      tenantId,
+      messageId: messageIdParaFila,
+    });
+    if (redisGuard.blocked) {
+      return trace.json(
+        { status: "ignored", reason: redisGuard.reason },
+        redisGuard.httpStatus ?? 200,
+        redisGuard.reason === "rate_limited" ? "rate_limited" : "duplicate_ignored"
+      );
+    }
 
     if (marcarWebhookDedupe(messageId, telefone)) {
       log.info("wa.webhook.duplicate_ignored_memory", {
@@ -962,7 +1149,7 @@ export async function POST(request: NextRequest) {
           nome: pushName || `Parceiro ${telLimpo.slice(-4)}`,
           telefone: telLimpo,
           status: "captacao",
-          tenant_id: defaultTenantId(),
+          tenant_id: tenantId,
         };
         let parIns = await supabase.from("hub_parceiros").insert(parceiroRow).select("id").single();
         if (parIns.error && isMissingPgColumn(parIns.error, "tenant_id")) {
@@ -1004,7 +1191,13 @@ export async function POST(request: NextRequest) {
       return trace.json({ status: "ok", intencao: "parceiro", telefone: trace.maskTelefone(telefone) }, 200, "parceiro_ok");
     }
 
-    const { lead, isNovo, pessoaId } = await encontrarOuCriarLead(telefone, pushName, mercado, mensagemFinal);
+    const { lead, isNovo, pessoaId } = await encontrarOuCriarLead(
+      telefone,
+      pushName,
+      mercado,
+      mensagemFinal,
+      tenantId
+    );
 
     if (!lead) {
       log.error("wa.webhook.lead_failed", { telefone: trace.maskTelefone(telefone), mercado });
@@ -1024,11 +1217,6 @@ export async function POST(request: NextRequest) {
     }
 
     const agenteSlugHint = linhaWa.kind === "agent_instance" ? linhaWa.agenteSlug : agenteResponsavelLead;
-    const messageIdParaFila = (messageId || "").trim();
-    if (!messageIdParaFila) {
-      log.warn("wa.webhook.message_missing_id", { telefone: trace.maskTelefone(telefone) });
-      return trace.json({ status: "ignored", reason: "missing_message_id" }, 200, "missing_message_id");
-    }
 
     if (isNovo) {
       try {
@@ -1063,13 +1251,14 @@ export async function POST(request: NextRequest) {
       isNovo,
       timestamp,
       messageId: messageIdParaFila,
+      tenantId,
       agenteSlugHint,
       linhaKind: linhaWa.kind,
       hasInstanceToken: Boolean(waSendOpts.instanceToken),
     };
 
     const enqueueResult = await enqueueWhatsappJob(supabase, {
-      tenantId: defaultTenantId(),
+      tenantId,
       telefone,
       leadId: lead.id as string,
       agenteSlug: agenteSlugHint,
@@ -1092,6 +1281,12 @@ export async function POST(request: NextRequest) {
       agenteSlug: agenteSlugHint,
       telefone,
       messageId: messageIdParaFila,
+      learnJob: {
+        tenantId,
+        agenteSlug: agenteSlugHint,
+        leadId: lead.id as string,
+        snippet: mensagemFinal,
+      },
     });
 
     return trace.json(

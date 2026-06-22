@@ -130,6 +130,7 @@ type ReconstructedContext = {
   };
   agente: { agente_slug: string } | null;
   waSendOpts?: { instanceToken?: string | null };
+  tenantId: string;
 };
 
 function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
@@ -149,6 +150,8 @@ function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
   const menuChoiceId = toNullableStr(payload.menuChoiceId);
   const mercado = toStr(payload.mercado) || "geral";
   const pushName = toStr(payload.pushName);
+  const tenantId =
+    toStr(payload.tenantId).trim() || (job.tenant_id || "").trim() || defaultTenantId();
 
   if (!telefone || !mensagemFinal) {
     throw new Error("payload inválido: telefone/mensagem ausentes");
@@ -177,6 +180,7 @@ function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
     },
     agente: agenteSlugHint ? { agente_slug: agenteSlugHint } : null,
     waSendOpts: instanceToken ? { instanceToken } : undefined,
+    tenantId,
   };
 }
 
@@ -447,6 +451,7 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
       groupJid: contexto.groupJid,
       fromMe: contexto.fromMe,
       senderTelefone: contexto.senderTelefone,
+      tenantId: contexto.tenantId,
     });
 
     await updateJobStatus(supabase, job, {

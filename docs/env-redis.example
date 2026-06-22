@@ -1,0 +1,40 @@
+# Redis — variáveis de ambiente
+
+Configuração compartilhada para idempotência de webhook, rate limit por tenant e fila de retroalimentação (`waje:learn:queue`).
+
+Quando `REDIS_HOST` **não** está definido, a app usa fallback **em memória** (adequado para dev local; **não** deduplica entre réplicas no Render).
+
+## Variáveis
+
+| Variável | Obrigatória | Exemplo | Descrição |
+|----------|-------------|---------|-----------|
+| `REDIS_HOST` | Sim (prod) | `red-xxxxx.render.com` | Hostname do Redis gerenciado |
+| `REDIS_PORT` | Não | `6379` | Porta TCP (padrão `6379`) |
+| `REDIS_USERNAME` | Não | `default` | Usuário (Redis 6+ ACL) |
+| `REDIS_PASSWORD` | Sim (prod) | `sua-chave-secreta` | Senha do serviço Redis |
+| `REDIS_KEY_PREFIX` | Não | `waje:` | Prefixo de todas as chaves (padrão `waje:`) |
+
+## Rate limit de webhook (opcional)
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `WEBHOOK_RATE_LIMIT_MAX` | desligado | Máximo de webhooks por tenant na janela |
+| `WEBHOOK_RATE_LIMIT_WINDOW_SEC` | `60` | Janela em segundos |
+
+Exemplo: `WEBHOOK_RATE_LIMIT_MAX=120` limita a 120 eventos/minuto por tenant.
+
+## Chaves Redis
+
+| Chave (após prefixo) | Uso |
+|----------------------|-----|
+| `webhook:idem:{tenantId}:{messageId}` | SET NX — dedupe distribuído (TTL 24h) |
+| `ratelimit:{tenantId}:{bucket}` | INCR + EXPIRE — burst por tenant |
+| `learn:queue` | LIST — jobs de retroalimentação de conhecimento |
+
+## Render
+
+1. Criar **Redis** no Render (ou Upstash/external).
+2. Copiar host, port, password para o Web Service **e** o Worker WhatsApp.
+3. Definir `REDIS_KEY_PREFIX=waje:` (ou prefixo por ambiente, ex. `waje:staging:`).
+
+**Nunca** commitar credenciais reais — configure apenas no painel Render / `.env.local` (gitignored).

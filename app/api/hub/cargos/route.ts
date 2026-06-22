@@ -15,6 +15,17 @@ import {
   listCargosCatalog,
   updateCargoCatalogRow,
 } from "@/lib/hub/cargo-catalogo-db";
+import {
+  getTenantCache,
+  invalidateTenantCachePrefix,
+  setTenantCache,
+} from "@/lib/cache/tenant-cache";
+
+const CARGOS_CACHE_TTL_SECONDS = 60;
+
+function cargosListCacheKey(all: boolean): string {
+  return `cargos:list:${all ? "all" : "active"}`;
+}
 
 function db() {
   return createClient(
@@ -165,6 +176,12 @@ export async function GET(request: NextRequest) {
   const supabase = db();
   const { searchParams } = new URL(request.url);
   const all = searchParams.get("all") === "true";
+  const cacheKey = cargosListCacheKey(all);
+
+  const cached = await getTenantCache<unknown[]>(tenantId, cacheKey);
+  if (cached != null) {
+    return NextResponse.json(cached);
+  }
 
   const { data, error } = await listCargosCatalog(supabase, all, tenantId);
 
@@ -182,6 +199,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  await setTenantCache(tenantId, cacheKey, data ?? [], CARGOS_CACHE_TTL_SECONDS);
   return NextResponse.json(data);
 }
 
@@ -283,6 +301,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  await invalidateTenantCachePrefix(tenantId, "cargos:");
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -415,6 +434,7 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
+  await invalidateTenantCachePrefix(tenantId, "cargos:");
   return NextResponse.json(data);
 }
 
@@ -434,5 +454,6 @@ export async function DELETE(request: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
+  await invalidateTenantCachePrefix(tenantId, "cargos:");
   return NextResponse.json({ ok: true, slug: result.slug });
 }

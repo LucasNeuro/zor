@@ -4,6 +4,7 @@ import {
   isLocalhostHost,
   isWebhookUrlLocalhost,
   pickPublicAppOrigin,
+  shouldSyncGlobalWebhookToOrigin,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
 
 describe("pickPublicAppOrigin", () => {
@@ -57,5 +58,12 @@ describe("isLocalhostHost", () => {
   it("reconhece hosts locais", () => {
     expect(isLocalhostHost("localhost")).toBe(true);
     expect(isLocalhostHost("waje.com.br")).toBe(false);
+  });
+});
+
+describe("shouldSyncGlobalWebhookToOrigin", () => {
+  it("bloqueia global webhook em localhost por padrão", () => {
+    expect(shouldSyncGlobalWebhookToOrigin("http://localhost:3001")).toBe(false);
+    expect(shouldSyncGlobalWebhookToOrigin("https://waje.com.br")).toBe(true);
   });
 });

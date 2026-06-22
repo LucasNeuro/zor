@@ -145,6 +145,17 @@ async function disableWebhookDaInstancia(
   return { ok: true };
 }
 
+export function shouldSyncGlobalWebhookToOrigin(origin: string): boolean {
+  try {
+    if (isLocalhostHost(new URL(origin).hostname)) {
+      return process.env.UAZAPI_ALLOW_LOCALHOST_GLOBAL_WEBHOOK === "1";
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Webhook global (todas as instâncias) — requer UAZAPI_ADMIN_TOKEN no servidor. */
 export async function syncWebhookGlobal(
   request: NextRequest
@@ -159,6 +170,16 @@ export async function syncWebhookGlobal(
       ok: false,
       error:
         "URL pública indisponível. Defina NEXT_PUBLIC_APP_URL=https://waje.com.br no Render (sem localhost).",
+    };
+  }
+
+  if (!shouldSyncGlobalWebhookToOrigin(origin)) {
+    createHubLogger("uazapi_webhook_sync").warn("wa.sync.global_skipped_localhost", { origin });
+    return {
+      ok: false,
+      skipped: true,
+      error:
+        "Webhook global não foi alterado (origem localhost derrubaria produção). Abra https://waje.com.br e use «Actualizar estado» no agente.",
     };
   }
 
@@ -193,6 +214,8 @@ export async function syncWebhooksUazapi(
     global = await syncWebhookGlobal(request);
     if (global.ok) {
       instance = await disableWebhookDaInstancia(request, instanceToken);
+    } else if (!global.ok && "skipped" in global && global.skipped === true) {
+      instance = await syncWebhookDaInstancia(request, instanceToken);
     } else {
       instance = await syncWebhookDaInstancia(request, instanceToken);
     }

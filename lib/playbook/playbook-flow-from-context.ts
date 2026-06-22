@@ -249,6 +249,8 @@ export function buildPlaybookFlowFromSnapshot(
     segmentos,
   });
 
+  const menuTargets = new Set(menuOptions.map((o) => o.next).filter(Boolean));
+
   const steps: PlaybookFlowStep[] = [
     {
       id: "inicio_saudacao",
@@ -336,71 +338,77 @@ export function buildPlaybookFlowFromSnapshot(
     },
   });
 
-  steps.push({
-    id: "ramo_suporte",
-    kind: "input",
-    journey: "suporte",
-    prompt: "Descreva o que aconteceu para eu registrar corretamente.",
-    field: "suporte_descricao",
-    input_type: "text",
-    next: "suporte_complete",
-  });
+  if (menuTargets.has("ramo_suporte")) {
+    steps.push({
+      id: "ramo_suporte",
+      kind: "input",
+      journey: "suporte",
+      prompt: "Descreva o que aconteceu para eu registrar corretamente.",
+      field: "suporte_descricao",
+      input_type: "text",
+      next: "suporte_complete",
+    });
 
-  steps.push({
-    id: "suporte_complete",
-    kind: "complete",
-    journey: "suporte",
-    complete: {
-      type: "complete",
-      handoff_to: "suporte",
-      summary: "Chamado de suporte registrado.",
-      crm_patch: { fluxo_ativo: "suporte" },
-    },
-  });
+    steps.push({
+      id: "suporte_complete",
+      kind: "complete",
+      journey: "suporte",
+      complete: {
+        type: "complete",
+        handoff_to: "suporte",
+        summary: "Chamado de suporte registrado.",
+        crm_patch: { fluxo_ativo: "suporte" },
+      },
+    });
+  }
 
-  steps.push({
-    id: "humano_motivo",
-    kind: "input",
-    journey: "triagem",
-    prompt: "Em poucas palavras, qual assunto você quer tratar com o time?",
-    field: "motivo_humano",
-    input_type: "text",
-    next: "humano_complete",
-  });
+  if (menuTargets.has("humano_motivo")) {
+    steps.push({
+      id: "humano_motivo",
+      kind: "input",
+      journey: "triagem",
+      prompt: "Em poucas palavras, qual assunto você quer tratar com o time?",
+      field: "motivo_humano",
+      input_type: "text",
+      next: "humano_complete",
+    });
 
-  steps.push({
-    id: "humano_complete",
-    kind: "complete",
-    journey: "triagem",
-    complete: {
-      type: "complete",
-      handoff_to: "time_humano",
-      summary: "Lead solicitou atendimento humano.",
-      crm_patch: { fluxo_ativo: "handoff", lead_kind: "outro" },
-    },
-  });
+    steps.push({
+      id: "humano_complete",
+      kind: "complete",
+      journey: "triagem",
+      complete: {
+        type: "complete",
+        handoff_to: "time_humano",
+        summary: "Lead solicitou atendimento humano.",
+        crm_patch: { fluxo_ativo: "handoff", lead_kind: "outro" },
+      },
+    });
+  }
 
-  steps.push({
-    id: "outro_descricao",
-    kind: "input",
-    journey: "triagem",
-    prompt: "Conte em uma frase o que você precisa — vou encaminhar ao time certo.",
-    field: "outro_assunto",
-    input_type: "text",
-    next: "outro_complete",
-  });
+  if (menuTargets.has("outro_descricao")) {
+    steps.push({
+      id: "outro_descricao",
+      kind: "input",
+      journey: "triagem",
+      prompt: "Conte em uma frase o que você precisa — vou encaminhar ao time certo.",
+      field: "outro_assunto",
+      input_type: "text",
+      next: "outro_complete",
+    });
 
-  steps.push({
-    id: "outro_complete",
-    kind: "complete",
-    journey: "triagem",
-    complete: {
-      type: "complete",
-      handoff_to: "time_humano",
-      summary: "Outro assunto — encaminhar com resumo.",
-      crm_patch: { fluxo_ativo: "outro", lead_kind: "outro" },
-    },
-  });
+    steps.push({
+      id: "outro_complete",
+      kind: "complete",
+      journey: "triagem",
+      complete: {
+        type: "complete",
+        handoff_to: "time_humano",
+        summary: "Outro assunto — encaminhar com resumo.",
+        crm_patch: { fluxo_ativo: "outro", lead_kind: "outro" },
+      },
+    });
+  }
 
   const definition: PlaybookFlowDefinition = {
     waje_playbook_flow_schema: 1,

@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { defaultTenantId } from "@/lib/tenant-default";
 
 export type LinhaWhatsAppWebhook =
   | {
@@ -21,9 +20,12 @@ type AgenteWaRow = {
 };
 
 const AGENTE_WA_SELECT =
-  "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo";
+  "agente_slug, modo_operacao, uazapi_instance_token, uazapi_connection_status, tenant_id, ativo, arquivado_em";
 
-function validarAgenteWaRow(r: AgenteWaRow, tid: string): LinhaWhatsAppWebhook | null {
+const WA_LIVE_STATUSES = new Set(["connected", "connecting", "open", "online"]);
+
+/** Valida agente para webhook inbound — não filtra por DEFAULT_TENANT_ID do servidor. */
+export function validarAgenteWaRowForWebhook(r: AgenteWaRow): LinhaWhatsAppWebhook | null {
   if (r.arquivado_em != null || r.ativo === false) {
     return { kind: "ignored", reason: "agente_inativo_ou_arquivado" };
   }
@@ -32,19 +34,14 @@ function validarAgenteWaRow(r: AgenteWaRow, tid: string): LinhaWhatsAppWebhook |
     return { kind: "ignored", reason: "agente_nao_modo_canal_whatsapp" };
   }
 
-  const agentTenant = typeof r.tenant_id === "string" ? r.tenant_id : null;
-  if (agentTenant && agentTenant !== tid) {
-    return { kind: "ignored", reason: "tenant_instancia_incompativel" };
-  }
-
   const token = typeof r.uazapi_instance_token === "string" ? r.uazapi_instance_token.trim() : "";
-  const status = typeof r.uazapi_connection_status === "string" ? r.uazapi_connection_status.trim() : "";
+  const status = (typeof r.uazapi_connection_status === "string" ? r.uazapi_connection_status.trim() : "").toLowerCase();
 
   if (!token) {
     return { kind: "ignored", reason: "instancia_sem_token_em_hub" };
   }
 
-  if (status !== "connected") {
+  if (!WA_LIVE_STATUSES.has(status)) {
     return { kind: "ignored", reason: "whatsapp_nao_conectado" };
   }
 
@@ -62,33 +59,29 @@ async function resolverPorLinhaHub(
   notFoundReason: string
 ): Promise<LinhaWhatsAppWebhook> {
   if (!row) return { kind: "ignored", reason: notFoundReason };
-  const tid = defaultTenantId();
-  const validated = validarAgenteWaRow(row, tid);
+  const validated = validarAgenteWaRowForWebhook(row);
   return validated ?? { kind: "ignored", reason: "agente_validacao_falhou" };
 }
 
 async function resolverUnicoAgenteWhatsappConectado(
   supabase: SupabaseClient
 ): Promise<LinhaWhatsAppWebhook | null> {
-  const tid = defaultTenantId();
   const { data: rows, error } = await supabase
     .from("hub_agente_identidade")
     .select(AGENTE_WA_SELECT)
     .eq("modo_operacao", "canal_whatsapp")
-    .eq("uazapi_connection_status", "connected")
+    .in("uazapi_connection_status", [...WA_LIVE_STATUSES])
     .eq("ativo", true);
 
   if (error || !rows?.length) return null;
 
-  const noTenant = (rows as AgenteWaRow[]).filter((r) => {
-    const t = typeof r.tenant_id === "string" ? r.tenant_id : null;
-    return !t || t === tid;
-  });
+  const candidates = (rows as AgenteWaRow[])
+    .map((r) => validarAgenteWaRowForWebhook(r))
+    .filter((v): v is Extract<LinhaWhatsAppWebhook, { kind: "agent_instance" }> => v?.kind === "agent_instance");
 
-  if (noTenant.length !== 1) return null;
+  if (candidates.length !== 1) return null;
 
-  const validated = validarAgenteWaRow(noTenant[0]!, tid);
-  return validated?.kind === "agent_instance" ? validated : null;
+  return candidates[0]!;
 }
 
 /**

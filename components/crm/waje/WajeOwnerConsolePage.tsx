@@ -61,10 +61,12 @@ export function WajeOwnerConsolePage() {
   const tabParam = searchParams.get("tab");
   const viewParam = searchParams.get("view");
 
-  const [tab, setTab] = useState<WajeOwnerTab>(parseTab(tabParam));
-  const [viewMode, setViewMode] = useState<PainelViewMode>(
-    viewParam === "tabela" ? "tabela" : "paineis",
-  );
+  const initialTab = parseTab(tabParam);
+  const [tab, setTab] = useState<WajeOwnerTab>(initialTab);
+  const [viewMode, setViewMode] = useState<PainelViewMode>(() => {
+    if (viewParam === "paineis" || viewParam === "tabela") return viewParam;
+    return initialTab === "tenants" ? "tabela" : "paineis";
+  });
 
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [agentes, setAgentes] = useState<AgenteRow[]>([]);
@@ -76,7 +78,8 @@ export function WajeOwnerConsolePage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const [erro, setErro] = useState("");
+  const [erroBloqueante, setErroBloqueante] = useState("");
+  const [erroTab, setErroTab] = useState<Partial<Record<WajeOwnerTab, string>>>({});
   const [search, setSearch] = useState("");
   const [filtroTenant, setFiltroTenant] = useState<"todos" | "ativos" | "inativos">("todos");
 
@@ -87,7 +90,8 @@ export function WajeOwnerConsolePage() {
   const carregar = useCallback(async (opts?: { silent?: boolean }) => {
     if (opts?.silent) setRefreshing(true);
     else setLoading(true);
-    setErro("");
+    setErroBloqueante("");
+    setErroTab({});
     try {
       const [rT, rA, rP, rU, rL] = await Promise.all([
         fetch("/api/ops/tenants", { headers: await opsApiHeaders(), credentials: "include" }),
@@ -123,11 +127,13 @@ export function WajeOwnerConsolePage() {
         if (!prev) return prev;
         return nextTenants.find((t) => t.id === prev.id) ?? prev;
       });
-      if (!rP.ok && jP.error) setErro(jP.error);
-      if (!rU.ok && jU.error) setErro(jU.error);
-      if (!rL.ok && jL.error) setErro(jL.error);
+      const tabErrors: Partial<Record<WajeOwnerTab, string>> = {};
+      if (!rP.ok && jP.error) tabErrors.pagamentos = jP.error;
+      if (!rU.ok && jU.error) tabErrors.usuarios = jU.error;
+      if (!rL.ok && jL.error) tabErrors.leads = jL.error;
+      setErroTab(tabErrors);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao carregar.");
+      setErroBloqueante(e instanceof Error ? e.message : "Erro ao carregar.");
     } finally {
       if (opts?.silent) setRefreshing(false);
       else setLoading(false);
@@ -294,15 +300,31 @@ export function WajeOwnerConsolePage() {
   return (
     <div className="flex min-h-full flex-col bg-[#f8fcf6]">
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
-        {erro ? (
+        {erroBloqueante ? (
           <div
             className="mb-4 rounded-xl border border-[#f8514966] bg-[#fff5f5] px-4 py-3 text-sm text-[#b91c1c]"
             role="alert"
           >
-            {erro}
+            {erroBloqueante}
             <button
               type="button"
               onClick={() => void carregar()}
+              className="ml-2 text-xs font-bold underline"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : null}
+
+        {!erroBloqueante && erroTab[tab] ? (
+          <div
+            className="mb-4 rounded-xl border border-[#f59e0b66] bg-[#fffbeb] px-4 py-3 text-sm text-[#92400e]"
+            role="status"
+          >
+            {TAB_COPY[tab].label}: {erroTab[tab]}
+            <button
+              type="button"
+              onClick={() => void carregar({ silent: true })}
               className="ml-2 text-xs font-bold underline"
             >
               Tentar novamente
@@ -357,6 +379,7 @@ export function WajeOwnerConsolePage() {
               pagamentos={pagamentos}
               usuarios={usuarios}
               leads={leads}
+              onGerirTenant={tab === "tenants" ? setTenantSideover : undefined}
             />
           ) : (
             <WajeOwnerTabela
@@ -377,7 +400,6 @@ export function WajeOwnerConsolePage() {
               onGerirTenant={setTenantSideover}
               onGerirUsuario={setUsuarioSideover}
               onGerirLead={setLeadSideover}
-              onPagamentosChange={() => void atualizarPagamentosGlobais()}
             />
           )}
         </div>

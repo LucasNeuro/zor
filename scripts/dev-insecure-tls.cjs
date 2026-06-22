@@ -66,6 +66,25 @@ if (resendKey) {
   );
 }
 
+function coraEmissorDigits() {
+  const raw = (process.env.CORA_EMISSOR_CNPJ || "").replace(/\r/g, "").trim();
+  return raw.replace(/\D/g, "");
+}
+
+const coraEmissor = coraEmissorDigits();
+if (coraEmissor.length >= 14) {
+  console.warn(`[dev] Cora emissor OK — CORA_EMISSOR_CNPJ carregado (${coraEmissor.slice(0, 2)}…${coraEmissor.slice(-4)}).\n`);
+} else if (process.env.CORA_EMISSOR_CNPJ?.trim()) {
+  console.warn(
+    "[dev] AVISO: CORA_EMISSOR_CNPJ no .env tem menos de 14 dígitos — emissão de boletos falhará.\n"
+  );
+} else {
+  console.warn(
+    "[dev] AVISO: CORA_EMISSOR_CNPJ ausente no .env — boletos Cora falham em localhost. " +
+      "Defina (ex.: 62.449.971/0001-70) e reinicie. Render não aplica aqui.\n"
+  );
+}
+
 const port = process.env.PORT || "3001";
 const devHost = process.env.HOST || "0.0.0.0";
 const lanIps = listLanIpv4();

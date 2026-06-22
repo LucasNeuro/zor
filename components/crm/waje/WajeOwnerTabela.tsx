@@ -1,8 +1,8 @@
 "use client";
 
 import type { MouseEvent } from "react";
-import { useCallback, useMemo, useState } from "react";
-import { Download, MessageCircle, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
+import { useCallback, useMemo } from "react";
+import { Download, Pencil, RefreshCw, Search } from "lucide-react";
 import {
   CrmResizableDataTable,
   type CrmResizableColumn,
@@ -15,7 +15,6 @@ import type { PagamentoRow } from "@/components/crm/waje/WajeOwnerPagamentoSideo
 import type { TenantRow } from "@/components/crm/waje/WajeOwnerTenantSideover";
 import type { UsuarioRow } from "@/components/crm/waje/WajeOwnerUsuarioSideover";
 import type { WajeOwnerTab } from "@/components/crm/waje/waje-owner-theme";
-import { opsApiHeaders } from "@/lib/ops-api-headers-client";
 
 type Props = {
   tab: WajeOwnerTab;
@@ -35,7 +34,6 @@ type Props = {
   onGerirTenant?: (row: TenantRow) => void;
   onGerirUsuario?: (row: UsuarioRow) => void;
   onGerirLead?: (row: LeadInteresseRow) => void;
-  onPagamentosChange?: () => void;
 };
 
 function stopRowClick(e: MouseEvent) {
@@ -62,10 +60,6 @@ function statusPagamento(s: string): "pendente" | "pago" | "atrasado" | "inativo
   if (x === "cancelado") return "inativo";
   if (x === "pendente") return "pendente";
   return "neutral";
-}
-
-function pagamentoPodeApagar(p: PagamentoRow) {
-  return p.status !== "pago" && !p.cora_invoice_id;
 }
 
 function trialLabel(trialAte: string | null | undefined) {
@@ -96,10 +90,7 @@ export function WajeOwnerTabela({
   onGerirTenant,
   onGerirUsuario,
   onGerirLead,
-  onPagamentosChange,
 }: Props) {
-  const [enviandoWa, setEnviandoWa] = useState<string | null>(null);
-  const [apagandoId, setApagandoId] = useState<string | null>(null);
   const tenantsFiltrados = useMemo(() => {
     let list = tenants;
     if (filtroTenant === "ativos") list = list.filter((t) => t.ativo);
@@ -159,49 +150,8 @@ export function WajeOwnerTabela({
     return p.boleto_arquivo_url?.trim() || p.cora_boleto_url?.trim() || null;
   }, []);
 
-  async function enviarWhatsappPagamento(p: PagamentoRow) {
-    const tel = window.prompt("WhatsApp do cliente (com DDD):", p.whatsapp_telefone ?? "");
-    if (!tel?.trim()) return;
-    setEnviandoWa(p.id);
-    try {
-      const res = await fetch(`/api/ops/pagamentos/${p.id}/whatsapp`, {
-        method: "POST",
-        headers: { ...(await opsApiHeaders()), "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ telefone: tel }),
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Falha ao enviar.");
-      onPagamentosChange?.();
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Erro ao enviar WhatsApp.");
-    } finally {
-      setEnviandoWa(null);
-    }
-  }
-
-  async function apagarPagamento(p: PagamentoRow) {
-    if (!pagamentoPodeApagar(p)) return;
-    if (!window.confirm("Apagar esta cobrança sem boleto emitido?")) return;
-    setApagandoId(p.id);
-    try {
-      const res = await fetch(`/api/ops/pagamentos/${p.id}`, {
-        method: "DELETE",
-        headers: await opsApiHeaders(),
-        credentials: "include",
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Falha ao apagar.");
-      onPagamentosChange?.();
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Erro ao apagar cobrança.");
-    } finally {
-      setApagandoId(null);
-    }
-  }
-
   const semEmissaoCount = useMemo(
-    () => pagamentos.filter(pagamentoPodeApagar).length,
+    () => pagamentos.filter((p) => p.status !== "pago" && !p.cora_invoice_id).length,
     [pagamentos],
   );
 
@@ -374,51 +324,8 @@ export function WajeOwnerTabela({
           );
         },
       },
-      {
-        id: "wa",
-        label: "WA",
-        defaultWidth: 52,
-        truncate: false,
-        align: "center",
-        render: (r) => (
-          <div onClick={stopRowClick} role="presentation">
-            <button
-              type="button"
-              disabled={!r.cora_invoice_id || enviandoWa === r.id}
-              title={r.whatsapp_enviado_em ? "Reenviar boleto" : "Enviar boleto"}
-              onClick={() => void enviarWhatsappPagamento(r)}
-              className="inline-flex rounded-lg border border-[#d4ecd0] bg-white p-1.5 text-[#0f6b4f] disabled:opacity-40"
-            >
-              <MessageCircle size={14} />
-            </button>
-          </div>
-        ),
-      },
-      {
-        id: "apagar",
-        label: "Apagar",
-        defaultWidth: 52,
-        truncate: false,
-        align: "center",
-        render: (r) => {
-          if (!pagamentoPodeApagar(r)) return <span className="text-[#90a89b]">—</span>;
-          return (
-            <div onClick={stopRowClick} role="presentation">
-              <button
-                type="button"
-                disabled={apagandoId === r.id}
-                title="Apagar cobrança sem boleto"
-                onClick={() => void apagarPagamento(r)}
-                className="inline-flex rounded-lg border border-[#f5d0d0] bg-white p-1.5 text-[#b42318] disabled:opacity-40"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          );
-        },
-      },
     ],
-    [apagandoId, enviandoWa, urlBoleto],
+    [urlBoleto],
   );
 
   const usuarioColumns = useMemo<CrmResizableColumn<UsuarioRow>[]>(
@@ -529,7 +436,8 @@ export function WajeOwnerTabela({
           <div className="flex flex-wrap items-center gap-3">
             {tab === "pagamentos" && semEmissaoCount > 0 ? (
               <p className="m-0 text-[10px] font-semibold text-[#b42318]">
-                {semEmissaoCount} sem boleto emitido — abra o tenant em Tenants ou use a coluna Apagar
+                {semEmissaoCount} sem boleto emitido — abra o tenant na aba Tenants para emitir ou
+                gerir cobranças
               </p>
             ) : null}
             <p className="m-0 text-[10px] text-[#89a095]">

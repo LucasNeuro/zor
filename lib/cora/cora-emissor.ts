@@ -6,15 +6,43 @@ export function getCoraEmissorCnpj(): string | null {
   return digits.length >= 14 ? digits.slice(0, 14) : null;
 }
 
+/** Por que `getCoraEmissorCnpj()` devolve null — útil em diagnósticos e erros de API. */
+export function motivoCoraEmissorIndisponivel(): "ausente" | "invalido" | null {
+  const raw = process.env.CORA_EMISSOR_CNPJ?.trim();
+  if (!raw) return "ausente";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 14) return "invalido";
+  return null;
+}
+
+/** Mensagem amigável quando CORA_EMISSOR_CNPJ não está disponível no processo Node atual. */
+export function mensagemCoraEmissorAusente(): string {
+  const motivo = motivoCoraEmissorIndisponivel();
+  const exemplo = "62.449.971/0001-70 (Onze Tecnologia)";
+  if (motivo === "invalido") {
+    return (
+      `CORA_EMISSOR_CNPJ está definido mas inválido (precisa de 14 dígitos). ` +
+      `Exemplo: ${exemplo}.`
+    );
+  }
+  if (process.env.NODE_ENV === "development") {
+    return (
+      `CORA_EMISSOR_CNPJ não está carregado neste servidor local. ` +
+      `Adicione ao ficheiro .env (ex.: ${exemplo}) e reinicie com npm run dev. ` +
+      `Variáveis configuradas só no Render não aplicam em localhost:3001.`
+    );
+  }
+  return (
+    `CORA_EMISSOR_CNPJ não está definido no servidor de produção. ` +
+    `No Render, configure ${exemplo} e faça redeploy para o processo receber a variável.`
+  );
+}
+
 /** Exige CORA_EMISSOR_CNPJ antes de emitir — validação de pagador vs emissor. */
 export function exigirCoraEmissorCnpj(): string {
   const cnpj = getCoraEmissorCnpj();
   if (!cnpj) {
-    throw new Error(
-      "CORA_EMISSOR_CNPJ não está definido no servidor. " +
-        "No Render, configure o CNPJ da conta Cora emissora (ex.: Onze 62.449.971/0001-70). " +
-        "Sem isso a plataforma não consegue validar pagador vs emissor.",
-    );
+    throw new Error(mensagemCoraEmissorAusente());
   }
   return cnpj;
 }

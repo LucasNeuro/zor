@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { coraConfigurado } from "@/lib/cora/cora-config";
-import { getCoraEmissorCnpj } from "@/lib/cora/cora-emissor";
+import { getCoraEmissorCnpj, mensagemCoraEmissorAusente } from "@/lib/cora/cora-emissor";
 import type { CoraFormaPagamento } from "@/lib/cora/cora-cobranca";
 import { gerarBoletosParcelados } from "@/lib/ops/cora-mensalidade";
 import { diagnosticarCoraTenant } from "@/lib/cora/cora-diagnostico";
@@ -26,8 +26,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
   if (!getCoraEmissorCnpj()) {
     return NextResponse.json(
       {
-        error:
-          "CORA_EMISSOR_CNPJ não definido no Render. Configure o CNPJ da conta Cora emissora (Onze: 62.449.971/0001-70).",
+        error: mensagemCoraEmissorAusente(),
         configured: false,
       },
       { status: 503 },

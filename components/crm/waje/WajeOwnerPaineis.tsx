@@ -22,6 +22,7 @@ type Props = {
   pagamentos: PagamentoRow[];
   usuarios?: UsuarioRow[];
   leads?: LeadInteresseRow[];
+  onGerirTenant?: (row: TenantRow) => void;
 };
 
 function StatLine({ label, value }: { label: string; value: string | number }) {
@@ -37,7 +38,43 @@ function StatLine({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export function WajeOwnerPaineis({ tab, tenants, agentes, pagamentos, usuarios = [], leads = [] }: Props) {
+function TenantStatLine({
+  tenant,
+  onGerirTenant,
+}: {
+  tenant: TenantRow;
+  onGerirTenant?: (row: TenantRow) => void;
+}) {
+  const status = tenant.ativo ? "Ativo" : "Inativo";
+  if (!onGerirTenant) {
+    return <StatLine label={tenant.nome} value={status} />;
+  }
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[rgba(146,255,0,0.08)] py-2 last:border-0">
+      <button
+        type="button"
+        onClick={() => onGerirTenant(tenant)}
+        className="min-w-0 truncate text-left text-[11px] font-semibold text-[#92ff00] underline-offset-2 hover:underline"
+        title={`Gerir ${tenant.nome}`}
+      >
+        {tenant.nome}
+      </button>
+      <span className="shrink-0 text-sm font-bold tabular-nums" style={{ color: "#92ff00" }}>
+        {status}
+      </span>
+    </div>
+  );
+}
+
+export function WajeOwnerPaineis({
+  tab,
+  tenants,
+  agentes,
+  pagamentos,
+  usuarios = [],
+  leads = [],
+  onGerirTenant,
+}: Props) {
   const ativosT = tenants.filter((t) => t.ativo).length;
   const waOk = agentes.filter((a) => a.whatsapp_conectado).length;
   const opsA = agentes.filter((a) => a.ativo && !a.arquivado_em).length;
@@ -66,9 +103,12 @@ export function WajeOwnerPaineis({ tab, tenants, agentes, pagamentos, usuarios =
           <StatLine label="Trial expirado" value={trialExpirado} />
           <StatLine label="Sem trial" value={tenants.filter((t) => !t.trial_ate).length} />
         </CrmPainelChartShell>
-        <CrmPainelChartShell title="Últimos tenants" subtitle="Mais recentes no cadastro">
+        <CrmPainelChartShell
+          title="Últimos tenants"
+          subtitle={onGerirTenant ? "Clique no nome para gerir o tenant" : "Mais recentes no cadastro"}
+        >
           {tenants.slice(0, 5).map((t) => (
-            <StatLine key={t.id} label={t.nome} value={t.ativo ? "Ativo" : "Inativo"} />
+            <TenantStatLine key={t.id} tenant={t} onGerirTenant={onGerirTenant} />
           ))}
           {tenants.length === 0 ? (
             <p className="py-4 text-center text-[11px]" style={{ color: "#7a9a7e" }}>

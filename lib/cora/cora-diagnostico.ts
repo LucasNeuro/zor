@@ -15,6 +15,7 @@ import {
   cnpjMesmoEmissorCora,
   getCoraEmissorCnpj,
   getCoraEmissorNome,
+  mensagemCoraEmissorAusente,
 } from "@/lib/cora/cora-emissor";
 import { obterCoraAccessToken } from "@/lib/cora/cora-client";
 
@@ -159,7 +160,7 @@ export async function diagnosticarCoraTenant(tenantId: string): Promise<CoraDiag
   if (!coraConfigurado()) {
     conclusao = "Cora não configurada no servidor (certificado/client_id).";
   } else if (!emissorEnv) {
-    conclusao = "Defina CORA_EMISSOR_CNPJ no Render (CNPJ da conta Onze).";
+    conclusao = mensagemCoraEmissorAusente();
   } else if (!billing) {
     conclusao = "Cadastro de faturamento incompleto — preencha CNPJ do cliente no painel.";
   } else if (check.bloqueado || cnpjMesmoEmissorCora(docEnviado)) {

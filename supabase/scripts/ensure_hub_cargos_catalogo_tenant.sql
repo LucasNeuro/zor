@@ -1,0 +1,1 @@
+-- Atalho: use docs/sql/hub-cargos-catalogo-tenant.sql no SQL Editor do Supabase.

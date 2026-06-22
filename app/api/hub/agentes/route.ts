@@ -39,6 +39,7 @@ import {
   type WaPresetId,
 } from "@/lib/hub/presets/wa-conversacao-preset";
 import { mergeUsoFerramentasWhatsappCanal } from "@/lib/hub/agente-ferramentas-registry";
+import { applyCargoTenantFilter } from "@/lib/hub/cargo-catalogo-tenant";
 import {
   EMAIL_CHANNEL_DISABLED_CODE,
   EMAIL_CHANNEL_DISABLED_MESSAGE,
@@ -402,14 +403,16 @@ export async function POST(request: NextRequest) {
     if (playbookPath) row.playbook_object_path = playbookPath;
     if (playbookUrl) row.playbook_public_url = playbookUrl;
   } else {
-  const { data: cat, error: catErr } = await supabase
-    .from("hub_cargos_catalogo")
-    .select(
-      "slug, titulo, descricao_curta, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao, saudacao_cliente, usar_perguntas_essenciais, ordem_perguntas_essenciais, perguntas_essenciais, comprimento_padrao"
-    )
-    .eq("slug", cargoSlugTrim)
-    .eq("ativo", true)
-    .maybeSingle();
+  const { data: cat, error: catErr } = await applyCargoTenantFilter(
+    supabase
+      .from("hub_cargos_catalogo")
+      .select(
+        "slug, titulo, descricao_curta, area, nivel, modelo_padrao, modelo_critico, modelo_alto_valor, supervisor_slug, pode_fazer_padrao, nao_pode_fazer_padrao, prompt_template, descricao, saudacao_cliente, usar_perguntas_essenciais, ordem_perguntas_essenciais, perguntas_essenciais, comprimento_padrao"
+      )
+      .eq("slug", cargoSlugTrim)
+      .eq("ativo", true),
+    tenantId
+  ).maybeSingle();
 
   if (catErr) {
     return NextResponse.json({ error: catErr.message }, { status: 500 });

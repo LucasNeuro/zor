@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import {
   sugerirCargoCatalogoComMistral,
   type CargoCatalogoContextRow,
@@ -13,7 +14,6 @@ import {
   formatarTrechosConhecimentoParaPrompt,
   lerAnaliseNegocioTenant,
 } from "@/lib/hub/tenant-conhecimento-rag";
-import { tenantIdFromRequest } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
@@ -27,6 +27,10 @@ function db() {
  * Devolve campos sugeridos para `hub_cargos_catalogo` com base nos cargos e mercados activos no Hub.
  */
 export async function POST(request: NextRequest) {
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const { tenantId } = tenantResolved;
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();
@@ -40,10 +44,9 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = db();
-  const tenantId = tenantIdFromRequest(request.headers);
 
   const [{ data: cargosData, error: cErr }, mercadosQuery] = await Promise.all([
-    selectCargosContextoSugerir(supabase),
+    selectCargosContextoSugerir(supabase, tenantId),
     supabase.from("hub_mercados").select("sigla,nome,codigo").eq("ativo", true).limit(40),
   ]);
 

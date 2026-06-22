@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { applyCargoTenantFilter } from "@/lib/hub/cargo-catalogo-tenant";
 
 export type CargoCatalogoAgente = {
   slug: string;
@@ -33,7 +34,8 @@ function slugifyTitulo(titulo: string): string {
 /** Resolve hub_cargos_catalogo a partir do titulo gravado em hub_agente_identidade.cargo. */
 export async function resolverCargoCatalogoParaAgente(
   supabase: SupabaseClient,
-  agenteOrTitulo: string | { cargo?: string | null }
+  agenteOrTitulo: string | { cargo?: string | null; tenant_id?: string | null },
+  tenantId?: string | null
 ): Promise<CargoCatalogoAgente | null> {
   const tituloAgente =
     typeof agenteOrTitulo === "string"
@@ -41,35 +43,41 @@ export async function resolverCargoCatalogoParaAgente(
       : String(agenteOrTitulo.cargo ?? "").trim();
   if (!tituloAgente) return null;
 
-  const { data: exact } = await supabase
+  const tid =
+    (tenantId?.trim() ||
+      (typeof agenteOrTitulo === "object" ? String(agenteOrTitulo.tenant_id ?? "").trim() : "")) ||
+    null;
+
+  let qExact = supabase
     .from("hub_cargos_catalogo")
     .select(CARGO_SELECT)
     .eq("titulo", tituloAgente)
-    .eq("ativo", true)
-    .maybeSingle();
+    .eq("ativo", true);
+  if (tid) qExact = applyCargoTenantFilter(qExact, tid);
+  const { data: exact } = await qExact.maybeSingle();
   if (exact) return exact as CargoCatalogoAgente;
 
-  const { data: porSlug } = await supabase
+  let qSlug = supabase
     .from("hub_cargos_catalogo")
     .select(CARGO_SELECT)
     .eq("slug", slugifyTitulo(tituloAgente))
-    .eq("ativo", true)
-    .maybeSingle();
+    .eq("ativo", true);
+  if (tid) qSlug = applyCargoTenantFilter(qSlug, tid);
+  const { data: porSlug } = await qSlug.maybeSingle();
   if (porSlug) return porSlug as CargoCatalogoAgente;
 
-  const { data: ilike } = await supabase
+  let qIlike = supabase
     .from("hub_cargos_catalogo")
     .select(CARGO_SELECT)
     .ilike("titulo", tituloAgente)
-    .eq("ativo", true)
-    .limit(1)
-    .maybeSingle();
+    .eq("ativo", true);
+  if (tid) qIlike = applyCargoTenantFilter(qIlike, tid);
+  const { data: ilike } = await qIlike.limit(1).maybeSingle();
   if (ilike) return ilike as CargoCatalogoAgente;
 
-  const { data: todos } = await supabase
-    .from("hub_cargos_catalogo")
-    .select(CARGO_SELECT)
-    .eq("ativo", true);
+  let qTodos = supabase.from("hub_cargos_catalogo").select(CARGO_SELECT).eq("ativo", true);
+  if (tid) qTodos = applyCargoTenantFilter(qTodos, tid);
+  const { data: todos } = await qTodos;
   if (!todos?.length) return null;
 
   const alvo = normalizarTitulo(tituloAgente);

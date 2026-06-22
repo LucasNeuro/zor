@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { applyCargoTenantFilter } from "@/lib/hub/cargo-catalogo-tenant";
 
 export function isMissingColumnError(msg: string): boolean {
   return /column|schema cache|could not find|does not exist/i.test(msg);
@@ -53,7 +54,8 @@ function cargoPayloadMinimo(row: Record<string, unknown>): Record<string, unknow
 
 export async function listCargosCatalog(
   supabase: SupabaseClient,
-  all: boolean
+  all: boolean,
+  tenantId: string
 ): Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null }> {
   const orderAttempts = [
     ["segmento", "especialidade", "nivel"],
@@ -66,13 +68,15 @@ export async function listCargosCatalog(
 
   let lastError: { message: string } | null = null;
   for (const cols of orderAttempts) {
-    let q = supabase.from("hub_cargos_catalogo").select("*");
+    let q = applyCargoTenantFilter(supabase.from("hub_cargos_catalogo").select("*"), tenantId);
     if (!all) q = q.eq("ativo", true);
     for (const col of cols) q = q.order(col);
     const { data, error } = await q;
     if (!error) {
       return {
-        data: (data || []).map((r) => normalizeCargoCatalogRow(r as unknown as Record<string, unknown>)),
+        data: (data || []).map((r: Record<string, unknown>) =>
+          normalizeCargoCatalogRow(r as unknown as Record<string, unknown>)
+        ),
         error: null,
       };
     }
@@ -83,7 +87,8 @@ export async function listCargosCatalog(
 }
 
 export async function selectCargosContextoSugerir(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  tenantId: string
 ): Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null }> {
   const selectAttempts = [
     "slug,titulo,segmento,especialidade,nivel",
@@ -98,15 +103,16 @@ export async function selectCargosContextoSugerir(
 
   let lastError: { message: string } | null = null;
   for (const cols of selectAttempts) {
-    const { data, error } = await supabase
-      .from("hub_cargos_catalogo")
-      .select(cols)
-      .eq("ativo", true)
-      .order("slug")
-      .limit(48);
+    let q = applyCargoTenantFilter(
+      supabase.from("hub_cargos_catalogo").select(cols).eq("ativo", true),
+      tenantId
+    );
+    const { data, error } = await q.order("slug").limit(48);
     if (!error) {
       return {
-        data: (data || []).map((r) => normalizeCargoCatalogRow(r as unknown as Record<string, unknown>)),
+        data: (data || []).map((r: Record<string, unknown>) =>
+          normalizeCargoCatalogRow(r as unknown as Record<string, unknown>)
+        ),
         error: null,
       };
     }
@@ -183,18 +189,18 @@ export async function insertCargoCatalogRow(
 export async function updateCargoCatalogRow(
   supabase: SupabaseClient,
   slug: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  tenantId: string
 ): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }> {
   let payload = { ...patch };
   let mirrorNome = false;
 
   for (let attempt = 0; attempt < 24; attempt++) {
-    const { data, error } = await supabase
-      .from("hub_cargos_catalogo")
-      .update(payload)
-      .eq("slug", slug)
-      .select("*")
-      .maybeSingle();
+    let q = applyCargoTenantFilter(
+      supabase.from("hub_cargos_catalogo").update(payload).eq("slug", slug),
+      tenantId
+    );
+    const { data, error } = await q.select("*").maybeSingle();
 
     if (!error && data) {
       return { data: normalizeCargoCatalogRow(data as unknown as Record<string, unknown>), error: null };
@@ -234,7 +240,8 @@ export type DeleteCargoResult =
 /** Elimina cargo — RPC `hub_delete_cargo_catalogo` ou fallback directo (service role). */
 export async function deleteCargoCatalogo(
   supabase: SupabaseClient,
-  slug: string
+  slug: string,
+  tenantId: string
 ): Promise<DeleteCargoResult> {
   const trimmed = slug.trim();
   if (trimmed.length < 2) {
@@ -260,21 +267,20 @@ export async function deleteCargoCatalogo(
     return { ok: false, error: rpcErr.message, status: 500 };
   }
 
-  const { data: cargo, error: loadErr } = await supabase
-    .from("hub_cargos_catalogo")
-    .select("slug,titulo,nome")
-    .eq("slug", trimmed)
-    .maybeSingle();
+  const { data: cargo, error: loadErr } = await applyCargoTenantFilter(
+    supabase.from("hub_cargos_catalogo").select("slug,titulo,nome").eq("slug", trimmed),
+    tenantId
+  ).maybeSingle();
 
   if (loadErr) return { ok: false, error: loadErr.message, status: 500 };
   if (!cargo) return { ok: false, error: "Cargo não encontrado.", status: 404 };
 
   const titulo = cargoTituloFromRow(cargo as unknown as Record<string, unknown>);
   if (titulo) {
-    const { count, error: countErr } = await supabase
-      .from("hub_agente_identidade")
-      .select("id", { count: "exact", head: true })
-      .eq("cargo", titulo);
+    const { count, error: countErr } = await applyCargoTenantFilter(
+      supabase.from("hub_agente_identidade").select("id", { count: "exact", head: true }).eq("cargo", titulo),
+      tenantId
+    );
 
     if (countErr && !isMissingColumnError(countErr.message ?? "")) {
       return { ok: false, error: countErr.message, status: 500 };
@@ -288,7 +294,10 @@ export async function deleteCargoCatalogo(
     }
   }
 
-  const { error: delErr } = await supabase.from("hub_cargos_catalogo").delete().eq("slug", trimmed);
+  const { error: delErr } = await applyCargoTenantFilter(
+    supabase.from("hub_cargos_catalogo").delete().eq("slug", trimmed),
+    tenantId
+  );
   if (delErr) {
     if (erroRpcCargoNaoInstalado(delErr.message ?? "")) {
       return {

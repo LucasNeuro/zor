@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { deleteCargoCatalogo } from "@/lib/hub/cargo-catalogo-db";
 
 function db() {
@@ -11,6 +12,10 @@ function db() {
 
 /** POST { slugs: string[] } — elimina cada slug (RPC ou fallback). */
 export async function POST(request: NextRequest) {
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const { tenantId } = tenantResolved;
+
   const supabase = db();
 
   let body: Record<string, unknown>;
@@ -34,7 +39,7 @@ export async function POST(request: NextRequest) {
   const blocked: { slug: string; error: string }[] = [];
 
   for (const slug of slugs) {
-    const result = await deleteCargoCatalogo(supabase, slug);
+    const result = await deleteCargoCatalogo(supabase, slug, tenantId);
     if (result.ok) deleted.push(result.slug);
     else blocked.push({ slug, error: result.error });
   }

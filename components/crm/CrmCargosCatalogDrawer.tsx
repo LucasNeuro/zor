@@ -25,7 +25,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { slugifyCargoSlug } from "@/lib/hub/cargo-slug";
 import {
   especialidadesExemploParaSegmento,
@@ -577,7 +577,7 @@ export function CrmCargosCatalogDrawer({
     try {
       const res = await fetch(`/api/hub/cargos?slug=${encodeURIComponent(slug)}`, {
         method: "DELETE",
-        headers: internalApiHeaders(),
+        headers: await hubApiHeaders(),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -607,7 +607,7 @@ export function CrmCargosCatalogDrawer({
     try {
       const res = await fetch("/api/hub/cargos/delete-batch", {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ slugs }),
       });
       const data = await res.json().catch(() => ({}));
@@ -663,7 +663,7 @@ export function CrmCargosCatalogDrawer({
     try {
       const res = await fetch("/api/hub/cargos", {
         method: "PATCH",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ slug, ativo: proximo }),
       });
       if (!res.ok) return;
@@ -686,7 +686,7 @@ export function CrmCargosCatalogDrawer({
           if (!slug) return false;
           const res = await fetch("/api/hub/cargos", {
             method: "PATCH",
-            headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+            headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
             body: JSON.stringify({ slug, ativo: ativoAlvo }),
           });
           return res.ok;
@@ -797,7 +797,7 @@ export function CrmCargosCatalogDrawer({
         const slugFinal = slugDigitado ? slugifyCargoSlug(slugDigitado) : slugifyCargoSlug(titulo);
         const res = await fetch("/api/hub/cargos", {
           method: "POST",
-          headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+          headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({ slug: slugFinal, ...basePayload }),
         });
         const data = await res.json().catch(() => ({}));
@@ -824,7 +824,7 @@ export function CrmCargosCatalogDrawer({
 
       const res = await fetch("/api/hub/cargos", {
         method: "PATCH",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
       const data = await res.json().catch(() => ({}));
@@ -894,7 +894,7 @@ export function CrmCargosCatalogDrawer({
     try {
       const res = await fetch("/api/hub/cargos/sugerir", {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ titulo }),
         signal: abort.signal,
       });

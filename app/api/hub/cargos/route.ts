@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { slugifyCargoSlug } from "@/lib/hub/cargo-slug";
+import { applyCargoTenantFilter, cargoSlugExistsForTenant } from "@/lib/hub/cargo-catalogo-tenant";
 import {
   modeloAltoValorForHubInsert,
   modeloCriticoForHubInsert,
@@ -156,13 +158,27 @@ function defaultsAtendimentoPorTipoCargo(input: {
 }
 
 export async function GET(request: NextRequest) {
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const { tenantId } = tenantResolved;
+
   const supabase = db();
   const { searchParams } = new URL(request.url);
   const all = searchParams.get("all") === "true";
 
-  const { data, error } = await listCargosCatalog(supabase, all);
+  const { data, error } = await listCargosCatalog(supabase, all, tenantId);
 
   if (error) {
+    const msg = error.message ?? "";
+    if (/tenant_id|column|schema cache/i.test(msg)) {
+      return NextResponse.json(
+        {
+          error:
+            "Catálogo de cargos por cliente ainda não está no Supabase. Aplique a migração 20260622180000_hub_cargos_catalogo_tenant_id.sql.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -171,6 +187,10 @@ export async function GET(request: NextRequest) {
 
 /** Corpo para criar cargo — `titulo` obrigatório; `slug` opcional (derivado do título). */
 export async function POST(request: NextRequest) {
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const { tenantId } = tenantResolved;
+
   const supabase = db();
 
   let body: Record<string, unknown>;
@@ -191,8 +211,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "slug inválido (mínimo 2 caracteres após normalização)." }, { status: 400 });
   }
 
-  const { data: dupe } = await supabase.from("hub_cargos_catalogo").select("slug").eq("slug", slugFinal).maybeSingle();
-  if (dupe) {
+  const slugCheck = await cargoSlugExistsForTenant(supabase, slugFinal, tenantId);
+  if (slugCheck.columnMissing) {
+    return NextResponse.json(
+      {
+        error:
+          "Catálogo de cargos por cliente ainda não está no Supabase. Aplique a migração 20260622180000_hub_cargos_catalogo_tenant_id.sql.",
+      },
+      { status: 503 }
+    );
+  }
+  if (slugCheck.exists) {
     return NextResponse.json({ error: `Já existe cargo com slug «${slugFinal}».` }, { status: 409 });
   }
 
@@ -240,6 +269,7 @@ export async function POST(request: NextRequest) {
     perguntas_essenciais: asStringArrayPatch(body.perguntas_essenciais) ?? defaultsAtendimento.perguntas_essenciais,
     comprimento_padrao: asTrimmedOrNull(body.comprimento_padrao) ?? defaultsAtendimento.comprimento_padrao,
     ativo: body.ativo !== false,
+    tenant_id: tenantId,
   };
 
   const lim = asOptionalNumberPatch(body.limite_autonomia_brl);
@@ -257,6 +287,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const { tenantId } = tenantResolved;
+
   const supabase = db();
 
   let body: Record<string, unknown>;
@@ -278,11 +312,10 @@ export async function PATCH(request: NextRequest) {
       ? slugifyCargoSlug(String(body.novo_slug))
       : "";
 
-  const { data: oldRow, error: oldErr } = await supabase
-    .from("hub_cargos_catalogo")
-    .select("*")
-    .eq("slug", slug)
-    .maybeSingle();
+  const { data: oldRow, error: oldErr } = await applyCargoTenantFilter(
+    supabase.from("hub_cargos_catalogo").select("*").eq("slug", slug),
+    tenantId
+  ).maybeSingle();
 
   if (oldErr) {
     return NextResponse.json({ error: oldErr.message }, { status: 500 });
@@ -294,8 +327,8 @@ export async function PATCH(request: NextRequest) {
   const oldTitulo = cargoTituloFromRow(oldRow as Record<string, unknown>);
 
   if (novoSlugNorm && novoSlugNorm !== slug) {
-    const { data: clash } = await supabase.from("hub_cargos_catalogo").select("slug").eq("slug", novoSlugNorm).maybeSingle();
-    if (clash) {
+    const clashCheck = await cargoSlugExistsForTenant(supabase, novoSlugNorm, tenantId);
+    if (clashCheck.exists) {
       return NextResponse.json({ error: `Slug «${novoSlugNorm}» já está em uso.` }, { status: 409 });
     }
   }
@@ -365,7 +398,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Nenhum campo para atualizar." }, { status: 400 });
   }
 
-  const { data, error } = await updateCargoCatalogRow(supabase, slug, patch);
+  const { data, error } = await updateCargoCatalogRow(supabase, slug, patch, tenantId);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -376,7 +409,10 @@ export async function PATCH(request: NextRequest) {
 
   const tituloFinal = cargoTituloFromRow(data);
   if (propagarTitulo && tituloFinal && oldTitulo && tituloFinal !== oldTitulo) {
-    await supabase.from("hub_agente_identidade").update({ cargo: tituloFinal }).eq("cargo", oldTitulo);
+    await applyCargoTenantFilter(
+      supabase.from("hub_agente_identidade").update({ cargo: tituloFinal }).eq("cargo", oldTitulo),
+      tenantId
+    );
   }
 
   return NextResponse.json(data);
@@ -384,13 +420,17 @@ export async function PATCH(request: NextRequest) {
 
 /** Query: ?slug= — elimina via RPC com SET LOCAL app.delete_authorized (trigger delete). */
 export async function DELETE(request: NextRequest) {
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const { tenantId } = tenantResolved;
+
   const supabase = db();
   const slug = new URL(request.url).searchParams.get("slug")?.trim();
   if (!slug) {
     return NextResponse.json({ error: "Query slug é obrigatória." }, { status: 400 });
   }
 
-  const result = await deleteCargoCatalogo(supabase, slug);
+  const result = await deleteCargoCatalogo(supabase, slug, tenantId);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

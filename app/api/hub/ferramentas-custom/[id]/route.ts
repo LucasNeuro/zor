@@ -52,7 +52,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     }
     patch.builtin_impl = b;
     const cat = catalogoBuiltinPorId(b);
-    if (cat) patch.parametros_schema = cat.mistralFunction.parameters;
+    if (cat?.mistralFunction) patch.parametros_schema = cat.mistralFunction.parameters;
   }
 
   if (body.smart_provider != null) {

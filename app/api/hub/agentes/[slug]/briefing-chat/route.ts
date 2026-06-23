@@ -197,7 +197,7 @@ export async function POST(
   const { data: agente, error: agErr } = await supabase
     .from("hub_agente_identidade")
     .select(
-      "agente_slug, nome, cargo, area, bio, modelo_padrao, system_prompt_base, modo_operacao, tenant_id, playbook_generated_at, playbook_object_path, playbook_public_url, playbook_source_hash"
+      "agente_slug, nome, cargo, area, bio, modelo_padrao, system_prompt_base, modo_operacao, tenant_id, uso_ferramentas_ia, playbook_generated_at, playbook_object_path, playbook_public_url, playbook_source_hash"
     )
     .eq("agente_slug", slug)
     .maybeSingle();

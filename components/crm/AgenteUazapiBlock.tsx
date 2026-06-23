@@ -6,7 +6,6 @@ import {
   AlertCircle,
   ChevronRight,
   Loader2,
-  MessageCircle,
   QrCode,
   RefreshCw,
   Smartphone,
@@ -41,6 +40,7 @@ import {
   avisoTelefoneBrPareamento,
 } from "@/lib/whatsapp/uazapi-proxy-connect";
 import { UazapiProxyCityPicker } from "@/components/crm/UazapiProxyCityPicker";
+import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
 
 /** UAZAPI: QR expira em ~2 min (doc OpenAPI). */
 const UAZAPI_QR_VALID_MS = 120_000;
@@ -1062,7 +1062,7 @@ export function AgenteUazapiBlock({
                   flexShrink: 0,
                 }}
               >
-                <MessageCircle size={20} style={{ color: "#25d366" }} aria-hidden />
+                <IntegracaoMarcaIcon variant="whatsapp" size={22} />
               </div>
               <div style={{ minWidth: 0 }}>
                 <p style={{ margin: 0, color: "#0b2210", fontSize: 14, fontWeight: 800 }}>WhatsApp</p>

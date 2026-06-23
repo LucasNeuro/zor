@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { Calendar, Check, ChevronRight, Loader2, Mail, Plug } from "lucide-react";
+import { Calendar, Check, ChevronRight, Loader2, Plug } from "lucide-react";
+import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
 import { CRM_ACCENT, crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
@@ -481,7 +482,10 @@ export function AgenteGoogleWorkspaceBlock({
                     flexShrink: 0,
                   }}
                 >
-                  <Mail size={20} style={{ color: "#4285f4" }} aria-hidden />
+                  <IntegracaoMarcaIcon
+                    variant={agendamento ? "google-calendar" : "google"}
+                    size={22}
+                  />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <p style={{ margin: 0, color: "#0b2210", fontSize: 14, fontWeight: 800 }}>
@@ -575,7 +579,10 @@ export function AgenteGoogleWorkspaceBlock({
             flexShrink: 0,
           }}
         >
-          <Plug size={22} strokeWidth={2} aria-hidden />
+          <IntegracaoMarcaIcon
+            variant={agendamento ? "google-calendar" : "google"}
+            size={24}
+          />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           {secaoIndice != null ? (

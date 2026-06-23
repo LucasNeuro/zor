@@ -1,5 +1,20 @@
 import { formatarOpcoesTriagemParaPrompt } from "@/lib/ia/mari-triagem-opcoes";
 
+/** Instruções para Google Calendar / Gmail (function calling hub_int_*). */
+export function blocoInstrucoesGoogleWorkspaceAgenda(): string {
+  return [
+    "═══ GOOGLE CALENDAR + GMAIL (obrigatório para reservas) ═══",
+    "A conta Google da empresa está ligada — use as ferramentas, não invente horários.",
+    "",
+    "1. **hub_int_gcal_listar_eventos** — antes de sugerir vagas, consulte a agenda real (parâmetro dias, ex. 7).",
+    "2. **hub_int_gcal_criar_evento** — quando o cliente **confirmar** data/hora, crie o evento (titulo, inicio, fim ISO, participantes com e-mail se houver).",
+    "3. Confirme ao cliente só **depois** da ferramenta retornar ok (com link Meet se existir).",
+    "4. **hub_int_gmail_enviar** — confirmação por e-mail quando fizer sentido.",
+    "",
+    "Proibido: listar horários fictícios sem chamar listar_eventos; prometer reserva sem chamar criar_evento.",
+  ].join("\n");
+}
+
 /** Instruções Mistral para uso fluido de ferramentas Hub no WhatsApp. */
 export function blocoInstrucoesFerramentasCrmWhatsapp(opcoes?: {
   temMenuWhatsapp?: boolean;

@@ -60,6 +60,32 @@ export type CriarEventoGoogleCalendarInput = {
   comGoogleMeet?: boolean;
 };
 
+export function inferirFimEventoGoogleCalendar(inicio: string, fim?: string): string {
+  const inicioTrim = inicio.trim();
+  const fimTrim = (fim ?? "").trim();
+  if (fimTrim && fimTrim !== inicioTrim) return fimTrim;
+
+  const parsed = new Date(inicioTrim);
+  if (!Number.isNaN(parsed.getTime())) {
+    const maisUmaHora = new Date(parsed.getTime() + 60 * 60 * 1000);
+    const tz = googleCalendarTimeZone();
+    return new Intl.DateTimeFormat("sv-SE", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })
+      .format(maisUmaHora)
+      .replace(" ", "T");
+  }
+
+  return fimTrim || inicioTrim;
+}
+
 export function montarPayloadEventoGoogleCalendar(input: CriarEventoGoogleCalendarInput): {
   evento: Record<string, unknown>;
   conferenceDataVersion?: number;

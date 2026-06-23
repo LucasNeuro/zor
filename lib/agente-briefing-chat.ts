@@ -77,7 +77,7 @@ export const SIMULACAO_CANAL_PREAMBLE = `${WHATSAPP_CANAL_PREAMBLE}
 
 ### SIMULAÇÃO INTERNA (painel CRM)
 - Não diga que está em simulação, briefing ou teste interno.
-- WhatsApp real não envia mensagens neste painel — menus ficam simulados; ferramentas CRM funcionam no lead de teste.`;
+- WhatsApp real não envia mensagens neste painel — menus ficam simulados; ferramentas CRM e **Google Calendar/Gmail** funcionam de verdade (criam eventos na conta ligada).`;
 
 export type BriefingModoSessao = "briefing_interno" | "simulacao_canal";
 

@@ -2,6 +2,7 @@
 // PROMPT BUILDER — Monta o prompt completo a partir do banco
 // Zero alucinação — IA só usa o que foi configurado
 // ============================================================
+import { blocoDataHoraAtualParaAgente } from "@/lib/ia/bloco-data-hora-agente";
 import { createClient } from "@supabase/supabase-js";
 import { HUB_MODELO_SENTINEL } from "./hub-model-defaults";
 import {
@@ -200,6 +201,8 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     ? 0
     : Math.max(0, params.turnosAnteriores ?? 0);
   const conversaEmAndamento = turnosAnteriores > 0;
+
+  secoes.push(blocoDataHoraAtualParaAgente());
 
   // CAMADA 1 — FONTE PRINCIPAL ESTÁTICA
   if (usarPlaybookPublicado) {

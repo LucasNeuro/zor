@@ -8,7 +8,7 @@ import {
   type MistralChatMessagePayload,
   type MistralChatToolDefinition,
 } from "@/lib/ia/mistral-chat-tools";
-import { blocoInstrucoesFerramentasCrmWhatsapp } from "@/lib/ia/bloco-ferramentas-crm-whatsapp";
+import { blocoInstrucoesFerramentasCrmWhatsapp, blocoInstrucoesGoogleWorkspaceAgenda } from "@/lib/ia/bloco-ferramentas-crm-whatsapp";
 
 const MAX_TOOL_ROUNDS = 6;
 
@@ -61,12 +61,19 @@ export async function completarChatComFerramentasMistral(params: {
   const toolCallsExecutadas: ToolCallExecLog[] = [];
   const nomesFerramentas = new Set(params.tools.map((t) => t.function.name));
   const menuWhatsappAtivo = nomesFerramentas.has("hub_whatsapp_menu");
+  const googleAgendaAtivo =
+    nomesFerramentas.has("hub_int_gcal_listar_eventos") ||
+    nomesFerramentas.has("hub_int_gcal_criar_evento");
 
   let systemExtra = `\n\n${blocoInstrucoesFerramentasCrmWhatsapp({
     temMenuWhatsapp: menuWhatsappAtivo,
     temAtualizarLead: nomesFerramentas.has("hub_atualizar_lead"),
     playbookUnificado: params.playbookPublicado === true,
   })}`;
+
+  if (googleAgendaAtivo) {
+    systemExtra += `\n\n${blocoInstrucoesGoogleWorkspaceAgenda()}`;
+  }
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const out = await mistralChatCompletionToolRound({

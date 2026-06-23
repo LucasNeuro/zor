@@ -552,24 +552,36 @@ export function mergeUsoFerramentasComPadrao(
 
 /**
  * Primeiro atendimento WhatsApp: ferramentas de leitura/escrita no CRM activadas por defeito.
- * `hub_whatsapp_menu` permanece activo salvo desligado explicitamente no agente (triagem list/button).
+ * Preserva hub_int_* / hub_ext_* / hub_custom_* do `uso` de entrada (não só builtins).
  */
 export function mergeUsoFerramentasWhatsappCanal(
-  uso: Partial<Record<HubAgenteFerramentaId, boolean>>,
+  uso: Partial<Record<string, boolean>>,
   modoOperacao?: string | null
-): Record<HubAgenteFerramentaId, boolean> {
-  const base = mergeUsoFerramentasComPadrao(uso);
+): Record<string, boolean> {
+  const full = mergeUsoFerramentasComPadraoPreservandoCustom(uso);
+  const merged: Record<string, boolean> = { ...full };
+
   if (modoOperacao === "canal_whatsapp" || modoOperacao === "canal_email") {
-    if (coalesceFerramentaBool(uso.hub_atualizar_lead) !== false) base.hub_atualizar_lead = true;
-    if (coalesceFerramentaBool(uso.hub_lead_memorias) !== false) base.hub_lead_memorias = true;
-    if (coalesceFerramentaBool(uso.hub_lead_resumo) !== false) base.hub_lead_resumo = true;
+    if (coalesceFerramentaBool(uso.hub_atualizar_lead) !== false) merged.hub_atualizar_lead = true;
+    if (coalesceFerramentaBool(uso.hub_lead_memorias) !== false) merged.hub_lead_memorias = true;
+    if (coalesceFerramentaBool(uso.hub_lead_resumo) !== false) merged.hub_lead_resumo = true;
     if (modoOperacao === "canal_whatsapp" && coalesceFerramentaBool(uso.hub_whatsapp_menu) !== false) {
-      base.hub_whatsapp_menu = true;
+      merged.hub_whatsapp_menu = true;
     }
-    if (coalesceFerramentaBool(uso.hub_registar_nota_lead) !== false) base.hub_registar_nota_lead = true;
-    if (coalesceFerramentaBool(uso.hub_criar_negocio) !== false) base.hub_criar_negocio = true;
+    if (coalesceFerramentaBool(uso.hub_registar_nota_lead) !== false) merged.hub_registar_nota_lead = true;
+    if (coalesceFerramentaBool(uso.hub_criar_negocio) !== false) merged.hub_criar_negocio = true;
+
+    // Google Workspace (agenda + e-mail) — activo por defeito em agentes de canal salvo desligado.
+    if (coalesceFerramentaBool(uso.hub_int_gmail_enviar) !== false) merged.hub_int_gmail_enviar = true;
+    if (coalesceFerramentaBool(uso.hub_int_gcal_criar_evento) !== false) {
+      merged.hub_int_gcal_criar_evento = true;
+    }
+    if (coalesceFerramentaBool(uso.hub_int_gcal_listar_eventos) !== false) {
+      merged.hub_int_gcal_listar_eventos = true;
+    }
   }
-  return base;
+
+  return merged;
 }
 
 export const HUB_FERRAMENTA_SECAO_LABEL: Record<HubFerramentaCategoria, string> = {

@@ -11,6 +11,7 @@ import {
 import { getValidGoogleAccessToken, readStoredGoogleOAuthCredentials } from "@/lib/email/oauth-google";
 import {
   montarPayloadEventoGoogleCalendar,
+  inferirFimEventoGoogleCalendar,
   resumirEventoGoogleCalendar,
   resumirListaEventosGoogleCalendar,
 } from "@/lib/hub/google-calendar-api";
@@ -105,7 +106,7 @@ async function executarGoogleCalendar(
     if (!titulo || !inicio) {
       return JSON.stringify({ erro: "parametros_invalidos", campos: ["titulo", "inicio"] });
     }
-    const fim = String(args.fim ?? "").trim() || inicio;
+    const fim = inferirFimEventoGoogleCalendar(inicio, String(args.fim ?? "").trim());
     const descricao = String(args.descricao ?? "").trim();
     const participantes = Array.isArray(args.participantes)
       ? (args.participantes as unknown[]).map((e) => String(e).trim()).filter(Boolean)

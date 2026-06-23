@@ -63,7 +63,7 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
         titulo: "Criar evento / reunião (Google Meet)",
         descricao_curta: "Cria evento no Calendar com link Meet.",
         descricao_modelo:
-          "Usa quando o utilizador pedir para agendar, marcar reunião, call ou videoconferência. Cria evento no Google Calendar com link Google Meet e convida participantes por e-mail. Exige título e data/hora de início (ISO 8601, ex. 2026-06-20T10:00:00). Confirme data/hora com o cliente antes de chamar.",
+          "Usa quando o cliente **confirmar** data/hora de reserva, reunião ou videoconferência. Cria evento no Google Calendar (conta ligada). Exige título e início ISO 8601 (ex. 2026-06-24T14:30:00). Chame só após confirmação explícita do cliente.",
         politica: "escrita",
         parametros_schema: {
           type: "object",
@@ -94,7 +94,7 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
         titulo: "Listar eventos do Calendar",
         descricao_curta: "Lista próximos eventos.",
         descricao_modelo:
-          "Usa quando o utilizador perguntar o que está agendado, a agenda do dia ou próximos compromissos no Google Calendar.",
+          "OBRIGATÓRIO antes de sugerir horários livres para reserva ou reunião: consulta a agenda real do Google Calendar ligado. Use para ver compromissos já marcados e calcular vagas. Parâmetro dias (padrão 7).",
         politica: "leitura",
         parametros_schema: {
           type: "object",

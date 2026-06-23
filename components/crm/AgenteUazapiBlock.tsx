@@ -79,7 +79,7 @@ export type AgenteUazapiBlockProps = {
   layout?: "card" | "painel";
 };
 
-function AgenteUazapiSideoverShell({
+export function CrmIntegracaoSideoverShell({
   open,
   onClose,
   title,
@@ -88,6 +88,8 @@ function AgenteUazapiSideoverShell({
   footer,
   embedded = false,
   theme = "light",
+  sectionLabel = "Integração",
+  closeAriaLabel,
 }: {
   open: boolean;
   onClose: () => void;
@@ -98,6 +100,8 @@ function AgenteUazapiSideoverShell({
   /** Painel fixo no wizard (sem overlay escuro). */
   embedded?: boolean;
   theme?: "dark" | "light";
+  sectionLabel?: string;
+  closeAriaLabel?: string;
 }) {
   if (!open && !embedded) return null;
 
@@ -124,7 +128,7 @@ function AgenteUazapiSideoverShell({
           }}
         >
           <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
-            WhatsApp
+            {sectionLabel}
           </p>
           <h2
             style={{
@@ -174,7 +178,7 @@ function AgenteUazapiSideoverShell({
     <>
       <button
         type="button"
-        aria-label="Fechar painel WhatsApp"
+        aria-label={closeAriaLabel ?? `Fechar painel ${sectionLabel}`}
         onClick={onClose}
         style={{
           position: "fixed",
@@ -213,7 +217,7 @@ function AgenteUazapiSideoverShell({
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 11, letterSpacing: 0.8, fontWeight: 700 }}>
-                WhatsApp
+                {sectionLabel}
               </p>
               <h2 style={{ margin: "4px 0 0", color: RF_TEXT_PRIMARY, fontSize: 17, fontWeight: 800 }}>{title}</h2>
               {subtitle ? (
@@ -1110,7 +1114,7 @@ export function AgenteUazapiBlock({
       </div>
       ) : null}
 
-      <AgenteUazapiSideoverShell
+      <CrmIntegracaoSideoverShell
         embedded={layout === "painel"}
         theme={darkSideover ? "dark" : "light"}
         open={layout === "painel" ? true : sideoverOpen}
@@ -1118,6 +1122,7 @@ export function AgenteUazapiBlock({
         title={agenteNome?.trim() || agenteSlug}
         subtitle={painelSubtitle}
         footer={botoesFooter}
+        sectionLabel="WhatsApp"
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div
@@ -1578,7 +1583,7 @@ export function AgenteUazapiBlock({
             </div>
           ) : null}
         </div>
-      </AgenteUazapiSideoverShell>
+      </CrmIntegracaoSideoverShell>
 
       <CrmConfirmDialog
         open={dialogExcluirUazapi}

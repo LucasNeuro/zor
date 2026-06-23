@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Suspense, useState, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, ChevronRight, Clock, MessageCircle, X, Zap } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
@@ -40,10 +40,8 @@ import {
   patchHubAgenteInLists,
   removeHubAgenteFromCaches,
   useHubAgenteDetail,
-  useHubAgenteLogs,
   useHubAgenteOperacao,
   useHubAgentesList,
-  type HubAgenteLogRow,
   type HubAgenteRow,
 } from "@/hooks/useHubAgentesQueries";
 import type { HubAgentesListMode } from "@/lib/hub/hub-query-keys";
@@ -86,7 +84,6 @@ const NIVEL_COR: Record<string, string> = {
 };
 
 type Agente = HubAgenteRow;
-type AgenteLog = HubAgenteLogRow;
 type ListMode = HubAgentesListMode;
 
 /** Resumo legível para cards (bio/playbook em Markdown). */
@@ -259,18 +256,11 @@ function AgentesView() {
   const detailErro = detailErroLocal ?? detailQueryError?.message ?? null;
 
   const {
-    data: logs = [],
-    isLoading: logsLoading,
-    error: logsQueryError,
-  } = useHubAgenteLogs(selectedSlug);
-  const logsErro = logsQueryError?.message ?? null;
-
-  const {
     data: operacao = null,
     isLoading: operacaoLoading,
     isFetching: operacaoAtualizando,
     error: operacaoQueryError,
-  } = useHubAgenteOperacao(selectedSlug);
+  } = useHubAgenteOperacao(selectedSlug, { live: !!selectedSlug });
   const operacaoErro = operacaoQueryError?.message ?? null;
 
   const [editNome, setEditNome] = useState("");
@@ -281,18 +271,14 @@ function AgentesView() {
   const [editAtivo, setEditAtivo] = useState(true);
   /** Secções colapsáveis no painel lateral (modelo). */
   const [drawerSecCiclosAberto, setDrawerSecCiclosAberto] = useState(true);
-  const [drawerSecAtividadeAberto, setDrawerSecAtividadeAberto] = useState(true);
   const [drawerSecIdentidadeAberto, setDrawerSecIdentidadeAberto] = useState(true);
-  const [drawerSecConversasAberto, setDrawerSecConversasAberto] = useState(true);
 
   const detalheAberto = !!selectedSlug;
 
   useEffect(() => {
     if (!selectedSlug) return;
     setDrawerSecCiclosAberto(true);
-    setDrawerSecAtividadeAberto(true);
     setDrawerSecIdentidadeAberto(true);
-    setDrawerSecConversasAberto(true);
   }, [selectedSlug]);
 
   const saudeAgente = useMemo(() => {
@@ -311,69 +297,6 @@ function AgentesView() {
       ultimoPromptEm: operacao.ultimo_prompt_em,
     });
   }, [detailAgente, operacao]);
-
-  type AtividadeRecenteItem = {
-    id: string;
-    kind: "acao" | "ciclo";
-    titulo: string;
-    detalhe: string;
-    quando: string | null;
-    accent: string;
-    Icon: typeof Zap;
-  };
-
-  const atividadeRecente = useMemo((): AtividadeRecenteItem[] => {
-    if (!operacao) return [];
-    const items: AtividadeRecenteItem[] = [];
-    for (let i = 0; i < operacao.acoes.length; i++) {
-      const row = operacao.acoes[i] as {
-        id?: string;
-        tipo?: string;
-        descricao?: string;
-        sucesso?: boolean;
-        criado_em?: string;
-      };
-      const ok = row.sucesso !== false;
-      items.push({
-        id: `acao-${row.id ?? i}`,
-        kind: "acao",
-        titulo: String(row.tipo || "Ação da IA"),
-        detalhe: String(row.descricao || "").trim() || "Evento registado pelo motor.",
-        quando: row.criado_em ?? null,
-        accent: ok ? "#22c55e" : "#f87171",
-        Icon: Zap,
-      });
-    }
-    for (let i = 0; i < operacao.execucoes_ciclo.length; i++) {
-      const row = operacao.execucoes_ciclo[i] as {
-        id?: string;
-        status?: string;
-        erro?: string;
-        iniciado_em?: string;
-      };
-      const st = String(row.status || "—");
-      const stCor =
-        st === "erro" ? "#f87171" : st === "sucesso" ? "#86efac" : st === "sem_acao" ? "#6b8a76" : "#c9a24a";
-      items.push({
-        id: `ciclo-${row.id ?? i}`,
-        kind: "ciclo",
-        titulo: `Tarefa automática · ${st}`,
-        detalhe: row.erro
-          ? String(row.erro).slice(0, 180)
-          : "Corrida de ciclo ligada a este modelo.",
-        quando: row.iniciado_em ?? null,
-        accent: stCor,
-        Icon: Clock,
-      });
-    }
-    return items
-      .sort((a, b) => {
-        const ta = a.quando ? new Date(a.quando).getTime() : 0;
-        const tb = b.quando ? new Date(b.quando).getTime() : 0;
-        return tb - ta;
-      })
-      .slice(0, 12);
-  }, [operacao]);
 
   useEffect(() => {
     if (!detailAgente) return;
@@ -976,62 +899,6 @@ function AgentesView() {
                         >
                           <AgenteCiclosOperacaoList ciclos={operacao.ciclos} theme="dark" />
                         </SideoverFold>
-                        <SideoverFold
-                          title={`Atividade recente${atividadeRecente.length > 0 ? ` (${atividadeRecente.length})` : ""}`}
-                          open={drawerSecAtividadeAberto}
-                          onToggle={() => setDrawerSecAtividadeAberto((o) => !o)}
-                        >
-                      {atividadeRecente.length === 0 ? (
-                        <AgenteSideoverEntityCard
-                          accent={RF_ACCENT}
-                          progress={null}
-                          fallbackProgress={0.2}
-                          Icon={Activity}
-                          avatarCaption="Sem eventos"
-                          footer={
-                            <p style={{ margin: 0, color: RF_TEXT_MUTED, fontSize: 10, lineHeight: 1.45 }}>
-                              Ações da IA e corridas de ciclos aparecem aqui após WhatsApp, copiloto ou tarefas em{" "}
-                              <strong style={{ color: RF_ACCENT }}>Ciclos IA</strong>. Conversas com clientes estão na
-                              linha do tempo abaixo.
-                            </p>
-                          }
-                        >
-                          <strong style={{ color: RF_TEXT_PRIMARY, fontSize: 13, fontWeight: 800 }}>Nada registado ainda</strong>
-                          <p style={{ margin: "6px 0 0", color: RF_TEXT_MUTED, fontSize: 11, lineHeight: 1.45 }}>
-                            Normal antes da primeira mensagem no canal ou da primeira execução agendada.
-                          </p>
-                        </AgenteSideoverEntityCard>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          {atividadeRecente.map((ev) => (
-                            <AgenteSideoverEntityCard
-                              key={ev.id}
-                              accent={ev.accent}
-                              progress={null}
-                              fallbackProgress={0.4}
-                              Icon={ev.Icon}
-                              avatarCaption={
-                                ev.quando
-                                  ? tempoOpRelativo(ev.quando) !== "—"
-                                    ? `${tempoOpRelativo(ev.quando)} atrás`
-                                    : formatarData(ev.quando)
-                                  : "—"
-                              }
-                              footer={
-                                <span style={{ fontSize: 10, color: RF_TEXT_MUTED, fontWeight: 600 }}>
-                                  {ev.kind === "ciclo" ? "Ciclo automático" : "Ação interna / ferramenta"}
-                                </span>
-                              }
-                            >
-                              <strong style={{ color: RF_TEXT_PRIMARY, fontSize: 12, fontWeight: 800 }}>{ev.titulo}</strong>
-                              <p style={{ margin: "6px 0 0", color: RF_TEXT_SECONDARY, fontSize: 11, lineHeight: 1.45 }}>
-                                {ev.detalhe.length > 200 ? `${ev.detalhe.slice(0, 200)}…` : ev.detalhe}
-                              </p>
-                            </AgenteSideoverEntityCard>
-                          ))}
-                        </div>
-                      )}
-                        </SideoverFold>
                           </>
                         )}
 
@@ -1096,69 +963,6 @@ function AgentesView() {
                         </AgenteSideoverEntityCard>
                       );
                     })()}
-                        </SideoverFold>
-
-                        <SideoverFold
-                          title={`Linha do tempo de conversas${logs.length > 0 ? ` (${logs.length})` : ""}`}
-                          open={drawerSecConversasAberto}
-                          onToggle={() => setDrawerSecConversasAberto((o) => !o)}
-                        >
-                    {logsErro && (
-                      <div style={{ color: "#c0392b", background: "#fff2f1", border: "1px solid #f0c0bd", borderRadius: 8, padding: 10, fontSize: 12, marginBottom: 10 }}>
-                        {logsErro}
-                      </div>
-                    )}
-                    {logsLoading ? (
-                      <p style={{ margin: 0, color: RF_TEXT_MUTED, fontSize: 12 }}>A carregar interações…</p>
-                    ) : logs.length === 0 ? (
-                      <p style={{ margin: 0, color: RF_TEXT_MUTED, fontSize: 12, lineHeight: 1.5 }}>
-                        Quando o modelo responder no WhatsApp, no copiloto ou em tarefas internas, cada troca aparece aqui como linha do tempo — não é histórico técnico de prompts.
-                      </p>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {logs.map((log, idx) => {
-                          const userMsg = String(log.mensagem_usuario || "").trim();
-                          const aiMsg = String(log.resposta_ia || "").trim();
-                          const preview = userMsg || aiMsg || "Interação sem texto registado.";
-                          return (
-                            <AgenteSideoverEntityCard
-                              key={String(log.id || idx)}
-                              accent="#3b82f6"
-                              progress={null}
-                              fallbackProgress={0.5}
-                              Icon={MessageCircle}
-                              avatarCaption={formatarData(String(log.criado_em || ""))}
-                              footer={
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 10, color: RF_TEXT_MUTED }}>
-                                  {log.tempo_resposta_ms != null && <span>{String(log.tempo_resposta_ms)} ms</span>}
-                                  {log.tokens_input != null && <span>in {String(log.tokens_input)} tok</span>}
-                                  {log.tokens_output != null && <span>out {String(log.tokens_output)} tok</span>}
-                                  {log.custo_estimado_brl != null && <span>R$ {Number(log.custo_estimado_brl).toFixed(4)}</span>}
-                                </div>
-                              }
-                            >
-                              <p style={{ margin: "0 0 6px", color: RF_TEXT_MUTED, fontSize: 10, fontWeight: 700 }}>
-                                {String(log.modelo_usado || "Conversa")}
-                              </p>
-                              {userMsg ? (
-                                <p style={{ margin: "0 0 6px", color: RF_TEXT_PRIMARY, fontSize: 11, lineHeight: 1.45 }}>
-                                  <span style={{ color: RF_ACCENT, fontWeight: 700 }}>Entrada · </span>
-                                  {userMsg.length > 180 ? `${userMsg.slice(0, 180)}…` : userMsg}
-                                </p>
-                              ) : null}
-                              {aiMsg ? (
-                                <p style={{ margin: 0, color: RF_TEXT_SECONDARY, fontSize: 11, lineHeight: 1.45 }}>
-                                  <span style={{ color: RF_ACCENT, fontWeight: 700 }}>Resposta · </span>
-                                  {aiMsg.length > 180 ? `${aiMsg.slice(0, 180)}…` : aiMsg}
-                                </p>
-                              ) : (
-                                <p style={{ margin: 0, color: RF_TEXT_MUTED, fontSize: 11 }}>{preview}</p>
-                              )}
-                            </AgenteSideoverEntityCard>
-                          );
-                        })}
-                      </div>
-                    )}
                         </SideoverFold>
                       </div>
                   </div>

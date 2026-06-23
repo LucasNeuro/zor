@@ -42,13 +42,13 @@ import {
 import { buildCronUtc, parseCronAgendaUi } from "@/lib/cron-agenda-ui";
 import {
   agenteEhSomenteCanalWhatsapp,
-  MODO_OPERACAO_LABEL,
   resolveModoOperacaoAgente,
   type ModoOperacaoAgente,
 } from "@/lib/hub/agente-modo-operacao";
 import { CRM_ENTITY_GRID } from "@/lib/crm-glass-card";
 import { CicloCard, type CicloCardAgente } from "@/components/crm/CicloCard";
-import { CicloTimelinePanel } from "@/components/crm/CicloTimelinePanel";
+import { AgenteSideoverEntityCard, AgenteSideoverInfoGrid } from "@/components/crm/AgenteSideoverCards";
+import { cicloTipoMeta, tempoRelativoCiclo, CICLO_STATUS_COR } from "@/lib/crm/ciclo-ui";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import {
   ChevronRight,
@@ -78,7 +78,6 @@ interface Ciclo {
 type CicloTipo = "continuo" | "programado" | "gatilho";
 type DrawerMode = "create" | "edit";
 type ListMode = "todos" | "ativos" | "inativos";
-type DrawerSubTab = "dados" | "timeline";
 
 function proximaExecucao(cron?: string): string {
   if (!cron) return "—";
@@ -168,7 +167,6 @@ export default function CiclosPage() {
   const ciclosTodos = ciclosRaw as unknown as Ciclo[];
   const [modoLista, setModoLista] = useState<ListMode>("todos");
   const [busca, setBusca] = useState(() => searchParams.get("q")?.trim() || "");
-  const [drawerSubTab, setDrawerSubTab] = useState<DrawerSubTab>("dados");
   const [executando, setExecutando] = useState<string | null>(null);
   const [alternandoCicloId, setAlternandoCicloId] = useState<string | null>(null);
   const [excluindoCicloId, setExcluindoCicloId] = useState<string | null>(null);
@@ -204,6 +202,11 @@ export default function CiclosPage() {
   const [followupAvancadoForcado, setFollowupAvancadoForcado] = useState(false);
   /** Follow-up avançado: fechado por defeito para não sobrecarregar o formulário. */
   const [followupDetailsAberto, setFollowupDetailsAberto] = useState(false);
+  const [cicloStats, setCicloStats] = useState<{
+    ultimo_ciclo?: string | null;
+    ultimo_status?: string | null;
+    total_execucoes?: number;
+  } | null>(null);
   /** Agendamento (modo, intervalo, cron): aberto por defeito. */
   const [agendaDetailsAberto, setAgendaDetailsAberto] = useState(true);
   const [followupHubRows, setFollowupHubRows] = useState<HubFollowupConfigLite[]>([]);
@@ -332,7 +335,7 @@ export default function CiclosPage() {
   }, [queryClient]);
 
   useEffect(() => {
-    if (!drawerOpen || drawerSubTab !== "dados") return;
+    if (!drawerOpen) return;
     let cancelled = false;
     setFollowupHubLoading(true);
     setFollowupHubError(null);
@@ -355,7 +358,18 @@ export default function CiclosPage() {
     return () => {
       cancelled = true;
     };
-  }, [drawerOpen, drawerSubTab]);
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    if (!drawerOpen || drawerMode !== "edit" || !selectedCicloId) return;
+    const row = ciclosTodos.find((c) => c.id === selectedCicloId);
+    if (!row) return;
+    setCicloStats({
+      ultimo_ciclo: row.ultimo_ciclo ?? null,
+      ultimo_status: row.ultimo_status ?? null,
+      total_execucoes: row.total_execucoes ?? 0,
+    });
+  }, [drawerOpen, drawerMode, selectedCicloId, ciclosTodos]);
 
   useEffect(() => {
     if (fTipo !== "programado" || cronEditorLivre) return;
@@ -415,8 +429,20 @@ export default function CiclosPage() {
   }, [fAgenteSlug, agentesHub, ciclosTodos]);
 
   const agenteSomenteCanalWa = agenteEhSomenteCanalWhatsapp(modoOperacaoDrawer);
-  const esconderAgendamentoCron =
-    agenteSomenteCanalWa && drawerSubTab === "dados" && !mostrarBlocoFollowup;
+  const esconderAgendamentoCron = agenteSomenteCanalWa && !mostrarBlocoFollowup;
+
+  const drawerCicloPreview = useMemo(() => {
+    const tipoKey = esconderAgendamentoCron ? "gatilho" : fTipo;
+    const meta = cicloTipoMeta(tipoKey);
+    const ultimoIso = cicloStats?.ultimo_ciclo ?? null;
+    const temExec = !!ultimoIso && !Number.isNaN(new Date(ultimoIso).getTime());
+    const st = String(cicloStats?.ultimo_status || "nunca_executado");
+    const execN = cicloStats?.total_execucoes ?? null;
+    const labelTimer = !fAtivo ? "Pausado" : !temExec ? "Aguardando 1ª exec." : "Ativo";
+    return { tipoKey, meta, temExec, st, execN, labelTimer, ultimoIso };
+  }, [esconderAgendamentoCron, fTipo, cicloStats, fAtivo]);
+
+  const DrawerPreviewIcon = drawerCicloPreview.meta.Icon;
 
   useEffect(() => {
     if (!drawerOpen || drawerMode !== "create" || !agenteSomenteCanalWa || mostrarBlocoFollowup) return;
@@ -669,25 +695,24 @@ export default function CiclosPage() {
     setFollowupAvancadoForcado(false);
     setFollowupDetailsAberto(false);
     setAgendaDetailsAberto(true);
+    setCicloStats(null);
   }
 
   function abrirNovoCiclo() {
     resetForm();
     setDrawerMode("create");
-    setDrawerSubTab("dados");
     setDrawerOpen(true);
   }
 
   async function abrirEditarCiclo(cicloId: string) {
     resetForm();
     setDrawerMode("edit");
-    setDrawerSubTab("dados");
     setDrawerOpen(true);
     setSelectedCicloId(cicloId);
     setFormLoading(true);
     try {
       const res = await fetch(`/api/hub/ciclos/${encodeURIComponent(cicloId)}`, {
-        headers: internalApiHeaders(),
+        headers: await hubApiHeaders(),
       });
       const json = await res.json() as Ciclo | { error?: string };
       if (!res.ok || !("id" in json)) {
@@ -716,6 +741,11 @@ export default function CiclosPage() {
       }
       setFIntervalo(ciclo.intervalo_minutos != null ? String(ciclo.intervalo_minutos) : "");
       setFAtivo(ciclo.ativo !== false);
+      setCicloStats({
+        ultimo_ciclo: ciclo.ultimo_ciclo ?? null,
+        ultimo_status: ciclo.ultimo_status ?? null,
+        total_execucoes: ciclo.total_execucoes ?? 0,
+      });
       aplicarConfigNoForm(ciclo.configuracoes as Record<string, unknown> | undefined);
     } catch (e) {
       setErroDrawer(e instanceof Error ? e.message : "Erro ao abrir ciclo.");
@@ -752,7 +782,7 @@ export default function CiclosPage() {
       const method = drawerMode === "create" ? "POST" : "PATCH";
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+        headers: { "Content-Type": "application/json", ...(await hubApiHeaders()) },
         body: JSON.stringify(payload),
       });
       const json = await res.json() as { error?: string };
@@ -1036,58 +1066,104 @@ export default function CiclosPage() {
                   <X size={16} strokeWidth={2} aria-hidden />
                 </button>
               </div>
-              {drawerMode === "edit" && selectedCicloId && (
-                <div
-                  style={{
-                    marginTop: 12,
-                    display: "flex",
-                    width: "100%",
-                    overflow: "hidden",
-                    borderRadius: 8,
-                    border: `1px solid ${RF_BORDER_STRONG}`,
-                  }}
-                >
-                  {(["dados", "timeline"] as const).map((tab, i) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setDrawerSubTab(tab)}
-                      style={{
-                        flex: 1,
-                        minHeight: 36,
-                        margin: 0,
-                        borderRadius: 0,
-                        border: "none",
-                        borderLeft: i > 0 ? `1px solid ${RF_BORDER_STRONG}` : "none",
-                        background: drawerSubTab === tab ? "rgba(146, 255, 0, 0.1)" : "rgba(6, 13, 8, 0.5)",
-                        color: drawerSubTab === tab ? RF_ACCENT : RF_TEXT_MUTED,
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        textTransform: tab === "timeline" ? "none" : "capitalize",
-                      }}
-                    >
-                      {tab === "dados" ? "Dados" : "Timeline"}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div style={rfAsideBodyStyle()}>
             {formLoading ? (
               <p style={{ color: RF_TEXT_MUTED, fontSize: 13, margin: 0 }}>Carregando...</p>
             ) : (
-              <>
-
-                {drawerMode === "edit" && drawerSubTab === "timeline" && selectedCicloId ? (
-                  <CicloTimelinePanel
-                    cicloId={selectedCicloId}
-                    theme="dark"
-                    onRefreshRequest={() => void recarregarTudo()}
-                  />
-                ) : (
               <div className="space-y-3">
+                <AgenteSideoverEntityCard
+                  theme="dark"
+                  accent={drawerCicloPreview.meta.cor}
+                  Icon={DrawerPreviewIcon}
+                  pulse={!drawerCicloPreview.temExec && fAtivo}
+                  dim={!fAtivo}
+                  avatarCaption={drawerCicloPreview.labelTimer}
+                  footer={
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: drawerCicloPreview.meta.cor,
+                          padding: "4px 8px",
+                          borderRadius: 6,
+                          background: `${drawerCicloPreview.meta.cor}14`,
+                          border: `1px solid ${drawerCicloPreview.meta.cor}33`,
+                        }}
+                      >
+                        <DrawerPreviewIcon size={11} strokeWidth={2.2} aria-hidden />
+                        {drawerCicloPreview.meta.label}
+                      </span>
+                      <span style={{ color: RF_TEXT_MUTED, fontSize: 10, fontWeight: 600 }}>
+                        {fAgenteSlug.trim() ? `Agente «${fAgenteSlug.trim()}»` : "Defina o agente"}
+                      </span>
+                    </div>
+                  }
+                >
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: "3px 8px",
+                        borderRadius: 6,
+                        background: fAtivo ? "rgba(146, 255, 0, 0.16)" : "#3f1515",
+                        color: fAtivo ? "#86efac" : "#fca5a5",
+                        border: fAtivo ? "1px solid rgba(146, 255, 0, 0.4)" : "1px solid #7f1d1d",
+                      }}
+                    >
+                      {fAtivo ? "ativo" : "inativo"}
+                    </span>
+                    {drawerMode === "edit" && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: CICLO_STATUS_COR[drawerCicloPreview.st] || RF_TEXT_MUTED,
+                        }}
+                      >
+                        Último status · {drawerCicloPreview.st.replace(/_/g, " ")}
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    style={{
+                      margin: "0 0 8px",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: RF_TEXT_PRIMARY,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {fNome.trim() || (drawerMode === "create" ? "Novo ciclo" : "Sem nome")}
+                  </p>
+                  {drawerMode === "edit" ? (
+                    <AgenteSideoverInfoGrid
+                      rows={[
+                        {
+                          label: "Última execução",
+                          value: drawerCicloPreview.ultimoIso
+                            ? tempoRelativoCiclo(drawerCicloPreview.ultimoIso)
+                            : "Nunca executado",
+                        },
+                        {
+                          label: "Total exec.",
+                          value: drawerCicloPreview.execN != null ? String(drawerCicloPreview.execN) : "0",
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+                      {drawerCicloPreview.meta.descricaoCurta}
+                    </p>
+                  )}
+                </AgenteSideoverEntityCard>
+
                 <label className="block">
                   <span style={rfLabelStyle()}>Agente slug</span>
                   <input
@@ -1103,11 +1179,9 @@ export default function CiclosPage() {
                     className="text-xs m-0 rounded-lg p-3 leading-relaxed"
                     style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}`, color: RF_TEXT_SECONDARY }}
                   >
-                    Agente <strong style={{ color: RF_ACCENT }}>{MODO_OPERACAO_LABEL.canal_whatsapp}</strong>
-                    : a conversa ao vivo é pelo webhook UAZAPI. Use ciclo{" "}
-                    <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho</strong> para registo no hub; agendamento cron
-                    só faz sentido para <strong style={{ color: RF_ACCENT }}>follow-up</strong> (nome ou dispatch
-                    atendente/followup).
+                    Este agente responde por <strong style={{ color: RF_ACCENT }}>interação no WhatsApp</strong>. O ciclo
+                    fica em modo <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho</strong>. Para lembretes automáticos,
+                    use um ciclo de follow-up (nome com «follow» ou parâmetros abaixo).
                   </p>
                 )}
                 <label className="block">
@@ -1191,15 +1265,10 @@ export default function CiclosPage() {
                       }}
                     />
                     <span className="text-xs font-bold">
-                      Agendamento — quando o job / cron aciona o agente
+                      Agendamento
                     </span>
                   </summary>
                   <div className="space-y-3 px-3 pb-3">
-                  <p className="text-xs m-0 leading-relaxed" style={{ color: "#484f58" }}>
-                    O runner lê <code style={{ color: "#5d7a67" }}>hub_ciclos_ia</code> (ex.:{" "}
-                    <code style={{ color: "#5d7a67" }}>/api/cron/dispatch-ciclos</code>
-                    ). Escolha o modo abaixo; os campos técnicos são gerados em função dele.
-                  </p>
                   <div className="grid gap-2">
                     {(
                       [
@@ -1411,12 +1480,8 @@ export default function CiclosPage() {
                     style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
                   >
                     <p className="text-xs m-0" style={{ color: "#5d7a67", lineHeight: 1.5 }}>
-                      <strong style={{ color: RF_ACCENT }}>Follow-up WhatsApp</strong> — horas por passo e
-                      pré-visualização do hub aplicam-se sobretudo a ciclos de atendimento (ex.: «follow» no nome ou{" "}
-                      <code style={{ color: "#5d7a67" }}>dispatch</code>{" "}
-                      <code style={{ color: "#5d7a67" }}>atendente</code> /{" "}
-                      <code style={{ color: "#5d7a67" }}>followup</code>
-                      ). Para outros tipos de ciclo pode ignorar.
+                      <strong style={{ color: RF_ACCENT }}>Follow-up WhatsApp</strong> — cadência de lembretes automáticos
+                      para ciclos de atendimento. Pode ignorar se este ciclo não for de follow-up.
                     </p>
                     <button
                       type="button"
@@ -1458,7 +1523,7 @@ export default function CiclosPage() {
                       }}
                     />
                     <span className="text-xs font-bold">
-                      Avançado — follow-up WhatsApp / hub_followup_config
+                      Follow-up WhatsApp
                     </span>
                   </summary>
                   <div className="space-y-3 px-3 pb-3">
@@ -1472,13 +1537,12 @@ export default function CiclosPage() {
                         lineHeight: 1.45,
                       }}
                     >
-                      Secção aberta manualmente — use só se este ciclo alimentar{" "}
-                      <code style={{ color: "#5d7a67" }}>/api/ciclos/atendente?ciclo=followup</code> ou equivalente.
+                      Secção aberta manualmente — use apenas em ciclos de lembretes automáticos.
                     </p>
                   )}
                   <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.45 }}>
-                    Valores gravados em <code style={{ color: "#5d7a67" }}>configuracoes</code> (horas por passo e dias
-                    até arquivar); textos das mensagens vêm de <code style={{ color: "#5d7a67" }}>hub_followup_config</code>.
+                    Defina intervalos entre lembretes e dias até arquivar. O texto de cada mensagem vem da configuração
+                    de follow-up do hub.
                   </p>
                   <p className="text-xs font-bold m-0" style={{ color: RF_ACCENT }}>Parâmetros de follow-up</p>
                   <label className="block m-0">
@@ -1574,7 +1638,7 @@ export default function CiclosPage() {
 
                   <div className="rounded-lg p-3 space-y-2" style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-bold m-0" style={{ color: RF_TEXT_PRIMARY }}>Pré-visualizar merge com hub_followup_config</p>
+                      <p className="text-xs font-bold m-0" style={{ color: RF_TEXT_PRIMARY }}>Pré-visualizar cadência de lembretes</p>
                       {mercadosPreviewOptions.length > 1 && (
                         <label className="flex items-center gap-2 m-0 text-xs" style={{ color: "#5d7a67" }}>
                           <span>Mercado</span>
@@ -1601,7 +1665,7 @@ export default function CiclosPage() {
                       <p className="text-xs m-0" style={{ color: "#b3261e" }}>{followupHubError}</p>
                     ) : mergePreviewLinhas.length === 0 ? (
                       <p className="text-xs m-0" style={{ color: "#5d7a67" }}>
-                        Nenhum passo ativo para «{previewMercado}» (com fallback geral). Cadastre linhas em hub_followup_config.
+                        Nenhum passo ativo para «{previewMercado}». Configure os lembretes no hub de follow-up.
                       </p>
                     ) : (
                       <>
@@ -1693,7 +1757,7 @@ export default function CiclosPage() {
                     </p>
                   )}
                   <p className="text-xs m-0" style={{ color: "#484f58", lineHeight: 1.45 }}>
-                    O texto de cada mensagem continua a vir de <code style={{ color: "#5d7a67" }}>hub_followup_config</code> por mercado e passo.
+                    O texto de cada mensagem é definido na configuração de follow-up por mercado e passo.
                   </p>
                   </div>
                 </details>
@@ -1710,12 +1774,10 @@ export default function CiclosPage() {
                   <p style={{ margin: 0, fontSize: 13, color: "#f85149" }}>{erroDrawer}</p>
                 )}
               </div>
-                )}
-              </>
             )}
             </div>
 
-            {!(formLoading || (drawerMode === "edit" && drawerSubTab === "timeline")) && (
+            {!formLoading && (
               <div style={rfAsideFooterStyle()}>
                 {drawerMode === "edit" ? (
                   <button
@@ -1756,10 +1818,8 @@ export default function CiclosPage() {
         onConfirm={() => void confirmarExcluirCicloModal()}
       >
         <p style={{ margin: "0 0 10px" }}>
-          O ciclo <strong style={{ color: "#0b2210" }}>«{dialogExcluirCiclo?.nome}»</strong> será removido de{" "}
-          <code style={{ color: CRM_ACCENT }}>hub_ciclos_ia</code> juntamente com as linhas de execução associadas em{" "}
-          <code style={{ color: CRM_ACCENT }}>hub_ciclos_log</code> (mesma transação no servidor, com autorização de
-          exclusão).
+          O ciclo <strong style={{ color: "#0b2210" }}>«{dialogExcluirCiclo?.nome}»</strong> será removido
+          permanentemente, incluindo o histórico de execuções associado.
         </p>
         <p style={{ margin: 0, color: "#b3261e", fontWeight: 600 }}>Não é possível desfazer.</p>
       </CrmConfirmDialog>

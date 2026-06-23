@@ -155,12 +155,15 @@ export function useHubAgenteLogs(slug: string | null) {
   });
 }
 
-export function useHubAgenteOperacao(slug: string | null) {
+export function useHubAgenteOperacao(slug: string | null, options?: { live?: boolean }) {
+  const live = options?.live === true && !!slug;
   return useQuery({
     queryKey: hubQueryKeys.agentes.operacao(slug ?? ""),
     queryFn: () => fetchHubAgenteOperacao(slug!),
     enabled: !!slug,
     ...operacaoQueryDefaults,
+    refetchInterval: live ? 15_000 : false,
+    refetchOnWindowFocus: live,
     placeholderData: (prev) => prev,
   });
 }

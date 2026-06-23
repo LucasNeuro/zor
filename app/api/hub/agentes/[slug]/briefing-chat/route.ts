@@ -16,6 +16,8 @@ import {
 } from "@/lib/hub/agente-ferramentas-registry";
 import { extrairESalvarMemoriasAgente, formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
+import { registrarInteracaoPainelAgente } from "@/lib/hub/registrar-interacao-painel";
+import { garantirLeadSimulacaoCanal } from "@/lib/simulacao-canal/lead-simulacao";
 
 function erroBriefingJson(message: string, status: number) {
   return NextResponse.json({ error: mensagemErroBriefingChat(message) }, { status });
@@ -371,6 +373,39 @@ export async function POST(
     });
   } catch {
     /* hub_memorias_agente opcional até migração aplicada */
+  }
+
+  let leadIdSim: string | null = null;
+  if (modo === "simulacao_canal") {
+    try {
+      const leadSim = await garantirLeadSimulacaoCanal(supabase, {
+        sessaoId,
+        agenteSlug: slug,
+        tenantId: typeof agente.tenant_id === "string" ? agente.tenant_id : null,
+      });
+      leadIdSim = leadSim.leadId;
+    } catch {
+      leadIdSim = null;
+    }
+  }
+
+  try {
+    await registrarInteracaoPainelAgente(supabase, {
+      agenteSlug: slug,
+      modo,
+      sessaoId,
+      mensagemUsuario: textoUser,
+      respostaTexto: resultado.texto,
+      modelo: resultado.modelo,
+      tokens_input: resultado.tokens_input,
+      tokens_output: resultado.tokens_output,
+      custo_brl: resultado.custo_brl,
+      motor: resultado.motor,
+      leadId: leadIdSim,
+      ehCopilotoInterno,
+    });
+  } catch (e) {
+    console.warn("[briefing-chat] registrar interacao painel:", e);
   }
 
   await supabase

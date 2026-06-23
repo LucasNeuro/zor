@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Bot, Send, User, X } from "lucide-react";
 import { hubApiHeaders } from "@/lib/internal-api-headers-client";
+import { hubQueryKeys } from "@/lib/hub/hub-query-keys";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 import {
   agenteEhCopilotoInterno,
@@ -54,6 +56,7 @@ export function AgenteBriefingDrawer({
   agenteCargo = null,
   modoOperacao = null,
 }: AgenteBriefingDrawerProps) {
+  const queryClient = useQueryClient();
   const modoResolvido = isModoOperacaoAgente(modoOperacao) ? modoOperacao : null;
   const ehCopilotoInterno = agenteEhCopilotoInterno(modoResolvido);
   const ehAnalistaCrm = agenteEhPerfilAnalistaCrm({ cargo: agenteCargo });
@@ -127,6 +130,7 @@ export function AgenteBriefingDrawer({
       }
       if (data.sessao_id) setSessaoId(data.sessao_id);
       if (Array.isArray(data.mensagens)) setMensagens(data.mensagens);
+      void queryClient.invalidateQueries({ queryKey: hubQueryKeys.agentes.operacao(agenteSlug) });
     } catch {
       setMensagens((prev) => prev.filter((m) => m.id !== tempId));
       setErro("Falha de rede ao enviar.");

@@ -158,11 +158,13 @@ export function AgenteCiclosOperacaoList({
         const intervalMin = estimateIntervalMinutes(row.cron_expressao, row.intervalo_minutos);
         const prog = progressoAnelCiclo(row.ultimo_ciclo, intervalMin);
         const ultimoIso = row.ultimo_ciclo ? String(row.ultimo_ciclo) : "";
-        const temExecucao = ultimoIso && !Number.isNaN(new Date(ultimoIso).getTime());
+        const execN = row.total_execucoes != null ? Number(row.total_execucoes) : null;
+        const temExecucao =
+          (ultimoIso && !Number.isNaN(new Date(ultimoIso).getTime())) ||
+          (execN != null && execN > 0);
         const st = String(row.ultimo_status || "nunca_executado");
         const stCor = corUltimoCicloStatus(st, theme);
         const cadencia = rotuloCadenciaCron(intervalMin, row.cron_expressao, row.tipo);
-        const execN = row.total_execucoes != null ? Number(row.total_execucoes) : null;
 
         const labelTimer =
           row.ativo === false
@@ -298,6 +300,8 @@ export function AgenteCiclosOperacaoList({
                     </time>
                     <span style={{ color: txt.muted }}> ({tempoOpRelativo(ultimoIso)} atrás)</span>
                   </>
+                ) : execN != null && execN > 0 ? (
+                  `${execN} execução(ões) — sem data da última corrida`
                 ) : (
                   "Nunca executado — aguardando 1ª corrida"
                 )}

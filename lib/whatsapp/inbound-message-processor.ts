@@ -737,37 +737,43 @@ export async function processarMensagemInboundWhatsapp(params: {
       try {
         const { data: cicloRef } = await supabase
           .from("hub_ciclos_ia")
-          .select("id")
+          .select("id, total_execucoes")
           .eq("agente_slug", slugEfetivo)
+          .eq("tipo", "gatilho")
           .maybeSingle();
+        const cicloRow =
+          cicloRef ??
+          (
+            await supabase
+              .from("hub_ciclos_ia")
+              .select("id, total_execucoes")
+              .eq("agente_slug", slugEfetivo)
+              .maybeSingle()
+          ).data;
+        const agoraIso = new Date().toISOString();
         await supabase.from("hub_ciclos_log").insert({
-          ciclo_id: cicloRef?.id ?? null,
+          ciclo_id: cicloRow?.id ?? null,
           agente_slug: slugEfetivo,
           status: "sucesso",
           tokens_usados: tokens,
           custo_brl: custo,
           acoes_tomadas: { acao: "respondeu", lead_id: lead.id, mercado: params.mercado, isNovo: params.isNovo },
-          iniciado_em: new Date().toISOString(),
-          finalizado_em: new Date().toISOString(),
+          iniciado_em: agoraIso,
+          finalizado_em: agoraIso,
         });
-      } catch (e) {
-        console.error("[WHATSAPP][PROCESSOR] hub_ciclos_log:", e);
-      }
-
-      try {
-        const { data: cicloCount } = await supabase
-          .from("hub_ciclos_ia")
-          .select("total_execucoes")
-          .eq("agente_slug", slugEfetivo)
-          .maybeSingle();
-        if (cicloCount) {
-          await supabase.from("hub_ciclos_ia").update({
-            total_execucoes: (cicloCount.total_execucoes || 0) + 1,
-            atualizado_em: new Date().toISOString(),
-          }).eq("agente_slug", slugEfetivo);
+        if (cicloRow?.id) {
+          await supabase
+            .from("hub_ciclos_ia")
+            .update({
+              ultimo_ciclo: agoraIso,
+              ultimo_status: "sucesso",
+              total_execucoes: (cicloRow.total_execucoes || 0) + 1,
+              atualizado_em: agoraIso,
+            })
+            .eq("id", cicloRow.id);
         }
       } catch (e) {
-        console.error("[WHATSAPP][PROCESSOR] hub_ciclos_ia:", e);
+        console.error("[WHATSAPP][PROCESSOR] hub_ciclos_log:", e);
       }
     }
   } catch (e) {

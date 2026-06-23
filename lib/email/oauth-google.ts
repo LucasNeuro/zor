@@ -10,11 +10,14 @@ import type { HubIntegracaoCredenciaisRow } from "@/lib/hub/ferramentas-externas
 import { integradorPorId } from "@/lib/hub/integradores-catalogo";
 
 export const GMAIL_INTEGRADOR_ID = "gmail" as const;
+export const GOOGLE_CALENDAR_INTEGRADOR_ID = "google_calendar" as const;
 
-/** Scopes Gmail canal + perfil (polling usa readonly noutro agente). */
+/** Gmail canal + Calendar (agentes) + perfil. Não use senha do cliente — OAuth offline. */
 export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/userinfo.email",
   "openid",
 ].join(" ");
@@ -23,6 +26,8 @@ export type GoogleOAuthState = {
   tenantId: string;
   agenteSlug?: string;
   returnTo?: string;
+  /** agent_email = liga caixa no agente; integradores = só hub_integracoes (Calendar/Gmail tools). */
+  purpose?: "agent_email" | "integradores";
   exp: number;
 };
 
@@ -256,14 +261,15 @@ export function readStoredGoogleOAuthCredentials(
   return null;
 }
 
-export async function upsertGmailOAuthIntegracao(
+export async function upsertGoogleOAuthIntegracao(
   supabase: SupabaseClient,
   tenantId: string,
+  integracaoId: typeof GMAIL_INTEGRADOR_ID | typeof GOOGLE_CALENDAR_INTEGRADOR_ID,
   tokens: GoogleTokenResponse,
   profileEmail: string
 ): Promise<{ hubIntegracaoId: string }> {
-  const entry = integradorPorId(GMAIL_INTEGRADOR_ID);
-  if (!entry) throw new Error("Integrador gmail não encontrado no catálogo.");
+  const entry = integradorPorId(integracaoId);
+  if (!entry) throw new Error(`Integrador ${integracaoId} não encontrado no catálogo.`);
 
   const config = { oauth_email: profileEmail, provider: "google" };
   const credenciais = serializeGoogleOAuthCredentials(tokens, profileEmail);
@@ -272,7 +278,7 @@ export async function upsertGmailOAuthIntegracao(
     .from("hub_integracoes")
     .select("id")
     .eq("tenant_id", tenantId)
-    .eq("integracao_id", GMAIL_INTEGRADOR_ID)
+    .eq("integracao_id", integracaoId)
     .maybeSingle();
 
   let hubIntegracaoId = existing?.id ? String(existing.id) : "";
@@ -295,7 +301,7 @@ export async function upsertGmailOAuthIntegracao(
       .from("hub_integracoes")
       .insert({
         tenant_id: tenantId,
-        integracao_id: GMAIL_INTEGRADOR_ID,
+        integracao_id: integracaoId,
         nome: entry.nome,
         status: "ativo",
         config,
@@ -304,7 +310,7 @@ export async function upsertGmailOAuthIntegracao(
       .select("id")
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!inserted?.id) throw new Error("Falha ao criar integração Gmail.");
+    if (!inserted?.id) throw new Error(`Falha ao criar integração ${integracaoId}.`);
     hubIntegracaoId = String(inserted.id);
   }
 
@@ -342,6 +348,57 @@ export async function upsertGmailOAuthIntegracao(
   }
 
   return { hubIntegracaoId };
+}
+
+/** Gmail + Google Calendar com o mesmo fluxo OAuth (uma autorização no Google). */
+export async function upsertGoogleWorkspaceOAuthIntegracoes(
+  supabase: SupabaseClient,
+  tenantId: string,
+  tokens: GoogleTokenResponse,
+  profileEmail: string
+): Promise<{ gmailIntegracaoId: string; calendarIntegracaoId: string }> {
+  const gmail = await upsertGoogleOAuthIntegracao(
+    supabase,
+    tenantId,
+    GMAIL_INTEGRADOR_ID,
+    tokens,
+    profileEmail
+  );
+  const calendar = await upsertGoogleOAuthIntegracao(
+    supabase,
+    tenantId,
+    GOOGLE_CALENDAR_INTEGRADOR_ID,
+    tokens,
+    profileEmail
+  );
+  return {
+    gmailIntegracaoId: gmail.hubIntegracaoId,
+    calendarIntegracaoId: calendar.hubIntegracaoId,
+  };
+}
+
+export async function upsertGmailOAuthIntegracao(
+  supabase: SupabaseClient,
+  tenantId: string,
+  tokens: GoogleTokenResponse,
+  profileEmail: string
+): Promise<{ hubIntegracaoId: string }> {
+  return upsertGoogleOAuthIntegracao(supabase, tenantId, GMAIL_INTEGRADOR_ID, tokens, profileEmail);
+}
+
+export async function upsertGoogleCalendarOAuthIntegracao(
+  supabase: SupabaseClient,
+  tenantId: string,
+  tokens: GoogleTokenResponse,
+  profileEmail: string
+): Promise<{ hubIntegracaoId: string }> {
+  return upsertGoogleOAuthIntegracao(
+    supabase,
+    tenantId,
+    GOOGLE_CALENDAR_INTEGRADOR_ID,
+    tokens,
+    profileEmail
+  );
 }
 
 export async function getValidGoogleAccessToken(

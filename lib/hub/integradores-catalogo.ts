@@ -50,32 +50,39 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
   {
     id: "google_calendar",
     nome: "Google Calendar",
-    descricao: "Agendar e consultar eventos no calendário do escritório.",
+    descricao: "Agendar reuniões no Google Calendar com link Google Meet (OAuth Google).",
     categoria: "agente",
     authModo: "bearer",
     authLabels: {
-      principal: "Token de acesso OAuth",
-      principalPlaceholder: "ya29.… (token OAuth do Google Calendar)",
+      principal: "Conta Google (OAuth)",
+      principalPlaceholder: "Use «Ligar conta Google» — não cole senha do e-mail",
     },
     ferramentas: [
       {
         ferramenta_key: "hub_int_gcal_criar_evento",
-        titulo: "Criar evento no Calendar",
-        descricao_curta: "Cria evento no Google Calendar.",
+        titulo: "Criar evento / reunião (Google Meet)",
+        descricao_curta: "Cria evento no Calendar com link Meet.",
         descricao_modelo:
-          "Usa quando o utilizador pedir para agendar, marcar ou criar um evento/reunião no Google Calendar. Exige título e data/hora de início.",
+          "Usa quando o utilizador pedir para agendar, marcar reunião, call ou videoconferência. Cria evento no Google Calendar com link Google Meet e convida participantes por e-mail. Exige título e data/hora de início (ISO 8601, ex. 2026-06-20T10:00:00). Confirme data/hora com o cliente antes de chamar.",
         politica: "escrita",
         parametros_schema: {
           type: "object",
           properties: {
-            titulo: { type: "string", description: "Título do evento" },
-            inicio: { type: "string", description: "ISO 8601 ou data/hora legível" },
-            fim: { type: "string", description: "ISO 8601 opcional" },
-            descricao: { type: "string", description: "Notas do evento" },
+            titulo: { type: "string", description: "Título da reunião" },
+            inicio: {
+              type: "string",
+              description: "Início ISO 8601 com hora (ex. 2026-06-20T10:00:00)",
+            },
+            fim: { type: "string", description: "Fim ISO 8601 opcional (padrão = início)" },
+            descricao: { type: "string", description: "Pauta ou notas da reunião" },
             participantes: {
               type: "array",
               items: { type: "string" },
-              description: "E-mails dos convidados",
+              description: "E-mails dos convidados (inclua o do cliente se souber)",
+            },
+            com_google_meet: {
+              type: "boolean",
+              description: "Gerar link Google Meet (padrão true)",
             },
           },
           required: ["titulo", "inicio"],

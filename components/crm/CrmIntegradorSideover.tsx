@@ -111,6 +111,29 @@ export function CrmIntegradorSideover({
   if (!open || !integrador) return null;
 
   const precisaExtra = integrador.authModo === "zendesk";
+  const usaGoogleOAuth =
+    integrador.id === "google_calendar" || integrador.id === "gmail";
+
+  const ligarContaGoogle = useCallback(async () => {
+    setBusy(true);
+    setErro("");
+    try {
+      const headers = await crmApiHeaders();
+      const returnTo = `${window.location.pathname}${window.location.search}`;
+      const res = await fetch(
+        `/api/hub/integradores/oauth/google/start?json=1&return_to=${encodeURIComponent(returnTo)}`,
+        { headers }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.authorize_url !== "string") {
+        throw new Error(typeof data?.error === "string" ? data.error : "Não foi possível iniciar OAuth Google.");
+      }
+      window.location.href = data.authorize_url;
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao ligar Google");
+      setBusy(false);
+    }
+  }, []);
 
   return (
     <>
@@ -161,17 +184,63 @@ export function CrmIntegradorSideover({
               </p>
             </div>
             <div style={{ padding: "12px 14px" }}>
-              <label style={{ display: "block", marginBottom: 14 }}>
-                <span style={RF_LABEL_STYLE}>{integrador.authLabels.principal}</span>
-                <input
-                  type="password"
-                  value={principal}
-                  onChange={(e) => setPrincipal(e.target.value)}
-                  placeholder={integrador.authLabels.principalPlaceholder}
-                  disabled={busy}
-                  style={{ ...RF_INPUT_STYLE, marginTop: 6, fontFamily: "ui-monospace, monospace" }}
-                />
-              </label>
+              {usaGoogleOAuth ? (
+                <>
+                  <p style={{ margin: "0 0 12px", fontSize: 12, color: RF_TEXT_SECONDARY, lineHeight: 1.5 }}>
+                    Use a <strong>conta Google do cliente</strong> (e-mail corporativo). O Google não permite senha
+                    direta — autorize uma vez com OAuth; o Waje guarda o token renovável (Gmail + Calendar).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void ligarContaGoogle()}
+                    disabled={busy}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: `1px solid ${RF_BORDER}`,
+                      background: "rgba(46,160,67,0.15)",
+                      color: RF_TEXT_PRIMARY,
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: busy ? "wait" : "pointer",
+                    }}
+                  >
+                    {busy ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
+                    Ligar conta Google
+                  </button>
+                  <details style={{ marginTop: 14 }}>
+                    <summary style={{ fontSize: 11, color: RF_TEXT_MUTED, cursor: "pointer" }}>
+                      Avançado: colar token manual (legado)
+                    </summary>
+                    <label style={{ display: "block", marginTop: 10 }}>
+                      <span style={RF_LABEL_STYLE}>{integrador.authLabels.principal}</span>
+                      <input
+                        type="password"
+                        value={principal}
+                        onChange={(e) => setPrincipal(e.target.value)}
+                        placeholder={integrador.authLabels.principalPlaceholder}
+                        disabled={busy}
+                        style={{ ...RF_INPUT_STYLE, marginTop: 6, fontFamily: "ui-monospace, monospace" }}
+                      />
+                    </label>
+                  </details>
+                </>
+              ) : (
+                <label style={{ display: "block", marginBottom: 14 }}>
+                  <span style={RF_LABEL_STYLE}>{integrador.authLabels.principal}</span>
+                  <input
+                    type="password"
+                    value={principal}
+                    onChange={(e) => setPrincipal(e.target.value)}
+                    placeholder={integrador.authLabels.principalPlaceholder}
+                    disabled={busy}
+                    style={{ ...RF_INPUT_STYLE, marginTop: 6, fontFamily: "ui-monospace, monospace" }}
+                  />
+                </label>
+              )}
               {precisaExtra ? (
                 <>
                   <label style={{ display: "block", marginBottom: 14 }}>
@@ -198,10 +267,11 @@ export function CrmIntegradorSideover({
                   </label>
                 </>
               ) : null}
-              <p style={{ margin: "12px 0 0", fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
-                Google Calendar e Gmail usam token OAuth de curta duração. Gere no Google Cloud Console e renove quando
-                expirar.
-              </p>
+              {!usaGoogleOAuth ? (
+                <p style={{ margin: "12px 0 0", fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+                  Credenciais guardadas de forma encriptada no tenant.
+                </p>
+              ) : null}
             </div>
           </div>
 

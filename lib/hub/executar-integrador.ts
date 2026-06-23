@@ -9,6 +9,11 @@ import {
   type HubIntegracaoRow,
 } from "@/lib/hub/ferramentas-externas-db";
 import { getValidGoogleAccessToken, readStoredGoogleOAuthCredentials } from "@/lib/email/oauth-google";
+import {
+  montarPayloadEventoGoogleCalendar,
+  resumirEventoGoogleCalendar,
+  resumirListaEventosGoogleCalendar,
+} from "@/lib/hub/google-calendar-api";
 
 const HTTP_TIMEOUT_MS = 30_000;
 
@@ -60,11 +65,21 @@ async function fetchJson(
 async function executarGoogleCalendar(
   toolName: string,
   args: Record<string, unknown>,
-  cred: HubIntegracaoCredenciaisRow | null
+  cred: HubIntegracaoCredenciaisRow | null,
+  supabase: SupabaseClient,
+  tenantId: string,
+  integracaoRowId: string
 ): Promise<string> {
-  const token = bearerToken(cred);
+  let token = bearerToken(cred);
+  if (readStoredGoogleOAuthCredentials(cred)) {
+    const refreshed = await getValidGoogleAccessToken(supabase, tenantId, cred, integracaoRowId);
+    if (refreshed) token = refreshed;
+  }
   if (!token) {
-    return JSON.stringify({ erro: "google_calendar_sem_token", detalhe: "Configure o token OAuth na integração." });
+    return JSON.stringify({
+      erro: "google_calendar_sem_token",
+      detalhe: "Ligue a conta Google em Ferramentas → Integrações → Google Calendar (OAuth).",
+    });
   }
 
   const headers = {
@@ -81,7 +96,7 @@ async function executarGoogleCalendar(
     if (!res.ok) {
       return JSON.stringify({ erro: "google_calendar_api", status: res.status, detalhe: res.body });
     }
-    return JSON.stringify(res.body);
+    return JSON.stringify(resumirListaEventosGoogleCalendar(res.body));
   }
 
   if (toolName === "hub_int_gcal_criar_evento") {
@@ -95,26 +110,37 @@ async function executarGoogleCalendar(
     const participantes = Array.isArray(args.participantes)
       ? (args.participantes as unknown[]).map((e) => String(e).trim()).filter(Boolean)
       : [];
+    const comGoogleMeet = args.com_google_meet !== false;
 
-    const evento: Record<string, unknown> = {
-      summary: titulo,
-      description: descricao || undefined,
-      start: { dateTime: inicio, timeZone: "Europe/Lisbon" },
-      end: { dateTime: fim, timeZone: "Europe/Lisbon" },
-    };
-    if (participantes.length > 0) {
-      evento.attendees = participantes.map((email) => ({ email }));
-    }
-
-    const res = await fetchJson("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
-      method: "POST",
-      headers,
-      body: JSON.stringify(evento),
+    const { evento, conferenceDataVersion } = montarPayloadEventoGoogleCalendar({
+      titulo,
+      inicio,
+      fim,
+      descricao,
+      participantes,
+      comGoogleMeet,
     });
+
+    const qs = conferenceDataVersion ? "?conferenceDataVersion=1" : "";
+    const res = await fetchJson(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events${qs}`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(evento),
+      }
+    );
     if (!res.ok) {
       return JSON.stringify({ erro: "google_calendar_api", status: res.status, detalhe: res.body });
     }
-    return JSON.stringify(res.body);
+    const resumo = resumirEventoGoogleCalendar(res.body);
+    return JSON.stringify({
+      ok: true,
+      mensagem: resumo?.link_meet
+        ? "Evento criado com link Google Meet."
+        : "Evento criado no Google Calendar.",
+      evento: resumo,
+    });
   }
 
   return JSON.stringify({ erro: "ferramenta_integrador_desconhecida", tool: toolName });
@@ -289,7 +315,7 @@ export async function executarFerramentaIntegrador(
 
   switch (ref.integrador.id) {
     case "google_calendar":
-      return executarGoogleCalendar(toolName, args, credenciais);
+      return executarGoogleCalendar(toolName, args, credenciais, supabase, tenantId, String(integracao.id));
     case "gmail":
       return executarGmail(toolName, args, credenciais, supabase, tenantId, String(integracao.id));
     case "zendesk":

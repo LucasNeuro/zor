@@ -262,6 +262,12 @@ export async function enviarMensagemAtendimentoHumano(
   }
 
   const whatsappMessageId = extrairWhatsappMessageIdDeRespostaUazapi(sendInfo.body);
+  let avisoEntrega: string | undefined;
+  if (!sendSkipped && !whatsappMessageId) {
+    avisoEntrega =
+      "WhatsApp aceitou o pedido mas não devolveu ID da mensagem — confira no telefone do cliente se chegou.";
+    console.warn("[CRM][ATENDIMENTO] UAZAPI sem message id:", sendInfo.body);
+  }
   const urlMidiaPreview =
     midia && midia.mimeType.startsWith("image/")
       ? base64ParaUazapiFile(midia.base64, midia.mimeType)
@@ -405,6 +411,7 @@ export async function enviarMensagemAtendimentoHumano(
     ...(filaIns.error
       ? { aviso: "Mensagem registada no histórico; fila auxiliar não gravada (migração pendente)." }
       : {}),
+    ...(avisoEntrega ? { aviso: avisoEntrega } : {}),
   };
 }
 

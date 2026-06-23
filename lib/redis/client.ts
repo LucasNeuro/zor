@@ -312,6 +312,19 @@ function loadIoredisConstructor(): (new (options: Record<string, unknown>) => Io
   }
 }
 
+function redisTlsEnabled(): boolean {
+  const flag = process.env.REDIS_TLS?.trim().toLowerCase();
+  if (flag === "1" || flag === "true" || flag === "yes") return true;
+  if (flag === "0" || flag === "false" || flag === "no") return false;
+  const host = process.env.REDIS_HOST?.trim().toLowerCase() ?? "";
+  // Redis Cloud / Redis Enterprise Cloud exige TLS no endpoint público.
+  return (
+    host.includes("redislabs.com") ||
+    host.includes("redis-cloud.com") ||
+    host.endsWith(".render.com")
+  );
+}
+
 function buildIoredisClient(): IoredisLike | null {
   const RedisCtor = loadIoredisConstructor();
   if (!RedisCtor) {
@@ -324,11 +337,14 @@ function buildIoredisClient(): IoredisLike | null {
   const username = process.env.REDIS_USERNAME?.trim();
   const password = process.env.REDIS_PASSWORD?.trim();
 
+  const useTls = redisTlsEnabled();
+
   const client = new RedisCtor({
     host,
     port: Number.isFinite(port) ? port : 6379,
     username: username || undefined,
     password: password || undefined,
+    ...(useTls ? { tls: {} } : {}),
     maxRetriesPerRequest: 1,
     enableReadyCheck: false,
     lazyConnect: true,

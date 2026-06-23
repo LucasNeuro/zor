@@ -18,7 +18,8 @@
 #   DEFAULT_TENANT_ID             — 00000000-0000-4000-8000-000000000001
 # Redis (opcional — cache tenant; se ausente usa memória local):
 #   REDIS_HOST, REDIS_PORT (6379), REDIS_USERNAME (Upstash: default), REDIS_PASSWORD
-#   WRONGPASS nos logs = credenciais erradas; remova REDIS_HOST ou corrija no Dashboard.
+#   Redis Cloud: porta do painel (ex. 15295) + TLS (auto se host *.redislabs.com) ou REDIS_TLS=true
+#   WRONGPASS nos logs = credenciais erradas; no Redis Insight marque "Use TLS" na aba Security.
 # Supabase: aplicar migrações (incl. 20260605120000_ensure_hub_leads_crm_tenant.sql) antes do go-live.
 # WhatsApp: após deploy, abrir agente → QR/pareamento (sincroniza webhook para NEXT_PUBLIC_APP_URL/api/whatsapp/webhook).
 #

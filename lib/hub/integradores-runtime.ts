@@ -6,6 +6,33 @@ import {
   type HubIntegradorId,
 } from "@/lib/hub/integradores-catalogo";
 
+function credenciaisObj(credRow: unknown): Record<string, unknown> {
+  const credObj =
+    credRow &&
+    typeof credRow === "object" &&
+    "credenciais" in (credRow as object) &&
+    (credRow as { credenciais?: unknown }).credenciais &&
+    typeof (credRow as { credenciais: unknown }).credenciais === "object" &&
+    !Array.isArray((credRow as { credenciais: unknown }).credenciais)
+      ? ((credRow as { credenciais: Record<string, unknown> }).credenciais as Record<string, unknown>)
+      : {};
+  return credObj;
+}
+
+/** OAuth Google guarda access_token encriptado (_enc), não bearer_token legado. */
+function credenciaisIntegradorProntas(
+  integracaoId: HubIntegradorId,
+  credObj: Record<string, unknown>
+): boolean {
+  if (integracaoId === "google_calendar" || integracaoId === "gmail") {
+    if (credObj._enc === true && typeof credObj.access_token === "string" && credObj.access_token.trim()) {
+      return true;
+    }
+  }
+  const bearer = typeof credObj.bearer_token === "string" ? credObj.bearer_token.trim() : "";
+  return Boolean(bearer);
+}
+
 function integracaoConfigurada(
   integracaoId: HubIntegradorId,
   row: {
@@ -18,14 +45,7 @@ function integracaoConfigurada(
   if (row.ativo === false || row.integracao_id !== integracaoId) return false;
   const creds = row.hub_integracao_credenciais;
   const credRow = Array.isArray(creds) ? creds[0] : creds;
-  const credObj =
-    credRow &&
-    typeof credRow === "object" &&
-    "credenciais" in (credRow as object) &&
-    (credRow as { credenciais?: unknown }).credenciais &&
-    typeof (credRow as { credenciais: unknown }).credenciais === "object"
-      ? ((credRow as { credenciais: Record<string, unknown> }).credenciais as Record<string, unknown>)
-      : {};
+  const credObj = credenciaisObj(credRow);
 
   if (integracaoId === "zendesk") {
     const cfg =
@@ -37,8 +57,7 @@ function integracaoConfigurada(
     return Boolean(sub && key);
   }
 
-  const bearer = typeof credObj.bearer_token === "string" ? credObj.bearer_token.trim() : "";
-  return Boolean(bearer);
+  return credenciaisIntegradorProntas(integracaoId, credObj);
 }
 
 /** Ferramentas hub_int_* disponíveis para Mistral (integradores ligados no tenant). */

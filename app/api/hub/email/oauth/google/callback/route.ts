@@ -1,17 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import {
-  EMAIL_CHANNEL_DISABLED_CODE,
-  EMAIL_CHANNEL_DISABLED_MESSAGE,
-  isEmailChannelEnabled,
-} from "@/lib/feature-flags";
-import {
   exchangeGoogleOAuthCode,
   getGoogleProfileEmail,
   linkAgenteToGmailOAuth,
   parseGoogleOAuthState,
-  upsertGmailOAuthIntegracao,
+  upsertGoogleWorkspaceOAuthIntegracoes,
 } from "@/lib/email/oauth-google";
+import { isEmailChannelEnabled } from "@/lib/feature-flags";
 
 function db() {
   return createClient(
@@ -35,6 +31,7 @@ function redirectComResultado(
 
   const url = new URL(base.startsWith("http") ? base : `${origin}${base}`);
   url.searchParams.set("email_oauth", opts.ok ? "connected" : "error");
+  url.searchParams.set("google_oauth", opts.ok ? "connected" : "error");
   if (opts.email) url.searchParams.set("email", opts.email);
   if (opts.error) {
     url.searchParams.set("email_oauth_error", opts.error.slice(0, 200));
@@ -49,13 +46,6 @@ function redirectComResultado(
  * e opcionalmente liga agente (agente_slug no state).
  */
 export async function GET(request: NextRequest) {
-  if (!isEmailChannelEnabled()) {
-    return redirectComResultado(request, {
-      ok: false,
-      error: EMAIL_CHANNEL_DISABLED_CODE,
-    });
-  }
-
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
   }
@@ -99,18 +89,23 @@ export async function GET(request: NextRequest) {
     const profileEmail = await getGoogleProfileEmail(tokens.access_token);
 
     const supabase = db();
-    const { hubIntegracaoId } = await upsertGmailOAuthIntegracao(
+    const { gmailIntegracaoId } = await upsertGoogleWorkspaceOAuthIntegracoes(
       supabase,
       state.tenantId,
       tokens,
       profileEmail
     );
 
-    if (state.agenteSlug) {
+    const linkEmailAgente =
+      state.agenteSlug &&
+      state.purpose !== "integradores" &&
+      isEmailChannelEnabled();
+
+    if (linkEmailAgente && state.agenteSlug) {
       await linkAgenteToGmailOAuth(supabase, {
         tenantId: state.tenantId,
         agenteSlug: state.agenteSlug,
-        hubIntegracaoId,
+        hubIntegracaoId: gmailIntegracaoId,
         profileEmail,
       });
     }

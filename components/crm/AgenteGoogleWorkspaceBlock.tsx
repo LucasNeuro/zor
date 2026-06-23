@@ -13,6 +13,7 @@ import {
 import {
   GOOGLE_INTEGRADOR_FERRAMENTA_KEYS,
   googleOAuthErroAmigavel,
+  googleOAuthTesteErroAmigavel,
   saveWizardOAuthResume,
   wizardGoogleOAuthReturnTo,
 } from "@/lib/hub/agente-wizard-google";
@@ -181,13 +182,7 @@ export function AgenteGoogleWorkspaceBlock({
       });
       const data = (await res.json().catch(() => ({}))) as GoogleTestResult;
       if (!res.ok || !data.ok) {
-        throw new Error(
-          typeof data.error === "string"
-            ? String(data.error)
-            : typeof data.detalhe === "string"
-              ? data.detalhe
-              : "Teste falhou."
-        );
+        throw new Error(googleOAuthTesteErroAmigavel(data.error, data.detalhe));
       }
       setTeste(data);
       if (data.gmail_email) {

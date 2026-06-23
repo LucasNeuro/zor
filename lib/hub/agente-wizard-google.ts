@@ -142,6 +142,56 @@ export function googleOAuthErroAmigavel(raw: string | null | undefined): string 
   return msg.length > 220 ? `${msg.slice(0, 220)}…` : msg;
 }
 
+/** Mensagem legível para falha no POST /api/hub/integradores/oauth/google/test */
+export function googleOAuthTesteErroAmigavel(
+  error?: string | null,
+  detalhe?: unknown
+): string {
+  const code = (error ?? "").trim();
+  if (!code) return "Teste Gmail + Calendar falhou.";
+
+  const apiErr =
+    detalhe && typeof detalhe === "object" && !Array.isArray(detalhe)
+      ? (detalhe as Record<string, unknown>).error
+      : null;
+  const apiObj =
+    apiErr && typeof apiErr === "object" && !Array.isArray(apiErr)
+      ? (apiErr as Record<string, unknown>)
+      : null;
+  const apiMsg = typeof apiObj?.message === "string" ? apiObj.message : "";
+  const reasons = Array.isArray(apiObj?.errors)
+    ? apiObj.errors
+        .map((e) =>
+          e && typeof e === "object" && typeof (e as Record<string, unknown>).reason === "string"
+            ? String((e as Record<string, unknown>).reason)
+            : ""
+        )
+        .filter(Boolean)
+    : [];
+
+  if (code === "google_calendar_api") {
+    if (
+      reasons.includes("accessNotConfigured") ||
+      /Calendar API has not been used|calendar-json\.googleapis\.com/i.test(apiMsg)
+    ) {
+      return (
+        "Gmail ligou, mas a Google Calendar API não está ativa no projeto GCP. " +
+        "Ative em: APIs e serviços → Biblioteca → Google Calendar API → Ativar. Depois clique «Testar» de novo."
+      );
+    }
+    if (apiMsg) {
+      return `Gmail OK; Calendar falhou: ${apiMsg.slice(0, 180)}`;
+    }
+    return "Gmail ligou, mas a API do Google Calendar respondeu com erro. Verifique se a Calendar API está ativa no GCP.";
+  }
+
+  if (code === "gmail_nao_ligado") {
+    return "Ligue a conta Google antes de testar.";
+  }
+
+  return googleOAuthErroAmigavel(code);
+}
+
 export function readWizardOAuthResume(): WizardOAuthResume | null {
   if (typeof window === "undefined") return null;
   try {

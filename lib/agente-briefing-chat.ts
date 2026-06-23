@@ -8,6 +8,7 @@ import {
   ferramentasMistralListaParaAgente,
   mergeUsoFerramentasComPadraoPreservandoCustom,
   mergeUsoFerramentasWhatsappCanal,
+  agenteRaciocinioAvancadoAtivo,
 } from "@/lib/hub/agente-ferramentas-registry";
 import { executarFerramentaHub } from "@/lib/hub/executar-ferramenta-ia";
 import {
@@ -239,6 +240,7 @@ export async function executarBriefingReply(params: {
   mensagemUsuario: string;
   memoriasAgenteBloco?: string;
   modoOperacao?: string | null;
+  agentReasoningEnabled?: boolean;
 }): Promise<BriefingChatReplyResult> {
   const ehCopilotoInterno = agenteEhCopilotoInterno(
     isModoOperacaoAgente(params.modoOperacao) ? params.modoOperacao : null
@@ -292,6 +294,7 @@ export async function executarBriefingReply(params: {
     mensagens,
     modeloFromDb: params.modelo,
     maxTokens: 2048,
+    agentReasoningEnabled: params.agentReasoningEnabled,
   });
   if (!out.ok) throw new Error(out.erro);
 
@@ -403,6 +406,24 @@ Você é **${pc.agenteNome}** neste teste. Responda sempre com o nome, tom e fun
     params.motor === "playbook_ia" || Boolean(params.blocoFluxoExtra?.trim());
 
   let out: Awaited<ReturnType<typeof completarChatPreferindoMistral>> | null = null;
+  let agentReasoningEnabled = false;
+
+  if (params.supabase) {
+    const { data: ferrIaRowMeta } = await params.supabase
+      .from("hub_agente_identidade")
+      .select("uso_ferramentas_ia, modo_operacao")
+      .eq("agente_slug", params.agenteSlug)
+      .maybeSingle();
+    const modoOpMeta =
+      params.modoOperacao ??
+      ferrIaRowMeta?.modo_operacao ??
+      "canal_whatsapp";
+    const usoMeta = mergeUsoFerramentasWhatsappCanal(
+      mergeUsoFerramentasComPadraoPreservandoCustom(ferrIaRowMeta?.uso_ferramentas_ia ?? {}),
+      modoOpMeta
+    );
+    agentReasoningEnabled = agenteRaciocinioAvancadoAtivo(usoMeta);
+  }
 
   if (params.supabase && leadId) {
     const tenantForTools = (params.tenantId && params.tenantId.trim()) || defaultTenantId();
@@ -466,6 +487,7 @@ Você é **${pc.agenteNome}** neste teste. Responda sempre com o nome, tom e fun
         maxTokens: 2048,
         playbookPublicado: pc.playbookPublicado === true,
         playbookIaTurn,
+        agentReasoningEnabled,
         executarTool: (nome, argumentosSerializados) =>
           executarFerramentaHub(nome, argumentosSerializados, {
             leadId,
@@ -486,6 +508,7 @@ Você é **${pc.agenteNome}** neste teste. Responda sempre com o nome, tom e fun
       modeloFromDb: pc.modelo,
       maxTokens: 2048,
       playbookIaTurn,
+      agentReasoningEnabled,
     });
     if (semTools.ok) out = semTools;
     else if (!out) out = semTools;

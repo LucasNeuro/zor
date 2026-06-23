@@ -39,7 +39,10 @@ export async function mistralChatCompletion(params: {
   temperature?: number;
   /** Override; senão usa `resolveMistralReasoningEffort`. */
   reasoningEffort?: MistralReasoningEffort;
+  /** Turno playbook IA — afeta `MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY`. */
   playbookIaTurn?: boolean;
+  /** Toggle `hub_raciocinio_avancado` no agente. */
+  agentReasoningEnabled?: boolean;
 }): Promise<
   | { ok: true; text: string; inputTokens: number; outputTokens: number; model: string }
   | { ok: false; error: string }
@@ -48,7 +51,11 @@ export async function mistralChatCompletion(params: {
   if (!key) return { ok: false, error: "MISTRAL_API_KEY não configurada" };
 
   const reasoningEffort =
-    params.reasoningEffort ?? resolveMistralReasoningEffort({ playbookIaTurn: params.playbookIaTurn });
+    params.reasoningEffort ??
+    resolveMistralReasoningEffort({
+      playbookIaTurn: params.playbookIaTurn,
+      agentReasoningEnabled: params.agentReasoningEnabled,
+    });
   const body: Record<string, unknown> = {
     model: params.model,
     temperature: params.temperature ?? 0.7,

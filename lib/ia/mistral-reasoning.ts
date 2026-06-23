@@ -15,11 +15,22 @@ export function mistralReasoningEffortFromEnv(): MistralReasoningEffort {
 
 /**
  * Resolve se deve enviar `reasoning_effort` à API.
- * Com `MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY=1`, só aplica em turnos `playbook_ia`.
+ * - Toggle do agente (`hub_raciocinio_avancado`) força `high` quando activo.
+ * - Com `MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY=1`, só aplica em turnos `playbook_ia`
+ *   (tanto env global como toggle por agente).
  */
-export function resolveMistralReasoningEffort(opts?: { playbookIaTurn?: boolean }): MistralReasoningEffort {
-  const effort = mistralReasoningEffortFromEnv();
+export function resolveMistralReasoningEffort(opts?: {
+  playbookIaTurn?: boolean;
+  agentReasoningEnabled?: boolean;
+}): MistralReasoningEffort {
   const playbookOnly = parseBoolEnv(process.env.MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY);
+  const playbookTurnOk = !playbookOnly || opts?.playbookIaTurn === true;
+
+  if (opts?.agentReasoningEnabled && playbookTurnOk) {
+    return "high";
+  }
+
+  const effort = mistralReasoningEffortFromEnv();
   if (playbookOnly) {
     return opts?.playbookIaTurn ? effort : "none";
   }

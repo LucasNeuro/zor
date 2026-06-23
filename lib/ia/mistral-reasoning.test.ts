@@ -50,4 +50,21 @@ describe("resolveMistralReasoningEffort", () => {
     expect(resolveMistralReasoningEffort({ playbookIaTurn: false })).toBe("none");
     expect(resolveMistralReasoningEffort({ playbookIaTurn: true })).toBe("high");
   });
+
+  it("toggle do agente força high em turno playbook_ia", () => {
+    delete process.env.MISTRAL_REASONING_EFFORT;
+    process.env.MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY = "1";
+    expect(
+      resolveMistralReasoningEffort({ agentReasoningEnabled: true, playbookIaTurn: true })
+    ).toBe("high");
+    expect(
+      resolveMistralReasoningEffort({ agentReasoningEnabled: true, playbookIaTurn: false })
+    ).toBe("none");
+  });
+
+  it("toggle do agente sem playbook_ia only", () => {
+    delete process.env.MISTRAL_REASONING_EFFORT;
+    delete process.env.MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY;
+    expect(resolveMistralReasoningEffort({ agentReasoningEnabled: true })).toBe("high");
+  });
 });

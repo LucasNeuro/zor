@@ -28,6 +28,8 @@ export async function completarChatComFerramentasMistral(params: {
   playbookPublicado?: boolean;
   /** Turno playbook IA — afeta `MISTRAL_REASONING_EFFORT_PLAYBOOK_IA_ONLY`. */
   playbookIaTurn?: boolean;
+  /** Toggle `hub_raciocinio_avancado` no agente. */
+  agentReasoningEnabled?: boolean;
   executarTool: (nome: string, argumentosSerializados: string) => Promise<string>;
 }): Promise<
   | {
@@ -85,6 +87,7 @@ export async function completarChatComFerramentasMistral(params: {
       tools: params.tools,
       maxTokens: params.maxTokens ?? 1024,
       playbookIaTurn: params.playbookIaTurn,
+      agentReasoningEnabled: params.agentReasoningEnabled,
     });
 
     if (!out.ok) return { ok: false, erro: out.error };

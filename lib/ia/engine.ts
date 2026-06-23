@@ -15,6 +15,7 @@ import {
   ferramentasMistralListaParaAgente,
   mergeUsoFerramentasComPadraoPreservandoCustom,
   mergeUsoFerramentasWhatsappCanal,
+  agenteRaciocinioAvancadoAtivo,
 } from "@/lib/hub/agente-ferramentas-registry";
 import { executarFerramentaHub } from "@/lib/hub/executar-ferramenta-ia";
 import {
@@ -358,6 +359,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     const modeloResolved = resolveInferenceModelId(modelo);
     const playbookIaTurn =
       motorPlaybook === "playbook_ia" || Boolean(blocoContextoFluxoPlaybook?.trim());
+    const agentReasoningEnabled = agenteRaciocinioAvancadoAtivo(usoMap);
     const temMistralKey = Boolean(process.env.MISTRAL_API_KEY?.trim());
     const podeToolsMistral =
       temMistralKey &&
@@ -375,6 +377,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
           maxTokens: 1024,
           playbookPublicado: promptData.playbookPublicado === true,
           playbookIaTurn,
+          agentReasoningEnabled,
           executarTool: (nome, argumentosSerializados) =>
             executarFerramentaHub(nome, argumentosSerializados, {
               leadId: ctx.leadId!,
@@ -391,6 +394,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
           modeloFromDb: modelo,
           maxTokens: 1024,
           playbookIaTurn,
+          agentReasoningEnabled,
         });
     // Se tools Mistral falharem (ex.: 503 temporário), tenta sem tools antes de desistir.
     if (!out.ok && podeToolsMistral) {
@@ -400,6 +404,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         modeloFromDb: modelo,
         maxTokens: 1024,
         playbookIaTurn,
+        agentReasoningEnabled,
       });
       if (fallbackSemTools.ok) {
         out = fallbackSemTools;

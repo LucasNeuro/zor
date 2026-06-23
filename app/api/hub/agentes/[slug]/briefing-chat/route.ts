@@ -10,6 +10,10 @@ import {
   type BriefingModoSessao,
 } from "@/lib/agente-briefing-chat";
 import { agenteEhCopilotoInterno, isModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
+import {
+  agenteRaciocinioAvancadoAtivo,
+  mergeUsoFerramentasComPadraoPreservandoCustom,
+} from "@/lib/hub/agente-ferramentas-registry";
 import { extrairESalvarMemoriasAgente, formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 
@@ -332,6 +336,9 @@ export async function POST(
         mensagemUsuario: textoUser,
         memoriasAgenteBloco,
         modoOperacao,
+        agentReasoningEnabled: agenteRaciocinioAvancadoAtivo(
+          mergeUsoFerramentasComPadraoPreservandoCustom(agente.uso_ferramentas_ia)
+        ),
       });
     }
   } catch (e) {

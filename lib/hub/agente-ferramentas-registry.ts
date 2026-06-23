@@ -12,6 +12,7 @@ export type HubAgenteFerramentaId =
   | "hub_lead_memorias"
   | "hub_lead_lookup_por_telefone"
   | "hub_metricas_escritorio"
+  | "hub_raciocinio_avancado"
   | "hub_relatorio_html_simples"
   | "hub_registar_nota_lead"
   | "hub_whatsapp_menu"
@@ -26,7 +27,9 @@ export type HubAgenteFerramentaCatalogo = {
   descricao: string;
   /** Sugestão de pré-ligar em atendimento WhatsApp (não força default no servidor) */
   recomendadoWhatsApp: boolean;
-  mistralFunction: {
+  /** Capacidade do modelo — não é function calling Mistral */
+  metaCapacidade?: boolean;
+  mistralFunction?: {
     name: string;
     description: string;
     parameters: Record<string, unknown>;
@@ -118,6 +121,15 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
         additionalProperties: false,
       },
     },
+  },
+  {
+    id: "hub_raciocinio_avancado",
+    categoria: "analise",
+    titulo: "Raciocínio avançado (Mistral)",
+    descricao:
+      "Activa thinking interno do modelo antes de responder — melhora decisões em orçamentos, triagem e uso de várias ferramentas. O cliente só vê a resposta final. Aumenta latência e consumo de tokens.",
+    recomendadoWhatsApp: false,
+    metaCapacidade: true,
   },
   {
     id: "hub_relatorio_html_simples",
@@ -395,11 +407,21 @@ export function normalizarUsoFerramentasIa(raw: unknown): Partial<Record<HubAgen
   return out;
 }
 
+export function agenteRaciocinioAvancadoAtivo(
+  uso: Record<string, boolean | undefined> | null | undefined
+): boolean {
+  return coalesceFerramentaBool(uso?.hub_raciocinio_avancado) === true;
+}
+
 export function ferramentasMistralParaAgente(
   uso: Partial<Record<HubAgenteFerramentaId, boolean>>
-): Array<{ type: "function"; function: HubAgenteFerramentaCatalogo["mistralFunction"] }> {
-  const out: Array<{ type: "function"; function: HubAgenteFerramentaCatalogo["mistralFunction"] }> = [];
+): Array<{ type: "function"; function: NonNullable<HubAgenteFerramentaCatalogo["mistralFunction"]> }> {
+  const out: Array<{
+    type: "function";
+    function: NonNullable<HubAgenteFerramentaCatalogo["mistralFunction"]>;
+  }> = [];
   for (const item of HUB_AGENTE_FERRAMENTAS_CATALOGO) {
+    if (item.metaCapacidade || !item.mistralFunction) continue;
     if (uso[item.id] === true) {
       out.push({ type: "function", function: item.mistralFunction });
     }
@@ -474,6 +496,7 @@ export function ferramentasMistralListaParaAgente(
 ): MistralChatToolDefinition[] {
   const out: MistralChatToolDefinition[] = [];
   for (const item of HUB_AGENTE_FERRAMENTAS_CATALOGO) {
+    if (item.metaCapacidade || !item.mistralFunction) continue;
     if (uso[item.id] === true) {
       out.push({ type: "function", function: item.mistralFunction });
     }
@@ -538,6 +561,7 @@ export function mergeUsoFerramentasComPadrao(
     hub_lead_memorias: false,
     hub_lead_lookup_por_telefone: false,
     hub_metricas_escritorio: false,
+    hub_raciocinio_avancado: false,
     hub_relatorio_html_simples: false,
     hub_registar_nota_lead: false,
     hub_whatsapp_menu: false,
@@ -604,6 +628,7 @@ export const HUB_FERRAMENTA_ACESSO: Record<HubAgenteFerramentaId, HubFerramentaN
   hub_lead_memorias: "leitura",
   hub_lead_lookup_por_telefone: "leitura",
   hub_metricas_escritorio: "leitura",
+  hub_raciocinio_avancado: "leitura",
   hub_relatorio_html_simples: "escrita",
   hub_registar_nota_lead: "escrita",
   hub_whatsapp_menu: "escrita",

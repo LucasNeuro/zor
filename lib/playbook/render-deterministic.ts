@@ -111,7 +111,11 @@ function renderFerramentasLines(id: Record<string, unknown>): string[] {
     for (const [key] of activas) {
       const cat = HUB_AGENTE_FERRAMENTAS_CATALOGO.find((c) => c.id === key);
       if (cat) {
-        lines.push(`- **${cat.titulo}** — \`${cat.mistralFunction.name}\`: ${cat.descricao}`);
+        if (cat.metaCapacidade) {
+          lines.push(`- **${cat.titulo}** — capacidade do modelo: ${cat.descricao}`);
+        } else if (cat.mistralFunction) {
+          lines.push(`- **${cat.titulo}** — \`${cat.mistralFunction.name}\`: ${cat.descricao}`);
+        }
       } else {
         lines.push(
           `- **Custom / extensão** — \`${key}\`: ver catálogo em CRM → Ferramentas IA (tenant).`

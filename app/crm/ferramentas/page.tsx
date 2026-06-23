@@ -317,7 +317,7 @@ export default function FerramentasHubPage() {
       return {
         rowKey: `builtin:${f.id}`,
         ferramenta: f.titulo,
-        chave: f.mistralFunction.name,
+        chave: f.mistralFunction?.name ?? f.id,
         tipo: "builtin",
         categoria: HUB_FERRAMENTA_SECAO_LABEL[f.categoria],
         acesso: HUB_FERRAMENTA_ACESSO[f.id],

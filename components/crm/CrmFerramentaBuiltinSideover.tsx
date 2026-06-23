@@ -78,7 +78,9 @@ export function CrmFerramentaBuiltinSideover({ open, onClose, ferramentaId, agen
   if (!cat) return null;
 
   const nivel = HUB_FERRAMENTA_ACESSO[ferramentaId];
-  const schemaJson = JSON.stringify(cat.mistralFunction.parameters, null, 2);
+  const schemaJson = cat.mistralFunction
+    ? JSON.stringify(cat.mistralFunction.parameters, null, 2)
+    : "{}";
 
   return (
     <>
@@ -169,7 +171,7 @@ export function CrmFerramentaBuiltinSideover({ open, onClose, ferramentaId, agen
             </div>
             <div style={{ padding: "12px 14px" }}>
               <ReadOnlyField label="Descrição" value={cat.descricao} />
-              <ReadOnlyField label="Chave técnica" value={cat.mistralFunction.name} mono />
+              <ReadOnlyField label="Chave técnica" value={cat.mistralFunction?.name ?? cat.id} mono />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
                 <MetaChip label="Categoria" value={HUB_FERRAMENTA_SECAO_LABEL[cat.categoria]} />
                 <MetaChip label="Acesso" value={nivel === "escrita" ? "Escrita" : "Só leitura"} />

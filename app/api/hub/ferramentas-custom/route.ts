@@ -82,6 +82,12 @@ export async function POST(request: NextRequest) {
 
   const cat = catalogoBuiltinPorId(builtin_impl as HubAgenteFerramentaId);
   if (!cat) return NextResponse.json({ error: "builtin não encontrado no catálogo." }, { status: 400 });
+  if (!cat.mistralFunction) {
+    return NextResponse.json(
+      { error: "Esta capacidade não expõe schema de parâmetros para ferramenta custom." },
+      { status: 400 }
+    );
+  }
 
   const row = {
     tenant_id: tenantId,

@@ -65,3 +65,23 @@ export async function obterOuCriarFollowupConfig(
     passos: (passos || []) as HubAgenteFollowupPasso[],
   };
 }
+
+/** Cria config + 3 passos padrão na criação do agente WA (idempotente). */
+export async function provisionHubAgenteFollowupConfig(
+  supabase: SupabaseClient,
+  agenteSlug: string,
+  tenantId: string | null
+): Promise<{ criado: boolean; erro?: string }> {
+  const { data: existente, error: existErr } = await supabase
+    .from("hub_agente_followup_config")
+    .select("id")
+    .eq("agente_slug", agenteSlug)
+    .maybeSingle();
+
+  if (existErr) return { criado: false, erro: existErr.message };
+  if (existente) return { criado: false };
+
+  const pack = await obterOuCriarFollowupConfig(supabase, agenteSlug, tenantId);
+  if (!pack) return { criado: false, erro: "Não foi possível provisionar follow-up." };
+  return { criado: true };
+}

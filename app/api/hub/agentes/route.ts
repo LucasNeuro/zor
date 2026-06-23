@@ -7,6 +7,7 @@ import {
   provisionHubCicloPadrao,
   type CicloExecucaoCliente,
 } from "@/lib/hub/provision-hub-ciclo-padrao";
+import { provisionHubAgenteFollowupConfig } from "@/lib/hub/followup-db";
 import {
   forceMistralModeloTripleForDb,
   isChkModeloValidoConstraintMessage,
@@ -737,6 +738,22 @@ export async function POST(request: NextRequest) {
         : `preset WA: ${wa_preset_result.error}`;
     } else if (wa_preset_result.ciclo_followup_criado) {
       const msg = "Preset WA: ciclo follow-up criado. Configure passos em Agentes → Integrações.";
+      ciclo_aviso = ciclo_aviso ? `${ciclo_aviso} ${msg}` : msg;
+    }
+  }
+
+  if (modoFinal === "canal_whatsapp") {
+    const fp = await provisionHubAgenteFollowupConfig(
+      supabase,
+      created.agente_slug,
+      tenantCiclo
+    );
+    if (fp.erro) {
+      ciclo_erro = ciclo_erro ? `${ciclo_erro}; follow-up: ${fp.erro}` : `follow-up: ${fp.erro}`;
+      console.error("[crm] follow-up config após criar agente:", created.agente_slug, fp.erro);
+    } else if (fp.criado) {
+      const msg =
+        "Follow-up: 3 passos padrão criados (desligado). Ative e edite em Agentes → Integrações.";
       ciclo_aviso = ciclo_aviso ? `${ciclo_aviso} ${msg}` : msg;
     }
   }

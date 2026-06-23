@@ -41,6 +41,7 @@ import {
 } from "@/lib/whatsapp/uazapi-proxy-connect";
 import { UazapiProxyCityPicker } from "@/components/crm/UazapiProxyCityPicker";
 import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
+import { CrmSideoverLoadingState } from "@/components/crm/CrmSideoverLoadingState";
 
 /** UAZAPI: QR expira em ~2 min (doc OpenAPI). */
 const UAZAPI_QR_VALID_MS = 120_000;
@@ -90,6 +91,8 @@ export function CrmIntegracaoSideoverShell({
   theme = "light",
   sectionLabel = "Integração",
   closeAriaLabel,
+  loading = false,
+  loadingLabel = "A carregar…",
 }: {
   open: boolean;
   onClose: () => void;
@@ -102,6 +105,8 @@ export function CrmIntegracaoSideoverShell({
   theme?: "dark" | "light";
   sectionLabel?: string;
   closeAriaLabel?: string;
+  loading?: boolean;
+  loadingLabel?: string;
 }) {
   if (!open && !embedded) return null;
 
@@ -159,7 +164,11 @@ export function CrmIntegracaoSideoverShell({
             background: isDark ? "#060d08" : "#ffffff",
           }}
         >
-          {children}
+          {loading ? (
+            <CrmSideoverLoadingState theme={isDark ? "dark" : "light"} label={loadingLabel} />
+          ) : (
+            children
+          )}
         </div>
         <div
           style={{
@@ -235,7 +244,7 @@ export function CrmIntegracaoSideoverShell({
           </div>
         </header>
         <div className="panel-scroll" style={{ flex: 1, overflowY: "auto", padding: 16, minHeight: 0, background: "#060d08" }}>
-          {children}
+          {loading ? <CrmSideoverLoadingState label={loadingLabel} /> : children}
         </div>
         <div
           style={{

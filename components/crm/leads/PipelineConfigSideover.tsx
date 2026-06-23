@@ -9,6 +9,7 @@ import {
   CrmSideoverToolbarRow,
 } from "@/components/crm/CrmSideoverActionGroup";
 import { CrmRetrofitSideoverShell } from "@/components/crm/CrmRetrofitSideoverShell";
+import { CrmSideoverLoadingState } from "@/components/crm/CrmSideoverLoadingState";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import type { PipelineEstagioRow } from "@/lib/crm/pipeline-defaults";
@@ -484,9 +485,7 @@ export function PipelineConfigSideover({
     >
       <div className="flex flex-col gap-4">
         {loading ? (
-          <p className="text-sm" style={{ color: RF_LIGHT_TEXT_MUTED }}>
-            A carregar…
-          </p>
+          <CrmSideoverLoadingState theme="light" label="A carregar pipelines…" centered />
         ) : configTab === "pipelines" && showPipelineAdmin ? (
           <>
             <p className="text-xs leading-relaxed" style={{ color: RF_LIGHT_TEXT_MUTED }}>

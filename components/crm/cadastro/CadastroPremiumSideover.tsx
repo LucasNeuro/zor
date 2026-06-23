@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { X, type LucideIcon } from "lucide-react";
 import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
+import { CrmSideoverLoadingState } from "@/components/crm/CrmSideoverLoadingState";
 import {
   RF_ACCENT,
   RF_BORDER,
@@ -30,6 +31,8 @@ type Props = {
   accent?: string;
   footer?: ReactNode;
   children: ReactNode;
+  loading?: boolean;
+  loadingLabel?: string;
 };
 
 export function CadastroPremiumSideover({
@@ -43,6 +46,8 @@ export function CadastroPremiumSideover({
   accent = RF_ACCENT,
   footer,
   children,
+  loading = false,
+  loadingLabel = "A carregar…",
 }: Props) {
   if (!open) return null;
 
@@ -81,7 +86,9 @@ export function CadastroPremiumSideover({
           </div>
         </div>
 
-        <div style={rfAsideBodyStyle()}>{children}</div>
+        <div style={rfAsideBodyStyle()}>
+          {loading ? <CrmSideoverLoadingState label={loadingLabel} centered /> : children}
+        </div>
 
         {footer ? <div style={rfAsideFooterStyle()}>{footer}</div> : null}
       </aside>

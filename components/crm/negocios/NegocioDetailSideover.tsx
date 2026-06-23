@@ -369,6 +369,8 @@ export function NegocioDetailSideover({
       title={negocio?.titulo ?? (carregando ? "Carregando…" : "Negócio")}
       subtitle={subtitle || undefined}
       icon={BriefcaseBusiness}
+      loading={carregando && !negocio}
+      loadingLabel="A carregar negócio…"
       footer={
         tab === "dados"
           ? crmRetrofitSideoverFooterBtnPrimary(
@@ -380,12 +382,6 @@ export function NegocioDetailSideover({
           : undefined
       }
     >
-      {carregando && !negocio ? (
-        <p className="text-center text-sm" style={{ color: textMuted }}>
-          Carregando negócio…
-        </p>
-      ) : null}
-
       {negocio ? (
         <>
           <div className="mb-3 min-w-0 max-w-full overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">

@@ -34,3 +34,30 @@ export async function pausarFollowupLead(
     console.warn("[followup] pausar lead:", e);
   }
 }
+
+/** Reativa follow-up em todos os leads elegíveis do agente (sem humano, não encerrados). */
+export async function reativarFollowupLeadsAgente(
+  supabase: SupabaseClient,
+  agenteSlug: string
+): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from("hub_leads_crm")
+      .update({ followup_pausado: false })
+      .eq("agente_responsavel", agenteSlug)
+      .is("humano_responsavel", null)
+      .not("estagio", "in", '("ganho","perdido","arquivado")')
+      .not("telefone", "is", null)
+      .eq("followup_pausado", true)
+      .select("id");
+
+    if (error) {
+      console.warn("[followup] reativar leads:", error.message);
+      return 0;
+    }
+    return data?.length ?? 0;
+  } catch (e) {
+    console.warn("[followup] reativar leads:", e);
+    return 0;
+  }
+}

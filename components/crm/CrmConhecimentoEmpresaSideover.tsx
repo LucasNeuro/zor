@@ -233,6 +233,8 @@ export function CrmConhecimentoEmpresaSideover({ open, onClose, onSaved }: Props
       title="Dados da empresa"
       subtitle="CNPJ e identidade usados pelos agentes IA nas saudações e respostas."
       icon={Building2}
+      loading={loading}
+      loadingLabel="A carregar dados da empresa…"
       footer={
         <div className="flex w-full items-center justify-end gap-2">
           <button
@@ -261,11 +263,7 @@ export function CrmConhecimentoEmpresaSideover({ open, onClose, onSaved }: Props
         </div>
       }
     >
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <Loader2 size={24} className="animate-spin" style={{ color: RF_ACCENT }} />
-        </div>
-      ) : (
+      {!loading && (
         <div className="space-y-5 px-1 pb-4">
           {erro ? (
             <p

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
+import { validarAtrasoPasso } from "@/lib/hub/followup-types";
 
 function db() {
   return createClient(
@@ -42,7 +43,7 @@ export async function PATCH(
   const supabase = db();
   const { data: existente } = await supabase
     .from("hub_agente_followup_passo")
-    .select("id, agente_slug")
+    .select("id, agente_slug, atraso_horas, atraso_minutos")
     .eq("id", passoId)
     .eq("agente_slug", slug)
     .maybeSingle();
@@ -60,12 +61,19 @@ export async function PATCH(
     }
     patch.ordem = ordem;
   }
-  if (body.atraso_horas != null) {
-    const h = Number.parseInt(String(body.atraso_horas), 10);
-    if (!Number.isFinite(h) || h < 1 || h > 8760) {
-      return NextResponse.json({ error: "atraso_horas inválido" }, { status: 400 });
-    }
+  if (body.atraso_horas != null || body.atraso_minutos != null) {
+    const h =
+      body.atraso_horas != null
+        ? Number.parseInt(String(body.atraso_horas), 10)
+        : (existente.atraso_horas ?? 0);
+    const m =
+      body.atraso_minutos != null
+        ? Number.parseInt(String(body.atraso_minutos), 10)
+        : (existente.atraso_minutos ?? 0);
+    const atrasoErr = validarAtrasoPasso(h, m);
+    if (atrasoErr) return NextResponse.json({ error: atrasoErr }, { status: 400 });
     patch.atraso_horas = h;
+    patch.atraso_minutos = m;
   }
   if (body.tipo_conteudo != null) {
     const tipo = parseTipo(body.tipo_conteudo);

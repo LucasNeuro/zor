@@ -69,7 +69,7 @@ export function agenteWizardPasso8Descricao(
       : base;
   }
   const wa =
-    "Ligue o WhatsApp da empresa: região UAZAPI, instância e QR/código. O playbook publicado define o fluxo de atendimento.";
+    "Ligue o WhatsApp da empresa: região UAZAPI, instância e QR/código. Configure também o follow-up automático (lembretes por passo). O playbook publicado define o fluxo de atendimento.";
   return comAgendaGoogle
     ? `${wa} Na secção 2, autorize a conta Google da empresa para o agente marcar horários e enviar links Meet.`
     : wa;

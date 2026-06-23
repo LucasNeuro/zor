@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AlertCircle, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { CrmSideoverLoadingState } from "@/components/crm/CrmSideoverLoadingState";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import {
   deleteHubIntegracao,
@@ -311,9 +312,7 @@ export function CrmIntegracaoSideover({ open, onClose, onSaved, initialIntegraca
               </button>
             </div>
             {loading ? (
-              <p style={{ margin: 0, fontSize: 12, color: L.muted }}>
-                <Loader2 size={14} className="inline animate-spin" /> A carregar…
-              </p>
+              <CrmSideoverLoadingState theme="light" label="A carregar integrações…" />
             ) : rows.length === 0 ? (
               <p style={{ margin: 0, fontSize: 12, color: L.muted }}>Nenhuma integração tenant configurada.</p>
             ) : (

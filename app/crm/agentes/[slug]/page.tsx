@@ -329,6 +329,10 @@ export default function AgentePage() {
     if (oauth === "connected" || oauth === "error") {
       setAbaFicha("integracoes");
     }
+    const aba = searchParams.get("aba");
+    if (aba === "integracoes" || aba === "geral" || aba === "personalidade" || aba === "operacao") {
+      setAbaFicha(aba);
+    }
   }, [searchParams]);
 
   const avatarUrl = useMemo(() => {

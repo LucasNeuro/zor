@@ -264,9 +264,10 @@ export function CadastroEmpresaSideover({
         )
       }
       footer={footer}
+      loading={loading}
+      loadingLabel="A carregar dados da empresa…"
     >
-      {loading && <p style={{ color: "#5d7a67", fontSize: 13 }}>Carregando dados da empresa…</p>}
-      {erro && (
+      {!loading && erro && (
         <div
           style={{
             color: "#f87171",

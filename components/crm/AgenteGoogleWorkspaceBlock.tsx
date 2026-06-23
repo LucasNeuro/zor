@@ -777,6 +777,8 @@ export function AgenteGoogleWorkspaceBlock({
           footer={sideoverFooter}
           theme="dark"
           sectionLabel="Google Workspace"
+          loading={sideoverOpen && (carregando || agendaCfgCarregando)}
+          loadingLabel={agendaCfgCarregando ? "A carregar agenda…" : "A verificar ligação…"}
         >
           {painelConteudo}
         </CrmIntegracaoSideoverShell>

@@ -69,6 +69,7 @@ import { createAgenteWizardTheme } from "@/lib/crm/agente-wizard-theme";
 import { gerarPersonalidadeAgente } from "@/lib/hub/agente-personalidade-eixos";
 import { AgentePersonalidadeEixosPanel } from "@/components/crm/AgentePersonalidadeEixosPanel";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
+import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
 import {
   agenteUsaFerramentasGoogle,
   agentePrecisaGoogleWorkspace,
@@ -3448,6 +3449,16 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     }))
                   }
                 />
+                  <p style={{ ...wizardSectionLabel, margin: "16px 0 8px" }}>SECÇÃO · FOLLOW-UP WHATSAPP</p>
+                  <p style={{ color: wzMuted, fontSize: 12, margin: "0 0 10px", lineHeight: 1.55 }}>
+                    Lembretes automáticos após silêncio do cliente (3 passos padrão já criados). Ative, edite textos
+                    e imagens abaixo — ou depois em Agentes → Integrações.
+                  </p>
+                  <AgenteFollowupBlock
+                    layout="embedded"
+                    agenteSlug={agenteSlugCriado}
+                    agenteNome={nome.trim() || agenteSlugCriado}
+                  />
                 </>
               ) : null}
               {isEmailChannelEnabledClient() && modoOperacao === "canal_email" ? (

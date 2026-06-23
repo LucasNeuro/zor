@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type CSSProperties, type MouseEvent } from "react";
 import {
   ChevronDown,
@@ -223,6 +224,25 @@ export function CicloCard({
         <p style={{ fontSize: 11, margin: 0 }}>
           <span style={{ color: stCor, fontWeight: 700 }}>{st.replace(/_/g, " ")}</span>
         </p>
+
+        {agente?.modo_operacao === "canal_whatsapp" ? (
+          <Link
+            href={`/crm/agentes/${encodeURIComponent(ciclo.agente_slug)}?aba=integracoes`}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 8,
+              fontSize: 11,
+              fontWeight: 700,
+              color: CRM_ACCENT,
+              textDecoration: "none",
+            }}
+          >
+            Ir para Integrações (follow-up)
+          </Link>
+        ) : null}
       </div>
 
       <div

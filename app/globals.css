@@ -631,6 +631,16 @@ html[data-white-label="1"] .waje-float-btn-ring {
   50%       { opacity: 0.6; transform: scale(0.85); }
 }
 
+@keyframes crm-sideover-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.crm-sideover-spinner {
+  animation: crm-sideover-spin 0.72s linear infinite;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }

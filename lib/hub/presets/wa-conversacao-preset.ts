@@ -9,6 +9,7 @@ import {
   ensureHubCicloPadraoParaAgente,
   provisionFollowupCicloWhatsapp,
 } from "@/lib/hub/provision-hub-ciclo-padrao";
+import { provisionHubAgenteFollowupConfig } from "@/lib/hub/followup-db";
 import { serializarUsoFerramentasParaDb } from "@/lib/mistral/sync-hub-agent";
 import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
 import {
@@ -352,11 +353,25 @@ export async function applyWaConversacaoPreset(
     detalhe:
       followup.erro ??
       (followup.criado
-        ? "Ciclo follow-up criado (24h / 48h / 72h)."
+        ? "Ciclo follow-up (telemetria) criado."
         : "Ciclo follow-up já existia."),
   });
   if (followup.erro) {
     return { ok: false, error: followup.erro, passos };
+  }
+
+  const followupCfg = await provisionHubAgenteFollowupConfig(supabase, agenteSlug, tenantId);
+  passos.push({
+    passo: "followup_config",
+    ok: !followupCfg.erro,
+    detalhe:
+      followupCfg.erro ??
+      (followupCfg.criado
+        ? "Config follow-up: 3 passos padrão (desligado)."
+        : "Config follow-up já existia."),
+  });
+  if (followupCfg.erro) {
+    return { ok: false, error: followupCfg.erro, passos };
   }
 
   return {

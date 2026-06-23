@@ -47,6 +47,7 @@ import {
 } from "@/lib/hub/agente-modo-operacao";
 import { CRM_ENTITY_GRID } from "@/lib/crm-glass-card";
 import { CicloCard, type CicloCardAgente } from "@/components/crm/CicloCard";
+import { CrmSideoverLoadingState } from "@/components/crm/CrmSideoverLoadingState";
 import { AgenteSideoverEntityCard, AgenteSideoverInfoGrid } from "@/components/crm/AgenteSideoverCards";
 import { cicloTipoMeta, tempoRelativoCiclo, CICLO_STATUS_COR } from "@/lib/crm/ciclo-ui";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
@@ -1090,7 +1091,7 @@ export default function CiclosPage() {
 
             <div style={rfAsideBodyStyle()}>
             {formLoading ? (
-              <p style={{ color: RF_TEXT_MUTED, fontSize: 13, margin: 0 }}>Carregando...</p>
+              <CrmSideoverLoadingState label="A carregar ciclo…" />
             ) : (
               <div className="space-y-3">
                 <AgenteSideoverEntityCard

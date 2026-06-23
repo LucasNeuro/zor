@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
+import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { CRM_ACCENT, crmBtnPrimary, crmBtnPrimaryLg, crmBtnSecondary } from "@/lib/crm/crm-button-styles";
 import { BRAND_TEXT_DARK } from "@/lib/brand";
@@ -25,8 +26,13 @@ import {
   RF_TEXT_SECONDARY,
   rfInputStyle,
   rfLabelStyle,
+  rfInnerPanelStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import {
+  atrasoTotalMinutos,
+  formatarAtrasoPasso,
+} from "@/lib/hub/followup-types";
 
 type Props = {
   agenteSlug: string;
@@ -34,10 +40,21 @@ type Props = {
   layout?: "card" | "embedded";
 };
 
-function formatarAtraso(h: number): string {
-  if (h < 24) return `${h}h`;
-  if (h % 24 === 0) return `${h / 24}d`;
-  return `${h}h`;
+function normalizarPasso(p: HubAgenteFollowupPasso): HubAgenteFollowupPasso {
+  return {
+    ...p,
+    atraso_minutos: Number.isFinite(p.atraso_minutos) ? p.atraso_minutos : 0,
+  };
+}
+
+function clampMinutos(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.min(59, Math.max(0, v));
+}
+
+function clampHoras(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.min(8760, Math.max(0, v));
 }
 
 export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }: Props) {
@@ -96,7 +113,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       };
       if (!res.ok) throw new Error(data.error || "Falha ao carregar");
       setConfig(data.config ?? null);
-      setPassos(Array.isArray(data.passos) ? data.passos : []);
+      setPassos(
+        Array.isArray(data.passos) ? data.passos.map((p) => normalizarPasso(p as HubAgenteFollowupPasso)) : []
+      );
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar follow-up");
     } finally {
@@ -126,11 +145,17 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         error?: string;
         config?: HubAgenteFollowupConfig;
         passos?: HubAgenteFollowupPasso[];
+        leads_reativados?: number;
       };
       if (!res.ok) throw new Error(data.error || "Falha ao guardar");
       if (data.config) setConfig(data.config);
-      if (data.passos) setPassos(data.passos);
-      setOkMsg("Configuração guardada.");
+      if (data.passos) setPassos(data.passos.map(normalizarPasso));
+      const reativados = data.leads_reativados ?? 0;
+      setOkMsg(
+        reativados > 0
+          ? `Follow-up activo — ${reativados} lead(s) reactivado(s).`
+          : "Configuração guardada."
+      );
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao guardar");
     } finally {
@@ -139,6 +164,10 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }
 
   async function salvarPasso(passo: HubAgenteFollowupPasso) {
+    if (atrasoTotalMinutos(passo) < 1) {
+      setErro("Defina pelo menos 1 minuto de atraso (horas e/ou minutos).");
+      return;
+    }
     setSaving(true);
     setErro("");
     try {
@@ -148,6 +177,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         body: JSON.stringify({
           ordem: passo.ordem,
           atraso_horas: passo.atraso_horas,
+          atraso_minutos: passo.atraso_minutos ?? 0,
           tipo_conteudo: passo.tipo_conteudo,
           texto_template: passo.texto_template,
           imagem_url: passo.imagem_url,
@@ -203,7 +233,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   async function adicionarPasso() {
     const maxOrdem = passos.reduce((m, p) => Math.max(m, p.ordem), 0);
     const ultimo = passos.find((p) => p.ordem === maxOrdem);
-    const atraso = (ultimo?.atraso_horas ?? 2) * 2;
+    const totalMin = ultimo ? atrasoTotalMinutos(ultimo) * 2 : 120;
+    const atraso_horas = Math.min(8760, Math.floor(totalMin / 60));
+    const atraso_minutos = totalMin % 60;
     setSaving(true);
     try {
       const res = await fetch(`${base}/passos`, {
@@ -211,7 +243,8 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           ordem: maxOrdem + 1,
-          atraso_horas: Math.min(atraso, 168),
+          atraso_horas,
+          atraso_minutos,
           tipo_conteudo: "texto",
           texto_template: "Olá {nome}, ainda posso ajudar?",
         }),
@@ -288,14 +321,20 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       });
       const data = (await res.json()) as {
         error?: string;
-        resultado?: { enviados: number; arquivados: number; erros: string[]; acoes: string[] };
+        resultado?: {
+          enviados: number;
+          arquivados: number;
+          leads_elegiveis: number;
+          erros: string[];
+          acoes: string[];
+        };
       };
       if (!res.ok) throw new Error(data.error || "Falha ao testar");
       const r = data.resultado;
       if (r?.erros?.length) setErro(r.erros.slice(0, 3).join(" · "));
       setOkMsg(
         r
-          ? `Teste: ${r.enviados} enviado(s), ${r.arquivados} arquivado(s).`
+          ? `Teste: ${r.leads_elegiveis ?? 0} lead(s) elegível(eis), ${r.enviados} enviado(s), ${r.arquivados} arquivado(s).`
           : "Teste concluído."
       );
     } catch (e) {
@@ -313,61 +352,147 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   const passosAtivos = passos.filter((p) => p.ativo).length;
 
   const badge = ativo
-    ? { rotulo: "LIGADO", bg: "rgba(146,255,0,0.18)", fg: CRM_ACCENT }
-    : { rotulo: "DESLIGADO", bg: "#eef0f2", fg: "#64748b" };
+    ? { rotulo: "ACTIVO", bg: "rgba(63,185,80,0.14)", fg: "#3fb950" }
+    : { rotulo: "INACTIVO", bg: "#eef0f2", fg: "#64748b" };
 
   const painelConteudo = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <label
+      <div
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 10,
-          fontSize: 13,
-          fontWeight: 700,
-          color: RF_TEXT_PRIMARY,
-          cursor: saving ? "wait" : "pointer",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+          padding: 12,
+          borderRadius: 12,
+          border: `1px solid ${ativo ? "rgba(63, 185, 80, 0.38)" : RF_BORDER_STRONG}`,
+          background: ativo ? "rgba(63, 185, 80, 0.08)" : "rgba(6, 13, 8, 0.45)",
         }}
       >
-        <input
-          type="checkbox"
-          checked={ativo}
-          disabled={loading || saving || !config}
-          onChange={(e) => void salvarConfig({ ativo: e.target.checked })}
-        />
-        Follow-up ativo (cron envia lembretes)
-      </label>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
-        <label style={{ flex: "1 1 160px" }}>
-          <span style={rfLabelStyle()}>Arquivar lead após (dias)</span>
-          <input
-            type="number"
-            min={1}
-            max={365}
-            value={config?.arquivar_apos_dias ?? 7}
-            onChange={(e) =>
-              setConfig((c) =>
-                c ? { ...c, arquivar_apos_dias: Number.parseInt(e.target.value, 10) || 7 } : c
-              )
-            }
-            style={rfInputStyle()}
-          />
-        </label>
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => void salvarConfig({ arquivar_apos_dias: config?.arquivar_apos_dias ?? 7 })}
-          style={{ ...btnSecondaryDark(saving), width: "auto", padding: "9px 14px" }}
+        <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 0, alignItems: "flex-start" }}>
+          <div
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 10,
+              background: ativo ? "rgba(63, 185, 80, 0.16)" : "rgba(146, 255, 0, 0.1)",
+              border: `1px solid ${ativo ? "rgba(63, 185, 80, 0.35)" : "rgba(146, 255, 0, 0.22)"}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              marginTop: 2,
+            }}
+          >
+            <Bell size={20} color={ativo ? "#86efac" : RF_ACCENT} aria-hidden />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              <span id="followup-ativo-label" style={{ fontSize: 13, fontWeight: 700, color: RF_TEXT_PRIMARY }}>
+                Follow-up automático
+              </span>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 800,
+                  letterSpacing: 0.06,
+                  color: "#79c0ff",
+                  border: "1px solid rgba(121,192,255,0.35)",
+                  borderRadius: 4,
+                  padding: "2px 6px",
+                }}
+              >
+                WHATSAPP
+              </span>
+            </div>
+            <span
+              style={{
+                display: "block",
+                marginTop: 4,
+                fontSize: 11,
+                lineHeight: 1.45,
+                color: RF_TEXT_SECONDARY,
+              }}
+            >
+              Cron envia lembretes quando o cliente fica sem responder — mensagens fixas por passo.
+            </span>
+          </div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 4,
+            flexShrink: 0,
+            paddingTop: 4,
+          }}
         >
-          Guardar regra
-        </button>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: ativo ? "#3fb950" : RF_TEXT_MUTED,
+            }}
+          >
+            {ativo ? "ACTIVO" : "INACTIVO"}
+          </span>
+          <CrmToggleSwitch
+            checked={ativo}
+            disabled={loading || saving || !config}
+            variant="dark"
+            labelledBy="followup-ativo-label"
+            onCheckedChange={(v) => void salvarConfig({ ativo: v })}
+          />
+        </div>
       </div>
 
-      <p style={{ margin: 0, fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
-        Mensagens fixas após silêncio do cliente — sem IA. Condição: lead deste agente, sem humano,
-        não arquivado/ganho/perdido. Use <code style={{ color: RF_ACCENT }}>{"{nome}"}</code> no texto.
-      </p>
+      <div style={rfInnerPanelStyle()}>
+        <div style={{ padding: "12px 14px", borderBottom: `1px solid ${RF_BORDER}` }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: RF_ACCENT }}>
+            Alcance automático
+          </p>
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: RF_TEXT_SECONDARY, lineHeight: 1.45 }}>
+            Com follow-up <strong style={{ color: RF_TEXT_PRIMARY }}>ACTIVO</strong>, o cron percorre{" "}
+            <strong style={{ color: RF_TEXT_PRIMARY }}>todos os leads</strong> deste agente com WhatsApp —
+            excepto arquivados, ganhos, perdidos ou com atendimento humano. Mensagens fixas, sem IA.
+            Use <code style={{ color: RF_ACCENT }}>{"{nome}"}</code> no texto.
+          </p>
+        </div>
+      </div>
+
+      <div style={rfInnerPanelStyle()}>
+        <div style={{ padding: "12px 14px", borderBottom: `1px solid ${RF_BORDER}` }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: RF_ACCENT }}>
+            Regra de arquivamento
+          </p>
+        </div>
+        <div style={{ padding: "12px 14px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+          <label style={{ flex: "1 1 160px" }}>
+            <span style={rfLabelStyle()}>Arquivar lead após (dias)</span>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={config?.arquivar_apos_dias ?? 7}
+              onChange={(e) =>
+                setConfig((c) =>
+                  c ? { ...c, arquivar_apos_dias: Number.parseInt(e.target.value, 10) || 7 } : c
+                )
+              }
+              style={rfInputStyle()}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void salvarConfig({ arquivar_apos_dias: config?.arquivar_apos_dias ?? 7 })}
+            style={{ ...btnSecondaryDark(saving), width: "auto", padding: "9px 14px" }}
+          >
+            Guardar regra
+          </button>
+        </div>
+      </div>
 
       {passosAtivos > 0 && (
         <div
@@ -394,8 +519,8 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
                   marginBottom: 4,
                 }}
               >
-                <span style={{ fontWeight: 800, color: RF_ACCENT, minWidth: 48 }}>
-                  +{formatarAtraso(p.atraso_horas)}
+                <span style={{ fontWeight: 800, color: RF_ACCENT, minWidth: 72 }}>
+                  +{formatarAtrasoPasso(p)}
                 </span>
                 <span style={{ flex: 1 }}>
                   {p.imagem_url ? "🖼 " : ""}
@@ -476,27 +601,39 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
               >
                 Passo {passo.ordem}
               </span>
-              <label
+              <div
                 style={{
-                  display: "inline-flex",
+                  display: "flex",
                   alignItems: "center",
                   gap: 6,
-                  fontSize: 11,
-                  color: RF_TEXT_PRIMARY,
+                  marginLeft: "auto",
                 }}
               >
-                <input
-                  type="checkbox"
+                <span
+                  id={`followup-passo-ativo-${passo.id}`}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: passo.ativo ? "#3fb950" : RF_TEXT_MUTED,
+                  }}
+                >
+                  {passo.ativo ? "ACTIVO" : "INACTIVO"}
+                </span>
+                <CrmToggleSwitch
                   checked={passo.ativo}
-                  onChange={(e) => atualizarPassoLocal(passo.id, { ativo: e.target.checked })}
+                  disabled={saving}
+                  variant="dark"
+                  labelledBy={`followup-passo-ativo-${passo.id}`}
+                  onCheckedChange={(v) => {
+                    atualizarPassoLocal(passo.id, { ativo: v });
+                    void salvarPasso({ ...passo, ativo: v });
+                  }}
                 />
-                Ativo
-              </label>
+              </div>
               <button
                 type="button"
                 onClick={() => void excluirPasso(passo.id)}
                 style={{
-                  marginLeft: "auto",
                   border: "none",
                   background: "transparent",
                   color: "#f85149",
@@ -512,19 +649,35 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
                 gap: 10,
               }}
             >
               <label>
-                <span style={rfLabelStyle()}>Após (horas)</span>
+                <span style={rfLabelStyle()}>Horas</span>
                 <input
                   type="number"
-                  min={1}
+                  min={0}
+                  max={8760}
                   value={passo.atraso_horas}
                   onChange={(e) =>
                     atualizarPassoLocal(passo.id, {
-                      atraso_horas: Number.parseInt(e.target.value, 10) || 1,
+                      atraso_horas: clampHoras(Number.parseInt(e.target.value, 10) || 0),
+                    })
+                  }
+                  style={rfInputStyle()}
+                />
+              </label>
+              <label>
+                <span style={rfLabelStyle()}>Minutos</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={passo.atraso_minutos ?? 0}
+                  onChange={(e) =>
+                    atualizarPassoLocal(passo.id, {
+                      atraso_minutos: clampMinutos(Number.parseInt(e.target.value, 10) || 0),
                     })
                   }
                   style={rfInputStyle()}
@@ -547,6 +700,14 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
                 </select>
               </label>
             </div>
+            <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.4 }}>
+              Envia após{" "}
+              <strong style={{ color: RF_ACCENT }}>{formatarAtrasoPasso(passo)}</strong> sem resposta
+              do cliente (desde a última mensagem recebida).
+              {atrasoTotalMinutos(passo) < 60 ? (
+                <> Ideal para testes em produção.</>
+              ) : null}
+            </p>
 
             <label style={{ display: "block", marginTop: 10 }}>
               <span style={rfLabelStyle()}>Mensagem</span>
@@ -744,14 +905,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         footer={sideoverFooter}
         theme="dark"
         sectionLabel="Follow-up"
+        loading={loading}
       >
-        {loading ? (
-          <p style={{ margin: 0, color: RF_TEXT_MUTED, display: "flex", gap: 8, alignItems: "center" }}>
-            <Loader2 size={16} className="animate-spin" /> A carregar…
-          </p>
-        ) : (
-          painelConteudo
-        )}
+        {painelConteudo}
       </CrmIntegracaoSideoverShell>
     );
   }
@@ -856,14 +1012,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         footer={sideoverFooter}
         theme="dark"
         sectionLabel="Follow-up WhatsApp"
+        loading={loading}
       >
-        {loading ? (
-          <p style={{ margin: 0, color: RF_TEXT_MUTED, display: "flex", gap: 8, alignItems: "center" }}>
-            <Loader2 size={16} className="animate-spin" /> A carregar…
-          </p>
-        ) : (
-          painelConteudo
-        )}
+        {painelConteudo}
       </CrmIntegracaoSideoverShell>
     </>
   );

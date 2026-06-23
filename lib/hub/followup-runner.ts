@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsapp";
 import {
+  atrasoTotalMinutos,
   interpolarTemplateFollowup,
   type HubAgenteFollowupConfig,
   type HubAgenteFollowupPasso,
@@ -15,7 +16,9 @@ type LeadFollowupRow = {
   followup_passo: number | null;
   followup_pausado: boolean | null;
   ultima_msg_cliente_em: string | null;
+  ultimo_contato: string | null;
   ultimo_followup: string | null;
+  criado_em: string | null;
   atualizado_em: string | null;
   metadata: Record<string, unknown> | null;
   agente_responsavel: string | null;
@@ -26,6 +29,7 @@ export type FollowupRunResult = {
   agente_slug: string;
   enviados: number;
   arquivados: number;
+  leads_elegiveis: number;
   erros: string[];
   acoes: string[];
 };
@@ -33,8 +37,10 @@ export type FollowupRunResult = {
 function relogioCliente(lead: LeadFollowupRow): Date {
   const raw =
     lead.ultima_msg_cliente_em ||
+    lead.ultimo_contato ||
     lead.ultimo_followup ||
-    lead.atualizado_em;
+    lead.atualizado_em ||
+    lead.criado_em;
   if (!raw) return new Date(0);
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? new Date(0) : d;
@@ -85,6 +91,7 @@ export async function executarFollowupParaAgente(
     agente_slug: slug,
     enviados: 0,
     arquivados: 0,
+    leads_elegiveis: 0,
     erros: [],
     acoes: [],
   };
@@ -111,7 +118,7 @@ export async function executarFollowupParaAgente(
   const { data: leads, error } = await supabase
     .from("hub_leads_crm")
     .select(
-      "id, nome, telefone, estagio, followup_passo, followup_pausado, ultima_msg_cliente_em, ultimo_followup, atualizado_em, metadata, agente_responsavel, humano_responsavel"
+      "id, nome, telefone, estagio, followup_passo, followup_pausado, ultima_msg_cliente_em, ultimo_contato, ultimo_followup, criado_em, atualizado_em, metadata, agente_responsavel, humano_responsavel"
     )
     .eq("agente_responsavel", slug)
     .eq("followup_pausado", false)
@@ -125,8 +132,10 @@ export async function executarFollowupParaAgente(
   }
 
   const agora = Date.now();
+  const listaLeads = (leads || []) as LeadFollowupRow[];
+  result.leads_elegiveis = listaLeads.length;
 
-  for (const lead of (leads || []) as LeadFollowupRow[]) {
+  for (const lead of listaLeads) {
     const tel = (lead.telefone || "").trim();
     if (!tel) continue;
 
@@ -134,7 +143,8 @@ export async function executarFollowupParaAgente(
     const proximaOrdem = passoAtual + 1;
     const passo = passosAtivos.find((p) => p.ordem === proximaOrdem);
     const inicioSilencio = relogioCliente(lead);
-    const horasSilencio = (agora - inicioSilencio.getTime()) / 3_600_000;
+    const minutosSilencio = (agora - inicioSilencio.getTime()) / 60_000;
+    const horasSilencio = minutosSilencio / 60;
 
     if (!passo && passoAtual >= maxOrdem && horasSilencio >= arquivarHoras) {
       await supabase
@@ -147,7 +157,7 @@ export async function executarFollowupParaAgente(
     }
 
     if (!passo) continue;
-    if (horasSilencio < passo.atraso_horas) continue;
+    if (minutosSilencio < atrasoTotalMinutos(passo)) continue;
 
     const mercado =
       (lead.metadata && typeof lead.metadata.mercado === "string"
@@ -263,6 +273,7 @@ export async function executarFollowupTodosAgentesAtivos(
         agente_slug: cfg.agente_slug,
         enviados: 0,
         arquivados: 0,
+        leads_elegiveis: 0,
         erros: [pErr.message],
         acoes: [],
       });

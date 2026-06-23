@@ -50,6 +50,7 @@ export async function obterOuCriarFollowupConfig(
     agente_slug: agenteSlug,
     ordem: p.ordem,
     atraso_horas: p.atraso_horas,
+    atraso_minutos: 0,
     tipo_conteudo: p.tipo_conteudo,
     texto_template: p.texto_template,
     ativo: true,

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
+import { validarAtrasoPasso } from "@/lib/hub/followup-types";
 
 function db() {
   return createClient(
@@ -45,12 +46,14 @@ export async function POST(
   }
 
   const ordem = Number.parseInt(String(body.ordem ?? ""), 10);
-  const atraso_horas = Number.parseInt(String(body.atraso_horas ?? ""), 10);
+  const atraso_horas = Number.parseInt(String(body.atraso_horas ?? "0"), 10);
+  const atraso_minutos = Number.parseInt(String(body.atraso_minutos ?? "0"), 10);
   if (!Number.isFinite(ordem) || ordem < 1 || ordem > 24) {
     return NextResponse.json({ error: "ordem inválida (1–24)." }, { status: 400 });
   }
-  if (!Number.isFinite(atraso_horas) || atraso_horas < 1 || atraso_horas > 8760) {
-    return NextResponse.json({ error: "atraso_horas inválido." }, { status: 400 });
+  const atrasoErr = validarAtrasoPasso(atraso_horas, atraso_minutos);
+  if (atrasoErr) {
+    return NextResponse.json({ error: atrasoErr }, { status: 400 });
   }
 
   const tipo = parseTipo(body.tipo_conteudo);
@@ -62,6 +65,7 @@ export async function POST(
     agente_slug: slug,
     ordem,
     atraso_horas,
+    atraso_minutos,
     tipo_conteudo: tipo,
     texto_template: body.texto_template != null ? String(body.texto_template) : null,
     imagem_url: body.imagem_url != null ? String(body.imagem_url).trim() || null : null,

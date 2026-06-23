@@ -197,10 +197,8 @@ export async function provisionFollowupCicloWhatsapp(
 
   const rotulo = nomeAgente.trim().slice(0, 80) || agenteSlug;
   const baseCfg: Record<string, unknown> = {
-    ciclo_origem_provisionamento: "wa_preset_v1",
-    dispatch: { api: "atendente", ciclo: "followup" },
-    horas_followup: [24, 48, 72],
-    arquivar_apos_dias: 7,
+    ciclo_origem_provisionamento: "wa_followup_v2",
+    followup_v2_telemetry: true,
   };
 
   const parsedCfg = validateAndNormalizeCicloConfiguracoes(baseCfg);
@@ -209,11 +207,11 @@ export async function provisionFollowupCicloWhatsapp(
   const row: Record<string, unknown> = {
     agente_slug: agenteSlug,
     nome: FOLLOWUP_CICLO_NOME,
-    descricao: `Follow-up proativo para leads inactivos — Agente «${rotulo}». Configure dispatch antes de activar.`,
-    tipo: "programado",
+    descricao: `Registo de execuções do follow-up automático — Agente «${rotulo}». Configure passos em Integrações.`,
+    tipo: "gatilho",
     cron_expressao: null,
-    intervalo_minutos: 60,
-    ativo: false,
+    intervalo_minutos: null,
+    ativo: true,
     configuracoes: parsedCfg.value,
     tenant_id: tenantId || defaultTenantId(),
   };

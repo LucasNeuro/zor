@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { X, type LucideIcon } from "lucide-react";
+import { CrmSideoverLoadingState } from "@/components/crm/CrmSideoverLoadingState";
 import {
   RF_ACCENT,
   RF_BORDER,
@@ -40,6 +41,8 @@ type Props = {
   bodyClassName?: string;
   /** Claro em conversas/negócio no lead; escuro no restante do CRM. */
   theme?: CrmSideoverTheme;
+  loading?: boolean;
+  loadingLabel?: string;
 };
 
 export function CrmRetrofitSideoverShell({
@@ -58,6 +61,8 @@ export function CrmRetrofitSideoverShell({
   widthClass,
   bodyClassName,
   theme = "dark",
+  loading = false,
+  loadingLabel = "A carregar…",
 }: Props) {
   if (!open) return null;
 
@@ -145,7 +150,15 @@ export function CrmRetrofitSideoverShell({
             bodyClassName ?? "min-h-0 flex-1 overflow-y-auto px-6 py-4"
           }
         >
-          {children}
+          {loading ? (
+            <CrmSideoverLoadingState
+              theme={theme}
+              label={loadingLabel}
+              centered
+            />
+          ) : (
+            children
+          )}
         </div>
 
         {footer ? (

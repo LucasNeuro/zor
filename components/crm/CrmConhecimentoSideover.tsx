@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { CrmSideoverLoadingState } from "@/components/crm/CrmSideoverLoadingState";
 import {
   AlertCircle,
   FileJson,
@@ -456,10 +457,7 @@ export function CrmConhecimentoSideover({
             </div>
             <div style={{ padding: "12px 14px" }}>
               {carregando ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: RF_TEXT_MUTED, fontSize: 12 }}>
-                  <Loader2 size={14} className="animate-spin" />
-                  A carregar análise…
-                </div>
+                <CrmSideoverLoadingState label="A carregar análise…" />
               ) : (
                 <ResumoIaPanel resumo={doc.resumo_ia} />
               )}

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
+import { reativarFollowupLeadsAgente } from "@/lib/hub/followup-lead-state";
 
 function db() {
   return createClient(
@@ -99,11 +100,20 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  let leadsReativados = 0;
+  if (patch.ativo === true) {
+    leadsReativados = await reativarFollowupLeadsAgente(supabase, slug);
+  }
+
   const { data: passos } = await supabase
     .from("hub_agente_followup_passo")
     .select("*")
     .eq("config_id", pack.config.id)
     .order("ordem");
 
-  return NextResponse.json({ config: data, passos: passos || [] });
+  return NextResponse.json({
+    config: data,
+    passos: passos || [],
+    leads_reativados: leadsReativados,
+  });
 }

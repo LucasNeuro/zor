@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { WajeBrand } from "@/components/brand/WajeBrand";
+import { PlatformBrandDisplay } from "@/components/brand/PlatformBrandDisplay";
 
 const links = [
   { href: "#produto", label: "Produto" },
@@ -13,7 +13,7 @@ export function LandingNav() {
   return (
     <header className="fixed left-0 right-0 top-0 z-50 px-4 pt-4 md:px-6">
       <div className="waje-glass-nav mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 md:px-6">
-        <WajeBrand layout="horizontal" tone="brand" wordmarkSize="sm" className="items-center" />
+        <PlatformBrandDisplay layout="horizontal" tone="brand" wordmarkSize="sm" className="items-center" />
         <nav className="hidden items-center gap-6 text-[11px] font-semibold uppercase tracking-[0.14em] lg:flex">
           {links.map((l) => (
             <a key={l.href} href={l.href} className="waje-nav-link">

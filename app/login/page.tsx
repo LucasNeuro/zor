@@ -5,8 +5,8 @@ import { Eye, EyeOff, Zap } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
-import { WajeBrand } from "@/components/brand/WajeBrand";
-import { WajeWordmark } from "@/components/brand/WajeWordmark";
+import { PlatformBrandDisplay } from "@/components/brand/PlatformBrandDisplay";
+import { PlatformBrandWordmark } from "@/components/brand/PlatformBrandWordmark";
 import { getSafeReturnPath } from "@/lib/auth/safe-return-path";
 
 function messageForAuthRequestFailure(err: unknown): string {
@@ -183,7 +183,7 @@ function LoginForm() {
         <aside className="flex h-full w-full flex-col border-r border-[#d7e5d3] bg-white/95 md:w-[460px] md:min-w-[420px]">
           <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col justify-center p-6 text-[#1c2a1c] md:p-8">
             <div className="mb-10 flex items-center justify-between">
-              <WajeBrand layout="horizontal" tone="brand" />
+              <PlatformBrandDisplay layout="horizontal" tone="brand" />
               <Link href="/" className="text-xs font-medium text-[#3f5b44] hover:text-[#1f3a24]">
                 Voltar
               </Link>
@@ -280,7 +280,7 @@ function LoginForm() {
             </span>
             <div>
               <p className="text-xs font-bold">
-                <WajeWordmark size="sm" tone="brand" />
+                <PlatformBrandWordmark size="sm" tone="brand" />
               </p>
               <p className="text-[11px] text-[#527055]">Atendimento com IA</p>
             </div>

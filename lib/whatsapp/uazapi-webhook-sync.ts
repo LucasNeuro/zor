@@ -58,11 +58,27 @@ function acceptOriginCandidate(raw: string, isProd: boolean): string | null {
 }
 
 /**
+ * White-label: webhook UAZAPI deve ficar num único domínio canónico (ex. waje.com.br),
+ * mesmo quando o CRM é acedido por synkronia.com.br ou outro revendedor.
+ */
+function pinnedWebhookPublicOrigin(isProd: boolean): string | null {
+  const raw =
+    process.env.WHATSAPP_WEBHOOK_PUBLIC_ORIGIN?.trim() ||
+    process.env.WEBHOOK_PUBLIC_ORIGIN?.trim();
+  if (!raw) return null;
+  return acceptOriginCandidate(raw, isProd);
+}
+
+/**
  * Origem pública para webhook WhatsApp (UAZAPI precisa alcançar esta URL).
- * Em produção ignora localhost no env e prioriza o host real do pedido (Render/CDN).
+ * Com WHATSAPP_WEBHOOK_PUBLIC_ORIGIN fixa o domínio canónico (recomendado em white-label).
+ * Caso contrário, em produção prioriza x-forwarded-host e depois env.
  */
 export function pickPublicAppOrigin(request: NextRequest): string | null {
   const isProd = process.env.NODE_ENV === "production";
+
+  const pinned = pinnedWebhookPublicOrigin(isProd);
+  if (pinned) return pinned;
 
   if (isProd) {
     const forwarded = originFromForwardedHeaders(request);

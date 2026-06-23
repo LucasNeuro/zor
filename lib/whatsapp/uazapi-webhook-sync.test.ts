@@ -36,6 +36,21 @@ describe("pickPublicAppOrigin", () => {
     expect(pickPublicAppOrigin(req)).toBe("http://localhost:3001");
   });
 
+  it("WHATSAPP_WEBHOOK_PUBLIC_ORIGIN fixa domínio canónico (white-label)", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("WHATSAPP_WEBHOOK_PUBLIC_ORIGIN", "https://waje.com.br");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://synkronia.com.br");
+
+    const req = new NextRequest("https://synkronia.com.br/api/hub/agentes/x/uazapi", {
+      headers: {
+        "x-forwarded-host": "synkronia.com.br",
+        "x-forwarded-proto": "https",
+      },
+    });
+
+    expect(pickPublicAppOrigin(req)).toBe("https://waje.com.br");
+  });
+
   it("em produção rejeita localhost no env sem forwarded host", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3001");

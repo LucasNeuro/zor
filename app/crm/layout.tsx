@@ -17,8 +17,8 @@ import {
   type CrmNavGroup,
 } from "@/lib/crm-nav-groups";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
-import { WajeLogoMark } from "@/components/brand/WajeLogoMark";
-import { WajeWordmark } from "@/components/brand/WajeWordmark";
+import { PlatformBrandLogo } from "@/components/brand/PlatformBrandLogo";
+import { PlatformBrandWordmark } from "@/components/brand/PlatformBrandWordmark";
 import { CrmQueryProvider } from "@/components/crm/CrmQueryProvider";
 import { CrmLogoutOverlayProvider } from "@/lib/crm/logout-overlay-context";
 import { CrmFeedbackProvider } from "@/components/crm/CrmFeedbackProvider";
@@ -567,9 +567,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                       className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl"
                       style={{ background: "#0b1f10", border: "1px solid rgba(146,255,0,0.35)" }}
                     >
-                      <WajeLogoMark size={20} />
+                      <PlatformBrandLogo size={20} />
                     </div>
-                    {sidebarExpanded && <WajeWordmark size="sm" tone="brand" />}
+                    {sidebarExpanded && <PlatformBrandWordmark size="sm" tone="brand" />}
                   </Link>
                   </div>
 
@@ -654,9 +654,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                     className="flex h-7 w-7 items-center justify-center rounded-lg"
                     style={{ background: "#0b1f10" }}
                   >
-                    <WajeLogoMark size={16} />
+                    <PlatformBrandLogo size={16} />
             </div>
-                  <WajeWordmark size="sm" tone="brand" />
+                  <PlatformBrandWordmark size="sm" tone="brand" />
                 </Link>
           <button
             type="button"
@@ -730,9 +730,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                 >
                   <Link href="/crm" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2.5 no-underline">
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "#0b1f10" }}>
-                      <WajeLogoMark size={20} />
+                      <PlatformBrandLogo size={20} />
           </div>
-                    <WajeWordmark tone="brand" />
+                    <PlatformBrandWordmark tone="brand" />
                   </Link>
                   <button
                     type="button"

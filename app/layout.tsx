@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import dynamic from "next/dynamic";
 import { Poppins, Playfair_Display, Space_Mono } from "next/font/google";
+import { PlatformBrandProvider } from "@/components/brand/PlatformBrandProvider";
 import "./globals.css";
 
 /** Reservado — shell mobile Obra10 desativado; componente repassa children. */
@@ -101,7 +102,9 @@ export default function RootLayout({
       className={`${poppins.variable} ${playfair.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className={`${poppins.className} min-h-full flex flex-col`}>
-        <MobileDetector>{children}</MobileDetector>
+        <PlatformBrandProvider>
+          <MobileDetector>{children}</MobileDetector>
+        </PlatformBrandProvider>
         <IOSInstallBanner />
       </body>
     </html>

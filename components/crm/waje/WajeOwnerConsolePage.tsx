@@ -20,9 +20,10 @@ import { WajeOwnerUsuarioSideover } from "@/components/crm/waje/WajeOwnerUsuario
 import { sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import type { PainelViewMode } from "@/lib/crm/painel-view";
 import type { WajeOwnerTab } from "@/components/crm/waje/waje-owner-theme";
+import { WajeOwnerPlataformasTab } from "@/components/crm/waje/WajeOwnerPlataformasTab";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
 
-const VALID_TABS: WajeOwnerTab[] = ["tenants", "agentes", "pagamentos", "usuarios", "leads"];
+const VALID_TABS: WajeOwnerTab[] = ["tenants", "agentes", "pagamentos", "usuarios", "leads", "plataformas"];
 
 function parseTab(v: string | null): WajeOwnerTab {
   if (v && (VALID_TABS as string[]).includes(v)) return v as WajeOwnerTab;
@@ -49,6 +50,10 @@ const TAB_COPY: Record<WajeOwnerTab, { label: string; description: string }> = {
   leads: {
     label: "Leads landing",
     description: "Interessados captados na landing (waje_landing_interesse).",
+  },
+  plataformas: {
+    label: "White-label",
+    description: "Marcas e domínios (Waje, Synkron.IA, revendedores) — logos, cores e hostnames.",
   },
 };
 
@@ -176,6 +181,14 @@ export function WajeOwnerConsolePage() {
   }, [tabParam, viewParam]);
 
   const metrics = useMemo(() => {
+    if (tab === "plataformas") {
+      return [
+        { label: "White-label", valor: "Marcas", sub: "Waje + revendedores", tone: "brand" as const, seed: 21 },
+        { label: "Domínios", valor: "DNS", sub: "Render + registro.br", tone: "success" as const, seed: 22 },
+        { label: "Webhook WA", valor: "waje.com.br", sub: "Não alterar por marca", tone: "warning" as const, seed: 23 },
+        { label: "Owner", valor: "Waje", sub: "Plataforma principal", tone: "muted" as const, seed: 24 },
+      ];
+    }
     if (tab === "tenants") {
       const ativos = tenants.filter((t) => t.ativo).length;
       const emTrial = tenants.filter(
@@ -362,16 +375,24 @@ export function WajeOwnerConsolePage() {
             description={TAB_COPY[tab].description}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
-            showViewToggle
+            showViewToggle={tab !== "plataformas"}
             periodo="7d"
             onPeriodoChange={() => {}}
             showPeriodo={false}
-            onRefresh={viewMode === "paineis" ? () => void carregar({ silent: true }) : undefined}
+            onRefresh={
+              tab === "plataformas"
+                ? undefined
+                : viewMode === "paineis"
+                  ? () => void carregar({ silent: true })
+                  : undefined
+            }
             refreshing={refreshing}
             dark={false}
           />
 
-          {viewMode === "paineis" ? (
+          {tab === "plataformas" ? (
+            <WajeOwnerPlataformasTab />
+          ) : viewMode === "paineis" ? (
             <WajeOwnerPaineis
               tab={tab}
               tenants={tenants}

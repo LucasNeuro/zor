@@ -1175,11 +1175,8 @@ export default function AgentePage() {
                     color: mistralProvisionar ? CRM_ACCENT : "#484f58",
                   }}
                 >
-                  {syncMistralLoading ? "A sincronizar…" : "Sincronizar na nuvem agora"}
+                  {syncMistralLoading ? "A sincronizar…" : "Sincronizar agora"}
                 </button>
-                <p style={{ color: "#484f58", fontSize: 11, margin: 0, lineHeight: 1.45 }}>
-                  A sincronização na nuvem requer a opção de provisionamento activa.
-                </p>
                 {botaoSalvar}
               </div>
             ) : null}

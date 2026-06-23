@@ -60,7 +60,7 @@ function ferramentasThemeTokens(theme: FerramentasIaTheme) {
       listItem: RF_TEXT_SECONDARY,
       syncBoxBg: "rgba(6, 13, 8, 0.85)",
       syncBoxBorder: RF_BORDER,
-      sectionTitle: "Funções do modelo na conversa",
+      sectionTitle: "Funções do agente",
     };
   }
   return {
@@ -82,7 +82,7 @@ function ferramentasThemeTokens(theme: FerramentasIaTheme) {
     listItem: "#5d7a67",
     syncBoxBg: "#ffffff",
     syncBoxBorder: "#dcebd8",
-    sectionTitle: "FUNÇÕES DO MODELO NO HUB (MISTRAL)",
+    sectionTitle: "Funções do agente",
   };
 }
 
@@ -264,33 +264,8 @@ export function AgenteFerramentasIaBlock({
       }}
     >
       {!modoCompacto ? (
-        <p style={{ color: t.heading, fontSize: 11, fontWeight: 700, margin: "0 0 4px", letterSpacing: 0.06 }}>
+        <p style={{ color: t.heading, fontSize: 13, fontWeight: 700, margin: "0 0 12px" }}>
           {t.sectionTitle}
-        </p>
-      ) : null}
-
-      <ol
-        style={{
-          color: t.muted,
-          fontSize: 12,
-          margin: modoCompacto ? "0 0 12px" : "0 0 14px",
-          lineHeight: 1.55,
-          paddingLeft: 18,
-        }}
-      >
-        <li style={{ marginBottom: 6 }}>
-          Use os <strong style={{ color: t.section }}>interruptores</strong> para o modelo pedir dados ao servidor com{" "}
-          <strong style={{ color: t.section }}>cliente na sessão</strong>.
-        </li>
-        <li style={{ marginBottom: 6 }}>
-          Só as funções <strong style={{ color: t.section }}>activas</strong> são usadas durante a conversa.
-        </li>
-        <li>Opcional: sincronizar o agente na nuvem ao guardar.</li>
-      </ol>
-
-      {destacarWhatsApp ? (
-        <p style={{ color: "#c9a24a", fontSize: 11, margin: "0 0 10px", lineHeight: 1.45 }}>
-          Canal WhatsApp: convém activar funções sobre o cliente para não inventar estágio ou responsável.
         </p>
       ) : null}
 
@@ -308,8 +283,8 @@ export function AgenteFerramentasIaBlock({
             lineHeight: 1.45,
           }}
         >
-          O motor está ligado mas <strong>nenhuma função está activa</strong>. Active pelo menos um interruptor na
-          lista ou use o atalho abaixo.
+          O motor está ligado mas <strong>nenhuma função está activa</strong>. Active pelo menos uma opção abaixo
+          {destacarWhatsApp ? " ou use o atalho recomendado." : "."}
         </div>
       ) : null}
 
@@ -331,9 +306,6 @@ export function AgenteFerramentasIaBlock({
           >
             Activar pacote recomendado (WhatsApp)
           </button>
-          <span style={{ display: "block", color: "#6e7781", fontSize: 11, marginTop: 6 }}>
-            Liga o motor e activa resumo, memórias e registo de nota na timeline.
-          </span>
         </div>
       ) : null}
 
@@ -358,9 +330,7 @@ export function AgenteFerramentasIaBlock({
             Funções durante a conversa
           </span>
           <span style={{ display: "block", color: t.body, fontWeight: 400, fontSize: 12, marginTop: 2 }}>
-            Com cliente na sessão ·{" "}
-            <strong style={{ color: motorSemTools ? "#f85149" : t.body }}>{nAtivas}</strong> de{" "}
-            {nSlots} funções activas
+            <strong style={{ color: motorSemTools ? "#f85149" : t.body }}>{nAtivas}</strong> de {nSlots} activas
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
@@ -394,10 +364,10 @@ export function AgenteFerramentasIaBlock({
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <span id="label-mistral-sync" style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
-            Sincronizar na nuvem ao guardar
+            Sincronizar ao guardar
           </span>
           <span style={{ display: "block", color: t.body, fontWeight: 400, fontSize: 12, marginTop: 2 }}>
-            Actualiza o agente na nuvem com identidade, conhecimento e {nAtivas} função(ões) activa(s).
+            Mantém o agente actualizado com as alterações desta ficha.
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
@@ -414,7 +384,7 @@ export function AgenteFerramentasIaBlock({
       </div>
 
       <p style={{ color: t.heading, fontSize: 11, fontWeight: 700, margin: "0 0 10px", letterSpacing: 0.04 }}>
-        FUNÇÕES DISPONÍVEIS
+        Capacidades
       </p>
 
       <>
@@ -927,11 +897,11 @@ export function AgenteFerramentasIaBlock({
           }}
         >
           <p style={{ color: t.heading, fontSize: 11, fontWeight: 700, margin: "0 0 6px" }}>
-            Estado da sincronização
+            Sincronização
           </p>
           {mistralAgentId ? (
             <p style={{ color: t.body, fontSize: 11, margin: 0 }}>
-              Sincronizado na nuvem
+              Agente sincronizado
             </p>
           ) : null}
           {mistralSyncEm ? (

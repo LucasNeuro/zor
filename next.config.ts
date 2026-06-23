@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
           ...new Set([
             "localhost",
             "127.0.0.1",
+            "synkronia.lvh.me",
+            "synkronia.local",
             ...(process.env.NEXT_DEV_ALLOWED_ORIGINS?.split(",")
               .map((s) => s.trim())
               .filter(Boolean) ?? []),

@@ -17,8 +17,7 @@ import {
   type CrmNavGroup,
 } from "@/lib/crm-nav-groups";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
-import { PlatformBrandLogo } from "@/components/brand/PlatformBrandLogo";
-import { PlatformBrandWordmark } from "@/components/brand/PlatformBrandWordmark";
+import { CrmSidebarBrand } from "@/components/brand/CrmSidebarBrand";
 import { CrmQueryProvider } from "@/components/crm/CrmQueryProvider";
 import { CrmLogoutOverlayProvider } from "@/lib/crm/logout-overlay-context";
 import { CrmFeedbackProvider } from "@/components/crm/CrmFeedbackProvider";
@@ -78,14 +77,16 @@ function NavItemRow({
         style={{
           background: active ? SB.itemActiveBg : "transparent",
           color: active ? SB.itemActiveText : SB.itemText,
-          borderLeft: active ? `3px solid ${SB.itemActiveBorder}` : "3px solid transparent",
+          borderLeft: active
+            ? "3px solid var(--platform-brand-primary, #3f9848)"
+            : "3px solid transparent",
         }}
       >
         <Icon
           size={17}
           strokeWidth={active ? 2 : 1.75}
           className="flex-shrink-0 transition-colors"
-          style={{ color: active ? SB.itemActiveBorder : SB.itemTextMuted }}
+          style={{ color: active ? "var(--platform-brand-primary, #3f9848)" : SB.itemTextMuted }}
           aria-hidden
         />
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -557,20 +558,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                     justifyContent: sidebarExpanded ? "space-between" : "center",
                   }}
                 >
-                  {/* Brand — same icon always, expanded shows label too */}
-                  <Link
-                    href="/crm"
-                    className="flex items-center gap-2.5 no-underline"
-                    style={{ justifyContent: sidebarExpanded ? "flex-start" : "center", width: "100%" }}
-                  >
-                    <div
-                      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl"
-                      style={{ background: "#0b1f10", border: "1px solid rgba(146,255,0,0.35)" }}
-                    >
-                      <PlatformBrandLogo size={20} />
-                    </div>
-                    {sidebarExpanded && <PlatformBrandWordmark size="sm" tone="brand" />}
-                  </Link>
+                  <CrmSidebarBrand expanded={sidebarExpanded} />
                   </div>
 
                 {/* Navigation */}
@@ -649,15 +637,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           >
                   <ChevronRight size={20} className="rotate-180" aria-hidden />
           </button>
-                <Link href="/crm" className="flex items-center gap-2 no-underline">
-                  <div
-                    className="flex h-7 w-7 items-center justify-center rounded-lg"
-                    style={{ background: "#0b1f10" }}
-                  >
-                    <PlatformBrandLogo size={16} />
-            </div>
-                  <PlatformBrandWordmark size="sm" tone="brand" />
-                </Link>
+                <CrmSidebarBrand expanded />
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
@@ -728,12 +708,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   className="flex flex-shrink-0 items-center justify-between gap-2 border-b px-4 py-3.5"
                   style={{ borderColor: SB.border }}
                 >
-                  <Link href="/crm" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2.5 no-underline">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "#0b1f10" }}>
-                      <PlatformBrandLogo size={20} />
-          </div>
-                    <PlatformBrandWordmark tone="brand" />
-                  </Link>
+                  <CrmSidebarBrand expanded />
                   <button
                     type="button"
                     onClick={() => setMobileMenuOpen(false)}

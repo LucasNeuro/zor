@@ -27,6 +27,16 @@ export function usePlatformBrand(): PlatformBrandContextValue {
   return useContext(PlatformBrandContext);
 }
 
+export function useBrandNome(): string {
+  const { brand } = usePlatformBrand();
+  return brand?.nome?.trim() || "Waje";
+}
+
+export function useIsWhiteLabelBrand(): boolean {
+  const { brand } = usePlatformBrand();
+  return Boolean(brand && !brand.isPrincipal);
+}
+
 function applyBrandToDocument(brand: PlatformBrandPublic | null) {
   if (typeof document === "undefined" || !brand) return;
   const root = document.documentElement;
@@ -45,9 +55,15 @@ function applyBrandToDocument(brand: PlatformBrandPublic | null) {
   }
 }
 
-export function PlatformBrandProvider({ children }: { children: ReactNode }) {
-  const [brand, setBrand] = useState<PlatformBrandPublic | null>(null);
-  const [loading, setLoading] = useState(true);
+export function PlatformBrandProvider({
+  children,
+  initialBrand = null,
+}: {
+  children: ReactNode;
+  initialBrand?: PlatformBrandPublic | null;
+}) {
+  const [brand, setBrand] = useState<PlatformBrandPublic | null>(initialBrand);
+  const [loading, setLoading] = useState(!initialBrand);
 
   const refresh = useCallback(async () => {
     try {
@@ -65,8 +81,9 @@ export function PlatformBrandProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (initialBrand) applyBrandToDocument(initialBrand);
     void refresh();
-  }, [refresh]);
+  }, [initialBrand, refresh]);
 
   const value = useMemo(() => ({ brand, loading, refresh }), [brand, loading, refresh]);
 

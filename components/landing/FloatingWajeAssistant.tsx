@@ -3,10 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, RotateCcw, Send, Sparkles, X } from "lucide-react";
-import { WajeLogoMark } from "@/components/brand/WajeLogoMark";
+import { PlatformBrandLogo } from "@/components/brand/PlatformBrandLogo";
+import { useBrandNome } from "@/components/brand/PlatformBrandProvider";
+import {
+  miniBotIntro,
+  miniBotSuccessMessage,
+  miniBotTeaserCopy,
+} from "@/lib/landing-brand-copy";
 import {
   labelOpcao,
-  WAJE_MINI_BOT_INTRO,
   WAJE_MINI_BOT_PERGUNTAS,
   type WajeMiniBotResposta,
 } from "@/lib/landing/waje-mini-bot-flow";
@@ -18,13 +23,15 @@ type ChatMsg = { role: "bot" | "user"; text: string };
 type Fase = "perguntas" | "formulario" | "sucesso";
 
 export function FloatingWajeAssistant() {
+  const brandNome = useBrandNome();
+  const introText = miniBotIntro(brandNome);
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [showTeaser, setShowTeaser] = useState(false);
   const [fase, setFase] = useState<Fase>("perguntas");
   const [perguntaIdx, setPerguntaIdx] = useState(0);
   const [respostas, setRespostas] = useState<WajeMiniBotResposta[]>([]);
-  const [mensagens, setMensagens] = useState<ChatMsg[]>([{ role: "bot", text: WAJE_MINI_BOT_INTRO }]);
+  const [mensagens, setMensagens] = useState<ChatMsg[]>([{ role: "bot", text: introText }]);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -73,11 +80,20 @@ export function FloatingWajeAssistant() {
     }
   }, []);
 
+  useEffect(() => {
+    setMensagens((m) => {
+      if (m.length === 1 && m[0]?.role === "bot") {
+        return [{ role: "bot", text: introText }];
+      }
+      return m;
+    });
+  }, [introText]);
+
   const reiniciar = useCallback(() => {
     setFase("perguntas");
     setPerguntaIdx(0);
     setRespostas([]);
-    setMensagens([{ role: "bot", text: WAJE_MINI_BOT_INTRO }]);
+    setMensagens([{ role: "bot", text: introText }]);
     setNome("");
     setEmail("");
     setTelefone("");
@@ -85,7 +101,7 @@ export function FloatingWajeAssistant() {
     setMensagem("");
     setErro(null);
     iniciadoRef.current = false;
-  }, []);
+  }, [introText]);
 
   const abrir = useCallback(() => {
     dismissTeaser(false);
@@ -180,7 +196,7 @@ export function FloatingWajeAssistant() {
       setFase("sucesso");
       setMensagens((m) => [
         ...m,
-        { role: "bot", text: "Obrigado! ✅ Registramos seu interesse. Em breve alguém da Waje fala com você." },
+        { role: "bot", text: miniBotSuccessMessage(brandNome) },
       ]);
     } catch {
       setErro("Erro de conexão. Verifique a internet e tente de novo.");
@@ -194,16 +210,21 @@ export function FloatingWajeAssistant() {
   const ui = (
     <div className="waje-float-root flex flex-col items-end gap-3">
       {open ? (
-        <div className="waje-mini-bot-panel flex max-h-[min(520px,78dvh)] w-[min(340px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-[#92ff00]/25 bg-[#0b1f10] shadow-[0_24px_64px_rgba(0,0,0,0.35)]">
-          <div className="flex shrink-0 items-center justify-between border-b border-[#92ff00]/15 bg-[#071209] px-4 py-3">
+        <div className="waje-mini-bot-panel flex max-h-[min(520px,78dvh)] w-[min(340px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_25%,transparent)] bg-[#0b1f10] shadow-[0_24px_64px_rgba(0,0,0,0.35)]">
+          <div className="flex shrink-0 items-center justify-between border-b border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_15%,transparent)] bg-[#071209] px-4 py-3">
             <div className="flex items-center gap-2.5">
-              <div className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[#92ff00]/30 bg-[#0b1f10]">
-                <WajeLogoMark size={22} />
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#071209] bg-[#92ff00]" />
+              <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_30%,transparent)] bg-[#0b1f10]">
+                <PlatformBrandLogo size={22} variant="favicon" />
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#071209]"
+                  style={{ background: "var(--platform-brand-accent, #92ff00)" }}
+                />
               </div>
               <div className="text-left">
-                <span className="block text-sm font-bold leading-tight text-white">Assistente Waje</span>
-                <span className="text-[11px] font-medium text-[#92ff00]">Online · resposta rápida</span>
+                <span className="block text-sm font-bold leading-tight text-white">Assistente {brandNome}</span>
+                <span className="text-[11px] font-medium text-[var(--platform-brand-accent,#92ff00)]">
+                  Online · resposta rápida
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -237,9 +258,14 @@ export function FloatingWajeAssistant() {
                 <div
                   className={`max-w-[88%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
                     msg.role === "user"
-                      ? "rounded-br-sm bg-[#92ff00] text-[#061008]"
+                      ? "rounded-br-sm text-[#061008]"
                       : "rounded-bl-sm border border-white/10 bg-white/8 text-white/90"
                   }`}
+                  style={
+                    msg.role === "user"
+                      ? { background: "var(--platform-brand-accent, #92ff00)" }
+                      : undefined
+                  }
                 >
                   {msg.text}
                 </div>
@@ -253,7 +279,7 @@ export function FloatingWajeAssistant() {
                     key={op.id}
                     type="button"
                     onClick={() => escolherOpcao(op.id, op.label)}
-                    className="rounded-full border border-[#92ff00]/30 bg-[#92ff00]/10 px-3 py-2 text-left text-xs font-medium text-[#c8ffaa] transition hover:border-[#92ff00]/55 hover:bg-[#92ff00]/18"
+                    className="rounded-full border border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_30%,transparent)] bg-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_10%,transparent)] px-3 py-2 text-left text-xs font-medium text-[#c8ffaa] transition hover:border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_55%,transparent)] hover:bg-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_18%,transparent)]"
                   >
                     {op.label}
                   </button>
@@ -303,7 +329,7 @@ export function FloatingWajeAssistant() {
                 <button
                   type="submit"
                   disabled={enviando}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-[#92ff00] py-2.5 text-xs font-bold text-[#061008] transition hover:brightness-110 disabled:opacity-60"
+                  className="waje-btn-glow flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-xs font-bold transition hover:brightness-110 disabled:opacity-60"
                 >
                   {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                   Enviar interesse
@@ -325,18 +351,16 @@ export function FloatingWajeAssistant() {
             <X className="h-3.5 w-3.5" />
           </button>
           <div className="mb-2 flex items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#92ff00]/35 bg-[#0b1f10]">
-              <WajeLogoMark size={18} />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_35%,transparent)] bg-[#0b1f10]">
+              <PlatformBrandLogo size={18} variant="favicon" />
             </div>
             <p className="text-sm font-bold leading-tight text-[#0b1f10]">Olá! 👋 Precisa de ajuda?</p>
           </div>
-          <p className="mb-3 text-xs leading-relaxed text-[#506a54]">
-            Responda 3 perguntas rápidas e deixe seu contato — a equipe Waje retorna em breve.
-          </p>
+          <p className="mb-3 text-xs leading-relaxed text-[#506a54]">{miniBotTeaserCopy(brandNome)}</p>
           <button
             type="button"
             onClick={abrir}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-[#92ff00] py-2 text-xs font-bold text-[#061008] transition hover:brightness-110"
+            className="waje-btn-glow inline-flex w-full items-center justify-center gap-1.5 rounded-full py-2 text-xs font-bold transition hover:brightness-110"
           >
             <Sparkles className="h-3.5 w-3.5" />
             Iniciar conversa
@@ -350,10 +374,10 @@ export function FloatingWajeAssistant() {
           type="button"
           onClick={() => (open ? fechar() : abrir())}
           className="waje-float-btn relative flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full"
-          aria-label={open ? "Fechar assistente" : "Abrir assistente Waje"}
+          aria-label={open ? "Fechar assistente" : `Abrir assistente ${brandNome}`}
           aria-expanded={open}
         >
-          <WajeLogoMark size={30} />
+          <PlatformBrandLogo size={30} variant="favicon" />
         </button>
       </div>
     </div>

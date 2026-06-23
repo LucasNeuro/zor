@@ -57,7 +57,14 @@ const SYNKRON_STATIC: PlatformBrand = {
   slug: "synkron",
   nome: "Synkron.IA",
   tagline: "Inteligência sincronizada",
-  dominios: ["synkronia.com.br", "www.synkronia.com.br"],
+  dominios: [
+    "synkronia.com.br",
+    "www.synkronia.com.br",
+    "synkronia.lvh.me",
+    "synkronia.lvh.me:3001",
+    "synkronia.local",
+    "synkronia.local:3001",
+  ],
   logoUrl: "/brands/synkron/logo.png",
   faviconUrl: "/brands/synkron/logo.png",
   corPrimaria: "#3f9848",
@@ -73,6 +80,22 @@ let cacheAt = 0;
 type CachedBrand = PlatformBrand & { ativo: boolean };
 let cacheBrands: CachedBrand[] | null = null;
 const CACHE_MS = 60_000;
+
+/** Domínios extras só em `npm run dev` — testar Synkron sem editar hosts (lvh.me → 127.0.0.1). */
+const DEV_SYNKRON_EXTRA_DOMAINS = [
+  "synkronia.lvh.me",
+  "synkronia.lvh.me:3001",
+  "synkronia.local",
+  "synkronia.local:3001",
+] as const;
+
+function mergeDevSynkronDomains(brand: PlatformBrand): PlatformBrand {
+  if (process.env.NODE_ENV !== "development" || brand.slug !== "synkron") return brand;
+  return {
+    ...brand,
+    dominios: [...new Set([...brand.dominios, ...DEV_SYNKRON_EXTRA_DOMAINS])],
+  };
+}
 
 export function normalizeHostname(host: string): string {
   return host.split(",")[0]?.trim().toLowerCase() ?? "";
@@ -125,7 +148,8 @@ export function toPlatformBrandPublic(brand: PlatformBrand): PlatformBrandPublic
 export function resolveStaticPlatformBrand(host: string): PlatformBrand {
   const norm = normalizeHostname(host);
   for (const brand of STATIC_BRANDS) {
-    if (brand.dominios.some((d) => hostMatchesDomain(norm, d))) return brand;
+    const candidate = mergeDevSynkronDomains(brand);
+    if (candidate.dominios.some((d) => hostMatchesDomain(norm, d))) return candidate;
   }
   const fallbackSlug = process.env.PLATFORM_BRAND_FALLBACK_SLUG?.trim() || "waje";
   return STATIC_BRANDS.find((b) => b.slug === fallbackSlug) ?? WAJE_STATIC;
@@ -161,7 +185,10 @@ export async function resolvePlatformBrand(host: string): Promise<PlatformBrand>
   const norm = normalizeHostname(host);
   const fromDb = await loadAllBrandsFromDb();
   if (fromDb?.length) {
-    const match = fromDb.find((b) => b.dominios.some((d) => hostMatchesDomain(norm, d)));
+    const match = fromDb.find((b) => {
+      const candidate = mergeDevSynkronDomains(b);
+      return candidate.dominios.some((d) => hostMatchesDomain(norm, d));
+    });
     if (match) {
       if (!match.ativo) return enrichPlatformBrandAssets(crmDb(), principalBrand(fromDb));
       const { ativo: _ativo, ...brand } = match;
@@ -173,10 +200,13 @@ export async function resolvePlatformBrand(host: string): Promise<PlatformBrand>
 }
 
 export function hostFromRequest(request: NextRequest | { headers: Headers }): string {
-  const h = request.headers;
+  return hostFromHeaders(request.headers);
+}
+
+export function hostFromHeaders(headers: Headers): string {
   return (
-    h.get("x-forwarded-host")?.split(",")[0]?.trim() ||
-    h.get("host")?.trim() ||
+    headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+    headers.get("host")?.trim() ||
     ""
   );
 }
@@ -184,5 +214,5 @@ export function hostFromRequest(request: NextRequest | { headers: Headers }): st
 export async function resolvePlatformBrandFromRequest(
   request: NextRequest | { headers: Headers }
 ): Promise<PlatformBrand> {
-  return resolvePlatformBrand(hostFromRequest(request));
+  return resolvePlatformBrand(hostFromHeaders(request.headers));
 }

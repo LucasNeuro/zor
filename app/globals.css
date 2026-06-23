@@ -212,6 +212,49 @@ body {
   box-shadow: 0 8px 32px rgba(146, 255, 0, 0.45), 0 4px 16px rgba(11, 31, 16, 0.1);
 }
 
+html[data-white-label="1"] .waje-btn-glow {
+  background: linear-gradient(
+    135deg,
+    var(--platform-brand-accent, #92ff00) 0%,
+    var(--platform-brand-primary, #3f9848) 100%
+  );
+  box-shadow: 0 4px 24px color-mix(in srgb, var(--platform-brand-accent, #92ff00) 35%, transparent);
+}
+
+html[data-white-label="1"] .waje-btn-glow:hover {
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--platform-brand-accent, #92ff00) 45%, transparent);
+}
+
+html[data-white-label="1"] .waje-section-label {
+  color: var(--platform-brand-primary, #3f9848);
+}
+
+html[data-white-label="1"] .waje-nav-link:hover {
+  color: var(--platform-brand-primary, #3f9848);
+}
+
+html[data-white-label="1"] .waje-hero-badge {
+  border-color: color-mix(in srgb, var(--platform-brand-accent, #92ff00) 45%, transparent);
+  background: color-mix(in srgb, var(--platform-brand-accent, #92ff00) 14%, transparent);
+}
+
+html[data-white-label="1"] .waje-float-btn {
+  border-color: color-mix(in srgb, var(--platform-brand-accent, #92ff00) 55%, transparent);
+  box-shadow:
+    0 0 0 0 color-mix(in srgb, var(--platform-brand-accent, #92ff00) 35%, transparent),
+    0 8px 28px rgba(11, 31, 16, 0.35);
+}
+
+html[data-white-label="1"] .waje-float-btn:hover {
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--platform-brand-accent, #92ff00) 12%, transparent),
+    0 12px 32px rgba(11, 31, 16, 0.4);
+}
+
+html[data-white-label="1"] .waje-float-btn-ring {
+  border-color: color-mix(in srgb, var(--platform-brand-accent, #92ff00) 35%, transparent);
+}
+
 .waje-btn-ghost {
   border: 1px solid var(--waje-border);
   background: rgba(255, 255, 255, 0.75);

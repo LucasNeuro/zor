@@ -4,7 +4,8 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { WajeBrand } from "@/components/brand/WajeBrand";
+import { PlatformBrandDisplay } from "@/components/brand/PlatformBrandDisplay";
+import { useBrandNome } from "@/components/brand/PlatformBrandProvider";
 import { formatCep, formatCnpj, formatCpf, isValidCnpj, isValidCpf, onlyDigits } from "@/lib/brasil-docs";
 import { supabase } from "@/lib/supabase/client";
 import { getSafeReturnPath } from "@/lib/auth/safe-return-path";
@@ -102,6 +103,7 @@ const INITIAL_FORM: FormData = {
 
 export default function CadastroPage() {
   const router = useRouter();
+  const brandNome = useBrandNome();
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
@@ -339,7 +341,7 @@ export default function CadastroPage() {
         <aside className="flex h-full w-full flex-col overflow-hidden border-r border-[#d7e5d3] bg-white/95 md:w-[560px] md:min-w-[500px]">
           <div className="shrink-0 border-b border-[#e8f0e6] px-6 pb-4 pt-6 md:px-8 md:pt-8">
             <div className="mx-auto flex w-full max-w-[540px] items-center justify-between">
-              <WajeBrand layout="horizontal" tone="brand" className="items-start text-left" />
+              <PlatformBrandDisplay layout="horizontal" tone="brand" className="items-start text-left" />
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-[#3f5b44] hover:text-[#1f3a24]">
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
@@ -595,10 +597,10 @@ export default function CadastroPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-[#92ff00]/35 bg-[#92ff00] px-5 text-sm font-bold text-[#0a1206] transition hover:brightness-95 disabled:opacity-60"
+                  className="waje-btn-glow inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold transition hover:brightness-95 disabled:opacity-60"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                  {submitting ? "Criando conta..." : "Criar conta Waje"}
+                  {submitting ? "Criando conta..." : `Criar conta ${brandNome}`}
                 </button>
               </div>
 

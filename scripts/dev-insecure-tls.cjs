@@ -26,6 +26,7 @@ function listLanIpv4() {
 
 /** Wildcards suportados pelo Next (isCsrfOriginAllowed) — cobre IP DHCP na LAN. */
 const PRIVATE_LAN_ORIGIN_PATTERNS = ["192.168.*.*", "10.*.*.*"];
+const LOCAL_WHITE_LABEL_DEV_ORIGINS = ["synkronia.lvh.me", "synkronia.local"];
 
 function mergeDevAllowedOrigins() {
   const fromEnv = (process.env.NEXT_DEV_ALLOWED_ORIGINS || "")
@@ -33,7 +34,7 @@ function mergeDevAllowedOrigins() {
     .map((s) => s.trim())
     .filter(Boolean);
   const lan = listLanIpv4();
-  const merged = [...new Set([...fromEnv, ...lan, ...PRIVATE_LAN_ORIGIN_PATTERNS])];
+  const merged = [...new Set([...fromEnv, ...lan, ...PRIVATE_LAN_ORIGIN_PATTERNS, ...LOCAL_WHITE_LABEL_DEV_ORIGINS])];
   process.env.NEXT_DEV_ALLOWED_ORIGINS = merged.join(",");
   return merged;
 }
@@ -93,6 +94,7 @@ console.warn(
 );
 console.warn(
   `[dev] URL local: http://localhost:${port}\n` +
+    `     Synkron (white-label): http://synkronia.lvh.me:${port}\n` +
     (lanIps.length
       ? `     Rede LAN: ${lanIps.map((ip) => `http://${ip}:${port}`).join(" · ")}\n`
       : "") +

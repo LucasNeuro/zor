@@ -18,14 +18,13 @@ export function PlatformBrandLogo({ className = "h-9 w-9", size, variant = "logo
       : brand?.logoUrl || brand?.faviconUrl;
 
   if (src) {
-    const dim = size ? { width: size, height: size } : undefined;
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={brand?.nome ?? "Logo"}
-        className={size ? "object-contain" : `${className} object-contain`}
-        style={dim}
+        className={`object-contain ${size ? "" : className}`}
+        style={size ? { width: size, height: size } : undefined}
       />
     );
   }

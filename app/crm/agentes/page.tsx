@@ -47,6 +47,8 @@ import {
   type HubAgenteRow,
 } from "@/hooks/useHubAgentesQueries";
 import type { HubAgentesListMode } from "@/lib/hub/hub-query-keys";
+import { hubAgentesRootKey } from "@/lib/hub/hub-query-keys";
+import { useCrmListLiveRefresh } from "@/hooks/useCrmListLiveRefresh";
 
 /** Wizard ~3k linhas — carregar só ao abrir o drawer evita ChunkLoadError no dev (compile > timeout). */
 const AgenteNovoWizard = dynamic(
@@ -224,6 +226,7 @@ function AgentesView() {
   const searchParams = useSearchParams();
   const openedFromQuery = useRef(false);
   const queryClient = useQueryClient();
+  useCrmListLiveRefresh(hubAgentesRootKey, "/crm/agentes");
   const { setSlot } = useCrmHeaderSlot();
   const { success: toastSuccess, error: toastError } = useCrmToast();
 
@@ -232,9 +235,11 @@ function AgentesView() {
   const [filtroSegmento, setFiltroSegmento] = useState("");
   const {
     data: agentes = [],
-    isLoading: carregando,
+    isPending: listaPendente,
+    isFetching: listaBuscando,
     error: listaQueryError,
   } = useHubAgentesList(modoLista);
+  const carregando = agentes.length === 0 && (listaPendente || listaBuscando) && !listaQueryError;
   const erroLista = listaQueryError?.message ?? null;
   const [drawerNovoOpen, setDrawerNovoOpen] = useState(false);
   const [drawerCargosOpen, setDrawerCargosOpen] = useState(false);

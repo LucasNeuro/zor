@@ -3,14 +3,17 @@ import type { HubCargoCatalogRow } from "@/lib/hub/fetch-hub-cargos-catalog";
 
 export type HubAgentesListMode = "todos" | "ativos" | "inativos" | "arquivados";
 
+/** Referência estável — evita loops de invalidate quando usada em deps de useEffect. */
+export const hubAgentesRootKey = ["hub", "agentes"] as const;
+
 export const hubQueryKeys = {
   all: ["hub"] as const,
   agentes: {
-    all: () => [...hubQueryKeys.all, "agentes"] as const,
-    list: (modo: HubAgentesListMode) => [...hubQueryKeys.agentes.all(), "list", modo] as const,
-    detail: (slug: string) => [...hubQueryKeys.agentes.all(), "detail", slug] as const,
-    logs: (slug: string) => [...hubQueryKeys.agentes.all(), slug, "logs"] as const,
-    operacao: (slug: string) => [...hubQueryKeys.agentes.all(), slug, "operacao"] as const,
+    all: () => hubAgentesRootKey,
+    list: (modo: HubAgentesListMode) => [...hubAgentesRootKey, "list", modo] as const,
+    detail: (slug: string) => [...hubAgentesRootKey, "detail", slug] as const,
+    logs: (slug: string) => [...hubAgentesRootKey, slug, "logs"] as const,
+    operacao: (slug: string) => [...hubAgentesRootKey, slug, "operacao"] as const,
   },
   ciclos: {
     all: () => [...hubQueryKeys.all, "ciclos"] as const,

@@ -10,6 +10,8 @@ export const GOOGLE_INTEGRADOR_FERRAMENTA_KEYS = [
   "hub_int_gmail_enviar",
   "hub_int_gcal_criar_evento",
   "hub_int_gcal_listar_eventos",
+  "hub_int_gcal_listar_reservas_lead",
+  "hub_int_gcal_cancelar_evento",
 ] as const;
 
 export type CatalogoFerramentaIntegradorLite = {
@@ -55,6 +57,8 @@ export function patchFerramentasGoogleAgendamento(
   const next = { ...uso };
   if (uso.hub_int_gcal_criar_evento !== false) next.hub_int_gcal_criar_evento = true;
   if (uso.hub_int_gcal_listar_eventos !== false) next.hub_int_gcal_listar_eventos = true;
+  if (uso.hub_int_gcal_listar_reservas_lead !== false) next.hub_int_gcal_listar_reservas_lead = true;
+  if (uso.hub_int_gcal_cancelar_evento !== false) next.hub_int_gcal_cancelar_evento = true;
   return next;
 }
 

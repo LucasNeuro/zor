@@ -44,6 +44,7 @@ export function blocoDataHoraAtualParaAgente(): string {
 
 Regras de calendário:
 - Nunca invente horários nem datas — consulte a agenda real com **hub_int_gcal_listar_eventos** antes de sugerir vagas.
-- Quando o cliente confirmar horário, crie o evento com **hub_int_gcal_criar_evento** (título, inicio, fim, participantes).
+- Quando o cliente confirmar horário, crie o evento com **hub_int_gcal_criar_evento** e **cole o link_para_whatsapp** na resposta.
+- Ao consultar agenda, use **hub_int_gcal_listar_eventos** — só cite vagas_disponiveis, nunca nomes de outras reservas.
 - «Amanhã» = data de amanhã acima, não datas antigas do playbook.`;
 }

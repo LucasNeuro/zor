@@ -63,7 +63,9 @@ export async function completarChatComFerramentasMistral(params: {
   const menuWhatsappAtivo = nomesFerramentas.has("hub_whatsapp_menu");
   const googleAgendaAtivo =
     nomesFerramentas.has("hub_int_gcal_listar_eventos") ||
-    nomesFerramentas.has("hub_int_gcal_criar_evento");
+    nomesFerramentas.has("hub_int_gcal_criar_evento") ||
+    nomesFerramentas.has("hub_int_gcal_cancelar_evento") ||
+    nomesFerramentas.has("hub_int_gcal_listar_reservas_lead");
 
   let systemExtra = `\n\n${blocoInstrucoesFerramentasCrmWhatsapp({
     temMenuWhatsapp: menuWhatsappAtivo,

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { Calendar, Check, ChevronRight, Loader2, Plug } from "lucide-react";
+import { Calendar, Check, ChevronRight, Loader2, Plug, Video } from "lucide-react";
+import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
 import { CRM_ACCENT, crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
@@ -91,8 +92,63 @@ export function AgenteGoogleWorkspaceBlock({
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState("");
   const [teste, setTeste] = useState<GoogleTestResult | null>(null);
+  const [agendaCfg, setAgendaCfg] = useState({
+    duracao_reserva_min: 90,
+    abertura: "11:30",
+    fechamento: "23:00",
+    timezone: "America/Sao_Paulo",
+    com_meet: false,
+  });
+  const [agendaCfgCarregando, setAgendaCfgCarregando] = useState(false);
+  const [agendaCfgSalvo, setAgendaCfgSalvo] = useState(false);
 
   const badge = googleBadge(ligado);
+
+  const carregarAgendaConfig = useCallback(async () => {
+    setAgendaCfgCarregando(true);
+    try {
+      const headers = await crmApiHeaders();
+      const res = await fetch("/api/hub/integradores/agenda-config", { headers });
+      const data = (await res.json().catch(() => ({}))) as {
+        config?: typeof agendaCfg;
+      };
+      if (res.ok && data.config) {
+        setAgendaCfg({
+          duracao_reserva_min: data.config.duracao_reserva_min ?? 90,
+          abertura: data.config.abertura ?? "11:30",
+          fechamento: data.config.fechamento ?? "23:00",
+          timezone: data.config.timezone ?? "America/Sao_Paulo",
+          com_meet: data.config.com_meet === true,
+        });
+      }
+    } catch {
+      /* mantém defaults */
+    } finally {
+      setAgendaCfgCarregando(false);
+    }
+  }, []);
+
+  const salvarAgendaConfig = useCallback(async () => {
+    setBusy(true);
+    setErro("");
+    setAgendaCfgSalvo(false);
+    try {
+      const headers = await crmApiHeaders();
+      const res = await fetch("/api/hub/integradores/agenda-config", {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(agendaCfg),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; config?: typeof agendaCfg };
+      if (!res.ok) throw new Error(data.error || "Falha ao gravar horários da agenda.");
+      if (data.config) setAgendaCfg(data.config);
+      setAgendaCfgSalvo(true);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao gravar agenda.");
+    } finally {
+      setBusy(false);
+    }
+  }, [agendaCfg]);
 
   const refreshStatus = useCallback(async () => {
     setCarregando(true);
@@ -117,7 +173,12 @@ export function AgenteGoogleWorkspaceBlock({
 
   useEffect(() => {
     void refreshStatus();
-  }, [refreshStatus]);
+    void carregarAgendaConfig();
+  }, [refreshStatus, carregarAgendaConfig]);
+
+  useEffect(() => {
+    if (sideoverOpen) void carregarAgendaConfig();
+  }, [sideoverOpen, carregarAgendaConfig]);
 
   useEffect(() => {
     if (oauthEmail) setEmail(oauthEmail);
@@ -393,6 +454,181 @@ export function AgenteGoogleWorkspaceBlock({
           ) : null}
         </div>
       ) : null}
+
+      <div
+        style={{
+          padding: "12px 14px",
+          borderRadius: 10,
+          border: `1px solid ${isCard ? RF_BORDER : border}`,
+          background: isCard ? "rgba(6, 13, 8, 0.45)" : "#f8fbf8",
+        }}
+      >
+        <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 800, color: isCard ? RF_TEXT_PRIMARY : title }}>
+          Horário da agenda (esta empresa)
+        </p>
+        <p style={{ margin: "0 0 12px", fontSize: 11, color: muted, lineHeight: 1.45 }}>
+          Cada cliente Waje define duração da reserva e funcionamento. O agente calcula vagas com estes valores.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: muted }}>
+            Duração (min)
+            <input
+              type="number"
+              min={15}
+              max={480}
+              step={15}
+              value={agendaCfg.duracao_reserva_min}
+              disabled={busy || agendaCfgCarregando}
+              onChange={(e) => {
+                setAgendaCfgSalvo(false);
+                setAgendaCfg((c) => ({ ...c, duracao_reserva_min: Number(e.target.value) || 90 }));
+              }}
+              style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${border}`, fontSize: 12 }}
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: muted }}>
+            Fuso
+            <input
+              type="text"
+              value={agendaCfg.timezone}
+              disabled={busy || agendaCfgCarregando}
+              onChange={(e) => {
+                setAgendaCfgSalvo(false);
+                setAgendaCfg((c) => ({ ...c, timezone: e.target.value }));
+              }}
+              style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${border}`, fontSize: 12 }}
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: muted }}>
+            Abertura
+            <input
+              type="time"
+              value={agendaCfg.abertura}
+              disabled={busy || agendaCfgCarregando}
+              onChange={(e) => {
+                setAgendaCfgSalvo(false);
+                setAgendaCfg((c) => ({ ...c, abertura: e.target.value }));
+              }}
+              style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${border}`, fontSize: 12 }}
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: muted }}>
+            Fechamento
+            <input
+              type="time"
+              value={agendaCfg.fechamento}
+              disabled={busy || agendaCfgCarregando}
+              onChange={(e) => {
+                setAgendaCfgSalvo(false);
+                setAgendaCfg((c) => ({ ...c, fechamento: e.target.value }));
+              }}
+              style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${border}`, fontSize: 12 }}
+            />
+          </label>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginTop: 12,
+            padding: "12px 14px",
+            borderRadius: 12,
+            border: `1px solid ${
+              agendaCfg.com_meet
+                ? isDark
+                  ? "rgba(63, 152, 72, 0.45)"
+                  : "#388bfd44"
+                : isDark
+                  ? RF_BORDER
+                  : border
+            }`,
+            background: agendaCfg.com_meet
+              ? isDark
+                ? "rgba(146, 255, 0, 0.08)"
+                : "rgba(56, 139, 253, 0.06)"
+              : isDark
+                ? "rgba(6, 13, 8, 0.85)"
+                : "#ffffff",
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              background: agendaCfg.com_meet
+                ? isDark
+                  ? "rgba(146, 255, 0, 0.14)"
+                  : "rgba(56, 139, 253, 0.18)"
+                : isDark
+                  ? "rgba(11, 31, 16, 0.9)"
+                  : "#eef7eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              color: agendaCfg.com_meet ? (isDark ? "#86efac" : "#0969da") : muted,
+            }}
+            aria-hidden
+          >
+            <Video size={20} strokeWidth={2} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span
+              id="label-google-meet-agenda"
+              style={{ color: isDark ? RF_TEXT_PRIMARY : title, fontSize: 13, fontWeight: 700 }}
+            >
+              Link Google Meet
+            </span>
+            <span
+              style={{
+                display: "block",
+                color: isDark ? RF_TEXT_SECONDARY : body,
+                fontWeight: 400,
+                fontSize: 12,
+                marginTop: 2,
+                lineHeight: 1.45,
+              }}
+            >
+              Reuniões online com videoconferência · desligado para reservas de restaurante
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: agendaCfg.com_meet ? "#3fb950" : muted,
+              }}
+            >
+              {agendaCfg.com_meet ? "ACTIVO" : "INACTIVO"}
+            </span>
+            <CrmToggleSwitch
+              checked={agendaCfg.com_meet}
+              disabled={busy || agendaCfgCarregando}
+              labelledBy="label-google-meet-agenda"
+              variant={isDark ? "dark" : "light"}
+              onCheckedChange={(v) => {
+                setAgendaCfgSalvo(false);
+                setAgendaCfg((c) => ({ ...c, com_meet: v }));
+              }}
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={busy || agendaCfgCarregando}
+          style={{ ...btnSecondaryDark(busy || agendaCfgCarregando), marginTop: 10 }}
+          onClick={() => void salvarAgendaConfig()}
+        >
+          {busy ? <Loader2 size={14} className="animate-spin" /> : null}
+          Guardar horários da agenda
+        </button>
+        {agendaCfgSalvo ? (
+          <p style={{ margin: "8px 0 0", fontSize: 11, color: "#3fb950" }}>Configuração gravada para este tenant.</p>
+        ) : null}
+      </div>
 
       <p style={{ margin: 0, fontSize: 11, color: muted, lineHeight: 1.5 }}>
         Ferramentas activadas no agente: enviar e-mail, criar evento com Meet e listar compromissos. O modelo usa estas

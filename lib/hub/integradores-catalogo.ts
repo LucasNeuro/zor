@@ -63,26 +63,33 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
         titulo: "Criar evento / reunião (Google Meet)",
         descricao_curta: "Cria evento no Calendar com link Meet.",
         descricao_modelo:
-          "Usa quando o cliente **confirmar** data/hora de reserva, reunião ou videoconferência. Cria evento no Google Calendar (conta ligada). Exige título e início ISO 8601 (ex. 2026-06-24T14:30:00). Chame só após confirmação explícita do cliente.",
+          "Usa quando o cliente **confirmar** data/hora de reserva. Use **formato 24h**: 20:30 = noite (não 08:30). Passe `hora_cliente` como o cliente disse (ex. «20:30», «20h30»). A resposta inclui link_para_whatsapp.",
         politica: "escrita",
         parametros_schema: {
           type: "object",
           properties: {
-            titulo: { type: "string", description: "Título da reunião" },
+            titulo: { type: "string", description: "Título interno (ex. Reserva - 4 pessoas - Cantina Nova)" },
             inicio: {
               type: "string",
-              description: "Início ISO 8601 com hora (ex. 2026-06-20T10:00:00)",
+              description: "Data/hora ISO 24h (ex. 2026-06-24T20:30:00 para 20h30 da noite)",
             },
-            fim: { type: "string", description: "Fim ISO 8601 opcional (padrão = início)" },
-            descricao: { type: "string", description: "Pauta ou notas da reunião" },
+            hora_cliente: {
+              type: "string",
+              description: "Hora como o cliente disse (ex. 20:30, 20h30) — obrigatório para evitar AM/PM errado",
+            },
+            fim: {
+              type: "string",
+              description: "Fim ISO opcional; se omitido, usa duracao_reserva_min do tenant",
+            },
+            descricao: { type: "string", description: "Notas internas (nome cliente, telefone)" },
             participantes: {
               type: "array",
               items: { type: "string" },
-              description: "E-mails dos convidados (inclua o do cliente se souber)",
+              description: "E-mails opcionais",
             },
             com_google_meet: {
               type: "boolean",
-              description: "Gerar link Google Meet (padrão true)",
+              description: "Link Meet (padrão false para reservas; true para videoconferência)",
             },
           },
           required: ["titulo", "inicio"],
@@ -91,15 +98,42 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
       },
       {
         ferramenta_key: "hub_int_gcal_listar_eventos",
-        titulo: "Listar eventos do Calendar",
-        descricao_curta: "Lista próximos eventos.",
+        titulo: "Consultar vagas na agenda",
+        descricao_curta: "Slots livres sem expor outros clientes.",
         descricao_modelo:
-          "OBRIGATÓRIO antes de sugerir horários livres para reserva ou reunião: consulta a agenda real do Google Calendar ligado. Use para ver compromissos já marcados e calcular vagas. Parâmetro dias (padrão 7).",
+          "OBRIGATÓRIO antes de sugerir horários. Retorna vagas_disponiveis e horarios_ocupados **sem nomes** de terceiros. Use parâmetro data (YYYY-MM-DD) para um dia específico.",
         politica: "leitura",
         parametros_schema: {
           type: "object",
           properties: {
             dias: { type: "number", description: "Quantos dias à frente (padrão 7)" },
+            data: { type: "string", description: "Dia foco ISO date (ex. 2026-06-23)" },
+          },
+          required: [],
+          additionalProperties: false,
+        },
+      },
+      {
+        ferramenta_key: "hub_int_gcal_listar_reservas_lead",
+        titulo: "Minhas reservas (este cliente)",
+        descricao_curta: "Lista só reservas do lead na sessão.",
+        descricao_modelo:
+          "Usa quando o cliente perguntar «minhas reservas», «minha agenda» ou «o que tenho marcado». Retorna apenas eventos **deste** lead/contacto WhatsApp.",
+        politica: "leitura",
+        parametros_schema: SCHEMA_VAZIO,
+      },
+      {
+        ferramenta_key: "hub_int_gcal_cancelar_evento",
+        titulo: "Cancelar reserva no Calendar",
+        descricao_curta: "Remove evento do lead na sessão.",
+        descricao_modelo:
+          "OBRIGATÓRIO quando o cliente pedir cancelar/desmarcar. Cancela a reserva **deste lead** no Google Calendar. Opcional: evento_id ou inicio para escolher qual reserva.",
+        politica: "escrita",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            evento_id: { type: "string", description: "ID Google Calendar (se souber)" },
+            inicio: { type: "string", description: "ISO da reserva a cancelar (ex. 2026-06-23T20:30:00)" },
           },
           required: [],
           additionalProperties: false,

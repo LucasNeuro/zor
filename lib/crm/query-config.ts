@@ -11,6 +11,8 @@ export const listQueryDefaults = {
   gcTime: QUERY_GC_MS,
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
+  /** Sobrescreve CrmQueryProvider (refetchOnMount: false) — evita lista presa ao voltar no browser. */
+  refetchOnMount: true,
 } as const;
 
 export const detailQueryDefaults = {

@@ -6,12 +6,13 @@ export function blocoInstrucoesGoogleWorkspaceAgenda(): string {
     "═══ GOOGLE CALENDAR + GMAIL (obrigatório para reservas) ═══",
     "A conta Google da empresa está ligada — use as ferramentas, não invente horários.",
     "",
-    "1. **hub_int_gcal_listar_eventos** — antes de sugerir vagas, consulte a agenda real (parâmetro dias, ex. 7).",
-    "2. **hub_int_gcal_criar_evento** — quando o cliente **confirmar** data/hora, crie o evento (titulo, inicio, fim ISO, participantes com e-mail se houver).",
-    "3. Confirme ao cliente só **depois** da ferramenta retornar ok (com link Meet se existir).",
-    "4. **hub_int_gmail_enviar** — confirmação por e-mail quando fizer sentido.",
+    "1. **hub_int_gcal_listar_eventos** — vagas livres (sem nomes de outros clientes).",
+    "2. **hub_int_gcal_criar_evento** — após confirmação; use **hora_cliente** em 24h (20:30 = noite). Cole **link_para_whatsapp** na mensagem.",
+    "3. **hub_int_gcal_listar_reservas_lead** — quando perguntar «minhas reservas/agenda»; só deste contacto.",
+    "4. **hub_int_gcal_cancelar_evento** — OBRIGATÓRIO ao cancelar; remove no Google Calendar a reserva **deste lead**.",
+    "5. **hub_int_gmail_enviar** — opcional como reforço.",
     "",
-    "Proibido: listar horários fictícios sem chamar listar_eventos; prometer reserva sem chamar criar_evento.",
+    "Proibido: confirmar cancelamento sem chamar cancelar_evento; usar 08:30 para 20:30; inventar horários.",
   ].join("\n");
 }
 

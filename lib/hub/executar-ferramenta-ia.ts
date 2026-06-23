@@ -620,7 +620,10 @@ export async function executarFerramentaHub(
   try {
     if (toolName.startsWith("hub_int_")) {
       const { executarFerramentaIntegrador } = await import("@/lib/hub/executar-integrador");
-      return executarFerramentaIntegrador(supabase, tenant, toolName, args);
+      return executarFerramentaIntegrador(supabase, tenant, toolName, args, {
+        leadId: ctx.leadId,
+        telefone: ctx.telefoneSessao,
+      });
     }
 
     if (toolName.startsWith("hub_ext_")) {

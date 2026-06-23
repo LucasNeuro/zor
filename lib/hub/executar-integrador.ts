@@ -11,10 +11,28 @@ import {
 import { getValidGoogleAccessToken, readStoredGoogleOAuthCredentials } from "@/lib/email/oauth-google";
 import {
   montarPayloadEventoGoogleCalendar,
-  inferirFimEventoGoogleCalendar,
   resumirEventoGoogleCalendar,
-  resumirListaEventosGoogleCalendar,
+  resumirListaEventosParaDisponibilidade,
+  linkEventoParaWhatsapp,
 } from "@/lib/hub/google-calendar-api";
+import {
+  GCAL_LEAD_PROP,
+  montarExtendedPropertiesLead,
+  normalizarFimParaGoogleCalendar,
+  normalizarInicioParaGoogleCalendar,
+} from "@/lib/hub/google-calendar-datetime";
+import {
+  gravarReservaGcalNoLead,
+  removerReservaGcalDoLead,
+  reservasLeadParaRespostaCliente,
+  type LeadGcalReserva,
+} from "@/lib/hub/google-calendar-lead";
+import { lerTenantAgendaConfig } from "@/lib/hub/tenant-agenda-config";
+
+export type GcalFerramentaContexto = {
+  leadId?: string;
+  telefone?: string | null;
+};
 
 const HTTP_TIMEOUT_MS = 30_000;
 
@@ -69,8 +87,10 @@ async function executarGoogleCalendar(
   cred: HubIntegracaoCredenciaisRow | null,
   supabase: SupabaseClient,
   tenantId: string,
-  integracaoRowId: string
+  integracaoRowId: string,
+  gcalCtx?: GcalFerramentaContexto
 ): Promise<string> {
+  const agendaCfg = await lerTenantAgendaConfig(supabase, tenantId);
   let token = bearerToken(cred);
   if (readStoredGoogleOAuthCredentials(cred)) {
     const refreshed = await getValidGoogleAccessToken(supabase, tenantId, cred, integracaoRowId);
@@ -90,37 +110,67 @@ async function executarGoogleCalendar(
 
   if (toolName === "hub_int_gcal_listar_eventos") {
     const dias = typeof args.dias === "number" && args.dias > 0 ? args.dias : 7;
+    const dataFoco = typeof args.data === "string" ? args.data.trim() : "";
     const min = new Date().toISOString();
     const max = new Date(Date.now() + dias * 86400000).toISOString();
-    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}&singleEvents=true&orderBy=startTime&maxResults=25`;
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}&singleEvents=true&orderBy=startTime&maxResults=50`;
     const res = await fetchJson(url, { method: "GET", headers });
     if (!res.ok) {
       return JSON.stringify({ erro: "google_calendar_api", status: res.status, detalhe: res.body });
     }
-    return JSON.stringify(resumirListaEventosGoogleCalendar(res.body));
+    return JSON.stringify(
+      resumirListaEventosParaDisponibilidade(res.body, {
+        dias,
+        dataFoco: dataFoco || undefined,
+        cfg: agendaCfg,
+      })
+    );
   }
 
   if (toolName === "hub_int_gcal_criar_evento") {
     const titulo = String(args.titulo ?? "").trim();
-    const inicio = String(args.inicio ?? "").trim();
-    if (!titulo || !inicio) {
+    const inicioRaw = String(args.inicio ?? "").trim();
+    const horaCliente = typeof args.hora_cliente === "string" ? args.hora_cliente.trim() : "";
+    if (!titulo || !inicioRaw) {
       return JSON.stringify({ erro: "parametros_invalidos", campos: ["titulo", "inicio"] });
     }
-    const fim = inferirFimEventoGoogleCalendar(inicio, String(args.fim ?? "").trim());
-    const descricao = String(args.descricao ?? "").trim();
+
+    const norm = normalizarInicioParaGoogleCalendar(inicioRaw, agendaCfg, {
+      horaCliente: horaCliente || undefined,
+    });
+    const inicio = norm.inicio;
+    const fim = normalizarFimParaGoogleCalendar(inicio, String(args.fim ?? "").trim(), agendaCfg);
+
+    const leadId = gcalCtx?.leadId?.trim() || "";
+    const descricaoBase = String(args.descricao ?? "").trim();
+    const descricao = leadId
+      ? [descricaoBase, `waje_lead_id:${leadId}`].filter(Boolean).join("\n")
+      : descricaoBase;
+
     const participantes = Array.isArray(args.participantes)
       ? (args.participantes as unknown[]).map((e) => String(e).trim()).filter(Boolean)
       : [];
-    const comGoogleMeet = args.com_google_meet !== false;
+    const comGoogleMeet =
+      args.com_google_meet === true
+        ? true
+        : args.com_google_meet === false
+          ? false
+          : agendaCfg.comMeetPadrao;
 
-    const { evento, conferenceDataVersion } = montarPayloadEventoGoogleCalendar({
-      titulo,
-      inicio,
-      fim,
-      descricao,
-      participantes,
-      comGoogleMeet,
-    });
+    const { evento, conferenceDataVersion } = montarPayloadEventoGoogleCalendar(
+      {
+        titulo,
+        inicio,
+        fim,
+        descricao,
+        participantes,
+        comGoogleMeet,
+        extendedProperties: leadId
+          ? montarExtendedPropertiesLead(leadId, gcalCtx?.telefone)
+          : undefined,
+      },
+      agendaCfg
+    );
 
     const qs = conferenceDataVersion ? "?conferenceDataVersion=1" : "";
     const res = await fetchJson(
@@ -135,12 +185,132 @@ async function executarGoogleCalendar(
       return JSON.stringify({ erro: "google_calendar_api", status: res.status, detalhe: res.body });
     }
     const resumo = resumirEventoGoogleCalendar(res.body);
+    const linkWhatsapp = linkEventoParaWhatsapp(resumo);
+    const eventId = resumo?.id != null ? String(resumo.id) : "";
+
+    if (leadId && eventId) {
+      await gravarReservaGcalNoLead(supabase, leadId, {
+        event_id: eventId,
+        inicio: typeof resumo?.inicio === "string" ? resumo.inicio : inicio,
+        fim: typeof resumo?.fim === "string" ? resumo.fim : fim,
+        link_calendario: typeof resumo?.link_calendario === "string" ? resumo.link_calendario : null,
+        link_meet: typeof resumo?.link_meet === "string" ? resumo.link_meet : null,
+      });
+    }
+
     return JSON.stringify({
       ok: true,
-      mensagem: resumo?.link_meet
-        ? "Evento criado com link Google Meet."
+      mensagem: linkWhatsapp
+        ? "Evento criado. Cole o link na mensagem WhatsApp para o cliente."
         : "Evento criado no Google Calendar.",
       evento: resumo,
+      inicio_normalizado: inicio,
+      horario_corrigido: norm.corrigido,
+      aviso_horario: norm.aviso,
+      link_para_whatsapp: linkWhatsapp,
+      instrucao_agente: linkWhatsapp
+        ? `Obrigatório incluir na resposta ao cliente: ${linkWhatsapp}`
+        : "Confirme data/hora ao cliente.",
+    });
+  }
+
+  if (toolName === "hub_int_gcal_listar_reservas_lead") {
+    const leadId = gcalCtx?.leadId?.trim() || "";
+    if (!leadId) {
+      return JSON.stringify({ erro: "lead_id_ausente", nota: "Só disponível com cliente na sessão WhatsApp." });
+    }
+
+    const min = new Date().toISOString();
+    const prop = encodeURIComponent(`${GCAL_LEAD_PROP}=${leadId}`);
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=${prop}&timeMin=${encodeURIComponent(min)}&singleEvents=true&orderBy=startTime&maxResults=20`;
+    const res = await fetchJson(url, { method: "GET", headers });
+    if (!res.ok) {
+      return JSON.stringify({ erro: "google_calendar_api", status: res.status, detalhe: res.body });
+    }
+
+    const body = res.body as { items?: unknown[] };
+    const items = Array.isArray(body?.items) ? body.items : [];
+    const reservas = items
+      .map((ev) => resumirEventoGoogleCalendar(ev))
+      .filter((x): x is Record<string, unknown> => x != null)
+      .map(
+        (r): LeadGcalReserva => ({
+          event_id: String(r.id ?? ""),
+          inicio: typeof r.inicio === "string" ? r.inicio : null,
+          fim: typeof r.fim === "string" ? r.fim : null,
+          link_calendario: typeof r.link_calendario === "string" ? r.link_calendario : null,
+          link_meet: typeof r.link_meet === "string" ? r.link_meet : null,
+          criado_em: new Date().toISOString(),
+        })
+      )
+      .filter((r) => r.event_id);
+
+    return JSON.stringify({
+      ok: true,
+      lead_id: leadId,
+      ...reservasLeadParaRespostaCliente(reservas),
+      instrucao_agente: "Mostre só as reservas deste cliente. Se vazio, diga que não há reservas activas.",
+    });
+  }
+
+  if (toolName === "hub_int_gcal_cancelar_evento") {
+    const leadId = gcalCtx?.leadId?.trim() || "";
+    let eventoId = String(args.evento_id ?? "").trim();
+
+    if (!eventoId && leadId) {
+      const prop = encodeURIComponent(`${GCAL_LEAD_PROP}=${leadId}`);
+      const min = new Date(Date.now() - 7 * 86400000).toISOString();
+      const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=${prop}&timeMin=${encodeURIComponent(min)}&singleEvents=true&orderBy=startTime&maxResults=10`;
+      const listRes = await fetchJson(url, { method: "GET", headers });
+      if (!listRes.ok) {
+        return JSON.stringify({ erro: "google_calendar_api", status: listRes.status, detalhe: listRes.body });
+      }
+      const items = (listRes.body as { items?: { id?: string; start?: { dateTime?: string } }[] })?.items ?? [];
+      const inicioFiltro = String(args.inicio ?? "").trim();
+      const agora = Date.now();
+      const futuros = items
+        .filter((ev) => ev?.id)
+        .map((ev) => ({
+          id: String(ev.id),
+          start: String(ev.start?.dateTime ?? ""),
+          t: new Date(String(ev.start?.dateTime ?? "")).getTime(),
+        }))
+        .filter((ev) => !Number.isNaN(ev.t) && ev.t >= agora - 3_600_000)
+        .sort((a, b) => a.t - b.t);
+
+      if (inicioFiltro) {
+        const match = futuros.find((ev) => ev.start.startsWith(inicioFiltro.slice(0, 16)));
+        eventoId = match?.id ?? "";
+      } else {
+        eventoId = futuros[0]?.id ?? "";
+      }
+    }
+
+    if (!eventoId) {
+      return JSON.stringify({
+        erro: "evento_nao_encontrado",
+        nota: "Nenhuma reserva deste lead para cancelar. Confirme com hub_int_gcal_listar_reservas_lead.",
+      });
+    }
+
+    const delRes = await fetchJson(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventoId)}`,
+      { method: "DELETE", headers }
+    );
+    if (!delRes.ok && delRes.status !== 404 && delRes.status !== 410) {
+      return JSON.stringify({ erro: "google_calendar_api", status: delRes.status, detalhe: delRes.body });
+    }
+
+    if (leadId) {
+      await removerReservaGcalDoLead(supabase, leadId, eventoId);
+    }
+
+    return JSON.stringify({
+      ok: true,
+      cancelado: true,
+      evento_id: eventoId,
+      mensagem: "Reserva cancelada no Google Calendar.",
+      instrucao_agente: "Confirme ao cliente que a reserva foi cancelada.",
     });
   }
 
@@ -296,7 +466,8 @@ export async function executarFerramentaIntegrador(
   supabase: SupabaseClient,
   tenantId: string,
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  gcalCtx?: GcalFerramentaContexto
 ): Promise<string> {
   const ref = ferramentaIntegradorPorKey(toolName);
   if (!ref) {
@@ -316,7 +487,7 @@ export async function executarFerramentaIntegrador(
 
   switch (ref.integrador.id) {
     case "google_calendar":
-      return executarGoogleCalendar(toolName, args, credenciais, supabase, tenantId, String(integracao.id));
+      return executarGoogleCalendar(toolName, args, credenciais, supabase, tenantId, String(integracao.id), gcalCtx);
     case "gmail":
       return executarGmail(toolName, args, credenciais, supabase, tenantId, String(integracao.id));
     case "zendesk":

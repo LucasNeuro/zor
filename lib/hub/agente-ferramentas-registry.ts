@@ -579,6 +579,12 @@ export function mergeUsoFerramentasWhatsappCanal(
     if (coalesceFerramentaBool(uso.hub_int_gcal_listar_eventos) !== false) {
       merged.hub_int_gcal_listar_eventos = true;
     }
+    if (coalesceFerramentaBool(uso.hub_int_gcal_listar_reservas_lead) !== false) {
+      merged.hub_int_gcal_listar_reservas_lead = true;
+    }
+    if (coalesceFerramentaBool(uso.hub_int_gcal_cancelar_evento) !== false) {
+      merged.hub_int_gcal_cancelar_evento = true;
+    }
   }
 
   return merged;

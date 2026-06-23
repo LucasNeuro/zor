@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { humanoBloqueiaRespostaIa } from "@/lib/crm/resolve-crm-actor";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
+import { resetFollowupAoReceberMensagemCliente } from "@/lib/hub/followup-lead-state";
 import { respostaIaJaEnviadaRecente } from "@/lib/whatsapp/anti-duplicata-resposta";
 import {
   humanoSlugFromLead,
@@ -243,6 +244,22 @@ export async function processarMensagemInboundWhatsapp(params: {
   const agente = params.agente;
   const humanoResponsavelAtivo = humanoBloqueiaRespostaIa(lead);
   const isGroupTransfer = params.isGroupTransfer === true;
+
+  if (!params.fromMe) {
+    await resetFollowupAoReceberMensagemCliente(supabase, lead.id, {
+      pausado: humanoResponsavelAtivo || isGroupTransfer,
+    });
+    if (agente && typeof agente.agente_slug === "string" && agente.agente_slug.trim()) {
+      try {
+        await supabase
+          .from("hub_leads_crm")
+          .update({ agente_responsavel: agente.agente_slug.trim() })
+          .eq("id", lead.id);
+      } catch {
+        /* opcional */
+      }
+    }
+  }
 
   if (humanoResponsavelAtivo || isGroupTransfer) {
     const reason = isGroupTransfer ? "grupo_transfer_ativo" : "humano_responsavel_ativo";

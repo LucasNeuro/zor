@@ -418,7 +418,6 @@ export default function CiclosPage() {
     () => cicloPareceFollowupWhatsApp(fNome, extraConfig),
     [fNome, extraConfig]
   );
-  const mostrarBlocoFollowup = followupAvancadoForcado || followupHeuristica;
 
   const modoOperacaoDrawer = useMemo((): ModoOperacaoAgente | null => {
     const slug = fAgenteSlug.trim();
@@ -429,7 +428,10 @@ export default function CiclosPage() {
   }, [fAgenteSlug, agentesHub, ciclosTodos]);
 
   const agenteSomenteCanalWa = agenteEhSomenteCanalWhatsapp(modoOperacaoDrawer);
-  const esconderAgendamentoCron = agenteSomenteCanalWa && !mostrarBlocoFollowup;
+  const agenteSlugDrawer = fAgenteSlug.trim();
+  const mostrarBlocoFollowupLegado =
+    !agenteSomenteCanalWa && (followupAvancadoForcado || followupHeuristica);
+  const esconderAgendamentoCron = agenteSomenteCanalWa;
 
   const drawerCicloPreview = useMemo(() => {
     const tipoKey = esconderAgendamentoCron ? "gatilho" : fTipo;
@@ -445,9 +447,9 @@ export default function CiclosPage() {
   const DrawerPreviewIcon = drawerCicloPreview.meta.Icon;
 
   useEffect(() => {
-    if (!drawerOpen || drawerMode !== "create" || !agenteSomenteCanalWa || mostrarBlocoFollowup) return;
+    if (!drawerOpen || drawerMode !== "create" || !agenteSomenteCanalWa) return;
     if (fTipo !== "gatilho") setFTipo("gatilho");
-  }, [drawerOpen, drawerMode, agenteSomenteCanalWa, mostrarBlocoFollowup, fTipo]);
+  }, [drawerOpen, drawerMode, agenteSomenteCanalWa, fTipo]);
 
   const minMergeHorasDisparo = useMemo(() => {
     if (mergePreviewLinhas.length === 0) return null;
@@ -565,24 +567,47 @@ export default function CiclosPage() {
 
   async function executarAgora(ciclo: Ciclo) {
     setExecutando(ciclo.id);
-    const agente = slugParaApiCiclos(ciclo.agente_slug);
-    const nome = ciclo.nome.toLowerCase();
-    const nomeCiclo = nome.includes("follow") ? "followup"
-      : nome.includes("sla") ? "sla"
-      : nome.includes("manha") || nome.includes("matinal") ? ciclo.agente_slug === "gerente_atendimento" ? "relatorio_manha" : "analise_manha"
-      : nome.includes("noite") ? "analise_noite"
-      : nome.includes("tráfego") || nome.includes("trafego") ? "trafego"
-      : nome.includes("supervis") ? "supervisao"
-      : "followup";
+    const slugAgente = ciclo.agente_slug;
+    const row = agentesHub.find((a) => a.agente_slug === slugAgente);
+    const ciclosDoAgente = ciclosTodos.filter((c) => c.agente_slug === slugAgente);
+    const modo = resolveModoOperacaoAgente(row, ciclosDoAgente);
+    const ehWaFollowup =
+      agenteEhSomenteCanalWhatsapp(modo) &&
+      cicloPareceFollowupWhatsApp(ciclo.nome, ciclo.configuracoes || {});
 
     try {
-      await fetch(
-        `/api/ciclos/${agente}?ciclo=${nomeCiclo}&hub_ciclo_id=${encodeURIComponent(ciclo.id)}&secret=obra10plus_cron_2026`,
-        {
-        headers: internalApiHeaders(),
-        }
-      );
-    } catch (e) { console.error(e); }
+      if (ehWaFollowup) {
+        await fetch(`/api/hub/agentes/${encodeURIComponent(slugAgente)}/followup/test`, {
+          method: "POST",
+          headers: await hubApiHeaders(),
+        });
+      } else {
+        const agente = slugParaApiCiclos(slugAgente);
+        const nome = ciclo.nome.toLowerCase();
+        const nomeCiclo = nome.includes("follow")
+          ? "followup"
+          : nome.includes("sla")
+            ? "sla"
+            : nome.includes("manha") || nome.includes("matinal")
+              ? ciclo.agente_slug === "gerente_atendimento"
+                ? "relatorio_manha"
+                : "analise_manha"
+              : nome.includes("noite")
+                ? "analise_noite"
+                : nome.includes("tráfego") || nome.includes("trafego")
+                  ? "trafego"
+                  : nome.includes("supervis")
+                    ? "supervisao"
+                    : "followup";
+
+        await fetch(
+          `/api/ciclos/${agente}?ciclo=${nomeCiclo}&hub_ciclo_id=${encodeURIComponent(ciclo.id)}&secret=obra10plus_cron_2026`,
+          { headers: internalApiHeaders() }
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    }
 
     await recarregarCiclos();
     setExecutando(null);
@@ -818,9 +843,6 @@ export default function CiclosPage() {
           >
             {contadores.ativos} ativos
           </span>
-          <button type="button" onClick={abrirNovoCiclo} style={crmBtnPrimary()}>
-            + Novo ciclo
-          </button>
         </div>
       ),
     });
@@ -1003,13 +1025,11 @@ export default function CiclosPage() {
                 <h3 style={{ margin: "0 0 8px", color: BRAND_TEXT_DARK, fontSize: 17, fontWeight: 800 }}>
                   Nenhum ciclo cadastrado
                 </h3>
-                <p style={{ margin: "0 auto 20px", maxWidth: 420, color: "#5d7a67", fontSize: 13, lineHeight: 1.55 }}>
-                  Automações ligam agentes IA a tarefas programadas, follow-up WhatsApp e gatilhos externos.
-                  Crie o primeiro ciclo para o dispatch e o hub começarem a registar execuções.
+                <p style={{ margin: "0 auto", maxWidth: 420, color: "#5d7a67", fontSize: 13, lineHeight: 1.55 }}>
+                  Os ciclos são criados automaticamente ao cadastrar um agente IA. Use esta página para
+                  consultar execuções, activar ou editar ciclos de agentes existentes. Follow-up WhatsApp
+                  configura-se em <strong>Agentes → Integrações</strong>.
                 </p>
-                <button type="button" onClick={abrirNovoCiclo} style={crmBtnPrimary()}>
-                  + Novo ciclo
-                </button>
               </div>
             ) : null}
             {ciclosTodos.length > 0 && ciclosFiltrados.length === 0 && (
@@ -1175,14 +1195,44 @@ export default function CiclosPage() {
                   />
                 </label>
                 {agenteSomenteCanalWa && (
-                  <p
-                    className="text-xs m-0 rounded-lg p-3 leading-relaxed"
-                    style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}`, color: RF_TEXT_SECONDARY }}
+                  <div
+                    className="rounded-lg p-3 space-y-2"
+                    style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
                   >
-                    Este agente responde por <strong style={{ color: RF_ACCENT }}>interação no WhatsApp</strong>. O ciclo
-                    fica em modo <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho</strong>. Para lembretes automáticos,
-                    use um ciclo de follow-up (nome com «follow» ou parâmetros abaixo).
-                  </p>
+                    <p
+                      className="text-xs m-0 leading-relaxed"
+                      style={{ color: RF_TEXT_SECONDARY }}
+                    >
+                      Agente <strong style={{ color: RF_ACCENT }}>WhatsApp</strong>: conversa em modo{" "}
+                      <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho</strong> (mensagem do cliente). Lembretes
+                      automáticos são configurados abaixo — mensagens fixas por passo, com imagens no bucket{" "}
+                      <code style={{ color: RF_ACCENT }}>agent-followup</code>.
+                    </p>
+                    {drawerMode === "create" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!fNome.trim() || fNome === "Sob interação") {
+                            setFNome("Follow-up WhatsApp");
+                          }
+                          if (!fDescricao.trim()) {
+                            setFDescricao(
+                              "Cadência de lembretes automáticos quando o cliente deixa de responder. Configuração nos passos abaixo."
+                            );
+                          }
+                        }}
+                        className="text-xs font-bold px-2.5 py-1.5 rounded-md"
+                        style={{
+                          background: "rgba(146, 255, 0, 0.12)",
+                          color: RF_ACCENT,
+                          border: `1px solid ${RF_BORDER_STRONG}`,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Usar nome «Follow-up WhatsApp»
+                      </button>
+                    )}
+                  </div>
                 )}
                 <label className="block">
                   <span style={rfLabelStyle()}>Nome</span>
@@ -1237,10 +1287,8 @@ export default function CiclosPage() {
                     </p>
                     <p className="text-xs m-0 leading-relaxed" style={{ color: "#5d7a67" }}>
                       Este agente atua sob <strong style={{ color: RF_TEXT_PRIMARY }}>interação</strong> (mensagens
-                      UAZAPI). O tipo do ciclo fica em <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho</strong> para
-                      documentação no hub. Para cadências de follow-up programadas, use um nome com «follow» ou
-                      configure <code style={{ color: "#5d7a67" }}>dispatch.atendente/followup</code> e abra os
-                      parâmetros de follow-up abaixo.
+                      UAZAPI). O ciclo fica em <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho</strong>. A cadência
+                      de follow-up é independente — configure nos passos abaixo; o cron envia a cada ~10 min.
                     </p>
                   </div>
                 ) : (
@@ -1474,14 +1522,31 @@ export default function CiclosPage() {
                   </div>
                 </details>
                 )}
-                {!mostrarBlocoFollowup ? (
+                {agenteSomenteCanalWa && agenteSlugDrawer ? (
+                  <div
+                    className="rounded-lg p-3"
+                    style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
+                  >
+                    <p className="text-xs m-0 leading-relaxed" style={{ color: RF_TEXT_SECONDARY }}>
+                      <strong style={{ color: RF_ACCENT }}>Follow-up WhatsApp</strong> não se configura aqui.
+                      Abra <strong style={{ color: RF_TEXT_PRIMARY }}>CRM → Agentes → {agenteSlugDrawer} → Integrações</strong>{" "}
+                      e use <strong>Configurar passos</strong> no card Follow-up automático.
+                    </p>
+                  </div>
+                ) : !mostrarBlocoFollowupLegado ? (
                   <div
                     className="rounded-lg p-3 space-y-2"
                     style={{ background: RF_BG_PANEL, border: `1px solid ${RF_BORDER_STRONG}` }}
                   >
-                    <p className="text-xs m-0" style={{ color: "#5d7a67", lineHeight: 1.5 }}>
+                    <p className="text-xs m-0 mb-2" style={{ color: "#7a5c00", lineHeight: 1.5 }}>
+                    Novo: configure follow-up por agente em CRM → Agentes → Integrações (recomendado). Este bloco é legado.
+                  </p>
+                  <p className="text-xs m-0" style={{ color: "#5d7a67", lineHeight: 1.5 }}>
                       <strong style={{ color: RF_ACCENT }}>Follow-up WhatsApp</strong> — cadência de lembretes automáticos
                       para ciclos de atendimento. Pode ignorar se este ciclo não for de follow-up.
+                    </p>
+                    <p className="text-xs m-0" style={{ color: "#7a5c00", lineHeight: 1.5 }}>
+                      Novo: configure follow-up por agente em CRM → Agentes → Integrações (recomendado). Este bloco é legado.
                     </p>
                     <button
                       type="button"
@@ -1527,6 +1592,9 @@ export default function CiclosPage() {
                     </span>
                   </summary>
                   <div className="space-y-3 px-3 pb-3">
+                  <p className="text-xs m-0" style={{ color: "#7a5c00", lineHeight: 1.5 }}>
+                    Novo: configure follow-up por agente em CRM → Agentes → Integrações (recomendado). Este bloco é legado.
+                  </p>
                   {followupAvancadoForcado && !followupHeuristica && (
                     <p
                       className="text-xs m-0 rounded-md px-2 py-1.5"

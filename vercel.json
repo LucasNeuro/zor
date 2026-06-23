@@ -17,6 +17,10 @@
   ],
   "crons": [
     {
+      "path": "/api/cron/followup-whatsapp",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/ciclos/gerente?ciclo=relatorio_manha",
       "schedule": "0 8 * * *"
     },

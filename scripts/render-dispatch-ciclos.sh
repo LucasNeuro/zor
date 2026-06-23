@@ -46,3 +46,21 @@ if [ -n "$wa_url" ]; then
     --max-time 300 \
     "$wa_url" || echo "render-dispatch-ciclos: process-whatsapp-jobs failed (non-fatal)" >&2
 fi
+
+followup_url="${DISPATCH_FOLLOWUP_URL:-}"
+if [ -z "$followup_url" ]; then
+  base="${NEXT_PUBLIC_APP_URL:-}"
+  base="${base%/}"
+  if [ -n "$base" ]; then
+    followup_url="${base}/api/cron/followup-whatsapp"
+  fi
+fi
+
+if [ -n "$followup_url" ]; then
+  echo "render-dispatch-ciclos: followup-whatsapp → ${followup_url}"
+  curl -fsS -X GET \
+    -H "Authorization: Bearer ${secret}" \
+    -H "Accept: application/json" \
+    --max-time 300 \
+    "$followup_url" || echo "render-dispatch-ciclos: followup-whatsapp failed (non-fatal)" >&2
+fi

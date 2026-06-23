@@ -48,6 +48,7 @@ import {
   type AgenteResendSnapshot,
 } from "@/components/crm/AgenteEmailConnectBlock";
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
+import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
 import { buildGoogleIntegradorCatalogLite } from "@/lib/hub/agente-wizard-google";
 import { agenteEhModoCanal, type ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
@@ -1040,6 +1041,7 @@ export default function AgentePage() {
                   </p>
                 </div>
                 {agente.modo_operacao === "canal_whatsapp" ? (
+                  <>
                   <AgenteUazapiBlock
                     agenteSlug={slug}
                     agenteNome={agente.nome}
@@ -1090,6 +1092,8 @@ export default function AgentePage() {
                       });
                     }}
                   />
+                  <AgenteFollowupBlock agenteSlug={slug} agenteNome={agente.nome} />
+                  </>
                 ) : null}
                 {isEmailChannelEnabledClient() && agente.modo_operacao === "canal_email" ? (
                   <AgenteEmailConnectBlock

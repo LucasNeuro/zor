@@ -736,7 +736,7 @@ export async function POST(request: NextRequest) {
         ? `${ciclo_erro}; preset WA: ${wa_preset_result.error}`
         : `preset WA: ${wa_preset_result.error}`;
     } else if (wa_preset_result.ciclo_followup_criado) {
-      const msg = "Preset WA: ciclo follow-up criado (activar em CRM → Ciclos).";
+      const msg = "Preset WA: ciclo follow-up criado. Configure passos em Agentes → Integrações.";
       ciclo_aviso = ciclo_aviso ? `${ciclo_aviso} ${msg}` : msg;
     }
   }

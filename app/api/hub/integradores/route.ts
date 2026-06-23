@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
       configurado =
         Boolean(typeof cfg.subdomain === "string" && cfg.subdomain) &&
         Boolean(typeof credObj.api_key === "string" && credObj.api_key);
-    } else if (entry.id === "gmail") {
+    } else if (entry.id === "gmail" || entry.id === "google_calendar") {
       configurado =
         (credObj._enc === true && typeof credObj.access_token === "string" && Boolean(credObj.access_token)) ||
         Boolean(typeof credObj.bearer_token === "string" && credObj.bearer_token);

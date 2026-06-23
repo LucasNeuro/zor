@@ -26,6 +26,8 @@ const AGENTE_WA_SELECT =
 
 const WA_LIVE_STATUSES = new Set(["connected", "connecting", "open", "online"]);
 
+export { WA_LIVE_STATUSES };
+
 /** Valida agente para webhook inbound — não filtra por DEFAULT_TENANT_ID do servidor. */
 export function validarAgenteWaRowForWebhook(r: AgenteWaRow): LinhaWhatsAppWebhook | null {
   if (r.arquivado_em != null || r.ativo === false) {

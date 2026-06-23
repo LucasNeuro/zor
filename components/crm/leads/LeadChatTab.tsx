@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Bot, Image as ImageIcon, Paperclip, Send, StickyNote, User, UserRound, X } from "lucide-react";
+import { Bot, Image as ImageIcon, Mic, Paperclip, Send, StickyNote, User, UserRound, X } from "lucide-react";
 import { ChatMensagemMidia } from "@/components/crm/leads/ChatMensagemMidia";
 import { CrmBotRingAvatar } from "@/components/crm/CrmBotRingAvatar";
 import type { CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
@@ -538,6 +538,7 @@ export function LeadChatTab({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   /** Evita reutilizar legenda já enviada ao anexar novo ficheiro. */
   const ultimoTextoEnviadoRef = useRef("");
 
@@ -1066,6 +1067,13 @@ export function LeadChatTab({
             accept="image/jpeg,image/png,image/webp,image/gif"
             onChange={onAnexoChange}
           />
+          <input
+            ref={audioInputRef}
+            type="file"
+            className="hidden"
+            accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm"
+            onChange={onAnexoChange}
+          />
           <div
             className="flex items-center gap-2 rounded-xl border px-3 py-2"
             style={{
@@ -1121,6 +1129,17 @@ export function LeadChatTab({
                 <button
                   type="button"
                   disabled={enviando || !podeEnviar}
+                  onClick={() => audioInputRef.current?.click()}
+                  aria-label="Enviar áudio"
+                  title="Enviar áudio"
+                  className="flex h-9 w-9 items-center justify-center border-0 border-r disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ borderColor: CHAT.border, color: CHAT.secondary }}
+                >
+                  <Mic size={17} />
+                </button>
+                <button
+                  type="button"
+                  disabled={enviando || !podeEnviar}
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Enviar arquivo"
                   title="Enviar arquivo"
@@ -1148,7 +1167,7 @@ export function LeadChatTab({
           </div>
           <p className="mt-2 text-center text-[10px]" style={{ color: CHAT.muted }}>
             {assumido
-              ? "Fotos e arquivos até 12 MB · Enter envia · tag *[Waje · seu nome]* automática"
+              ? "Fotos, áudios e arquivos até 12 MB · Enter envia · tag *[Waje · seu nome]* automática"
               : "Enter envia · Shift+Enter nova linha"}
           </p>
         </div>

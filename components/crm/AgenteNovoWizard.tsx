@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Clock, Mail, MessageSquare, Webhook, Zap } from "lucide-react";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import {
@@ -68,10 +68,19 @@ import { RF } from "@/lib/crm/crm-retrofit-dark-theme";
 import { createAgenteWizardTheme } from "@/lib/crm/agente-wizard-theme";
 import { gerarPersonalidadeAgente } from "@/lib/hub/agente-personalidade-eixos";
 import { AgentePersonalidadeEixosPanel } from "@/components/crm/AgentePersonalidadeEixosPanel";
+import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
+import {
+  agenteUsaFerramentasGoogle,
+  agentePrecisaGoogleWorkspace,
+  buildGoogleIntegradorCatalogLite,
+  cargoRecomendaGoogleWorkspace,
+  patchFerramentasGoogleAgendamento,
+  readWizardOAuthResume,
+} from "@/lib/hub/agente-wizard-google";
 
 // --- Constants ---
 
-/** Passos do assistente — após «Ferramentas» e criar agente, passos 7–8 são pós-criação (Canal só para WhatsApp). */
+/** Passos do assistente — após «Ferramentas» e criar agente, passos 7–9 são pós-criação (Canal / Google conforme tipo). */
 const WIZARD_STEP_LABELS = [
   "Cargo",
   "Identidade",
@@ -81,6 +90,7 @@ const WIZARD_STEP_LABELS = [
   "Ferramentas",
   "Materiais",
   "Canal",
+  "Google",
 ] as const;
 
 const WIZARD_CONHECIMENTO_SECOES = ["empresa", "servicos", "atendimento", "proibicoes"] as const;
@@ -322,6 +332,7 @@ export type AgenteNovoWizardProps = {
 
 export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWizardProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [passo, setPasso] = useState(1);
   const [dialogFecharAssistente, setDialogFecharAssistente] = useState(false);
@@ -357,6 +368,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [hubCiclosCarregando, setHubCiclosCarregando] = useState(false);
   const [hubCiclosVincularIds, setHubCiclosVincularIds] = useState<string[]>([]);
   const hubCiclosLoadRef = useRef(false);
+  const googleAutoCanalRef = useRef(false);
 
   const [motorFerramentasHub, setMotorFerramentasHub] = useState(false);
   const [mistralProvisionar, setMistralProvisionar] = useState(false);
@@ -372,6 +384,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [catalogoIntegradorFerramentasWizard, setCatalogoIntegradorFerramentasWizard] = useState<
     CatalogoFerramentaIntegradorLite[]
   >([]);
+  const [googleOauthEmail, setGoogleOauthEmail] = useState<string | null>(null);
 
   const [erroCargos, setErroCargos] = useState(false);
 
@@ -483,6 +496,39 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     })();
   }, []);
 
+  const refreshIntegradoresCatalogo = useCallback(async () => {
+    try {
+      const headers = await crmApiHeaders();
+      const resInt = await fetch("/api/hub/integradores", { headers });
+      if (!resInt.ok) return;
+      const j = (await resInt.json()) as {
+        catalogo?: IntegradorCatalogoEntry[];
+        conexoes?: Record<string, { configurado?: boolean }>;
+      };
+      const lista: CatalogoFerramentaIntegradorLite[] = [];
+      for (const entry of j.catalogo ?? []) {
+        if (j.conexoes?.[entry.id]?.configurado !== true) continue;
+        for (const f of entry.ferramentas) {
+          lista.push({
+            ferramenta_key: f.ferramenta_key,
+            titulo: f.titulo,
+            integrador_nome: entry.nome,
+            politica: f.politica,
+            descricao_curta: f.descricao_curta ?? null,
+          });
+        }
+      }
+      setCatalogoIntegradorFerramentasWizard(lista);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!googleOauthEmail) return;
+    void refreshIntegradoresCatalogo();
+  }, [googleOauthEmail, refreshIntegradoresCatalogo]);
+
   const refreshSnapshotUazapi = useCallback(async () => {
     if (!agenteSlugCriado) return;
     try {
@@ -539,6 +585,53 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       setPasso(7);
     }
   }, [passo, modoOperacao]);
+
+  useEffect(() => {
+    if (passo !== 9) return;
+    const recomenda = cargoRecomendaGoogleWorkspace({
+      cargoTitulo: cargoSelecionado?.titulo,
+      cargoDescricao: cargoSelecionado?.descricao_curta ?? cargoSelecionado?.descricao,
+      cargoSlug: cargoSelecionado?.slug,
+      cargoEspecialidade: cargoSelecionado?.especialidade,
+      nomeAgente: nome,
+    });
+    if (
+      !agentePrecisaGoogleWorkspace(usoFerramentasIa, {
+        recomendaCargo: recomenda,
+        modoCanal: false,
+      })
+    ) {
+      setPasso(7);
+    }
+  }, [passo, usoFerramentasIa, cargoSelecionado, nome]);
+
+  useEffect(() => {
+    if (!agenteEhModoCanal(modoOperacao)) return;
+    if (googleAutoCanalRef.current) return;
+    googleAutoCanalRef.current = true;
+    setMotorFerramentasHub(true);
+    setUsoFerramentasIa((prev) =>
+      patchFerramentasGoogleAgendamento(mergeUsoFerramentasComPadraoPreservandoCustom(prev))
+    );
+  }, [modoOperacao]);
+
+  useEffect(() => {
+    const resume = readWizardOAuthResume();
+    if (resume?.agenteSlug) {
+      setAgenteSlugCriado(resume.agenteSlug);
+      setPasso(resume.passo);
+    }
+    const oauth = searchParams.get("google_oauth");
+    if (oauth === "connected") {
+      const email = searchParams.get("email")?.trim();
+      if (email) setGoogleOauthEmail(email);
+      const agente = searchParams.get("agente")?.trim();
+      if (agente) setAgenteSlugCriado(agente);
+      if (searchParams.get("wizard_google") === "1") {
+        setPasso(agenteEhModoCanal(modoOperacao) ? 8 : 9);
+      }
+    }
+  }, [searchParams, modoOperacao]);
 
   useEffect(() => {
     if (passo !== 8 || !agenteSlugCriado || !agenteEhModoCanal(modoOperacao)) {
@@ -1150,9 +1243,41 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
   const wizardDark = variant === "drawer";
   const precisaPassoCanal = agenteEhModoCanal(modoOperacao);
-  const wizardStepLabels = precisaPassoCanal
-    ? WIZARD_STEP_LABELS
-    : WIZARD_STEP_LABELS.filter((label) => label !== "Canal");
+  const recomendaGoogleWorkspace = cargoRecomendaGoogleWorkspace({
+    cargoTitulo: cargoSelecionado?.titulo,
+    cargoDescricao: cargoSelecionado?.descricao_curta ?? cargoSelecionado?.descricao,
+    cargoSlug: cargoSelecionado?.slug,
+    cargoEspecialidade: cargoSelecionado?.especialidade,
+    nomeAgente: nome,
+  });
+  const precisaGoogleWorkspace = agentePrecisaGoogleWorkspace(usoFerramentasIa, {
+    recomendaCargo: recomendaGoogleWorkspace,
+    modoCanal: precisaPassoCanal,
+  });
+  const googleNoPassoCanal = precisaPassoCanal && precisaGoogleWorkspace;
+  const precisaPassoGoogle = precisaGoogleWorkspace && !precisaPassoCanal;
+  const wizardPassosVisiveis = useMemo(() => {
+    const items: { id: number; label: string }[] = [];
+    for (let i = 0; i < 7; i += 1) {
+      items.push({ id: i + 1, label: WIZARD_STEP_LABELS[i] });
+    }
+    if (precisaPassoCanal) {
+      items.push({
+        id: 8,
+        label: googleNoPassoCanal ? "Canal + Agenda" : "Canal",
+      });
+    }
+    if (precisaPassoGoogle) items.push({ id: 9, label: "Agenda Google" });
+    return items;
+  }, [precisaPassoCanal, precisaPassoGoogle, googleNoPassoCanal]);
+
+  const integradorCatalogWizard = useMemo(() => {
+    const keys = new Set(catalogoIntegradorFerramentasWizard.map((x) => x.ferramenta_key));
+    const pendentes = buildGoogleIntegradorCatalogLite({ requerConexao: true }).filter(
+      (x) => !keys.has(x.ferramenta_key)
+    );
+    return [...catalogoIntegradorFerramentasWizard, ...pendentes];
+  }, [catalogoIntegradorFerramentasWizard]);
 
   const playbookDropzoneBorder =
     playbookUploadStatus === "hover"
@@ -1569,12 +1694,12 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             WebkitOverflowScrolling: "touch",
           }}
         >
-          {wizardStepLabels.map((label, i) => {
-            const num = i + 1;
+          {wizardPassosVisiveis.map((item, i) => {
+            const num = item.id;
             const ativo = passo === num;
             const passado = passo > num;
             return (
-              <div key={label} style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 56 }}>
+              <div key={item.label} style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 56 }}>
                 <div
                   style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 1 }}
                 >
@@ -1587,10 +1712,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       lineHeight: 1.15,
                     }}
                   >
-                    {label}
+                    {item.label}
                   </span>
                 </div>
-                {i < wizardStepLabels.length - 1 && (
+                {i < wizardPassosVisiveis.length - 1 && (
                   <div
                     style={{
                       ...stepConnector(passo > num),
@@ -1617,7 +1742,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       >
         <div
           style={{
-            maxWidth: passo === 6 || (passo === 8 && precisaPassoCanal) ? 1180 : 760,
+            maxWidth: passo === 6 || (passo === 8 && precisaPassoCanal) || passo === 9 ? 1180 : 760,
             margin: "0 auto",
             padding: "28px 24px 48px",
             width: "100%",
@@ -2480,9 +2605,17 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 }
                 customCatalog={catalogoCustomFerramentasWizard}
                 externaCatalog={catalogoExternaFerramentasWizard}
-                integradorCatalog={catalogoIntegradorFerramentasWizard}
+                integradorCatalog={integradorCatalogWizard}
                 destacarWhatsApp={agenteEhModoCanal(modoOperacao)}
               />
+              {precisaGoogleWorkspace ? (
+                <div style={{ ...wizardInfoBox(), marginTop: 4 }}>
+                  <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Agenda Google:</strong>{" "}
+                  {googleNoPassoCanal
+                    ? "no passo Canal + Agenda, ligue a conta Google da empresa (secção 2)."
+                    : "no passo Agenda Google, autorize Gmail + Calendar."}
+                </div>
+              ) : null}
               {erro && (
                 <p
                   style={{
@@ -2502,7 +2635,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 <p style={{ color: "#3fb950", fontSize: 12, margin: "0 0 10px", lineHeight: 1.5 }}>
                   Agente <strong style={{ color: wzStrong }}>{agenteSlugCriado}</strong> já foi criado (ex.: ao
                   processar documentos RAG). Grave as ferramentas abaixo e continue para Materiais
-                  {precisaPassoCanal ? " e Canal." : "."}
+                  {precisaPassoCanal ? ", Canal" : ""}
+                  {googleNoPassoCanal ? " + Agenda Google" : precisaPassoGoogle ? " e Agenda Google" : ""}
+                  {precisaPassoCanal || precisaGoogleWorkspace ? "." : "."}
                 </p>
               ) : null}
 
@@ -3230,8 +3365,19 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               <div>
                 <h2 style={wzH2}>{AGENTE_WIZARD_STEP_INTRO[8].titulo}</h2>
                 <p style={wzP}>
-                  {agenteWizardPasso8Descricao(modoOperacao, isEmailChannelEnabledClient())}
+                  {agenteWizardPasso8Descricao(
+                    modoOperacao,
+                    isEmailChannelEnabledClient(),
+                    googleNoPassoCanal
+                  )}
                 </p>
+                {googleNoPassoCanal ? (
+                  <p style={{ color: wzMuted, fontSize: 12, margin: "10px 0 0", lineHeight: 1.55 }}>
+                    <strong style={{ color: wzStrong }}>Secção 1</strong> — WhatsApp.{" "}
+                    <strong style={{ color: wzStrong }}>Secção 2</strong> — agenda Google da empresa (reservas e
+                    Meet).
+                  </p>
+                ) : null}
               </div>
 
               {ragPosCriacaoAviso ? (
@@ -3273,7 +3419,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 </p>
               ) : null}
               {modoOperacao === "canal_whatsapp" ? (
-                <AgenteUazapiBlock
+                <>
+                  {googleNoPassoCanal ? (
+                    <p style={{ ...wizardSectionLabel, margin: "4px 0 8px" }}>SECÇÃO 1 · WHATSAPP</p>
+                  ) : null}
+                  <AgenteUazapiBlock
                   layout="painel"
                   agenteNome={nome.trim() || agenteSlugCriado}
                   agenteSlug={agenteSlugCriado}
@@ -3298,6 +3448,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     }))
                   }
                 />
+                </>
               ) : null}
               {isEmailChannelEnabledClient() && modoOperacao === "canal_email" ? (
                 <AgenteEmailConnectBlock
@@ -3326,8 +3477,55 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   }
                 />
               ) : null}
+
+              {googleNoPassoCanal && agenteSlugCriado ? (
+                <AgenteGoogleWorkspaceBlock
+                  agenteSlug={agenteSlugCriado}
+                  theme={wizardDark ? "dark" : "light"}
+                  contexto={recomendaGoogleWorkspace ? "agendamento" : "padrao"}
+                  secaoIndice={2}
+                  usoFerramentas={mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentasIa)}
+                  oauthEmail={googleOauthEmail}
+                  onOauthEmail={setGoogleOauthEmail}
+                  onUsoSynced={(patch) =>
+                    setUsoFerramentasIa((prev) => ({
+                      ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                      ...patch,
+                    }))
+                  }
+                />
+              ) : null}
             </div>
           )}
+
+          {passo === 9 && agenteSlugCriado && precisaPassoGoogle ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <h2 style={wzH2}>{AGENTE_WIZARD_STEP_INTRO[9].titulo}</h2>
+                <p style={wzP}>{AGENTE_WIZARD_STEP_INTRO[9].descricao}</p>
+                {googleOauthEmail ? (
+                  <p style={{ color: "#3fb950", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
+                    Conta Google autorizada: <strong style={{ color: wzStrong }}>{googleOauthEmail}</strong>
+                  </p>
+                ) : null}
+              </div>
+
+              <AgenteGoogleWorkspaceBlock
+                agenteSlug={agenteSlugCriado}
+                theme={wizardDark ? "dark" : "light"}
+                contexto={recomendaGoogleWorkspace ? "agendamento" : "padrao"}
+                usoFerramentas={mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentasIa)}
+                oauthEmail={googleOauthEmail}
+                onOauthEmail={setGoogleOauthEmail}
+                onUsoSynced={(patch) =>
+                  setUsoFerramentasIa((prev) => ({
+                    ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                    ...patch,
+                  }))
+                }
+              />
+            </div>
+          ) : null}
 
           <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
             {passo > 1 && (
@@ -3358,10 +3556,19 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 onClick={() => setPasso(8)}
                 style={wizardBtnPrimary()}
               >
-                Continuar → Canal
+                Continuar → {googleNoPassoCanal ? "Canal + Agenda" : "Canal"}
               </button>
             ) : null}
-            {passo === 7 && agenteSlugCriado && !precisaPassoCanal ? (
+            {passo === 7 && agenteSlugCriado && !precisaPassoCanal && precisaPassoGoogle ? (
+              <button
+                type="button"
+                onClick={() => setPasso(9)}
+                style={wizardBtnPrimary()}
+              >
+                Continuar → Google
+              </button>
+            ) : null}
+            {passo === 7 && agenteSlugCriado && !precisaPassoCanal && !precisaPassoGoogle ? (
               <button
                 type="button"
                 onClick={concluirPosCriacao}
@@ -3371,6 +3578,15 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               </button>
             ) : null}
             {passo === 8 && precisaPassoCanal ? (
+              <button
+                type="button"
+                onClick={concluirPosCriacao}
+                style={wizardBtnPrimary()}
+              >
+                Concluir
+              </button>
+            ) : null}
+            {passo === 9 && precisaPassoGoogle ? (
               <button
                 type="button"
                 onClick={concluirPosCriacao}

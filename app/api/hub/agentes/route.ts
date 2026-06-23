@@ -38,7 +38,8 @@ import {
   waPresetHintsParaCriacao,
   type WaPresetId,
 } from "@/lib/hub/presets/wa-conversacao-preset";
-import { mergeUsoFerramentasWhatsappCanal } from "@/lib/hub/agente-ferramentas-registry";
+import { mergeUsoFerramentasWhatsappCanal, mergeUsoFerramentasComPadraoPreservandoCustom } from "@/lib/hub/agente-ferramentas-registry";
+import { patchFerramentasGoogleAgendamento } from "@/lib/hub/agente-wizard-google";
 import { applyCargoTenantFilter } from "@/lib/hub/cargo-catalogo-tenant";
 import {
   EMAIL_CHANNEL_DISABLED_CODE,
@@ -563,7 +564,7 @@ export async function POST(request: NextRequest) {
 
   row.motor_ferramentas_habilitado = motorFerramentasHub;
   row.mistral_agent_sync_habilitado = mistralAgentSyncHabilitado;
-  const usoFerramentasMerged = waHints
+  let usoFerramentasMerged = waHints
     ? mergeUsoFerramentasWhatsappCanal(
         {
           ...(waHints.uso_ferramentas_ia as Record<string, boolean>),
@@ -572,6 +573,13 @@ export async function POST(request: NextRequest) {
         waHints.modo_operacao
       )
     : body.uso_ferramentas_ia;
+  if (modoFinal === "canal_whatsapp" || modoFinal === "canal_email") {
+    const baseUso = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentasMerged);
+    usoFerramentasMerged = patchFerramentasGoogleAgendamento(baseUso);
+    if (motorFerramentasHub !== true) {
+      row.motor_ferramentas_habilitado = true;
+    }
+  }
   row.uso_ferramentas_ia = serializarUsoFerramentasParaDb(usoFerramentasMerged);
 
   let modeloForcado = false;

@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
+import {
+  resolverLinhaWhatsAppInbound,
+  WA_LIVE_STATUSES,
+} from "@/lib/whatsapp/resolver-linha-whatsapp";
 
 /** Resolve token UAZAPI do agente WhatsApp ligado ao lead (ou fallback global). */
 export async function resolverTokenInstanciaWhatsapp(
@@ -21,20 +24,21 @@ export async function resolverTokenInstanciaWhatsapp(
         typeof agenteRow?.uazapi_instance_token === "string"
           ? agenteRow.uazapi_instance_token.trim()
           : "";
-      const status =
+      const statusRaw =
         typeof agenteRow?.uazapi_connection_status === "string"
           ? agenteRow.uazapi_connection_status.trim()
           : "";
-      const agenteOk =
-        token &&
-        agenteRow?.ativo !== false &&
-        agenteRow?.arquivado_em == null &&
-        (status === "connected" || status === "");
-      if (agenteOk) {
+      const status = statusRaw.toLowerCase();
+      const agenteAtivo =
+        token && agenteRow?.ativo !== false && agenteRow?.arquivado_em == null;
+
+      if (agenteAtivo && (!status || WA_LIVE_STATUSES.has(status))) {
         return { token, origem: `agente:${slug}` };
       }
-      if (token && status && status !== "connected") {
-        console.warn(`[CRM][WA] agente ${slug} com WhatsApp ${status}; tentando fallback`);
+
+      if (agenteAtivo && status) {
+        console.warn(`[CRM][WA] agente ${slug} WhatsApp status=${statusRaw} — não enviar por fallback`);
+        return { token: null, origem: `agente:${slug}:desconectado` };
       }
     }
   }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { telefoneConversaId } from "@/lib/crm/isolamento-conversa-lead";
+import { resolverTelefoneWhatsappLead } from "@/lib/crm/resolver-telefone-whatsapp-lead";
 import { ensureConversaAtiva, gravarMensagemSaidaConversa } from "@/lib/crm/conversa-canal";
 import { formatarMensagemConsultorWhatsapp } from "@/lib/crm/mensagem-consultor-whatsapp";
 import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsapp";
@@ -17,8 +18,21 @@ import {
   type MidiaAnexoEnviar,
 } from "@/lib/crm/atendimento-midia-envio";
 
-function onlyDigits(s: string): string {
-  return s.replace(/\D/g, "");
+function maskTelefone(tel: string): string {
+  const d = tel.replace(/\D/g, "");
+  if (d.length < 6) return "***";
+  return `***${d.slice(-4)}`;
+}
+
+function logAtendimentoSend(fields: Record<string, unknown>) {
+  console.info(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      scope: "crm_atendimento",
+      service: "escritorio-virtual",
+      ...fields,
+    })
+  );
 }
 
 function allowWhatsappDryRun(): boolean {
@@ -152,7 +166,7 @@ export async function enviarMensagemAtendimentoHumano(
 ): Promise<EnviarMensagemHumanoResult> {
   const { data: lead, error: leadErr } = await supabase
     .from("hub_leads_crm")
-    .select("id, telefone, humano_responsavel, agente_responsavel, pessoa_id, tenant_id")
+    .select("id, telefone, humano_responsavel, agente_responsavel, pessoa_id, tenant_id, metadata")
     .eq("id", opts.leadId)
     .maybeSingle();
 
@@ -168,7 +182,7 @@ export async function enviarMensagemAtendimentoHumano(
     };
   }
 
-  const telefone = onlyDigits(String(lead.telefone ?? ""));
+  const telefone = resolverTelefoneWhatsappLead(lead);
   if (telefone.length < 10) {
     return { ok: false, error: "Lead sem telefone válido para WhatsApp.", status: 400 };
   }
@@ -227,11 +241,22 @@ export async function enviarMensagemAtendimentoHumano(
   }
 
   if (!whatsappConfigured({ instanceToken })) {
+    const detalheToken =
+      tokenOrigem.includes("desconectado") || !instanceToken
+        ? "WhatsApp do agente não está conectado. Reconecte em Agentes → Canais → WhatsApp."
+        : "WhatsApp não configurado: conecte um agente em Canais ou defina UAZAPI_BASE_URL + token.";
     if (!allowWhatsappDryRun()) {
+      logAtendimentoSend({
+        event: "send_skip",
+        lead_id: opts.leadId,
+        telefone: maskTelefone(telefone),
+        agente_slug: agenteSlug,
+        token_origem: tokenOrigem,
+        motivo: detalheToken,
+      });
       return {
         ok: false,
-        error:
-          "WhatsApp não configurado: conecte um agente em Canais ou defina UAZAPI_BASE_URL + token da instância.",
+        error: detalheToken,
         status: 502,
       };
     }
@@ -252,6 +277,15 @@ export async function enviarMensagemAtendimentoHumano(
       }
     }
     if (!envio.ok) {
+      logAtendimentoSend({
+        event: "send_fail",
+        lead_id: opts.leadId,
+        telefone: maskTelefone(telefone),
+        agente_slug: agenteSlug,
+        token_origem: tokenOrigem,
+        status: envio.status,
+        error: envio.error,
+      });
       return {
         ok: false,
         error: erroEnvioWhatsapp(envio.status, envio.error),
@@ -259,6 +293,15 @@ export async function enviarMensagemAtendimentoHumano(
       };
     }
     sendInfo = { status: envio.status, body: envio.body, provider: envio.provider };
+    logAtendimentoSend({
+      event: "send_ok",
+      lead_id: opts.leadId,
+      telefone: maskTelefone(telefone),
+      agente_slug: agenteSlug,
+      token_origem: tokenOrigem,
+      status: envio.status,
+      whatsapp_message_id: extrairWhatsappMessageIdDeRespostaUazapi(envio.body),
+    });
   }
 
   const whatsappMessageId = extrairWhatsappMessageIdDeRespostaUazapi(sendInfo.body);

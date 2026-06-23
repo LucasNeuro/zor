@@ -183,6 +183,7 @@ export type CatalogoFerramentaIntegradorLite = {
   integrador_nome: string;
   politica: string;
   descricao_curta?: string | null;
+  requerConexao?: boolean;
 };
 
 export type AgenteFerramentasIaBlockProps = {
@@ -809,7 +810,9 @@ export function AgenteFerramentasIaBlock({
                   letterSpacing: 0.04,
                 }}
               >
-                INTEGRAÇÕES LIGADAS
+                {integradorActivos.some((tool) => tool.requerConexao) && !integradorActivos.some((tool) => !tool.requerConexao)
+                  ? "GOOGLE WORKSPACE (LIGAR NO PASSO SEGUINTE)"
+                  : "INTEGRAÇÕES LIGADAS"}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {integradorActivos.map((tool) => {
@@ -856,13 +859,13 @@ export function AgenteFerramentasIaBlock({
                               fontSize: 9,
                               fontWeight: 800,
                               letterSpacing: 0.06,
-                              color: RF_ACCENT,
-                              border: "1px solid rgba(146,255,0,0.35)",
+                              color: tool.requerConexao ? "#c9a24a" : RF_ACCENT,
+                              border: `1px solid ${tool.requerConexao ? "rgba(201,162,74,0.45)" : "rgba(146,255,0,0.35)"}`,
                               borderRadius: 4,
                               padding: "2px 6px",
                             }}
                           >
-                            {tool.integrador_nome}
+                            {tool.requerConexao ? "REQUER OAUTH" : tool.integrador_nome}
                           </span>
                         </div>
                         <code

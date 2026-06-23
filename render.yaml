@@ -23,6 +23,13 @@
 # Supabase: aplicar migrações (incl. 20260605120000_ensure_hub_leads_crm_tenant.sql) antes do go-live.
 # WhatsApp: após deploy, abrir agente → QR/pareamento (sincroniza webhook para NEXT_PUBLIC_APP_URL/api/whatsapp/webhook).
 #
+# Google Workspace (agentes — Gmail + Calendar + Meet):
+#   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+#   GOOGLE_OAUTH_REDIRECT_URI=https://waje.com.br/api/hub/email/oauth/google/callback
+#   HUB_CREDENTIALS_ENCRYPTION_KEY (32 bytes hex — node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+#   GOOGLE_CALENDAR_TIMEZONE=America/Sao_Paulo
+# GCP: OAuth consent screen → Publicar app (produção) + redirect URI autorizado acima.
+#
 # --- Cron Job (`dispatch-ciclos-cron`) ---
 # Minimal Docker image (`curl`) runs `scripts/render-dispatch-ciclos.sh` every schedule tick (UTC).
 # Inherits CRON_SECRET + NEXT_PUBLIC_APP_URL from the web service via `fromService`.
@@ -78,6 +85,16 @@ services:
         value: "30000"
       - key: MISTRAL_CHAT_RETRIES
         value: "1"
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
+      - key: HUB_CREDENTIALS_ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_CALENDAR_TIMEZONE
+        value: America/Sao_Paulo
 
   - type: worker
     name: whatsapp-job-worker

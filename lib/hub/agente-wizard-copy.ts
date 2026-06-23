@@ -2,7 +2,7 @@ import type { ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { MODO_OPERACAO_LABEL } from "@/lib/hub/agente-modo-operacao";
 
 export const AGENTE_WIZARD_STEP_INTRO: Record<
-  1 | 2 | 3 | 4 | 5 | 6 | 7 | 8,
+  1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
   { titulo: string; descricao: string }
 > = {
   1: {
@@ -43,6 +43,11 @@ export const AGENTE_WIZARD_STEP_INTRO: Record<
     titulo: "Canal",
     descricao: "Configure o canal WhatsApp após criar o agente.",
   },
+  9: {
+    titulo: "Google Workspace",
+    descricao:
+      "Ligue a conta Google do cliente (Gmail + Agenda). O agente poderá enviar e-mails e criar reuniões com link Meet.",
+  },
 };
 
 export function agenteWizardPasso8Intro(emailChannelEnabled: boolean): string {
@@ -53,12 +58,21 @@ export function agenteWizardPasso8Intro(emailChannelEnabled: boolean): string {
 
 export function agenteWizardPasso8Descricao(
   modo: ModoOperacaoAgente,
-  emailChannelEnabled = false
+  emailChannelEnabled = false,
+  comAgendaGoogle = false
 ): string {
   if (emailChannelEnabled && modo === "canal_email") {
-    return "Configure remetente, endereço de entrada e envie um e-mail de teste (Resend). O playbook publicado define o fluxo de atendimento.";
+    const base =
+      "Configure remetente, endereço de entrada e envie um e-mail de teste (Resend). O playbook publicado define o fluxo de atendimento.";
+    return comAgendaGoogle
+      ? `${base} Ligue também a agenda Google da empresa na secção abaixo.`
+      : base;
   }
-  return "Ligue o WhatsApp da empresa: região UAZAPI, instância e QR/código. O playbook publicado define o fluxo de atendimento.";
+  const wa =
+    "Ligue o WhatsApp da empresa: região UAZAPI, instância e QR/código. O playbook publicado define o fluxo de atendimento.";
+  return comAgendaGoogle
+    ? `${wa} Na secção 2, autorize a conta Google da empresa para o agente marcar horários e enviar links Meet.`
+    : wa;
 }
 
 export function modoOperacaoWizardResumo(modo: ModoOperacaoAgente): string {

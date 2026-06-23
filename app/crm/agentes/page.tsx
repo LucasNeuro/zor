@@ -1,12 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Suspense, useState, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Activity, ChevronRight, Clock, MessageCircle, X, Zap } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
-import { AgenteNovoWizard } from "@/components/crm/AgenteNovoWizard";
 import { CrmCargosCatalogDrawer } from "@/components/crm/CrmCargosCatalogDrawer";
 import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import { useCrmToast } from "@/lib/crm/crm-feedback";
@@ -47,6 +47,28 @@ import {
   type HubAgenteRow,
 } from "@/hooks/useHubAgentesQueries";
 import type { HubAgentesListMode } from "@/lib/hub/hub-query-keys";
+
+/** Wizard ~3k linhas — carregar só ao abrir o drawer evita ChunkLoadError no dev (compile > timeout). */
+const AgenteNovoWizard = dynamic(
+  () => import("@/components/crm/AgenteNovoWizard").then((m) => m.AgenteNovoWizard),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: RF_TEXT_MUTED,
+          fontSize: 13,
+        }}
+      >
+        A carregar assistente…
+      </div>
+    ),
+  }
+);
 
 const SEGMENTO_COR: Record<string, string> = {
   Marketing: "#3b82f6",
@@ -375,10 +397,14 @@ function AgentesView() {
 
   useEffect(() => {
     if (openedFromQuery.current) return;
-    if (searchParams.get("novo") === "1") {
+    const novo = searchParams.get("novo") === "1";
+    const wizardGoogle = searchParams.get("wizard_google") === "1";
+    if (novo || wizardGoogle) {
       openedFromQuery.current = true;
       setDrawerNovoOpen(true);
-      router.replace("/crm/agentes", { scroll: false });
+      if (novo && !wizardGoogle) {
+        router.replace("/crm/agentes", { scroll: false });
+      }
     }
   }, [searchParams, router]);
 

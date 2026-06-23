@@ -11,7 +11,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
   Archive,
@@ -48,6 +48,9 @@ import {
   type AgenteResendSnapshot,
 } from "@/components/crm/AgenteEmailConnectBlock";
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
+import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
+import { buildGoogleIntegradorCatalogLite } from "@/lib/hub/agente-wizard-google";
+import { agenteEhModoCanal, type ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { hubModeloExibicaoProduto } from "@/lib/ia/hub-model-defaults";
 import {
   mergeUsoFerramentasComPadraoPreservandoCustom,
@@ -139,6 +142,7 @@ function badgeStatusAgente(agente: Pick<Agente, "arquivado_em" | "ativo">): {
 export default function AgentePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slug = params?.slug as string;
   const { success: toastSuccess } = useCrmToast();
 
@@ -319,10 +323,29 @@ export default function AgentePage() {
     };
   }, [slug]);
 
+  useEffect(() => {
+    const oauth = searchParams.get("google_oauth");
+    if (oauth === "connected" || oauth === "error") {
+      setAbaFicha("integracoes");
+    }
+  }, [searchParams]);
+
   const avatarUrl = useMemo(() => {
     const v = agente?.avatar_url;
     return typeof v === "string" && v.trim() ? v.trim() : null;
   }, [agente?.avatar_url]);
+
+  const integradorCatalogFicha = useMemo(() => {
+    const keys = new Set(catalogoIntegradorFerramentas.map((x) => x.ferramenta_key));
+    const pendentes = buildGoogleIntegradorCatalogLite({ requerConexao: true }).filter(
+      (x) => !keys.has(x.ferramenta_key)
+    );
+    return [...catalogoIntegradorFerramentas, ...pendentes];
+  }, [catalogoIntegradorFerramentas]);
+
+  const agenteModoCanal = agente
+    ? agenteEhModoCanal(agente.modo_operacao as ModoOperacaoAgente)
+    : false;
 
   function toggleDia(d: number) {
     setDiasSemana((prev) =>
@@ -1095,6 +1118,21 @@ export default function AgentePage() {
                     }}
                   />
                 ) : null}
+                {agenteModoCanal ? (
+                  <AgenteGoogleWorkspaceBlock
+                    agenteSlug={slug}
+                    theme="light"
+                    contexto="agendamento"
+                    usoFerramentas={usoFerramentasIa}
+                    returnToPath={`/crm/agentes/${encodeURIComponent(slug)}?google_oauth=connected`}
+                    onUsoSynced={(patch) =>
+                      setUsoFerramentasIa((prev) => ({
+                        ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                        ...patch,
+                      }))
+                    }
+                  />
+                ) : null}
                 <AgenteFerramentasIaBlock
                   motorHabilitado={motorFerramentasHub}
                   onMotorChange={setMotorFerramentasHub}
@@ -1109,7 +1147,7 @@ export default function AgentePage() {
                   }
                   customCatalog={catalogoCustomFerramentas}
                   externaCatalog={catalogoExternaFerramentas}
-                  integradorCatalog={catalogoIntegradorFerramentas}
+                  integradorCatalog={integradorCatalogFicha}
                   mistralAgentId={typeof agente.mistral_agent_id === "string" ? agente.mistral_agent_id : null}
                   mistralSyncEm={typeof agente.mistral_agent_sync_em === "string" ? agente.mistral_agent_sync_em : null}
                   mistralSyncErro={

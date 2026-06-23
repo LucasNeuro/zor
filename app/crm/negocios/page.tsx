@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { NegocioFormDrawer } from "@/components/crm/NegocioFormDrawer";
@@ -151,9 +151,8 @@ export default function NegociosPage() {
   const [selectedNegocio, setSelectedNegocio] = useState<NegocioDetailData | null>(null);
 
   const carregarPipelines = useCallback(async () => {
-    const res = await fetch("/api/crm/pipelines?tipo=negocio", {
-      headers: internalApiHeaders(),
-    });
+    const headers = await crmApiHeaders();
+    const res = await fetch("/api/crm/pipelines?tipo=negocio", { headers });
     const json = await res.json().catch(() => ({ data: [] }));
     const list = (json.data || []) as PipelineUi[];
     if (!list.length) return;
@@ -182,7 +181,7 @@ export default function NegociosPage() {
   }, [pipelineAtivo]);
 
   const carregarLista = useCallback(
-    (nextOffset = 0, append = false) => {
+    async (nextOffset = 0, append = false) => {
       if (append) setCarregandoMais(true);
       else setCarregando(true);
 
@@ -193,7 +192,8 @@ export default function NegociosPage() {
         p.set("pipeline_id", pipelineAtivo.id);
       }
 
-      return fetch(`/api/crm/negocios?${p}`, { headers: internalApiHeaders() })
+      const headers = await crmApiHeaders();
+      return fetch(`/api/crm/negocios?${p}`, { headers })
         .then((r) => r.json())
         .then((d) => {
           const rows = (d.data ?? []) as Negocio[];
@@ -245,10 +245,11 @@ export default function NegociosPage() {
       );
     }
 
+    const headers = { "Content-Type": "application/json", ...(await crmApiHeaders()) };
     const res = await fetch(`/api/crm/negocios/${negocioId}`, {
       method: "PATCH",
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+      headers,
       body: JSON.stringify({ etapa: novaEtapa }),
     });
     const json = await res.json().catch(() => ({}));

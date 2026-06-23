@@ -6,7 +6,8 @@ import {
   CrmSideoverActionBtn,
   CrmSideoverActionGroup,
 } from "@/components/crm/CrmSideoverActionGroup";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
+import { isUuidValido } from "@/lib/tenant-default";
 import {
   RF_ACCENT,
   RF_BORDER,
@@ -94,12 +95,12 @@ export function LeadNegocioPanel({
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch("/api/crm/pipelines?tipo=negocio", {
-        headers: internalApiHeaders(),
-      });
+      const headers = await crmApiHeaders();
+      const res = await fetch("/api/crm/pipelines?tipo=negocio", { headers });
       const json = await res.json().catch(() => ({}));
-      if (res.ok && Array.isArray(json.data) && json.data[0]?.id) {
-        setPipelineId(String(json.data[0].id));
+      const id = json.data?.[0]?.id;
+      if (res.ok && typeof id === "string" && isUuidValido(id)) {
+        setPipelineId(id);
       }
     })();
   }, []);
@@ -108,9 +109,10 @@ export function LeadNegocioPanel({
     setGerandoSugestao(true);
     setSugestaoIaMsg("");
     try {
+      const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
       const res = await fetch("/api/crm/negocios/sugerir-ia", {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ lead_id: leadId }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -173,10 +175,11 @@ export function LeadNegocioPanel({
     }
     setSalvando(true);
     try {
+      const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
       const res = await fetch("/api/crm/negocios", {
         method: "POST",
         credentials: "include",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           titulo: titulo.trim(),
           prefixo_mercado: "GRL",

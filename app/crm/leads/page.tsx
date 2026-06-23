@@ -21,7 +21,7 @@ import {
 } from "@/components/crm/CrmRetrofitTablePanel";
 import { crmHeaderPrimaryBtnStyle } from "@/lib/crm/crm-list-pill-styles";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
 import {
   effectiveHumanoResponsavel,
@@ -225,9 +225,10 @@ export default function LeadsPage() {
 
   const carregarPipeline = useCallback(async () => {
     try {
+      const headers = await crmApiHeaders();
       const [resLead, resAt] = await Promise.all([
-        fetch("/api/crm/pipelines?tipo=lead", { headers: internalApiHeaders() }),
-        fetch("/api/crm/pipelines?tipo=atendimento", { headers: internalApiHeaders() }),
+        fetch("/api/crm/pipelines?tipo=lead", { headers }),
+        fetch("/api/crm/pipelines?tipo=atendimento", { headers }),
       ]);
       const jsonLead = await resLead.json();
       const list = (jsonLead.data || []) as PipelineUi[];

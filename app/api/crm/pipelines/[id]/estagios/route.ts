@@ -4,14 +4,23 @@ import {
   patchPipelineEstagioOrdem,
 } from "@/lib/crm/pipeline-estagios-db";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
+import { isUuidValido } from "@/lib/tenant-default";
 
 type Params = { params: Promise<{ id: string }> };
+
+function pipelineIdInvalido(id: string) {
+  return !isUuidValido(id);
+}
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   const configErr = crmConfigError();
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
 
   const { id: pipelineId } = await params;
+  if (pipelineIdInvalido(pipelineId)) {
+    return NextResponse.json({ error: "Pipeline inválido" }, { status: 400 });
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = await request.json();
@@ -61,6 +70,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
 
   const { id: pipelineId } = await params;
+  if (pipelineIdInvalido(pipelineId)) {
+    return NextResponse.json({ error: "Pipeline inválido" }, { status: 400 });
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = await request.json();
@@ -107,6 +120,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
 
   const { id: pipelineId } = await params;
+  if (pipelineIdInvalido(pipelineId)) {
+    return NextResponse.json({ error: "Pipeline inválido" }, { status: 400 });
+  }
+
   const slug = request.nextUrl.searchParams.get("slug")?.trim();
   if (!slug) return NextResponse.json({ error: "slug é obrigatório" }, { status: 400 });
 

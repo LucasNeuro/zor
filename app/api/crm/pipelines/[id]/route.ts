@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { isPipelinePrincipal } from "@/lib/crm/tenant-pipelines";
-import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+import { isUuidValido } from "@/lib/tenant-default";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -10,6 +11,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
 
   const { id: pipelineId } = await params;
+  if (!isUuidValido(pipelineId)) {
+    return NextResponse.json({ error: "Pipeline inválido" }, { status: 400 });
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = await request.json();
@@ -18,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const supabase = crmDb();
-  const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
+  const tenantId = await resolveTenantIdFromCaller(request);
 
   const { data: pipe, error: loadErr } = await supabase
     .from("hub_pipelines")
@@ -84,8 +89,12 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
 
   const { id: pipelineId } = await params;
+  if (!isUuidValido(pipelineId)) {
+    return NextResponse.json({ error: "Pipeline inválido" }, { status: 400 });
+  }
+
   const supabase = crmDb();
-  const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
+  const tenantId = await resolveTenantIdFromCaller(request);
 
   const { data: pipe, error: loadErr } = await supabase
     .from("hub_pipelines")

@@ -3,8 +3,8 @@ import { registrarLogCrm } from "@/lib/crm/audit-log";
 import { buildLeadEstagioPatch } from "@/lib/crm/estagio-map";
 import { validarMudancaEstagioLead } from "@/lib/crm/lead-rules";
 import { mergeLeadTimelineEvents, parseConversaTurnos } from "@/lib/crm/lead-timeline";
+import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
-import { tenantIdFromRequest } from "@/lib/tenant-default";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -104,7 +104,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const supabase = crmDb();
-  const tenantId = tenantIdFromRequest(request.headers);
+  const tenantId = await resolveTenantIdFromCaller(request);
 
   const { data: atual, error: fetchErr } = await supabase
     .from("hub_leads_crm")

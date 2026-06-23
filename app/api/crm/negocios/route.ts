@@ -7,8 +7,10 @@ import {
 } from "@/lib/crm/negocio-cadastro";
 import { prepararRowHubLeadInsert } from "@/lib/crm/lead-cadastro";
 import { criarVinculosNegocio } from "@/lib/crm/negocio-vinculos";
+import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 import { resolverServicoCatalogoParaNegocio } from "@/lib/crm/servicos-catalogo";
-import { defaultTenantId, isMissingPgColumn, isTenantFkError, tenantIdFromRequest } from "@/lib/tenant-default";
+import { resolveDefaultPipelineId } from "@/lib/crm/tenant-pipelines";
+import { isMissingPgColumn, isTenantFkError, isUuidValido } from "@/lib/tenant-default";
 
 function db() {
   return createClient(
@@ -402,7 +404,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = db();
-  const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
+  const tenantId = await resolveTenantIdFromCaller(request);
 
   let body: Partial<NegocioCadastroPayload> & {
     pipeline_id?: string | null;
@@ -425,10 +427,32 @@ export async function POST(request: NextRequest) {
   }
 
   const d = validacao.data;
-  const pipeline_id =
+  let pipeline_id =
     typeof body.pipeline_id === "string" && body.pipeline_id.trim()
       ? body.pipeline_id.trim()
       : null;
+
+  if (pipeline_id && !isUuidValido(pipeline_id)) {
+    pipeline_id = null;
+  }
+
+  if (!pipeline_id) {
+    try {
+      pipeline_id = await resolveDefaultPipelineId(supabase, tenantId, "negocio");
+    } catch {
+      pipeline_id = null;
+    }
+  }
+
+  if (!pipeline_id) {
+    return NextResponse.json(
+      {
+        error:
+          "Nenhum funil de negócios configurado para a sua empresa. Configure em Negócios → Estágios.",
+      },
+      { status: 400 }
+    );
+  }
 
   let servicoCatalogo: Awaited<ReturnType<typeof resolverServicoCatalogoParaNegocio>> = null;
   if (d.servico_catalogo_id) {

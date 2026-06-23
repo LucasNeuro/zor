@@ -1,49 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { estagiosPadraoParaTipo } from "@/lib/crm/pipeline-defaults";
+import { resolveValidatedTenantId } from "@/lib/crm/resolve-tenant-from-caller";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 import { ensureTenantPipelines, listTenantPipelines } from "@/lib/crm/tenant-pipelines";
-import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
 
 type PipelineTipoApi = "lead" | "negocio" | "atendimento";
-
-function pipelineFallbackNome(tipo: PipelineTipoApi): string {
-  if (tipo === "lead") return "Leads";
-  if (tipo === "atendimento") return "Atendimento";
-  return "Negócios";
-}
-
-function fallbackResponse(tipo: PipelineTipoApi) {
-  const estagios = estagiosPadraoParaTipo(tipo);
-  return NextResponse.json({
-    data: [
-      {
-        id: "fallback",
-        slug: `${tipo}-principal`,
-        nome: pipelineFallbackNome(tipo),
-        tipo,
-        mercado_sigla: null,
-        ordem: 0,
-        estagios: estagios.map((e) => ({
-          id: e.slug,
-          slug: e.slug,
-          label: e.label,
-          cor: e.cor,
-          ordem: e.ordem,
-          ativo: true,
-          tipo_fecho: e.tipo_fecho,
-          sistema: true,
-        })),
-      },
-    ],
-  });
-}
 
 export async function GET(request: NextRequest) {
   const configErr = crmConfigError();
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
 
+  const tenantResolved = await resolveValidatedTenantId(request);
+  if (!tenantResolved.ok) {
+    return NextResponse.json({ error: tenantResolved.error }, { status: tenantResolved.status });
+  }
+
   const tipo = (request.nextUrl.searchParams.get("tipo") || "lead").trim() as PipelineTipoApi;
-  const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
+  const tenantId = tenantResolved.tenantId;
   const supabase = crmDb();
 
   try {
@@ -53,11 +26,15 @@ export async function GET(request: NextRequest) {
     const pipelines = await listTenantPipelines(supabase, tenantId, tipo, {
       incluirInativos,
     });
-    if (pipelines.length === 0) return fallbackResponse(tipo);
     return NextResponse.json({ data: pipelines });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Erro ao listar pipelines";
-    if (msg.includes("does not exist")) return fallbackResponse(tipo);
+    if (msg.includes("does not exist")) {
+      return NextResponse.json(
+        { error: "Tabelas de pipeline não encontradas. Aplique as migrações Supabase." },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
@@ -65,6 +42,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const configErr = crmConfigError();
   if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
+
+  const tenantResolved = await resolveValidatedTenantId(request);
+  if (!tenantResolved.ok) {
+    return NextResponse.json({ error: tenantResolved.error }, { status: tenantResolved.status });
+  }
 
   let body: Record<string, unknown> = {};
   try {
@@ -84,9 +66,14 @@ export async function POST(request: NextRequest) {
   if (!nome) return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
 
   const supabase = crmDb();
-  const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
+  const tenantId = tenantResolved.tenantId;
 
-  await ensureTenantPipelines(supabase, tenantId);
+  try {
+    await ensureTenantPipelines(supabase, tenantId);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Erro ao preparar pipelines";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
 
   const { count } = await supabase
     .from("hub_pipelines")

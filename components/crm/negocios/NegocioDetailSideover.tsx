@@ -13,7 +13,7 @@ import {
   CrmRetrofitSideoverShell,
 } from "@/components/crm/CrmRetrofitSideoverShell";
 import { NEGOCIO_ETAPAS } from "@/lib/crm/negocio-cadastro";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { supabase } from "@/lib/supabase/client";
 import { LeadObservacoesTab, type CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
 import {
@@ -184,8 +184,9 @@ export function NegocioDetailSideover({
   const negocio = negocioProp ?? negocioLocal;
 
   const carregarDetalhe = useCallback(async (id: string) => {
+    const headers = await crmApiHeaders();
     const res = await fetch(`/api/crm/negocios/${encodeURIComponent(id)}`, {
-      headers: internalApiHeaders(),
+      headers,
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -255,10 +256,11 @@ export function NegocioDetailSideover({
     if (!negocio) return false;
     setSalvando(true);
     setErro("");
+    const headers = { "Content-Type": "application/json", ...(await crmApiHeaders()) };
     const res = await fetch(`/api/crm/negocios/${encodeURIComponent(negocio.id)}`, {
       method: "PATCH",
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+      headers,
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));

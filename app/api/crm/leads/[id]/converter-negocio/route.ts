@@ -6,8 +6,8 @@ import {
   prefixoMercadoFromLead,
 } from "@/lib/crm/negocio-vinculos";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
-import { listTenantPipelines } from "@/lib/crm/tenant-pipelines";
-import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+import { resolveDefaultPipelineId } from "@/lib/crm/tenant-pipelines";
+import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   const { id: lead_id } = await params;
   const supabase = crmDb();
-  const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
+  const tenantId = await resolveTenantIdFromCaller(request);
 
   const { data: lead, error: leadErr } = await supabase
     .from("hub_leads_crm")
@@ -42,10 +42,9 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   let pipelineNegId: string | null = null;
   try {
-    const pipelines = await listTenantPipelines(supabase, tenantId, "negocio");
-    pipelineNegId = pipelines[0]?.id ?? null;
+    pipelineNegId = await resolveDefaultPipelineId(supabase, tenantId, "negocio");
   } catch {
-    /* fallback abaixo */
+    pipelineNegId = null;
   }
 
   if (!pipelineNegId) {

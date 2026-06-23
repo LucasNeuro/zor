@@ -33,7 +33,7 @@ import {
   RF_LIGHT_TEXT_MUTED,
   type CrmSideoverTheme,
 } from "@/lib/crm/crm-retrofit-dark-theme";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
 import { leadEhCanalEmail, leadEhCanalWhatsapp } from "@/lib/crm/lead-canal";
 import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
@@ -167,8 +167,9 @@ export function LeadEditSideover({
   }, [screen, canalLead.showWhatsapp, canalLead.showEmail]);
 
   const carregarDetalhe = useCallback(async (leadId: string) => {
+    const headers = await crmApiHeaders();
     const res = await fetch(`/api/crm/leads/${encodeURIComponent(leadId)}`, {
-      headers: internalApiHeaders(),
+      headers,
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) return;
@@ -221,10 +222,11 @@ export function LeadEditSideover({
     if (!lead || !novaNota.trim()) return;
     setAdicionandoNota(true);
     setErroObservacao("");
+    const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
     const res = await fetch(`/api/crm/leads/${encodeURIComponent(lead.id)}/notas`, {
       method: "POST",
       credentials: "include",
-      headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ conteudo: novaNota.trim(), criado_por: "humano" }),
     });
     const json = (await res.json().catch(() => ({}))) as {

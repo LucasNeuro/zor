@@ -10,9 +10,10 @@ import {
 } from "@/components/crm/CrmSideoverActionGroup";
 import { CrmRetrofitSideoverShell } from "@/components/crm/CrmRetrofitSideoverShell";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import type { PipelineEstagioRow } from "@/lib/crm/pipeline-defaults";
 import { slugEstagioFromLabel } from "@/lib/crm/pipeline-estagios-ia";
+import { isUuidValido } from "@/lib/tenant-default";
 import {
   RF_LIGHT_BORDER_STRONG,
   RF_LIGHT_INPUT_STYLE,
@@ -89,10 +90,15 @@ export function PipelineConfigSideover({
     setErro("");
     try {
       const adminQs = showPipelineAdmin ? "&incluir_inativos=1" : "";
+      const headers = await crmApiHeaders();
       const res = await fetch(`/api/crm/pipelines?tipo=${tipo}${adminQs}`, {
-        headers: internalApiHeaders(),
+        headers,
       });
       const json = await res.json();
+      if (!res.ok) {
+        setErro(typeof json.error === "string" ? json.error : "Não foi possível carregar o pipeline.");
+        return;
+      }
       const list = (json.data || []) as PipelineComEstagios[];
       setPipelines(list);
       const activos = list.filter((p) => p.ativo !== false);
@@ -146,8 +152,8 @@ export function PipelineConfigSideover({
     slug: string,
     patch: { label?: string; cor?: string; ativo?: boolean }
   ) {
-    if (!pipeline?.id || pipeline.id === "fallback") return;
-    const headers = { ...internalApiHeaders(), "Content-Type": "application/json" };
+    if (!pipeline?.id || pipeline.id === "fallback" || !isUuidValido(pipeline.id)) return;
+    const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
     const res = await fetch(`/api/crm/pipelines/${pipeline.id}/estagios`, {
       method: "PATCH",
       headers,
@@ -182,7 +188,7 @@ export function PipelineConfigSideover({
   }
 
   async function toggleEstagio(slug: string, ativo: boolean) {
-    if (!pipeline?.id || pipeline.id === "fallback" || salvandoSlug === slug) return;
+    if (!pipeline?.id || pipeline.id === "fallback" || !isUuidValido(pipeline.id) || salvandoSlug === slug) return;
 
     const anterior = pipeline?.estagios.find((e) => e.slug === slug)?.ativo ?? !ativo;
     setErro("");
@@ -221,7 +227,7 @@ export function PipelineConfigSideover({
   }
 
   async function adicionarEstagio() {
-    if (!pipeline?.id || pipeline.id === "fallback") return;
+    if (!pipeline?.id || pipeline.id === "fallback" || !isUuidValido(pipeline.id)) return;
     const label = novoLabel.trim();
     const slug = (novoSlug.trim() || slugEstagioFromLabel(label)).toLowerCase().replace(/[^a-z0-9_]+/g, "_");
     if (!label) {
@@ -232,7 +238,7 @@ export function PipelineConfigSideover({
       setErro("Nome inválido para gerar identificador do estágio.");
       return;
     }
-    const headers = { ...internalApiHeaders(), "Content-Type": "application/json" };
+    const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
     const res = await fetch(`/api/crm/pipelines/${pipeline.id}/estagios`, {
       method: "POST",
       headers,
@@ -255,8 +261,8 @@ export function PipelineConfigSideover({
   );
 
   async function reordenarEstagios(slugs: string[]) {
-    if (!pipeline?.id || pipeline.id === "fallback") return false;
-    const headers = { ...internalApiHeaders(), "Content-Type": "application/json" };
+    if (!pipeline?.id || pipeline.id === "fallback" || !isUuidValido(pipeline.id)) return false;
+    const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
     const res = await fetch(`/api/crm/pipelines/${pipeline.id}/estagios`, {
       method: "PATCH",
       headers,
@@ -293,14 +299,14 @@ export function PipelineConfigSideover({
   }
 
   async function excluirEstagio(est: PipelineEstagioRow) {
-    if (!pipeline?.id || pipeline.id === "fallback") return;
+    if (!pipeline?.id || pipeline.id === "fallback" || !isUuidValido(pipeline.id)) return;
     const ok = window.confirm(
       `Excluir o estágio «${est.label}»? Só é possível se não houver leads/negócios nesta coluna.`
     );
     if (!ok) return;
     const res = await fetch(
       `/api/crm/pipelines/${pipeline.id}/estagios?slug=${encodeURIComponent(est.slug)}`,
-      { method: "DELETE", headers: internalApiHeaders() }
+      { method: "DELETE", headers: await crmApiHeaders() }
     );
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -319,7 +325,7 @@ export function PipelineConfigSideover({
       setErro("Informe o nome do novo pipeline.");
       return;
     }
-    const headers = { ...internalApiHeaders(), "Content-Type": "application/json" };
+    const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
     const res = await fetch("/api/crm/pipelines", {
       method: "POST",
       headers,
@@ -342,7 +348,7 @@ export function PipelineConfigSideover({
   }
 
   async function togglePipelineAtivo(item: PipelineComEstagios, ativo: boolean) {
-    if (!item.id || item.id === "fallback" || salvandoPipelineId === item.id) return;
+    if (!item.id || item.id === "fallback" || !isUuidValido(item.id) || salvandoPipelineId === item.id) return;
 
     const principal = isPipelinePrincipal({
       slug: item.slug,
@@ -357,7 +363,7 @@ export function PipelineConfigSideover({
     setErro("");
     setOkMsg("");
 
-    const headers = { ...internalApiHeaders(), "Content-Type": "application/json" };
+    const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
     const res = await fetch(`/api/crm/pipelines/${item.id}`, {
       method: "PATCH",
       headers,
@@ -390,7 +396,7 @@ export function PipelineConfigSideover({
   }
 
   async function excluirPipeline(item: PipelineComEstagios) {
-    if (!item.id || item.id === "fallback") return;
+    if (!item.id || item.id === "fallback" || !isUuidValido(item.id)) return;
 
     const principal = isPipelinePrincipal({
       slug: item.slug,
@@ -408,7 +414,7 @@ export function PipelineConfigSideover({
 
     const res = await fetch(`/api/crm/pipelines/${item.id}`, {
       method: "DELETE",
-      headers: internalApiHeaders(),
+      headers: await crmApiHeaders(),
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { supabase } from "@/lib/supabase/client";
 import {
   mergeLeadTimelineEvents,
@@ -42,8 +42,9 @@ export function LeadTimelineTab({
     setErro("");
 
     try {
+      const headers = await crmApiHeaders();
       const res = await fetch(`/api/crm/leads/${encodeURIComponent(leadId)}`, {
-        headers: internalApiHeaders(),
+        headers,
       });
       const json = await res.json().catch(() => ({}));
 

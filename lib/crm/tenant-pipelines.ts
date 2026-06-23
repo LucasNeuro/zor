@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { estagiosPadraoParaTipo, type PipelineTipo as PipelineTipoDefaults } from "@/lib/crm/pipeline-defaults";
+import { isTenantFkError } from "@/lib/tenant-default";
 
 export type PipelineTipo = "lead" | "negocio" | "atendimento";
 
@@ -109,9 +110,28 @@ export async function ensureTenantPipelines(
       .select("id")
       .single();
 
-    if (error || !pipeline?.id) continue;
+    if (error || !pipeline?.id) {
+      if (error && isTenantFkError(error)) {
+        throw new Error(
+          "O tenant da conta não está registado no sistema. Contacte o suporte ou conclua o cadastro da empresa."
+        );
+      }
+      throw new Error(
+        error?.message || `Não foi possível criar o pipeline «${tpl.nome}» para esta empresa.`
+      );
+    }
     await inserirEstagiosPadrao(supabase, String(pipeline.id), tpl.tipo);
   }
+}
+
+/** Primeiro pipeline activo do tenant para o tipo indicado. */
+export async function resolveDefaultPipelineId(
+  supabase: SupabaseClient,
+  tenantId: string,
+  tipo: PipelineTipo
+): Promise<string | null> {
+  const pipelines = await listTenantPipelines(supabase, tenantId, tipo);
+  return pipelines[0]?.id ?? null;
 }
 
 /** Lista apenas pipelines do tenant Waje (ignora seeds globais Obra10). */

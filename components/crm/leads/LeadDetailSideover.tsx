@@ -21,7 +21,7 @@ import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
 import { patchLeadCrm } from "@/lib/crm/patch-lead-client";
 import { LeadObservacoesTab, type CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
 import { MOTIVOS_PERDA, MOTIVOS_PERDA_LABEL } from "@/lib/crm/pipelines";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import { supabase } from "@/lib/supabase/client";
 import { LeadTimelineTab } from "@/components/crm/leads/LeadTimelineTab";
 import type { LeadTimelineEvent } from "@/lib/crm/lead-timeline";
@@ -128,8 +128,9 @@ export function LeadDetailSideover({
   const [perdaComoSpam, setPerdaComoSpam] = useState(false);
 
   const carregarDetalhe = useCallback(async (leadId: string) => {
+    const headers = await crmApiHeaders();
     const res = await fetch(`/api/crm/leads/${encodeURIComponent(leadId)}`, {
-      headers: internalApiHeaders(),
+      headers,
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) return;

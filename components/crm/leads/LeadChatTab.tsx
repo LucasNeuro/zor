@@ -17,8 +17,7 @@ import {
   effectiveHumanoResponsavel,
   formatHumanoDisplayName,
 } from "@/lib/crm/resolve-crm-actor";
-import { crmApiHeadersWithActor, getCrmSessionActor } from "@/lib/internal-api-headers-client";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders, crmApiHeadersWithActor, getCrmSessionActor } from "@/lib/internal-api-headers-client";
 import { parseConversaTurnos } from "@/lib/crm/lead-timeline";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -602,7 +601,7 @@ export function LeadChatTab({
       try {
         const res = await fetch(
           `/api/crm/atendimento/mensagens?canal=whatsapp&leadId=${encodeURIComponent(leadId)}`,
-          { headers: internalApiHeaders() }
+          { headers: await crmApiHeaders() }
         );
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {

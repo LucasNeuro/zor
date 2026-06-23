@@ -11,7 +11,7 @@ import {
   CrmRetrofitSideoverShell,
 } from "@/components/crm/CrmRetrofitSideoverShell";
 import { MERCADO_PREFIXO_PADRAO } from "@/lib/crm/negocio-cadastro";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import {
   RF_LIGHT_INPUT_STYLE,
   RF_LIGHT_LABEL_STYLE,
@@ -79,9 +79,10 @@ export function NegocioFormDrawer({
     setGerandoIa(false);
 
     void (async () => {
+      const headers = await crmApiHeaders();
       const [leadsRes, servRes] = await Promise.all([
-        fetch("/api/crm/leads?limit=40", { headers: internalApiHeaders() }),
-        fetch("/api/crm/servicos-catalogo?sync_if_empty=1", { headers: internalApiHeaders() }),
+        fetch("/api/crm/leads?limit=40", { headers }),
+        fetch("/api/crm/servicos-catalogo?sync_if_empty=1", { headers }),
       ]);
       const leadsJson = await leadsRes.json().catch(() => ({}));
       const servJson = await servRes.json().catch(() => ({}));
@@ -128,9 +129,10 @@ export function NegocioFormDrawer({
     setGerandoIa(true);
     setSugestaoMsg("");
     try {
+      const headers = { ...(await crmApiHeaders()), "Content-Type": "application/json" };
       const res = await fetch("/api/crm/negocios/sugerir-ia", {
         method: "POST",
-        headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ lead_id: leadId }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -178,10 +180,11 @@ export function NegocioFormDrawer({
     }
     setLoading(true);
     try {
+      const headers = { "Content-Type": "application/json", ...(await crmApiHeaders()) };
       const res = await fetch("/api/crm/negocios", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+        headers,
         body: JSON.stringify({
           titulo: titulo.trim(),
           prefixo_mercado: MERCADO_PREFIXO_PADRAO,

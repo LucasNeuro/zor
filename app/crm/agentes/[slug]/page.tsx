@@ -1121,6 +1121,8 @@ export default function AgentePage() {
                 {agenteModoCanal ? (
                   <AgenteGoogleWorkspaceBlock
                     agenteSlug={slug}
+                    agenteNome={agente.nome}
+                    layout="card"
                     theme="light"
                     contexto="agendamento"
                     usoFerramentas={usoFerramentasIa}

@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Calendar, Check, Loader2, Plug } from "lucide-react";
-import { CRM_ACCENT } from "@/lib/crm/crm-button-styles";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { Calendar, Check, ChevronRight, Loader2, Mail, Plug } from "lucide-react";
+import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
+import { CRM_ACCENT, crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
+import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import {
   RF_ACCENT,
   RF_BORDER,
+  RF_BORDER_STRONG,
   RF_TEXT_MUTED,
   RF_TEXT_PRIMARY,
   RF_TEXT_SECONDARY,
@@ -22,6 +25,7 @@ import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 
 export type AgenteGoogleWorkspaceBlockProps = {
   agenteSlug: string;
+  agenteNome?: string;
   theme?: "dark" | "light";
   usoFerramentas: Record<string, boolean>;
   onUsoSynced?: (patch: Record<string, boolean>) => void;
@@ -31,6 +35,8 @@ export type AgenteGoogleWorkspaceBlockProps = {
   secaoIndice?: number;
   /** Retorno OAuth após autorizar (ficha do agente). */
   returnToPath?: string;
+  /** `card` — resumo + sideover (ficha). `painel` — bloco completo inline (wizard). */
+  layout?: "card" | "painel";
 };
 
 type GoogleTestResult = {
@@ -42,8 +48,16 @@ type GoogleTestResult = {
   calendar?: { total?: number; eventos?: unknown[] };
 };
 
+function googleBadge(ligado: boolean): { bg: string; fg: string; bar: string; rotulo: string } {
+  if (ligado) {
+    return { bg: "#23863633", fg: "#3fb950", bar: "#3fb950", rotulo: "LIGADO" };
+  }
+  return { bg: "#dcebd8", fg: "#5d7a67", bar: "#484f58", rotulo: "NÃO LIGADO" };
+}
+
 export function AgenteGoogleWorkspaceBlock({
   agenteSlug,
+  agenteNome,
   theme = "light",
   usoFerramentas,
   onUsoSynced,
@@ -52,8 +66,10 @@ export function AgenteGoogleWorkspaceBlock({
   contexto = "padrao",
   secaoIndice,
   returnToPath,
+  layout = "painel",
 }: AgenteGoogleWorkspaceBlockProps) {
-  const isDark = theme === "dark";
+  const isCard = layout === "card";
+  const isDark = isCard ? true : theme === "dark";
   const agendamento = contexto === "agendamento";
   const border = isDark ? RF_BORDER : "#dcebd8";
   const cardBg = isDark ? "rgba(6, 13, 8, 0.72)" : "#ffffff";
@@ -62,12 +78,20 @@ export function AgenteGoogleWorkspaceBlock({
   const muted = isDark ? RF_TEXT_MUTED : "#6e7781";
   const accent = isDark ? RF_ACCENT : CRM_ACCENT;
 
+  const tituloIntegracao = agendamento ? "Google Calendar + Meet" : "Gmail + Agenda (Google Meet)";
+  const subtituloCard = agendamento
+    ? "Agenda da empresa · Gmail e reuniões Meet"
+    : "Gmail e Google Calendar · OAuth do tenant";
+
+  const [sideoverOpen, setSideoverOpen] = useState(false);
   const [ligado, setLigado] = useState(false);
   const [email, setEmail] = useState<string | null>(oauthEmail ?? null);
   const [carregando, setCarregando] = useState(true);
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState("");
   const [teste, setTeste] = useState<GoogleTestResult | null>(null);
+
+  const badge = googleBadge(ligado);
 
   const refreshStatus = useCallback(async () => {
     setCarregando(true);
@@ -101,16 +125,21 @@ export function AgenteGoogleWorkspaceBlock({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
+    if (params.get("google_oauth") === "connected" || params.get("email_oauth") === "connected") {
+      void refreshStatus();
+      if (isCard) setSideoverOpen(true);
+    }
     if (params.get("google_oauth") !== "error" && params.get("email_oauth") !== "error") return;
     const raw = params.get("email_oauth_error") || params.get("email_oauth_message");
     setErro(googleOAuthErroAmigavel(raw));
+    if (isCard) setSideoverOpen(true);
     params.delete("google_oauth");
     params.delete("email_oauth");
     params.delete("email_oauth_error");
     params.delete("email_oauth_message");
     const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
     window.history.replaceState({}, "", next);
-  }, []);
+  }, [isCard, refreshStatus]);
 
   const syncFerramentasNoAgente = useCallback(async () => {
     const uso = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentas);
@@ -198,6 +227,323 @@ export function AgenteGoogleWorkspaceBlock({
     }
   }, [onOauthEmail, syncFerramentasNoAgente]);
 
+  const btnPrimaryDark = (disabled: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: "none",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+    background: disabled ? "#4a6356" : BRAND_TEXT_DARK,
+    color: disabled ? "#c8dcc8" : BRAND_GREEN_BRIGHT,
+    boxShadow: disabled ? "none" : "0 2px 8px rgba(11, 31, 16, 0.12)",
+  });
+
+  const btnSecondaryDark = (disabled: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    minHeight: 40,
+    padding: "9px 14px",
+    borderRadius: 8,
+    border: `1px solid ${RF_BORDER_STRONG}`,
+    background: "rgba(6, 13, 8, 0.72)",
+    color: disabled ? RF_TEXT_MUTED : RF_TEXT_PRIMARY,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+  });
+
+  const painelConteudo = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div
+        style={{
+          position: "relative",
+          padding: "14px 16px",
+          borderRadius: 12,
+          border: `1px solid ${isCard ? RF_BORDER : border}`,
+          background: isCard ? "rgba(6, 13, 8, 0.72)" : cardBg,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 10,
+            bottom: 10,
+            width: 3,
+            borderRadius: "0 4px 4px 0",
+            background: badge.bar,
+          }}
+          aria-hidden
+        />
+        <div style={{ paddingLeft: 12 }}>
+          <span
+            style={{
+              display: "inline-block",
+              padding: "6px 12px",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 800,
+              background: badge.bg,
+              color: badge.fg,
+            }}
+          >
+            {carregando ? "A VERIFICAR…" : badge.rotulo}
+          </span>
+          {email ? (
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: isCard ? RF_TEXT_SECONDARY : body, lineHeight: 1.5 }}>
+              Conta: <strong style={{ color: isCard ? RF_TEXT_PRIMARY : title }}>{email}</strong>
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <p style={{ margin: 0, fontSize: 12, color: isCard ? RF_TEXT_SECONDARY : body, lineHeight: 1.55 }}>
+        {agendamento
+          ? "Autorize o e-mail Google da empresa contratante. O agente consulta horários e cria reservas com link Meet quando o cliente pedir pelo WhatsApp."
+          : "Uma autorização OAuth liga envio de e-mail e criação de eventos com link Meet para este tenant."}
+      </p>
+
+      {erro ? (
+        <p style={{ margin: 0, color: "#f85149", fontSize: 12, lineHeight: 1.45 }}>{erro}</p>
+      ) : null}
+
+      {!isCard ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => void ligarContaGoogle()}
+            disabled={busy}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: `1px solid ${accent}`,
+              background: isDark ? "rgba(146, 255, 0, 0.1)" : "#2d6a4f12",
+              color: accent,
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: busy ? "wait" : "pointer",
+            }}
+          >
+            {busy ? <Loader2 size={16} /> : <Plug size={16} />}
+            Ligar conta Google da empresa
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void testarIntegracao()}
+            disabled={busy || carregando}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: `1px solid ${border}`,
+              background: "transparent",
+              color: title,
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: busy || carregando ? "wait" : "pointer",
+            }}
+          >
+            {busy ? <Loader2 size={16} /> : <Calendar size={16} />}
+            Testar Gmail + Calendar
+          </button>
+        </div>
+      ) : null}
+
+      {teste?.ok ? (
+        <div
+          style={{
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid #23863644",
+            background: "#23863618",
+            fontSize: 12,
+            color: "#3fb950",
+            lineHeight: 1.5,
+          }}
+        >
+          <strong>{teste.mensagem ?? "Teste OK"}</strong>
+          {teste.gmail_email ? (
+            <>
+              <br />
+              E-mail: {teste.gmail_email}
+            </>
+          ) : null}
+          {typeof teste.calendar?.total === "number" ? (
+            <>
+              <br />
+              Próximos eventos na agenda: {teste.calendar.total}
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      <p style={{ margin: 0, fontSize: 11, color: muted, lineHeight: 1.5 }}>
+        Ferramentas activadas no agente: enviar e-mail, criar evento com Meet e listar compromissos. O modelo usa estas
+        funções quando o cliente pedir reunião ou contacto por e-mail.
+      </p>
+    </div>
+  );
+
+  const sideoverFooter = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <button
+        type="button"
+        disabled={busy}
+        style={btnPrimaryDark(busy)}
+        onClick={() => void ligarContaGoogle()}
+      >
+        {busy ? <Loader2 size={15} className="animate-spin" /> : <Plug size={15} />}
+        Ligar conta Google da empresa
+      </button>
+      <button
+        type="button"
+        disabled={busy || carregando}
+        style={btnSecondaryDark(busy || carregando)}
+        onClick={() => void testarIntegracao()}
+      >
+        {busy ? <Loader2 size={15} className="animate-spin" /> : <Calendar size={15} />}
+        Testar Gmail + Calendar
+      </button>
+      {isCard ? (
+        <button
+          type="button"
+          style={btnSecondaryDark(false)}
+          onClick={() => setSideoverOpen(false)}
+        >
+          Fechar
+        </button>
+      ) : null}
+    </div>
+  );
+
+  const painelSubtitle = ligado
+    ? "Conta Google ligada — teste Gmail e Calendar ou volte a autorizar outro e-mail."
+    : "Autorize o e-mail Google da empresa para o agente enviar e-mails e criar reuniões Meet.";
+
+  if (isCard) {
+    return (
+      <>
+        <div
+          style={{
+            marginBottom: 18,
+            borderRadius: 14,
+            border: "1px solid #dcebd8",
+            background: "#ffffff",
+            boxShadow: "0 4px 16px rgba(11, 31, 16, 0.06)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: 3,
+              background: "linear-gradient(90deg, #4285f4, #ea4335, #fbbc04, #34a853)",
+              opacity: 0.95,
+            }}
+            aria-hidden
+          />
+          <div style={{ padding: "14px 16px 16px" }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", gap: 12, minWidth: 0, alignItems: "center" }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: "linear-gradient(145deg, #4285f422, #34a85318)",
+                    border: "1px solid #4285f444",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Mail size={20} style={{ color: "#4285f4" }} aria-hidden />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, color: "#0b2210", fontSize: 14, fontWeight: 800 }}>
+                    {tituloIntegracao}
+                  </p>
+                  <p style={{ margin: "4px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.45 }}>
+                    {subtituloCard} ·{" "}
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        background: badge.bg,
+                        color: badge.fg,
+                      }}
+                    >
+                      {carregando ? "…" : badge.rotulo}
+                    </span>
+                  </p>
+                  {email ? (
+                    <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
+                      Conta: <strong style={{ color: "#2d4a38" }}>{email}</strong>
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSideoverOpen(true)}
+                style={{
+                  ...crmBtnPrimaryLg(false),
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flex: "none",
+                  padding: "9px 14px",
+                }}
+              >
+                Configurar ligação
+                <ChevronRight size={16} aria-hidden />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <CrmIntegracaoSideoverShell
+          open={sideoverOpen}
+          onClose={() => setSideoverOpen(false)}
+          title={agenteNome?.trim() || agenteSlug}
+          subtitle={painelSubtitle}
+          footer={sideoverFooter}
+          theme="dark"
+          sectionLabel="Google Workspace"
+        >
+          {painelConteudo}
+        </CrmIntegracaoSideoverShell>
+      </>
+    );
+  }
+
   return (
     <section
       style={{
@@ -249,13 +595,8 @@ export function AgenteGoogleWorkspaceBlock({
             {agendamento ? "AGENDA DA EMPRESA" : "GOOGLE WORKSPACE"}
           </p>
           <h3 style={{ margin: "4px 0 0", fontSize: 15, fontWeight: 800, color: title }}>
-            {agendamento ? "Google Calendar + Meet" : "Gmail + Agenda (Google Meet)"}
+            {tituloIntegracao}
           </h3>
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: body, lineHeight: 1.5 }}>
-            {agendamento
-              ? "Autorize o e-mail Google da empresa contratante. O agente consulta horários e cria reservas com link Meet quando o cliente pedir pelo WhatsApp."
-              : "Uma autorização OAuth liga envio de e-mail e criação de eventos com link Meet para este tenant."}
-          </p>
           {carregando ? (
             <p style={{ margin: "8px 0 0", fontSize: 11, color: muted }}>A verificar ligação…</p>
           ) : ligado ? (
@@ -281,90 +622,7 @@ export function AgenteGoogleWorkspaceBlock({
         </div>
       </header>
 
-      <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-        {erro ? (
-          <p style={{ margin: 0, color: "#f85149", fontSize: 12, lineHeight: 1.45 }}>{erro}</p>
-        ) : null}
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => void ligarContaGoogle()}
-            disabled={busy}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: `1px solid ${accent}`,
-              background: isDark ? "rgba(146, 255, 0, 0.1)" : "#2d6a4f12",
-              color: accent,
-              fontWeight: 700,
-              fontSize: 13,
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            {busy ? <Loader2 size={16} /> : <Plug size={16} />}
-            Ligar conta Google da empresa
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void testarIntegracao()}
-            disabled={busy || carregando}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: `1px solid ${border}`,
-              background: "transparent",
-              color: title,
-              fontWeight: 700,
-              fontSize: 13,
-              cursor: busy || carregando ? "wait" : "pointer",
-            }}
-          >
-            {busy ? <Loader2 size={16} /> : <Calendar size={16} />}
-            Testar Gmail + Calendar
-          </button>
-        </div>
-
-        {teste?.ok ? (
-          <div
-            style={{
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid #23863644",
-              background: "#23863618",
-              fontSize: 12,
-              color: "#3fb950",
-              lineHeight: 1.5,
-            }}
-          >
-            <strong>{teste.mensagem ?? "Teste OK"}</strong>
-            {teste.gmail_email ? (
-              <>
-                <br />
-                E-mail: {teste.gmail_email}
-              </>
-            ) : null}
-            {typeof teste.calendar?.total === "number" ? (
-              <>
-                <br />
-                Próximos eventos na agenda: {teste.calendar.total}
-              </>
-            ) : null}
-          </div>
-        ) : null}
-
-        <p style={{ margin: 0, fontSize: 11, color: muted, lineHeight: 1.5 }}>
-          Ferramentas activadas no agente: enviar e-mail, criar evento com Meet e listar compromissos. O modelo usa
-          estas funções quando o cliente pedir reunião ou contacto por e-mail.
-        </p>
-      </div>
+      <div style={{ padding: "14px 16px" }}>{painelConteudo}</div>
     </section>
   );
 }

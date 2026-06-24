@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pencil, Plus, RefreshCw, Search } from "lucide-react";
 import {
   CrmResizableDataTable,
@@ -12,58 +12,22 @@ import {
   WajeOwnerPlataformaSideover,
   type PlatformBrandRow,
 } from "@/components/crm/waje/WajeOwnerPlataformaSideover";
-import { opsApiHeaders } from "@/lib/ops-api-headers-client";
 
 const TABLE_SCROLL_MAX = "min(52vh, 460px)";
 
 type Props = {
-  /** Sincroniza linhas com o painel pai (métricas no topo, fora do card). */
-  onRowsChange?: (rows: PlatformBrandRow[]) => void;
+  rows: PlatformBrandRow[];
+  setRows: React.Dispatch<React.SetStateAction<PlatformBrandRow[]>>;
+  loading: boolean;
+  refreshing?: boolean;
+  erro: string;
+  carregar: (opts?: { silent?: boolean }) => Promise<void>;
 };
 
-export function WajeOwnerPlataformasTab({ onRowsChange }: Props) {
-  const [rows, setRows] = useState<PlatformBrandRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState("");
+export function WajeOwnerPlataformasTab({ rows, setRows, loading, refreshing = false, erro, carregar }: Props) {
   const [search, setSearch] = useState("");
   const [sideoverRow, setSideoverRow] = useState<PlatformBrandRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-
-  const carregar = useCallback(async () => {
-    setLoading(true);
-    setErro("");
-    try {
-      const res = await fetch("/api/ops/platform-brands", {
-        headers: await opsApiHeaders(),
-        credentials: "include",
-      });
-      const raw = await res.text();
-      let json: { data?: PlatformBrandRow[]; error?: string } = {};
-      try {
-        json = raw ? (JSON.parse(raw) as typeof json) : {};
-      } catch {
-        throw new Error(
-          res.ok
-            ? "Resposta inválida do servidor."
-            : `Falha ao carregar (${res.status}). Confirme que executou ensure_hub_platform_brands.sql no Supabase.`
-        );
-      }
-      if (!res.ok) throw new Error(json.error ?? `Falha ao carregar (${res.status}).`);
-      const next = json.data ?? [];
-      setRows(next);
-      onRowsChange?.(next);
-    } catch (e) {
-      setRows([]);
-      onRowsChange?.([]);
-      setErro(e instanceof Error ? e.message : "Erro ao carregar.");
-    } finally {
-      setLoading(false);
-    }
-  }, [onRowsChange]);
-
-  useEffect(() => {
-    void carregar();
-  }, [carregar]);
 
   const filtrados = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -73,6 +37,30 @@ export function WajeOwnerPlataformasTab({ onRowsChange }: Props) {
       return blob.includes(q);
     });
   }, [rows, search]);
+
+  const handleCreated = useCallback(
+    (r: PlatformBrandRow) => {
+      setRows((prev) => [...prev, r]);
+      setCreateOpen(false);
+    },
+    [setRows]
+  );
+
+  const handleSaved = useCallback(
+    (r: PlatformBrandRow) => {
+      setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)));
+      setSideoverRow(r);
+    },
+    [setRows]
+  );
+
+  const handleDeactivated = useCallback(
+    (id: string) => {
+      setRows((prev) => prev.map((x) => (x.id === id ? { ...x, ativo: false } : x)));
+      setSideoverRow(null);
+    },
+    [setRows]
+  );
 
   const columns = useMemo<CrmResizableColumn<PlatformBrandRow>[]>(
     () => [
@@ -199,11 +187,11 @@ export function WajeOwnerPlataformasTab({ onRowsChange }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => void carregar()}
-              disabled={loading}
+              onClick={() => void carregar({ silent: true })}
+              disabled={loading || refreshing}
               className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[#d4ecd0] bg-white px-3 text-xs font-semibold text-[#1e4a24] disabled:opacity-50"
             >
-              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={13} className={loading || refreshing ? "animate-spin" : ""} />
               Atualizar
             </button>
           </div>
@@ -228,7 +216,16 @@ export function WajeOwnerPlataformasTab({ onRowsChange }: Props) {
               Carregando marcas…
             </div>
           ) : (
-            <CrmResizableDataTable
+            <div className="relative">
+              {refreshing ? (
+                <div
+                  className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden rounded-full bg-[#eef5ec]"
+                  aria-hidden
+                >
+                  <div className="h-full w-1/3 animate-pulse rounded-full bg-[#92ff00]" />
+                </div>
+              ) : null}
+              <CrmResizableDataTable
               tableId="waje-owner-plataformas"
               variant="waje"
               columns={columns}
@@ -243,6 +240,7 @@ export function WajeOwnerPlataformasTab({ onRowsChange }: Props) {
                 setSideoverRow(r);
               }}
             />
+            </div>
           )}
         </div>
       </div>
@@ -252,14 +250,7 @@ export function WajeOwnerPlataformasTab({ onRowsChange }: Props) {
         row={null}
         createMode
         onClose={() => setCreateOpen(false)}
-        onCreated={(r) => {
-          setRows((prev) => {
-            const next = [...prev, r];
-            onRowsChange?.(next);
-            return next;
-          });
-          setCreateOpen(false);
-        }}
+        onCreated={handleCreated}
         onSaved={() => {}}
       />
 
@@ -267,23 +258,9 @@ export function WajeOwnerPlataformasTab({ onRowsChange }: Props) {
         open={Boolean(sideoverRow)}
         row={sideoverRow}
         onClose={() => setSideoverRow(null)}
-        onSaved={(r) => {
-          setRows((prev) => {
-            const next = prev.map((x) => (x.id === r.id ? r : x));
-            onRowsChange?.(next);
-            return next;
-          });
-          setSideoverRow(r);
-        }}
+        onSaved={handleSaved}
         onCreated={() => {}}
-        onDeactivated={(id) => {
-          setRows((prev) => {
-            const next = prev.map((x) => (x.id === id ? { ...x, ativo: false } : x));
-            onRowsChange?.(next);
-            return next;
-          });
-          setSideoverRow(null);
-        }}
+        onDeactivated={handleDeactivated}
       />
     </>
   );

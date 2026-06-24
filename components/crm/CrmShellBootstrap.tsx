@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { PlatformBrandLoading } from "@/components/brand/PlatformBrandLoading";
 import { usePlatformBrand } from "@/components/brand/PlatformBrandProvider";
 
@@ -13,8 +14,17 @@ type Props = {
 export function CrmShellBootstrap({ layoutReady, accessLoaded, children }: Props) {
   const { ready: brandReady } = usePlatformBrand();
   const shellReady = layoutReady && accessLoaded && brandReady;
+  const [hasBootstrapped, setHasBootstrapped] = useState(false);
+  const bootstrappedRef = useRef(false);
 
-  if (!shellReady) {
+  useEffect(() => {
+    if (shellReady && !bootstrappedRef.current) {
+      bootstrappedRef.current = true;
+      setHasBootstrapped(true);
+    }
+  }, [shellReady]);
+
+  if (!hasBootstrapped && !shellReady) {
     return <PlatformBrandLoading label="A preparar o CRM…" />;
   }
 

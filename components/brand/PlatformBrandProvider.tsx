@@ -68,9 +68,10 @@ export function PlatformBrandProvider({
 }) {
   const [brand, setBrand] = useState<PlatformBrandPublic | null>(initialBrand);
   const [loading, setLoading] = useState(!initialBrand);
+  const [readyOnce, setReadyOnce] = useState(Boolean(initialBrand));
 
   const refresh = useCallback(async (options?: { background?: boolean }) => {
-    const background = options?.background ?? false;
+    const background = options?.background ?? Boolean(brand);
     if (!background) setLoading(true);
     try {
       const res = await fetch("/api/public/platform-brand", { credentials: "include" });
@@ -89,7 +90,7 @@ export function PlatformBrandProvider({
     } finally {
       if (!background) setLoading(false);
     }
-  }, []);
+  }, [brand]);
 
   useEffect(() => {
     if (initialBrand) {
@@ -100,9 +101,13 @@ export function PlatformBrandProvider({
     void refresh();
   }, [initialBrand, refresh]);
 
-  const ready = Boolean(brand) && !loading;
+  useEffect(() => {
+    if (Boolean(brand) && !loading) setReadyOnce(true);
+  }, [brand, loading]);
+
+  const ready = readyOnce || (Boolean(brand) && !loading);
   const value = useMemo(
-    () => ({ brand, loading, ready, refresh: () => refresh() }),
+    () => ({ brand, loading, ready, refresh: () => refresh({ background: true }) }),
     [brand, loading, ready, refresh]
   );
 

@@ -21,7 +21,7 @@ import { sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import type { PainelViewMode } from "@/lib/crm/painel-view";
 import type { WajeOwnerTab } from "@/components/crm/waje/waje-owner-theme";
 import { WajeOwnerPlataformasTab } from "@/components/crm/waje/WajeOwnerPlataformasTab";
-import type { PlatformBrandRow } from "@/components/crm/waje/WajeOwnerPlataformaSideover";
+import { useWajePlataformaBrands } from "@/components/crm/waje/useWajePlataformaBrands";
 import { computeWajePlataformaMetrics } from "@/lib/crm/waje-plataforma-metrics";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
 
@@ -89,7 +89,7 @@ export function WajeOwnerConsolePage() {
   const [erroTab, setErroTab] = useState<Partial<Record<WajeOwnerTab, string>>>({});
   const [search, setSearch] = useState("");
   const [filtroTenant, setFiltroTenant] = useState<"todos" | "ativos" | "inativos">("todos");
-  const [plataformaRows, setPlataformaRows] = useState<PlatformBrandRow[]>([]);
+  const plataformaBrands = useWajePlataformaBrands();
 
   const [tenantSideover, setTenantSideover] = useState<TenantRow | null>(null);
   const [usuarioSideover, setUsuarioSideover] = useState<UsuarioRow | null>(null);
@@ -185,7 +185,7 @@ export function WajeOwnerConsolePage() {
 
   const metrics = useMemo(() => {
     if (tab === "plataformas") {
-      return computeWajePlataformaMetrics(plataformaRows);
+      return computeWajePlataformaMetrics(plataformaBrands.rows);
     }
     if (tab === "tenants") {
       const ativos = tenants.filter((t) => t.ativo).length;
@@ -298,7 +298,7 @@ export function WajeOwnerConsolePage() {
         ocultavel: true,
       },
     ];
-  }, [tab, tenants, agentes, pagamentos, usuarios, leads, plataformaRows]);
+  }, [tab, tenants, agentes, pagamentos, usuarios, leads, plataformaBrands.rows]);
 
   if (loading && !hasLoadedOnce) {
     return (
@@ -389,7 +389,14 @@ export function WajeOwnerConsolePage() {
           />
 
           {tab === "plataformas" ? (
-            <WajeOwnerPlataformasTab onRowsChange={setPlataformaRows} />
+            <WajeOwnerPlataformasTab
+              rows={plataformaBrands.rows}
+              setRows={plataformaBrands.setRows}
+              loading={plataformaBrands.loading}
+              refreshing={plataformaBrands.refreshing}
+              erro={plataformaBrands.erro}
+              carregar={plataformaBrands.carregar}
+            />
           ) : viewMode === "paineis" ? (
             <WajeOwnerPaineis
               tab={tab}

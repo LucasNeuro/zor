@@ -377,6 +377,103 @@ export async function upsertGoogleWorkspaceOAuthIntegracoes(
   };
 }
 
+/** Revoga token no Google (melhor esforço — ignora falhas). */
+async function revokeGoogleToken(token: string): Promise<void> {
+  try {
+    await fetch("https://oauth2.googleapis.com/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token }),
+    });
+  } catch {
+    /* token já inválido ou rede */
+  }
+}
+
+/**
+ * Desliga Gmail + Calendar do tenant (OAuth Google Workspace).
+ * Remove credenciais, desactiva integrações e desassocia agentes que usavam a caixa Gmail.
+ */
+export async function disconnectGoogleWorkspaceOAuthIntegracoes(
+  supabase: SupabaseClient,
+  tenantId: string
+): Promise<{ desconectado: boolean; email?: string }> {
+  const integracaoIds = [GMAIL_INTEGRADOR_ID, GOOGLE_CALENDAR_INTEGRADOR_ID] as const;
+  let lastEmail: string | undefined;
+  let gmailHubId: string | null = null;
+  let hadConnection = false;
+
+  for (const integracaoId of integracaoIds) {
+    const { data: row } = await supabase
+      .from("hub_integracoes")
+      .select("id, config, hub_integracao_credenciais(id, credenciais)")
+      .eq("tenant_id", tenantId)
+      .eq("integracao_id", integracaoId)
+      .maybeSingle();
+
+    if (!row?.id) continue;
+
+    const hubId = String(row.id);
+    if (integracaoId === GMAIL_INTEGRADOR_ID) gmailHubId = hubId;
+
+    const cfg =
+      row.config && typeof row.config === "object"
+        ? (row.config as Record<string, unknown>)
+        : {};
+    const cfgEmail = typeof cfg.oauth_email === "string" ? cfg.oauth_email : undefined;
+    if (cfgEmail) lastEmail = cfgEmail;
+
+    const creds = row.hub_integracao_credenciais;
+    const credRow = Array.isArray(creds) ? creds[0] : creds;
+    const stored = readStoredGoogleOAuthCredentials(
+      credRow && typeof credRow === "object" && "credenciais" in credRow
+        ? ({ credenciais: credRow.credenciais } as HubIntegracaoCredenciaisRow)
+        : null
+    );
+
+    if (stored?.refreshToken) {
+      await revokeGoogleToken(stored.refreshToken);
+    } else if (stored?.accessToken) {
+      await revokeGoogleToken(stored.accessToken);
+    }
+
+    if (stored || cfgEmail) hadConnection = true;
+
+    await supabase
+      .from("hub_integracao_credenciais")
+      .delete()
+      .eq("integracao_id", hubId)
+      .eq("tenant_id", tenantId);
+
+    await supabase
+      .from("hub_integracoes")
+      .update({
+        status: "inativo",
+        ativo: false,
+        config: {},
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq("id", hubId)
+      .eq("tenant_id", tenantId);
+  }
+
+  if (gmailHubId) {
+    await supabase
+      .from("hub_agente_identidade")
+      .update({
+        email_provider: "resend",
+        email_integracao_id: null,
+        email_from: null,
+        email_inbound: null,
+        email_ativo: false,
+      })
+      .eq("tenant_id", tenantId)
+      .eq("email_integracao_id", gmailHubId);
+  }
+
+  return { desconectado: hadConnection, email: lastEmail };
+}
+
 export async function upsertGmailOAuthIntegracao(
   supabase: SupabaseClient,
   tenantId: string,

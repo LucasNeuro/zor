@@ -83,17 +83,26 @@ export async function GET(request: NextRequest) {
       HUB_INTEGRADORES_CATALOGO.filter((i) => !i.emBreve).map((i) => i.id)
     );
 
-  const conexoes: Record<string, { hub_id: string; configurado: boolean; ativo: boolean }> = {};
+  const conexoes: Record<
+    string,
+    { hub_id: string; configurado: boolean; ativo: boolean; oauth_email?: string | null }
+  > = {};
   for (const entry of HUB_INTEGRADORES_CATALOGO) {
     if (entry.emBreve) {
-      conexoes[entry.id] = { hub_id: "", configurado: false, ativo: false };
+      conexoes[entry.id] = { hub_id: "", configurado: false, ativo: false, oauth_email: null };
       continue;
     }
     const row = (rows ?? []).find((r) => r.integracao_id === entry.id);
     if (!row) {
-      conexoes[entry.id] = { hub_id: "", configurado: false, ativo: false };
+      conexoes[entry.id] = { hub_id: "", configurado: false, ativo: false, oauth_email: null };
       continue;
     }
+    const cfg =
+      row.config && typeof row.config === "object" ? (row.config as Record<string, unknown>) : {};
+    const oauthEmail =
+      typeof cfg.oauth_email === "string" && cfg.oauth_email.trim()
+        ? cfg.oauth_email.trim().toLowerCase()
+        : null;
     const creds = row.hub_integracao_credenciais;
     const credRow = Array.isArray(creds) ? creds[0] : creds;
     const credObj =
@@ -122,6 +131,7 @@ export async function GET(request: NextRequest) {
       hub_id: String(row.id),
       configurado,
       ativo: row.ativo !== false && configurado,
+      oauth_email: entry.id === "gmail" || entry.id === "google_calendar" ? oauthEmail : null,
     };
   }
 

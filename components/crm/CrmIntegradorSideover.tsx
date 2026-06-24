@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, Plug, Save, X } from "lucide-react";
+import { Check, Loader2, Plug, Save, Unplug, X } from "lucide-react";
 import { CrmFerramentaAgentesPanel } from "@/components/crm/CrmFerramentaAgentesPanel";
 import {
   RF_ACCENT,
@@ -135,6 +135,34 @@ export function CrmIntegradorSideover({
     }
   }, []);
 
+  const desconectarContaGoogle = useCallback(async () => {
+    if (
+      !confirm(
+        "Desligar a conta Google desta empresa?\n\nGmail e Calendar deixam de funcionar nos agentes até ligar outra conta."
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setErro("");
+    try {
+      const headers = await crmApiHeaders();
+      const res = await fetch("/api/hub/integradores/oauth/google/disconnect", {
+        method: "DELETE",
+        headers,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data?.error === "string" ? data.error : "Falha ao desligar Google.");
+      }
+      onSaved?.();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao desligar Google");
+    } finally {
+      setBusy(false);
+    }
+  }, [onSaved]);
+
   return (
     <>
       <button type="button" aria-label="Fechar" onClick={onClose} style={rfOverlayStyle(212)} />
@@ -190,27 +218,52 @@ export function CrmIntegradorSideover({
                     Use a <strong>conta Google do cliente</strong> (e-mail corporativo). O Google não permite senha
                     direta — autorize uma vez com OAuth; o Waje guarda o token renovável (Gmail + Calendar).
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => void ligarContaGoogle()}
-                    disabled={busy}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: `1px solid ${RF_BORDER}`,
-                      background: "rgba(46,160,67,0.15)",
-                      color: RF_TEXT_PRIMARY,
-                      fontWeight: 700,
-                      fontSize: 13,
-                      cursor: busy ? "wait" : "pointer",
-                    }}
-                  >
-                    {busy ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
-                    Ligar conta Google
-                  </button>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => void ligarContaGoogle()}
+                      disabled={busy}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "10px 14px",
+                        borderRadius: 10,
+                        border: `1px solid ${RF_BORDER}`,
+                        background: "rgba(46,160,67,0.15)",
+                        color: RF_TEXT_PRIMARY,
+                        fontWeight: 700,
+                        fontSize: 13,
+                        cursor: busy ? "wait" : "pointer",
+                      }}
+                    >
+                      {busy ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
+                      {configurado ? "Trocar conta Google" : "Ligar conta Google"}
+                    </button>
+                    {configurado ? (
+                      <button
+                        type="button"
+                        onClick={() => void desconectarContaGoogle()}
+                        disabled={busy}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "10px 14px",
+                          borderRadius: 10,
+                          border: "1px solid #f8514966",
+                          background: "rgba(248, 81, 73, 0.1)",
+                          color: "#f85149",
+                          fontWeight: 700,
+                          fontSize: 13,
+                          cursor: busy ? "wait" : "pointer",
+                        }}
+                      >
+                        {busy ? <Loader2 size={16} className="animate-spin" /> : <Unplug size={16} />}
+                        Desconectar
+                      </button>
+                    ) : null}
+                  </div>
                   <details style={{ marginTop: 14 }}>
                     <summary style={{ fontSize: 11, color: RF_TEXT_MUTED, cursor: "pointer" }}>
                       Avançado: colar token manual (legado)

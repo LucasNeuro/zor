@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { Calendar, Check, ChevronRight, Loader2, Plug, Video } from "lucide-react";
+import { Calendar, Check, ChevronRight, Loader2, Plug, Unplug, Video } from "lucide-react";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
@@ -157,19 +157,25 @@ export function AgenteGoogleWorkspaceBlock({
       const headers = await crmApiHeaders();
       const res = await fetch("/api/hub/integradores", { headers });
       const data = (await res.json().catch(() => ({}))) as {
-        conexoes?: Record<string, { configurado?: boolean }>;
+        conexoes?: Record<string, { configurado?: boolean; oauth_email?: string | null }>;
       };
       if (!res.ok) throw new Error("Não foi possível ler integrações.");
       const gmailOk = data.conexoes?.gmail?.configurado === true;
       const calOk = data.conexoes?.google_calendar?.configurado === true;
+      const oauthEmail =
+        data.conexoes?.gmail?.oauth_email || data.conexoes?.google_calendar?.oauth_email || null;
       setLigado(gmailOk && calOk);
+      if (oauthEmail) {
+        setEmail(oauthEmail);
+        onOauthEmail?.(oauthEmail);
+      }
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar status.");
       setLigado(false);
     } finally {
       setCarregando(false);
     }
-  }, []);
+  }, [onOauthEmail]);
 
   useEffect(() => {
     void refreshStatus();
@@ -235,6 +241,35 @@ export function AgenteGoogleWorkspaceBlock({
     }
     onUsoSynced?.(patch);
   }, [agenteSlug, onUsoSynced, usoFerramentas]);
+
+  const desconectarContaGoogle = useCallback(async () => {
+    if (
+      !confirm(
+        "Desligar a conta Google desta empresa?\n\nO agente deixa de enviar e-mail e criar eventos na agenda até ligar outra conta."
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setErro("");
+    setTeste(null);
+    try {
+      const headers = await crmApiHeaders();
+      const res = await fetch("/api/hub/integradores/oauth/google/disconnect", {
+        method: "DELETE",
+        headers,
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) throw new Error(data.error || "Falha ao desligar conta Google.");
+      setLigado(false);
+      setEmail(null);
+      onOauthEmail?.(null);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao desligar Google");
+    } finally {
+      setBusy(false);
+    }
+  }, [onOauthEmail]);
 
   const ligarContaGoogle = useCallback(async () => {
     setBusy(true);
@@ -324,6 +359,95 @@ export function AgenteGoogleWorkspaceBlock({
     cursor: disabled ? "not-allowed" : "pointer",
   });
 
+  const btnDangerDark = (disabled: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    minHeight: 40,
+    padding: "9px 14px",
+    borderRadius: 8,
+    border: "1px solid #f8514966",
+    background: "rgba(248, 81, 73, 0.1)",
+    color: disabled ? RF_TEXT_MUTED : "#f85149",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+  });
+
+  const botoesOAuth = (
+    <>
+      <button
+        type="button"
+        onClick={() => void ligarContaGoogle()}
+        disabled={busy}
+        style={isCard ? btnPrimaryDark(busy) : {
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 14px",
+          borderRadius: 10,
+          border: `1px solid ${accent}`,
+          background: isDark ? "rgba(146, 255, 0, 0.1)" : "#2d6a4f12",
+          color: accent,
+          fontWeight: 700,
+          fontSize: 13,
+          cursor: busy ? "wait" : "pointer",
+        }}
+      >
+        {busy ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
+        {ligado ? "Trocar conta Google" : "Ligar conta Google da empresa"}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => void testarIntegracao()}
+        disabled={busy || carregando}
+        style={isCard ? btnSecondaryDark(busy || carregando) : {
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 14px",
+          borderRadius: 10,
+          border: `1px solid ${border}`,
+          background: "transparent",
+          color: title,
+          fontWeight: 700,
+          fontSize: 13,
+          cursor: busy || carregando ? "wait" : "pointer",
+        }}
+      >
+        {busy ? <Loader2 size={16} /> : <Calendar size={16} />}
+        Testar Gmail + Calendar
+      </button>
+
+      {ligado ? (
+        <button
+          type="button"
+          onClick={() => void desconectarContaGoogle()}
+          disabled={busy}
+          style={isCard ? btnDangerDark(busy) : {
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #f8514966",
+            background: "rgba(248, 81, 73, 0.08)",
+            color: "#b91c1c",
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: busy ? "wait" : "pointer",
+          }}
+        >
+          {busy ? <Loader2 size={16} className="animate-spin" /> : <Unplug size={16} />}
+          Desconectar conta
+        </button>
+      ) : null}
+    </>
+  );
+
   const painelConteudo = (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div
@@ -380,51 +504,7 @@ export function AgenteGoogleWorkspaceBlock({
       ) : null}
 
       {!isCard ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => void ligarContaGoogle()}
-            disabled={busy}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: `1px solid ${accent}`,
-              background: isDark ? "rgba(146, 255, 0, 0.1)" : "#2d6a4f12",
-              color: accent,
-              fontWeight: 700,
-              fontSize: 13,
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            {busy ? <Loader2 size={16} /> : <Plug size={16} />}
-            Ligar conta Google da empresa
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void testarIntegracao()}
-            disabled={busy || carregando}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: `1px solid ${border}`,
-              background: "transparent",
-              color: title,
-              fontWeight: 700,
-              fontSize: 13,
-              cursor: busy || carregando ? "wait" : "pointer",
-            }}
-          >
-            {busy ? <Loader2 size={16} /> : <Calendar size={16} />}
-            Testar Gmail + Calendar
-          </button>
-        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{botoesOAuth}</div>
       ) : null}
 
       {teste?.ok ? (
@@ -639,24 +719,7 @@ export function AgenteGoogleWorkspaceBlock({
 
   const sideoverFooter = (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <button
-        type="button"
-        disabled={busy}
-        style={btnPrimaryDark(busy)}
-        onClick={() => void ligarContaGoogle()}
-      >
-        {busy ? <Loader2 size={15} className="animate-spin" /> : <Plug size={15} />}
-        Ligar conta Google da empresa
-      </button>
-      <button
-        type="button"
-        disabled={busy || carregando}
-        style={btnSecondaryDark(busy || carregando)}
-        onClick={() => void testarIntegracao()}
-      >
-        {busy ? <Loader2 size={15} className="animate-spin" /> : <Calendar size={15} />}
-        Testar Gmail + Calendar
-      </button>
+      {botoesOAuth}
       {isCard ? (
         <button
           type="button"
@@ -670,7 +733,7 @@ export function AgenteGoogleWorkspaceBlock({
   );
 
   const painelSubtitle = ligado
-    ? "Conta Google ligada — teste Gmail e Calendar ou volte a autorizar outro e-mail."
+    ? `Conta ligada${email ? ` (${email})` : ""} — teste a ligação, troque de conta ou desconecte.`
     : "Autorize o e-mail Google da empresa para o agente enviar e-mails e criar reuniões Meet.";
 
   if (isCard) {

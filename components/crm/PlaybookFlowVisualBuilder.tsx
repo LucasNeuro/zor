@@ -76,9 +76,20 @@ function makeDefaultStep(kind: PlaybookFlowStep["kind"], id: string): PlaybookFl
       next: "",
     };
   }
+  if (kind === "media") {
+    return {
+      id,
+      kind,
+      title: "Imagem / mídia",
+      media_type: "image",
+      file: "https://",
+      caption: "",
+      next: "",
+    };
+  }
   return {
     id,
-    kind,
+    kind: "complete",
     title: "Conclusão",
     complete: { type: "complete", summary: "Encaminhar para atendimento." },
   };

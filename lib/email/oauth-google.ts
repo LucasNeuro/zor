@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   hostIsKnownPlatformDomain,
   resolveOAuthReturnOrigin,

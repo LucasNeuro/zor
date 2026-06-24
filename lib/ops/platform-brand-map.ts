@@ -52,7 +52,8 @@ export function mapPlatformBrandRow(row: Record<string, unknown>): PlatformBrand
     contact_name: typeof row.contact_name === "string" ? row.contact_name : null,
     contact_email: typeof row.contact_email === "string" ? row.contact_email : null,
     contact_phone: typeof row.contact_phone === "string" ? row.contact_phone : null,
-    landing_assistant_ativo: row.landing_assistant_ativo !== false,
+    landing_assistant_ativo:
+      typeof row.landing_assistant_ativo === "boolean" ? row.landing_assistant_ativo : true,
     tenants_total: typeof row.tenants_total === "number" ? row.tenants_total : undefined,
     tenants_ativos: typeof row.tenants_ativos === "number" ? row.tenants_ativos : undefined,
     usuarios_total: typeof row.usuarios_total === "number" ? row.usuarios_total : undefined,

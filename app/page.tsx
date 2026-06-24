@@ -17,6 +17,8 @@ import {
   toPlatformBrandPublic,
 } from "@/lib/platform-brands";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   const h = await headers();
   const brand = toPlatformBrandPublic(await resolvePlatformBrand(hostFromHeaders(h)));
@@ -109,7 +111,7 @@ export default async function HomePage() {
       <LandingStats />
       <LandingFaq items={faqItems} />
       <LandingCta brandNome={brand.nome} />
-      <FloatingWajeAssistant />
+      {brand.landingAssistantAtivo !== false ? <FloatingWajeAssistant /> : null}
 
       <footer className="border-t border-[#dce7d8] px-4 py-8 text-center text-xs text-[#8aa892]">
         © {new Date().getFullYear()} {brand.nome} · Escritório Virtual

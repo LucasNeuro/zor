@@ -8,8 +8,6 @@ import {
 } from "@/components/crm/CrmResizableDataTable";
 import { CrmIconButtonGroup } from "@/components/crm/CrmIconButtonGroup";
 import { OpsStatusBadge } from "@/components/ops/OpsStatusBadge";
-import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
-import { sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import {
   WajeOwnerPlataformaSideover,
   type PlatformBrandRow,
@@ -18,7 +16,12 @@ import { opsApiHeaders } from "@/lib/ops-api-headers-client";
 
 const TABLE_SCROLL_MAX = "min(52vh, 460px)";
 
-export function WajeOwnerPlataformasTab() {
+type Props = {
+  /** Sincroniza linhas com o painel pai (métricas no topo, fora do card). */
+  onRowsChange?: (rows: PlatformBrandRow[]) => void;
+};
+
+export function WajeOwnerPlataformasTab({ onRowsChange }: Props) {
   const [rows, setRows] = useState<PlatformBrandRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
@@ -46,14 +49,17 @@ export function WajeOwnerPlataformasTab() {
         );
       }
       if (!res.ok) throw new Error(json.error ?? `Falha ao carregar (${res.status}).`);
-      setRows(json.data ?? []);
+      const next = json.data ?? [];
+      setRows(next);
+      onRowsChange?.(next);
     } catch (e) {
       setRows([]);
+      onRowsChange?.([]);
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onRowsChange]);
 
   useEffect(() => {
     void carregar();
@@ -67,44 +73,6 @@ export function WajeOwnerPlataformasTab() {
       return blob.includes(q);
     });
   }, [rows, search]);
-
-  const metrics = useMemo(() => {
-    const vendors = rows.filter((r) => !r.is_principal);
-    const vendorsAtivos = vendors.filter((r) => r.ativo);
-    const clientesAtivos = vendors.reduce((s, r) => s + (r.tenants_ativos ?? 0), 0);
-    const utilizadoresTotal = vendors.reduce((s, r) => s + (r.usuarios_total ?? 0), 0);
-    const principal = rows.find((r) => r.is_principal);
-    return [
-      {
-        label: "Vendors white-label",
-        valor: vendorsAtivos.length,
-        sub: `${vendors.length} registados`,
-        tone: "brand" as const,
-        seed: 21,
-      },
-      {
-        label: "Clientes activos",
-        valor: clientesAtivos,
-        sub: "Tenants activos nos vendors",
-        tone: "success" as const,
-        seed: 22,
-      },
-      {
-        label: "Utilizadores (vendors)",
-        valor: utilizadoresTotal,
-        sub: "Controlo financeiro",
-        tone: "warning" as const,
-        seed: 23,
-      },
-      {
-        label: "Plataforma principal",
-        valor: principal?.nome ?? "Waje",
-        sub: principal ? `${principal.tenants_ativos ?? 0} clientes activos` : "Owner",
-        tone: "muted" as const,
-        seed: 24,
-      },
-    ];
-  }, [rows]);
 
   const columns = useMemo<CrmResizableColumn<PlatformBrandRow>[]>(
     () => [
@@ -142,8 +110,8 @@ export function WajeOwnerPlataformasTab() {
         defaultWidth: 88,
         render: (r) => (
           <OpsStatusBadge
-            variant={r.landing_assistant_ativo !== false ? "ativo" : "inativo"}
-            label={r.landing_assistant_ativo !== false ? "Ligado" : "Off"}
+            variant={r.landing_assistant_ativo === false ? "inativo" : "ativo"}
+            label={r.landing_assistant_ativo === false ? "Off" : "Ligado"}
           />
         ),
       },
@@ -208,18 +176,6 @@ export function WajeOwnerPlataformasTab() {
     <>
       <div className="flex min-h-0 flex-col">
         <div className="shrink-0 border-b border-[#eef5ec] px-4 py-3">
-          <CrmMetricsGrid cols={4} className="mb-3">
-            {metrics.map((m) => (
-              <CrmMetricCard
-                key={m.label}
-                label={m.label}
-                valor={m.valor}
-                sub={m.sub}
-                tone={m.tone}
-                sparkline={sparklineFromSeed(m.seed)}
-              />
-            ))}
-          </CrmMetricsGrid>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto_auto]">
             <div className="flex h-10 items-center gap-2 rounded-xl border border-[#d4ecd0] bg-white px-3">
               <Search size={14} className="text-[#6b8a76]" />
@@ -297,7 +253,11 @@ export function WajeOwnerPlataformasTab() {
         createMode
         onClose={() => setCreateOpen(false)}
         onCreated={(r) => {
-          setRows((prev) => [...prev, r]);
+          setRows((prev) => {
+            const next = [...prev, r];
+            onRowsChange?.(next);
+            return next;
+          });
           setCreateOpen(false);
         }}
         onSaved={() => {}}
@@ -308,12 +268,20 @@ export function WajeOwnerPlataformasTab() {
         row={sideoverRow}
         onClose={() => setSideoverRow(null)}
         onSaved={(r) => {
-          setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)));
+          setRows((prev) => {
+            const next = prev.map((x) => (x.id === r.id ? r : x));
+            onRowsChange?.(next);
+            return next;
+          });
           setSideoverRow(r);
         }}
         onCreated={() => {}}
         onDeactivated={(id) => {
-          setRows((prev) => prev.map((x) => (x.id === id ? { ...x, ativo: false } : x)));
+          setRows((prev) => {
+            const next = prev.map((x) => (x.id === id ? { ...x, ativo: false } : x));
+            onRowsChange?.(next);
+            return next;
+          });
           setSideoverRow(null);
         }}
       />

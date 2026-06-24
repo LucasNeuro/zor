@@ -81,7 +81,7 @@ const STATIC_BRANDS: PlatformBrand[] = [WAJE_STATIC, SYNKRON_STATIC];
 let cacheAt = 0;
 type CachedBrand = PlatformBrand & { ativo: boolean };
 let cacheBrands: CachedBrand[] | null = null;
-const CACHE_MS = 60_000;
+const CACHE_MS = 5_000;
 
 /** Domínios extras só em `npm run dev` — testar Synkron sem editar hosts (lvh.me → 127.0.0.1). */
 const DEV_SYNKRON_EXTRA_DOMAINS = [
@@ -128,7 +128,8 @@ function rowToBrand(row: Record<string, unknown>): PlatformBrand {
     corFundo: String(row.cor_fundo ?? BRAND_MARK_BG),
     companyName: typeof row.company_name === "string" ? row.company_name : null,
     isPrincipal: row.is_principal === true,
-    landingAssistantAtivo: row.landing_assistant_ativo !== false,
+    landingAssistantAtivo:
+      typeof row.landing_assistant_ativo === "boolean" ? row.landing_assistant_ativo : true,
   };
 }
 

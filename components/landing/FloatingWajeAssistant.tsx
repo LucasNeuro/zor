@@ -23,7 +23,7 @@ type ChatMsg = { role: "bot" | "user"; text: string };
 type Fase = "perguntas" | "formulario" | "sucesso";
 
 export function FloatingWajeAssistant() {
-  const { brand } = usePlatformBrand();
+  const { brand, ready } = usePlatformBrand();
   const brandNome = useBrandNome();
   const introText = miniBotIntro(brandNome);
   const [mounted, setMounted] = useState(false);
@@ -206,8 +206,8 @@ export function FloatingWajeAssistant() {
     }
   };
 
-  if (!mounted) return null;
-  if (brand && brand.landingAssistantAtivo === false) return null;
+  if (!mounted || !ready) return null;
+  if (brand?.landingAssistantAtivo === false) return null;
 
   const ui = (
     <div className="waje-float-root flex flex-col items-end gap-3">

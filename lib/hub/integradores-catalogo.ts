@@ -157,7 +157,7 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
         titulo: "Enviar e-mail",
         descricao_curta: "Envia e-mail via Gmail API.",
         descricao_modelo:
-          "Usa quando o utilizador pedir para enviar e-mail, confirmar por correio ou notificar alguém por Gmail. Exige destinatário, assunto e corpo.",
+          "Usa quando o utilizador pedir para enviar e-mail, confirmar por correio ou notificar alguém por Gmail. Exige destinatário, assunto e corpo. Confirme o e-mail exato (ex.: hotmail.com, não hotmail.com.br salvo se o cliente disser .com.br).",
         politica: "escrita",
         parametros_schema: {
           type: "object",

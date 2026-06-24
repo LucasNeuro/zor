@@ -9,6 +9,7 @@ import {
   type HubIntegracaoRow,
 } from "@/lib/hub/ferramentas-externas-db";
 import { getValidGoogleAccessToken, readStoredGoogleOAuthCredentials } from "@/lib/email/oauth-google";
+import { sendGmailEmail } from "@/lib/email/gmail-send";
 import {
   montarPayloadEventoGoogleCalendar,
   resumirEventoGoogleCalendar,
@@ -323,10 +324,12 @@ async function executarGmail(
   cred: HubIntegracaoCredenciaisRow | null,
   supabase: SupabaseClient,
   tenantId: string,
-  integracaoRowId: string
+  integracaoRowId: string,
+  integracao?: HubIntegracaoRow
 ): Promise<string> {
   let token = bearerToken(cred);
-  if (readStoredGoogleOAuthCredentials(cred)) {
+  const storedOAuth = readStoredGoogleOAuthCredentials(cred);
+  if (storedOAuth) {
     const refreshed = await getValidGoogleAccessToken(supabase, tenantId, cred, integracaoRowId);
     if (refreshed) token = refreshed;
   }
@@ -342,28 +345,41 @@ async function executarGmail(
       return JSON.stringify({ erro: "parametros_invalidos", campos: ["para", "assunto", "corpo"] });
     }
 
-    const raw = [
-      `To: ${para}`,
-      "Content-Type: text/plain; charset=utf-8",
-      "MIME-Version: 1.0",
-      `Subject: ${assunto}`,
-      "",
-      corpo,
-    ].join("\r\n");
-    const encoded = Buffer.from(raw, "utf-8").toString("base64url");
+    const cfg = integracao ? configObj(integracao) : {};
+    const from =
+      (typeof cfg.oauth_email === "string" ? cfg.oauth_email.trim() : "") ||
+      storedOAuth?.email?.trim() ||
+      "";
 
-    const res = await fetchJson("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ raw: encoded }),
-    });
-    if (!res.ok) {
-      return JSON.stringify({ erro: "gmail_api", status: res.status, detalhe: res.body });
+    if (!from) {
+      return JSON.stringify({
+        erro: "gmail_sem_remetente",
+        detalhe: "Conta Google OAuth sem e-mail guardado. Volte a ligar Gmail em Integrações.",
+      });
     }
-    return JSON.stringify(res.body);
+
+    const enviado = await sendGmailEmail({
+      bearerToken: token,
+      to: para,
+      subject: assunto,
+      text: corpo,
+      from,
+    });
+
+    if (!enviado.ok) {
+      return JSON.stringify({ erro: "gmail_api", status: enviado.status, detalhe: enviado.error });
+    }
+
+    return JSON.stringify({
+      ok: true,
+      message_id: enviado.id,
+      de: from,
+      para,
+      assunto,
+      corpo_resumo: corpo.length > 200 ? `${corpo.slice(0, 199)}…` : corpo,
+      instrucao_agente:
+        "Confirme ao utilizador que o e-mail foi enviado pelo Gmail. A entrega no destino pode demorar; se o endereço estiver errado (ex.: hotmail.com vs hotmail.com.br), peça para confirmar o e-mail correto.",
+    });
   }
 
   return JSON.stringify({ erro: "ferramenta_integrador_desconhecida", tool: toolName });
@@ -489,7 +505,7 @@ export async function executarFerramentaIntegrador(
     case "google_calendar":
       return executarGoogleCalendar(toolName, args, credenciais, supabase, tenantId, String(integracao.id), gcalCtx);
     case "gmail":
-      return executarGmail(toolName, args, credenciais, supabase, tenantId, String(integracao.id));
+      return executarGmail(toolName, args, credenciais, supabase, tenantId, String(integracao.id), integracao);
     case "zendesk":
       return executarZendesk(toolName, args, integracao, credenciais);
     default:

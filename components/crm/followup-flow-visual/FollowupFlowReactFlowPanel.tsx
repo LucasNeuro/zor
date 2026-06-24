@@ -1,17 +1,22 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
-import { Image as ImageIcon, MessageSquare, Plus, Workflow } from "lucide-react";
-import type { FollowupTipoConteudo, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { FollowupFlowLegend } from "./FollowupFlowNodes";
 import {
-  RF_ACCENT,
-  RF_BORDER,
-  RF_BORDER_STRONG,
-  RF_TEXT_MUTED,
-  RF_TEXT_PRIMARY,
-} from "@/lib/crm/crm-retrofit-dark-theme";
+  Bell,
+  CheckCircle2,
+  Image as ImageIcon,
+  LocateFixed,
+  MessageSquare,
+  Play,
+  Save,
+  Workflow,
+} from "lucide-react";
+import { formatarGatilhoConfig } from "@/lib/hub/followup-types";
+import type { FollowupTipoConteudo, HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import { buildFollowupPanelStyles, followupToolbarGroup } from "./followup-flow-panel-styles";
+import type { FollowupFlowCanvasApi } from "./FollowupFlowCanvas";
 
 const FollowupFlowCanvas = dynamic(
   () => import("./FollowupFlowCanvas").then((m) => m.FollowupFlowCanvas),
@@ -19,18 +24,31 @@ const FollowupFlowCanvas = dynamic(
     ssr: false,
     loading: () => (
       <div style={loadingStyle}>
-        <Workflow size={20} style={{ opacity: 0.35, color: RF_ACCENT }} />
+        <Workflow size={20} style={{ opacity: 0.35 }} />
         <span>A carregar diagrama…</span>
       </div>
     ),
   }
 );
 
+export type { FollowupFlowCanvasApi };
+
 type Props = {
+  config: HubAgenteFollowupConfig;
   passos: HubAgenteFollowupPasso[];
   saving: boolean;
   uploadingId: string | null;
   disabled?: boolean;
+  theme?: "dark" | "light";
+  toolbarTheme?: "dark" | "light";
+  fullscreen?: boolean;
+  hasUnsavedChanges?: boolean;
+  onCanvasDirty?: () => void;
+  onSaveDraft?: () => void | Promise<void>;
+  onSaveDraftAndClose?: () => void | Promise<void>;
+  onIniciarEmBranco?: () => void | Promise<void>;
+  onSalvarConfig: (patch: Partial<HubAgenteFollowupConfig>) => Promise<void>;
+  onAtualizarConfigLocal: (patch: Partial<HubAgenteFollowupConfig>) => void;
   onAdicionarPasso: (tipo: FollowupTipoConteudo) => Promise<void>;
   onSalvarPasso: (passo: HubAgenteFollowupPasso) => Promise<void>;
   onExcluirPasso: (id: string) => Promise<void>;
@@ -40,10 +58,21 @@ type Props = {
 };
 
 export function FollowupFlowReactFlowPanel({
+  config,
   passos,
   saving,
   uploadingId,
   disabled,
+  theme = "light",
+  toolbarTheme = "dark",
+  fullscreen = false,
+  hasUnsavedChanges = false,
+  onCanvasDirty,
+  onSaveDraft,
+  onSaveDraftAndClose,
+  onIniciarEmBranco,
+  onSalvarConfig,
+  onAtualizarConfigLocal,
   onAdicionarPasso,
   onSalvarPasso,
   onExcluirPasso,
@@ -51,106 +80,201 @@ export function FollowupFlowReactFlowPanel({
   onUploadImagem,
   onAtualizarLocal,
 }: Props) {
+  const canvasApiRef = useRef<FollowupFlowCanvasApi | null>(null);
+  const toolbarStyles = useMemo(() => buildFollowupPanelStyles(toolbarTheme === "dark"), [toolbarTheme]);
+  const passosAtivos = passos.filter((p) => p.ativo).length;
+  const cadenciaOk = passos.length > 0 && passosAtivos > 0;
+  const canSave = hasUnsavedChanges;
+
+  async function flushAndSave(action?: () => void | Promise<void>) {
+    await canvasApiRef.current?.flushPendingEdit();
+    if (action) await action();
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          padding: "10px 12px",
-          borderRadius: 10,
-          border: `1px solid ${RF_BORDER}`,
-          background: "rgba(6,13,8,0.45)",
-        }}
-      >
-        <div>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: RF_ACCENT }}>
-            Diagrama de passos
-          </p>
-          <p style={{ margin: "4px 0 0", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.4 }}>
-            Arraste não é necessário — clique num nó para editar texto, imagem e atraso.
-          </p>
+    <div
+      style={{
+        ...toolbarStyles.panelStyle,
+        opacity: disabled ? 0.55 : 1,
+        pointerEvents: disabled ? "none" : "auto",
+      }}
+    >
+      <div style={toolbarStyles.toolbarStyle}>
+        <div style={followupToolbarGroup}>
+          <span style={toolbarStyles.metaItem}>
+            <Workflow size={12} />
+            {passos.length} passo{passos.length === 1 ? "" : "s"}
+          </span>
+          <span style={toolbarStyles.metaDivider} />
+          <span style={toolbarStyles.metaItem}>
+            Gatilho: <strong style={toolbarStyles.metaStrong}>{formatarGatilhoConfig(config)}</strong>
+          </span>
+          <span style={toolbarStyles.metaDivider} />
+          <span style={toolbarStyles.metaItem} title="Dias sem resposta até arquivar o lead">
+            Arquivar: <strong style={toolbarStyles.metaStrong}>{config.arquivar_apos_dias ?? 7}d</strong>
+          </span>
+          {passosAtivos > 0 ? (
+            <>
+              <span style={toolbarStyles.metaDivider} />
+              <span style={toolbarStyles.metaItem}>
+                <Bell size={12} />
+                {passosAtivos} activo{passosAtivos === 1 ? "" : "s"}
+              </span>
+            </>
+          ) : null}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+
+        <div style={followupToolbarGroup}>
           <button
             type="button"
             disabled={disabled || saving}
-            onClick={() => void onAdicionarPasso("texto")}
-            style={toolBtnStyle(disabled || saving)}
+            style={toolbarStyles.toolButtonStyle}
+            onClick={() => canvasApiRef.current?.openTriggerEditor()}
+            title="Editar gatilho e arquivamento"
           >
-            <MessageSquare size={14} /> Texto
+            <Play size={13} strokeWidth={2.2} />
+            Gatilho
           </button>
           <button
             type="button"
             disabled={disabled || saving}
-            onClick={() => void onAdicionarPasso("imagem")}
-            style={toolBtnStyle(disabled || saving)}
+            style={toolbarStyles.toolButtonStyle}
+            onClick={() => {
+              onCanvasDirty?.();
+              void onAdicionarPasso("texto");
+            }}
           >
-            <ImageIcon size={14} /> Imagem
+            <MessageSquare size={13} strokeWidth={2.2} />
+            Mensagem
           </button>
           <button
             type="button"
             disabled={disabled || saving}
-            onClick={() => void onAdicionarPasso("texto_imagem")}
-            style={toolBtnStyle(disabled || saving)}
+            style={toolbarStyles.toolButtonStyle}
+            onClick={() => {
+              onCanvasDirty?.();
+              void onAdicionarPasso("imagem");
+            }}
           >
-            <Plus size={14} /> Imagem + legenda
+            <ImageIcon size={13} strokeWidth={2.2} />
+            Imagem
           </button>
+          <button
+            type="button"
+            disabled={disabled || saving}
+            style={toolbarStyles.toolButtonStyle}
+            onClick={() => {
+              onCanvasDirty?.();
+              void onAdicionarPasso("texto_imagem");
+            }}
+          >
+            <ImageIcon size={13} strokeWidth={2.2} />
+            Imagem + legenda
+          </button>
+          <button
+            type="button"
+            style={toolbarStyles.toolButtonStyle}
+            onClick={() => canvasApiRef.current?.fitCanvas()}
+            title="Centralizar diagrama"
+          >
+            <LocateFixed size={13} strokeWidth={2.2} />
+            Centralizar
+          </button>
+        </div>
+
+        <div style={{ ...followupToolbarGroup, marginLeft: "auto" }}>
+          {onSaveDraft ? (
+            <button
+              type="button"
+              disabled={disabled || saving || !canSave}
+              onClick={() => void flushAndSave(onSaveDraft)}
+              style={{
+                ...toolbarStyles.saveButtonStyle,
+                opacity: disabled || saving || !canSave ? 0.55 : 1,
+              }}
+              title="Grava alterações pendentes"
+            >
+              <Save size={12} />
+              Salvar rascunho
+            </button>
+          ) : null}
+          {onSaveDraftAndClose ? (
+            <button
+              type="button"
+              disabled={disabled || saving || !canSave}
+              onClick={() => void flushAndSave(onSaveDraftAndClose)}
+              style={{
+                ...toolbarStyles.saveAndCloseButtonStyle,
+                opacity: disabled || saving || !canSave ? 0.55 : 1,
+              }}
+              title="Grava e fecha o editor"
+            >
+              Salvar e voltar
+            </button>
+          ) : null}
+          <span
+            style={{
+              ...toolbarStyles.validationBadge,
+              borderColor: cadenciaOk ? "#81c784" : "#e6c06a",
+              color: cadenciaOk ? "#2e7d32" : "#bb8009",
+              background: cadenciaOk ? "#e8f5e9" : "rgba(187, 128, 9, 0.14)",
+            }}
+          >
+            <CheckCircle2 size={11} strokeWidth={2.2} />
+            {cadenciaOk ? "Cadência válida" : "Adicione passos activos"}
+          </span>
         </div>
       </div>
 
       <div
         style={{
-          borderRadius: 12,
-          border: `1px solid ${RF_BORDER_STRONG}`,
-          overflow: "hidden",
-          background: "rgba(4,10,6,0.35)",
+          ...toolbarStyles.canvasWrapper,
+          minHeight: fullscreen ? 0 : 420,
+          flex: fullscreen ? 1 : undefined,
+          border: fullscreen ? "1px solid #dcebd8" : toolbarStyles.canvasWrapper.border,
         }}
       >
         <FollowupFlowCanvas
+          config={config}
           passos={passos}
           saving={saving}
           uploadingId={uploadingId}
           disabled={disabled}
-          onSalvarPasso={onSalvarPasso}
+          theme={theme}
+          fullHeight={fullscreen}
+          onExposeApi={(api) => {
+            canvasApiRef.current = api;
+          }}
+          onSalvarConfig={onSalvarConfig}
+          onAtualizarConfigLocal={(patch) => {
+            onCanvasDirty?.();
+            onAtualizarConfigLocal(patch);
+          }}
+          onSalvarPasso={async (p) => {
+            onCanvasDirty?.();
+            await onSalvarPasso(p);
+          }}
           onExcluirPasso={onExcluirPasso}
           onReorder={onReorder}
           onUploadImagem={onUploadImagem}
-          onAtualizarLocal={onAtualizarLocal}
+          onAtualizarLocal={(id, patch) => {
+            onCanvasDirty?.();
+            onAtualizarLocal(id, patch);
+          }}
         />
       </div>
-
-      <FollowupFlowLegend />
     </div>
   );
 }
 
-function toolBtnStyle(disabled: boolean): CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "7px 10px",
-    borderRadius: 8,
-    border: `1px solid ${RF_BORDER_STRONG}`,
-    background: "rgba(6,13,8,0.55)",
-    color: disabled ? RF_TEXT_MUTED : RF_TEXT_PRIMARY,
-    fontSize: 11,
-    fontWeight: 700,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
-
 const loadingStyle: CSSProperties = {
-  height: 520,
+  flex: 1,
+  minHeight: 420,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
   gap: 10,
-  color: RF_TEXT_MUTED,
+  color: "#5d7a67",
   fontSize: 12,
 };

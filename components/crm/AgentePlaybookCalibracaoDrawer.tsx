@@ -334,7 +334,7 @@ export function AgentePlaybookCalibracaoDrawer({
     }
   }
 
-  async function salvarRascunhoPlaybookNoBucket(markdownAlvo: string) {
+  async function salvarRascunhoPlaybookNoBucket(markdownAlvo: string, opts?: { silent?: boolean }) {
     const trimmed = markdownAlvo.trim();
     if (!trimmed || publicando) return;
     setPublicando(true);
@@ -363,7 +363,9 @@ export function AgentePlaybookCalibracaoDrawer({
         generatedAt:
           typeof data.playbook_generated_at === "string" ? data.playbook_generated_at : m.generatedAt,
       }));
-      toastSuccess("Fluxo gravado no playbook (bucket).");
+      if (!opts?.silent) {
+        toastSuccess("Fluxo gravado no playbook (bucket).");
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha ao gravar rascunho.";
       setErro(msg);
@@ -661,14 +663,23 @@ export function AgentePlaybookCalibracaoDrawer({
       setAnaliseResultado(null);
       setAnaliseErro("");
 
+      try {
+        await salvarRascunhoPlaybookNoBucket(outMarkdown, { silent: true });
+      } catch {
+        setErro(
+          "Fluxo gerado na sessão, mas não foi gravado no bucket. Use «Salvar rascunho» ou «Publicar» antes de sair."
+        );
+        return false;
+      }
+
       const empresa = data.resumo_contexto?.empresa_label ?? "empresa";
       const nicho = data.resumo_contexto?.nicho;
       toastSuccess(
         data.fallback_template
-          ? "Fluxo base criado. Revise no editor visual e publique."
+          ? "Fluxo base criado e gravado. Revise no editor visual."
           : nicho
-            ? `Fluxo gerado para ${empresa} (${nicho}). Revise no editor visual e publique.`
-            : `Fluxo gerado para ${empresa}. Revise no editor visual e publique.`
+            ? `Fluxo gerado para ${empresa} (${nicho}) e gravado. Revise no editor visual.`
+            : `Fluxo gerado para ${empresa} e gravado. Revise no editor visual.`
       );
 
       if (opts?.abrirEditorVisual !== false && visualBuilderEnabled) {

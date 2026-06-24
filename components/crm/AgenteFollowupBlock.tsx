@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Bell,
   ChevronRight,
   Loader2,
   Play,
+  Workflow,
 } from "lucide-react";
-import { FollowupFlowReactFlowPanel } from "@/components/crm/followup-flow-visual/FollowupFlowReactFlowPanel";
+import { FollowupFlowVisualFullscreen } from "@/components/crm/followup-flow-visual/FollowupFlowVisualFullscreen";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { hubApiHeaders } from "@/lib/internal-api-headers-client";
@@ -15,20 +16,19 @@ import { CRM_ACCENT, crmBtnPrimary, crmBtnPrimaryLg, crmBtnSecondary } from "@/l
 import { BRAND_TEXT_DARK } from "@/lib/brand";
 import {
   RF_ACCENT,
-  RF_BORDER,
   RF_BORDER_STRONG,
   RF_TEXT_MUTED,
   RF_TEXT_PRIMARY,
   RF_TEXT_SECONDARY,
   rfInputStyle,
   rfLabelStyle,
-  rfInnerPanelStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
 import {
   atrasoTotalMinutos,
-  formatarAtrasoPasso,
+  configGatilhoPadrao,
+  formatarGatilhoConfig,
 } from "@/lib/hub/followup-types";
 
 type Props = {
@@ -40,9 +40,29 @@ type Props = {
 function normalizarPasso(p: HubAgenteFollowupPasso): HubAgenteFollowupPasso {
   return {
     ...p,
+    atraso_dias: Number.isFinite(p.atraso_dias) ? p.atraso_dias : 0,
     atraso_minutos: Number.isFinite(p.atraso_minutos) ? p.atraso_minutos : 0,
   };
 }
+
+function normalizarConfig(c: HubAgenteFollowupConfig): HubAgenteFollowupConfig {
+  const padrao = configGatilhoPadrao();
+  return {
+    ...c,
+    gatilho_tipo: c.gatilho_tipo ?? padrao.gatilho_tipo,
+    gatilho_dias: c.gatilho_dias ?? padrao.gatilho_dias,
+    gatilho_horas: c.gatilho_horas ?? padrao.gatilho_horas,
+    gatilho_minutos: c.gatilho_minutos ?? padrao.gatilho_minutos,
+    gatilho_hora_dia: c.gatilho_hora_dia ?? padrao.gatilho_hora_dia,
+    arquivar_apos_dias: c.arquivar_apos_dias ?? padrao.arquivar_apos_dias,
+  };
+}
+
+const cardSurfaceDark: CSSProperties = {
+  borderRadius: 12,
+  border: `1px solid ${RF_BORDER_STRONG}`,
+  background: "rgba(6, 13, 8, 0.45)",
+};
 
 export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }: Props) {
   const isCard = layout === "card";
@@ -54,7 +74,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   const [erro, setErro] = useState("");
   const [okMsg, setOkMsg] = useState("");
   const [sideoverOpen, setSideoverOpen] = useState(false);
+  const [editorFullscreenOpen, setEditorFullscreenOpen] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const passosRef = useRef<HubAgenteFollowupPasso[]>([]);
 
   const base = `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/followup`;
 
@@ -62,6 +84,10 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     () => [...passos].sort((a, b) => a.ordem - b.ordem),
     [passos]
   );
+
+  useEffect(() => {
+    passosRef.current = passosOrdenados;
+  }, [passosOrdenados]);
 
   const btnPrimaryDark = (disabled: boolean): CSSProperties => ({
     ...crmBtnPrimaryLg(disabled),
@@ -96,10 +122,12 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         passos?: HubAgenteFollowupPasso[];
       };
       if (!res.ok) throw new Error(data.error || "Falha ao carregar");
-      setConfig(data.config ?? null);
-      setPassos(
-        Array.isArray(data.passos) ? data.passos.map((p) => normalizarPasso(p as HubAgenteFollowupPasso)) : []
-      );
+      setConfig((prev) => (data.config ? normalizarConfig(data.config) : prev));
+      const normalizados = Array.isArray(data.passos)
+        ? data.passos.map((p) => normalizarPasso(p as HubAgenteFollowupPasso))
+        : [];
+      setPassos(normalizados);
+      passosRef.current = [...normalizados].sort((a, b) => a.ordem - b.ordem);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar follow-up");
     } finally {
@@ -112,10 +140,20 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }, [carregar]);
 
   useEffect(() => {
-    if (sideoverOpen) void carregar();
-  }, [sideoverOpen, carregar]);
+    if (sideoverOpen || editorFullscreenOpen) void carregar();
+  }, [sideoverOpen, editorFullscreenOpen, carregar]);
 
-  async function salvarConfig(patch: Partial<{ ativo: boolean; arquivar_apos_dias: number }>) {
+  async function salvarConfig(
+    patch: Partial<{
+      ativo: boolean;
+      arquivar_apos_dias: number;
+      gatilho_tipo: HubAgenteFollowupConfig["gatilho_tipo"];
+      gatilho_dias: number;
+      gatilho_horas: number;
+      gatilho_minutos: number;
+      gatilho_hora_dia: string | null;
+    }>
+  ) {
     setSaving(true);
     setErro("");
     setOkMsg("");
@@ -132,7 +170,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         leads_reativados?: number;
       };
       if (!res.ok) throw new Error(data.error || "Falha ao guardar");
-      if (data.config) setConfig(data.config);
+      if (data.config) setConfig(normalizarConfig(data.config));
       if (data.passos) setPassos(data.passos.map(normalizarPasso));
       const reativados = data.leads_reativados ?? 0;
       setOkMsg(
@@ -147,35 +185,137 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     }
   }
 
-  async function salvarPasso(passo: HubAgenteFollowupPasso) {
+  async function salvarPassoInner(passo: HubAgenteFollowupPasso): Promise<HubAgenteFollowupPasso> {
     if (atrasoTotalMinutos(passo) < 1) {
-      setErro("Defina pelo menos 1 minuto de atraso (horas e/ou minutos).");
-      return;
+      throw new Error(`Passo ${passo.ordem}: defina pelo menos 1 minuto de atraso.`);
     }
-    setSaving(true);
-    setErro("");
-    try {
-      const res = await fetch(`${base}/passos/${encodeURIComponent(passo.id)}`, {
-        method: "PATCH",
-        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
+    const res = await fetch(`${base}/passos/${encodeURIComponent(passo.id)}`, {
+      method: "PATCH",
+      headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           ordem: passo.ordem,
+          atraso_dias: passo.atraso_dias ?? 0,
           atraso_horas: passo.atraso_horas,
           atraso_minutos: passo.atraso_minutos ?? 0,
           tipo_conteudo: passo.tipo_conteudo,
           texto_template: passo.texto_template,
           imagem_url: passo.imagem_url,
           legenda_imagem: passo.legenda_imagem,
+          disparo_hora_dia: passo.disparo_hora_dia ?? null,
           ativo: passo.ativo,
         }),
-      });
-      const data = (await res.json()) as { error?: string; passo?: HubAgenteFollowupPasso };
-      if (!res.ok) throw new Error(data.error || "Falha ao guardar passo");
-      if (data.passo) {
-        setPassos((prev) => prev.map((p) => (p.id === data.passo!.id ? data.passo! : p)));
-      }
+    });
+    const data = (await res.json()) as { error?: string; passo?: HubAgenteFollowupPasso };
+    if (!res.ok || !data.passo) throw new Error(data.error || "Falha ao guardar passo");
+    setPassos((prev) => prev.map((p) => (p.id === data.passo!.id ? normalizarPasso(data.passo!) : p)));
+    return normalizarPasso(data.passo);
+  }
+
+  async function salvarPasso(passo: HubAgenteFollowupPasso) {
+    setSaving(true);
+    setErro("");
+    try {
+      await salvarPassoInner(passo);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao guardar passo");
+      throw e;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function salvarTodosPassos(_lista: HubAgenteFollowupPasso[]): Promise<HubAgenteFollowupPasso[]> {
+    setSaving(true);
+    setErro("");
+    try {
+      const ordenados = [...passosRef.current].sort((a, b) => a.ordem - b.ordem);
+      for (const passo of ordenados) {
+        await salvarPassoInner(passo);
+      }
+      await carregar();
+      setOkMsg("Cadência guardada.");
+      return passosRef.current;
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao guardar cadência");
+      throw e;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function salvarTudo(): Promise<{ passos: HubAgenteFollowupPasso[]; config: HubAgenteFollowupConfig }> {
+    if (!config) throw new Error("Config não carregada.");
+    setSaving(true);
+    setErro("");
+    try {
+      const ordenados = [...passosRef.current].sort((a, b) => a.ordem - b.ordem);
+      for (const passo of ordenados) {
+        await salvarPassoInner(passo);
+      }
+      const cfg = await salvarConfigInner({
+        arquivar_apos_dias: config.arquivar_apos_dias,
+        gatilho_tipo: config.gatilho_tipo,
+        gatilho_dias: config.gatilho_dias,
+        gatilho_horas: config.gatilho_horas,
+        gatilho_minutos: config.gatilho_minutos,
+        gatilho_hora_dia: config.gatilho_hora_dia ?? null,
+      });
+      await carregar();
+      setOkMsg("Fluxo guardado.");
+      return { passos: passosRef.current, config: cfg };
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao guardar fluxo");
+      throw e;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function salvarConfigInner(
+    patch: Partial<{
+      ativo: boolean;
+      arquivar_apos_dias: number;
+      gatilho_tipo: HubAgenteFollowupConfig["gatilho_tipo"];
+      gatilho_dias: number;
+      gatilho_horas: number;
+      gatilho_minutos: number;
+      gatilho_hora_dia: string | null;
+    }>
+  ): Promise<HubAgenteFollowupConfig> {
+    const res = await fetch(base, {
+      method: "PATCH",
+      headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const data = (await res.json()) as {
+      error?: string;
+      config?: HubAgenteFollowupConfig;
+      passos?: HubAgenteFollowupPasso[];
+    };
+    if (!res.ok || !data.config) throw new Error(data.error || "Falha ao guardar config");
+    const cfg = normalizarConfig(data.config);
+    setConfig(cfg);
+    if (data.passos) setPassos(data.passos.map(normalizarPasso));
+    return cfg;
+  }
+
+  async function salvarConfigGatilho(
+    patch: Partial<{
+      arquivar_apos_dias: number;
+      gatilho_tipo: HubAgenteFollowupConfig["gatilho_tipo"];
+      gatilho_dias: number;
+      gatilho_horas: number;
+      gatilho_minutos: number;
+      gatilho_hora_dia: string | null;
+    }>
+  ) {
+    setSaving(true);
+    setErro("");
+    try {
+      await salvarConfigInner(patch);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao guardar gatilho");
+      throw e;
     } finally {
       setSaving(false);
     }
@@ -232,8 +372,8 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     }
   }
 
-  async function excluirPasso(id: string) {
-    if (!confirm("Excluir este lembrete?")) return;
+  async function excluirPasso(id: string, skipConfirm = false) {
+    if (!skipConfirm && !confirm("Excluir este lembrete?")) return;
     setSaving(true);
     try {
       const res = await fetch(`${base}/passos/${encodeURIComponent(id)}`, {
@@ -247,6 +387,34 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       if (restantes.length > 0) await persistirOrdem(restantes);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao excluir");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function excluirCadenciaCompleta() {
+    if (!confirm("Excluir toda a cadência de follow-up? Os passos serão removidos e o follow-up desactivado.")) {
+      return;
+    }
+    setSaving(true);
+    setErro("");
+    try {
+      for (const passo of [...passosOrdenados]) {
+        const res = await fetch(`${base}/passos/${encodeURIComponent(passo.id)}`, {
+          method: "DELETE",
+          headers: await hubApiHeaders(),
+        });
+        if (!res.ok) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error || "Falha ao excluir passo");
+        }
+      }
+      setPassos([]);
+      if (config?.ativo) await salvarConfig({ ativo: false });
+      setOkMsg("Cadência removida.");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao excluir cadência");
+      void carregar();
     } finally {
       setSaving(false);
     }
@@ -317,205 +485,126 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     }
   }
 
+  function atualizarConfigLocal(patch: Partial<HubAgenteFollowupConfig>) {
+    setConfig((c) => (c ? normalizarConfig({ ...c, ...patch }) : c));
+  }
+
   function atualizarPassoLocal(id: string, patch: Partial<HubAgenteFollowupPasso>) {
     setPassos((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }
 
   const ativo = config?.ativo === true;
   const passosAtivos = passos.filter((p) => p.ativo).length;
+  const nomeAgente = agenteNome?.trim() || agenteSlug;
 
   const badge = ativo
     ? { rotulo: "ACTIVO", bg: "rgba(63,185,80,0.14)", fg: "#3fb950" }
     : { rotulo: "INACTIVO", bg: "#eef0f2", fg: "#64748b" };
 
+  const gatilhoResumo = config ? formatarGatilhoConfig(config) : "—";
+
   const painelConteudo = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 12,
-          padding: 12,
-          borderRadius: 12,
-          border: `1px solid ${ativo ? "rgba(63, 185, 80, 0.38)" : RF_BORDER_STRONG}`,
-          background: ativo ? "rgba(63, 185, 80, 0.08)" : "rgba(6, 13, 8, 0.45)",
-        }}
-      >
-        <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 0, alignItems: "flex-start" }}>
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 10,
-              background: ativo ? "rgba(63, 185, 80, 0.16)" : "rgba(146, 255, 0, 0.1)",
-              border: `1px solid ${ativo ? "rgba(63, 185, 80, 0.35)" : "rgba(146, 255, 0, 0.22)"}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              marginTop: 2,
-            }}
-          >
-            <Bell size={20} color={ativo ? "#86efac" : RF_ACCENT} aria-hidden />
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-              <span id="followup-ativo-label" style={{ fontSize: 13, fontWeight: 700, color: RF_TEXT_PRIMARY }}>
-                Follow-up automático
-              </span>
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 800,
-                  letterSpacing: 0.06,
-                  color: "#79c0ff",
-                  border: "1px solid rgba(121,192,255,0.35)",
-                  borderRadius: 4,
-                  padding: "2px 6px",
-                }}
-              >
-                WHATSAPP
-              </span>
-            </div>
-            <span
-              style={{
-                display: "block",
-                marginTop: 4,
-                fontSize: 11,
-                lineHeight: 1.45,
-                color: RF_TEXT_SECONDARY,
-              }}
-            >
-              Cron envia lembretes quando o cliente fica sem responder — mensagens fixas por passo.
-            </span>
-          </div>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: 4,
-            flexShrink: 0,
-            paddingTop: 4,
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: ativo ? "#3fb950" : RF_TEXT_MUTED,
-            }}
-          >
-            {ativo ? "ACTIVO" : "INACTIVO"}
-          </span>
-          <CrmToggleSwitch
-            checked={ativo}
-            disabled={loading || saving || !config}
-            variant="dark"
-            labelledBy="followup-ativo-label"
-            onCheckedChange={(v) => void salvarConfig({ ativo: v })}
-          />
-        </div>
-      </div>
-
-      <div style={rfInnerPanelStyle()}>
-        <div style={{ padding: "12px 14px", borderBottom: `1px solid ${RF_BORDER}` }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: RF_ACCENT }}>
-            Alcance automático
-          </p>
-          <p style={{ margin: "6px 0 0", fontSize: 11, color: RF_TEXT_SECONDARY, lineHeight: 1.45 }}>
-            Com follow-up <strong style={{ color: RF_TEXT_PRIMARY }}>ACTIVO</strong>, o cron percorre{" "}
-            <strong style={{ color: RF_TEXT_PRIMARY }}>todos os leads</strong> deste agente com WhatsApp —
-            excepto arquivados, ganhos, perdidos ou com atendimento humano. Mensagens fixas, sem IA.
-            Use <code style={{ color: RF_ACCENT }}>{"{nome}"}</code> no texto.
-          </p>
-        </div>
-      </div>
-
-      <div style={rfInnerPanelStyle()}>
-        <div style={{ padding: "12px 14px", borderBottom: `1px solid ${RF_BORDER}` }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: RF_ACCENT }}>
-            Regra de arquivamento
-          </p>
-        </div>
-        <div style={{ padding: "12px 14px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
-          <label style={{ flex: "1 1 160px" }}>
-            <span style={rfLabelStyle()}>Arquivar lead após (dias)</span>
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={config?.arquivar_apos_dias ?? 7}
-              onChange={(e) =>
-                setConfig((c) =>
-                  c ? { ...c, arquivar_apos_dias: Number.parseInt(e.target.value, 10) || 7 } : c
-                )
-              }
-              style={rfInputStyle()}
+          <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 10,
+                background: ativo ? "rgba(63, 185, 80, 0.16)" : "rgba(146, 255, 0, 0.1)",
+                border: `1px solid ${ativo ? "rgba(63, 185, 80, 0.35)" : "rgba(146, 255, 0, 0.22)"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Bell size={20} color={ativo ? "#86efac" : RF_ACCENT} aria-hidden />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <span id="followup-ativo-label" style={{ fontSize: 13, fontWeight: 700, color: RF_TEXT_PRIMARY }}>
+                Follow-up automático WhatsApp
+              </span>
+              <p style={{ margin: "4px 0 0", fontSize: 11, lineHeight: 1.45, color: RF_TEXT_SECONDARY }}>
+                {passos.length} passo{passos.length === 1 ? "" : "s"} · Gatilho: {gatilhoResumo}
+                {config ? ` · Arquivar: ${config.arquivar_apos_dias ?? 7}d` : ""}
+              </p>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: ativo ? "#3fb950" : RF_TEXT_MUTED }}>
+              {ativo ? "ACTIVO" : "INACTIVO"}
+            </span>
+            <CrmToggleSwitch
+              checked={ativo}
+              disabled={loading || saving || !config}
+              variant="dark"
+              labelledBy="followup-ativo-label"
+              onCheckedChange={(v) => void salvarConfig({ ativo: v })}
             />
-          </label>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void salvarConfig({ arquivar_apos_dias: config?.arquivar_apos_dias ?? 7 })}
-            style={{ ...btnSecondaryDark(saving), width: "auto", padding: "9px 14px" }}
-          >
-            Guardar regra
-          </button>
+          </div>
         </div>
       </div>
 
-      {passosAtivos > 0 && (
-        <div
+      <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
+        <label htmlFor="followup-arquivar-dias">
+          <span style={rfLabelStyle()}>Arquivar lead após (dias sem resposta)</span>
+          <input
+            id="followup-arquivar-dias"
+            type="number"
+            min={1}
+            max={365}
+            value={config?.arquivar_apos_dias ?? 7}
+            disabled={loading || saving || !config}
+            onChange={(e) => {
+              const dias = Math.min(365, Math.max(1, Number.parseInt(e.target.value, 10) || 7));
+              atualizarConfigLocal({ arquivar_apos_dias: dias });
+            }}
+            onBlur={(e) => {
+              const dias = Math.min(365, Math.max(1, Number.parseInt(e.target.value, 10) || 7));
+              void salvarConfigGatilho({ arquivar_apos_dias: dias });
+            }}
+            style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
+          />
+        </label>
+        <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+          Depois de todos os passos, o lead é arquivado se continuar sem responder neste prazo (padrão: 7 dias).
+        </p>
+      </div>
+
+      <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
+        <p style={{ margin: "0 0 8px", fontSize: 11, color: RF_TEXT_SECONDARY, lineHeight: 1.5 }}>
+          Configure o <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho de disparo</strong> e os passos da cadência
+          no editor visual. Use <code style={{ color: RF_ACCENT }}>{"{nome}"}</code> nas mensagens.
+        </p>
+        <button
+          type="button"
+          disabled={loading || !config}
+          onClick={() => setEditorFullscreenOpen(true)}
           style={{
-            borderRadius: 10,
-            border: `1px solid ${RF_BORDER}`,
-            padding: 10,
-            background: "rgba(6,13,8,0.35)",
+            ...crmBtnPrimary(false),
+            width: "100%",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: "10px 14px",
           }}
         >
-          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: RF_ACCENT }}>
-            Cadência
-          </p>
-          {passosOrdenados
-            .filter((p) => p.ativo)
-            .map((p) => (
-              <div
-                key={`prev-${p.id}`}
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  fontSize: 11,
-                  color: RF_TEXT_SECONDARY,
-                  marginBottom: 4,
-                }}
-              >
-                <span style={{ fontWeight: 800, color: RF_ACCENT, minWidth: 72 }}>
-                  +{formatarAtrasoPasso(p)}
-                </span>
-                <span style={{ flex: 1 }}>
-                  {p.imagem_url ? "🖼 " : ""}
-                  {(p.texto_template || "—").slice(0, 70)}
-                </span>
-              </div>
-            ))}
-        </div>
-      )}
-
-      <FollowupFlowReactFlowPanel
-        passos={passosOrdenados}
-        saving={saving}
-        uploadingId={uploadingId}
-        disabled={loading || !config}
-        onAdicionarPasso={adicionarPasso}
-        onSalvarPasso={salvarPasso}
-        onExcluirPasso={excluirPasso}
-        onReorder={persistirOrdem}
-        onUploadImagem={uploadImagem}
-        onAtualizarLocal={atualizarPassoLocal}
-      />
+          <Workflow size={16} />
+          Configurar follow-up
+          <ChevronRight size={16} aria-hidden />
+        </button>
+      </div>
 
       {okMsg ? <p style={{ margin: 0, fontSize: 12, color: RF_ACCENT }}>{okMsg}</p> : null}
       {erro ? <p style={{ margin: 0, fontSize: 12, color: "#f85149" }}>{erro}</p> : null}
@@ -545,19 +634,42 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
 
   if (!isCard) {
     return (
-      <CrmIntegracaoSideoverShell
-        embedded
-        open
-        onClose={() => {}}
-        title={agenteNome?.trim() || agenteSlug}
-        subtitle="Cadência de lembretes WhatsApp"
-        footer={sideoverFooter}
-        theme="dark"
-        sectionLabel="Follow-up"
-        loading={loading}
-      >
-        {painelConteudo}
-      </CrmIntegracaoSideoverShell>
+      <>
+        <CrmIntegracaoSideoverShell
+          embedded
+          open
+          onClose={() => {}}
+          title={nomeAgente}
+          subtitle="Cadência de lembretes WhatsApp"
+          footer={sideoverFooter}
+          theme="dark"
+          sectionLabel="Follow-up"
+          loading={loading}
+        >
+          {painelConteudo}
+        </CrmIntegracaoSideoverShell>
+        {config && editorFullscreenOpen ? (
+        <FollowupFlowVisualFullscreen
+          open
+          onClose={() => setEditorFullscreenOpen(false)}
+          agenteNome={nomeAgente}
+          config={config}
+          passos={passosOrdenados}
+          saving={saving}
+          uploadingId={uploadingId}
+          disabled={loading}
+          onAdicionarPasso={adicionarPasso}
+          onSalvarPasso={salvarPasso}
+          onSalvarConfig={salvarConfigGatilho}
+          onSalvarTudo={salvarTudo}
+          onExcluirPasso={excluirPasso}
+          onReorder={persistirOrdem}
+          onUploadImagem={uploadImagem}
+          onAtualizarLocal={atualizarPassoLocal}
+          onAtualizarConfigLocal={atualizarConfigLocal}
+        />
+        ) : null}
+      </>
     );
   }
 
@@ -626,9 +738,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
                   >
                     {loading ? "…" : badge.rotulo}
                   </span>
-                  {!loading && ativo ? (
+                  {!loading && passos.length > 0 ? (
                     <span style={{ marginLeft: 6, fontSize: 11, color: "#5d7a67" }}>
-                      · {passosAtivos} passo(s)
+                      · {passosAtivos}/{passos.length} passo(s)
                     </span>
                   ) : null}
                 </p>
@@ -646,7 +758,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
                 padding: "9px 14px",
               }}
             >
-              Configurar passos
+              Configurar follow-up
               <ChevronRight size={16} aria-hidden />
             </button>
           </div>
@@ -656,8 +768,8 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       <CrmIntegracaoSideoverShell
         open={sideoverOpen}
         onClose={() => setSideoverOpen(false)}
-        title={agenteNome?.trim() || agenteSlug}
-        subtitle="Diagrama visual dos passos — texto e imagem no bucket agent-followup"
+        title={nomeAgente}
+        subtitle="Gerir cadência de lembretes WhatsApp"
         footer={sideoverFooter}
         theme="dark"
         sectionLabel="Follow-up WhatsApp"
@@ -665,6 +777,28 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       >
         {painelConteudo}
       </CrmIntegracaoSideoverShell>
+
+      {config && editorFullscreenOpen ? (
+      <FollowupFlowVisualFullscreen
+        open
+        onClose={() => setEditorFullscreenOpen(false)}
+        agenteNome={nomeAgente}
+        config={config}
+        passos={passosOrdenados}
+        saving={saving}
+        uploadingId={uploadingId}
+        disabled={loading}
+        onAdicionarPasso={adicionarPasso}
+        onSalvarPasso={salvarPasso}
+        onSalvarConfig={salvarConfigGatilho}
+        onSalvarTudo={salvarTudo}
+        onExcluirPasso={excluirPasso}
+        onReorder={persistirOrdem}
+        onUploadImagem={uploadImagem}
+        onAtualizarLocal={atualizarPassoLocal}
+        onAtualizarConfigLocal={atualizarConfigLocal}
+      />
+      ) : null}
     </>
   );
 }

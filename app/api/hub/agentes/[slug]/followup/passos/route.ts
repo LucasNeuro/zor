@@ -4,6 +4,7 @@ import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
 import { validarAtrasoPasso } from "@/lib/hub/followup-types";
+import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 
 function db() {
   return createClient(
@@ -46,12 +47,13 @@ export async function POST(
   }
 
   const ordem = Number.parseInt(String(body.ordem ?? ""), 10);
+  const atraso_dias = Number.parseInt(String(body.atraso_dias ?? "0"), 10);
   const atraso_horas = Number.parseInt(String(body.atraso_horas ?? "0"), 10);
   const atraso_minutos = Number.parseInt(String(body.atraso_minutos ?? "0"), 10);
   if (!Number.isFinite(ordem) || ordem < 1 || ordem > 24) {
     return NextResponse.json({ error: "ordem inválida (1–24)." }, { status: 400 });
   }
-  const atrasoErr = validarAtrasoPasso(atraso_horas, atraso_minutos);
+  const atrasoErr = validarAtrasoPasso(atraso_horas, atraso_minutos, atraso_dias);
   if (atrasoErr) {
     return NextResponse.json({ error: atrasoErr }, { status: 400 });
   }
@@ -64,6 +66,7 @@ export async function POST(
     tenant_id: tenantResolved.tenantId,
     agente_slug: slug,
     ordem,
+    atraso_dias,
     atraso_horas,
     atraso_minutos,
     tipo_conteudo: tipo,
@@ -83,7 +86,7 @@ export async function POST(
     if (error.message.includes("unique") || error.message.includes("duplicate")) {
       return NextResponse.json({ error: "Já existe passo com esta ordem." }, { status: 409 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: mensagemErroFollowupDb(error) }, { status: 500 });
   }
 
   return NextResponse.json({ passo: data });

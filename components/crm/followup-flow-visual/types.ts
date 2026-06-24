@@ -1,7 +1,7 @@
 "use client";
 
-import type { FollowupTipoConteudo, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { formatarAtrasoPasso } from "@/lib/hub/followup-types";
+import type { FollowupTipoConteudo, HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import { configGatilhoPadrao, formatarAtrasoPasso, formatarGatilhoConfig } from "@/lib/hub/followup-types";
 
 export const FOLLOWUP_START_NODE_ID = "__followup_start__";
 
@@ -12,11 +12,22 @@ export type FollowupFlowNodeData = {
   passoId?: string;
   ordem?: number;
   atrasoLabel?: string;
+  gatilhoLabel?: string;
   textoPreview?: string;
   imagemUrl?: string | null;
   ativo?: boolean;
   legenda?: string | null;
 };
+
+export function configToStartNodeData(config: HubAgenteFollowupConfig | null | undefined): FollowupFlowNodeData {
+  const padrao = configGatilhoPadrao();
+  const c = config ?? padrao;
+  return {
+    kind: "start",
+    gatilhoLabel: formatarGatilhoConfig(c),
+    textoPreview: `Arquivar em ${c.arquivar_apos_dias ?? padrao.arquivar_apos_dias} dia(s)`,
+  };
+}
 
 export function passoToNodeData(passo: HubAgenteFollowupPasso): FollowupFlowNodeData {
   const texto =
@@ -41,4 +52,37 @@ export function summarizeFollowupText(text: string, max = 72): string {
   if (!clean) return "Sem conteúdo";
   if (clean.length <= max) return clean;
   return `${clean.slice(0, max - 1)}…`;
+}
+
+export function passoPersistenciaSnapshot(p: HubAgenteFollowupPasso) {
+  return {
+    id: p.id,
+    ordem: p.ordem,
+    atraso_dias: p.atraso_dias ?? 0,
+    atraso_horas: p.atraso_horas,
+    atraso_minutos: p.atraso_minutos ?? 0,
+    tipo_conteudo: p.tipo_conteudo,
+    texto_template: p.texto_template ?? null,
+    imagem_url: p.imagem_url ?? null,
+    legenda_imagem: p.legenda_imagem ?? null,
+    disparo_hora_dia: p.disparo_hora_dia ?? null,
+    ativo: p.ativo,
+  };
+}
+
+export function configPersistenciaSnapshot(c: HubAgenteFollowupConfig | null | undefined) {
+  const padrao = configGatilhoPadrao();
+  const cfg = c ?? padrao;
+  return {
+    arquivar_apos_dias: cfg.arquivar_apos_dias ?? padrao.arquivar_apos_dias,
+    gatilho_tipo: cfg.gatilho_tipo ?? padrao.gatilho_tipo,
+    gatilho_dias: cfg.gatilho_dias ?? padrao.gatilho_dias,
+    gatilho_horas: cfg.gatilho_horas ?? padrao.gatilho_horas,
+    gatilho_minutos: cfg.gatilho_minutos ?? padrao.gatilho_minutos,
+    gatilho_hora_dia: cfg.gatilho_hora_dia ?? padrao.gatilho_hora_dia,
+  };
+}
+
+export function passoPersistenciaIgual(a: HubAgenteFollowupPasso, b: HubAgenteFollowupPasso): boolean {
+  return JSON.stringify(passoPersistenciaSnapshot(a)) === JSON.stringify(passoPersistenciaSnapshot(b));
 }

@@ -6,6 +6,7 @@ import {
   type HubAgenteFollowupConfig,
   type HubAgenteFollowupPasso,
 } from "@/lib/hub/followup-types";
+import { gatilhoDisparoPermitido } from "@/lib/hub/followup-schedule";
 import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
 type LeadFollowupRow = {
@@ -158,6 +159,20 @@ export async function executarFollowupParaAgente(
 
     if (!passo) continue;
     if (minutosSilencio < atrasoTotalMinutos(passo)) continue;
+
+    if (
+      !gatilhoDisparoPermitido({
+        gatilho_tipo: config.gatilho_tipo ?? "silencio",
+        gatilho_dias: config.gatilho_dias,
+        gatilho_horas: config.gatilho_horas,
+        gatilho_minutos: config.gatilho_minutos,
+        gatilho_hora_dia: config.gatilho_hora_dia,
+        minutosSilencio,
+        disparo_hora_dia: passo.disparo_hora_dia,
+      })
+    ) {
+      continue;
+    }
 
     const mercado =
       (lead.metadata && typeof lead.metadata.mercado === "string"

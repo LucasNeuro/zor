@@ -1,71 +1,207 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Bell, Image as ImageIcon, MessageSquare, Play } from "lucide-react";
+import { Archive, Clock, Image as ImageIcon, MessageSquare, Play } from "lucide-react";
 import type { FollowupFlowNodeData } from "./types";
 import { summarizeFollowupText } from "./types";
 
 export type FollowupNodeCallbacks = {
   onSelect: (passoId: string) => void;
+  onSelectStart: () => void;
 };
 
 export const FollowupNodeCallbacksContext = createContext<FollowupNodeCallbacks>({
   onSelect: () => undefined,
+  onSelectStart: () => undefined,
 });
 
-const NODE_W = 280;
+export const FollowupNodeThemeContext = createContext<"light" | "dark">("light");
+
+export const FOLLOWUP_NODE_W = 300;
 
 const KIND_THEME = {
   start: {
-    border: "#3fb950",
-    headerBg: "rgba(63,185,80,0.16)",
-    label: "Início",
+    border: "#2d7a36",
+    headerBg: "#e8f5e9",
+    headerText: "#1b5e20",
+    badgeBg: "#a5d6a7",
+    badgeText: "#1b5e20",
+    label: "Gatilho",
     Icon: Play,
   },
   texto: {
-    border: "#92ff00",
-    headerBg: "rgba(146,255,0,0.12)",
-    label: "Texto",
+    border: "#3f9848",
+    headerBg: "#edf7ee",
+    headerText: "#0b3d14",
+    badgeBg: "#c8e6c9",
+    badgeText: "#1b5e20",
+    label: "Mensagem",
     Icon: MessageSquare,
   },
   imagem: {
     border: "#58a6ff",
-    headerBg: "rgba(88,166,255,0.12)",
+    headerBg: "#e3f2fd",
+    headerText: "#0d47a1",
+    badgeBg: "#bbdefb",
+    badgeText: "#1565c0",
     label: "Imagem",
     Icon: ImageIcon,
   },
   texto_imagem: {
-    border: "#c9a24a",
-    headerBg: "rgba(201,162,74,0.14)",
+    border: "#d4a017",
+    headerBg: "#fff8e1",
+    headerText: "#6d4c00",
+    badgeBg: "#ffe082",
+    badgeText: "#5d4037",
     label: "Imagem + legenda",
     Icon: ImageIcon,
   },
 } as const;
 
+const cardBase: CSSProperties = {
+  width: FOLLOWUP_NODE_W,
+  minWidth: FOLLOWUP_NODE_W,
+  maxWidth: FOLLOWUP_NODE_W,
+  background: "#ffffff",
+  borderRadius: 14,
+  overflow: "visible",
+  position: "relative",
+  fontFamily: "inherit",
+};
+
+const headerBase: CSSProperties = {
+  padding: "10px 12px 8px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  borderRadius: "13px 13px 0 0",
+  borderBottom: "1px solid #e8f0e6",
+};
+
+const badgeRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  justifyContent: "space-between",
+};
+
+const badgeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  padding: "2px 8px 2px 6px",
+  borderRadius: 999,
+  fontSize: 10.5,
+  fontWeight: 700,
+  letterSpacing: 0.3,
+  lineHeight: 1.6,
+};
+
+const stepTagStyle: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 700,
+  color: "#5d7a67",
+  background: "#f4faf2",
+  border: "1px solid #dcebd8",
+  borderRadius: 999,
+  padding: "2px 7px",
+};
+
+const titleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 12.5,
+  fontWeight: 600,
+  lineHeight: 1.35,
+  wordBreak: "break-word",
+};
+
+const subtitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 10,
+  lineHeight: 1.4,
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+};
+
+const bodyBase: CSSProperties = {
+  padding: "10px 12px 12px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const contentBox: CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  color: "#2d4a35",
+  lineHeight: 1.55,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  borderRadius: 8,
+  padding: "7px 8px",
+  background: "#f4faf2",
+  border: "1px solid #dcebd8",
+  minHeight: 42,
+};
+
+const legendText: CSSProperties = {
+  margin: 0,
+  fontSize: 10,
+  color: "#7a9a7e",
+  letterSpacing: 0.2,
+  lineHeight: 1.35,
+};
+
+const metaLine: CSSProperties = {
+  margin: 0,
+  fontSize: 10.5,
+  color: "#5d7a67",
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+};
+
+function handleStyle(color: string, pos: "top" | "bottom"): CSSProperties {
+  return {
+    [pos]: -8,
+    width: 14,
+    height: 14,
+    background: color,
+    border: "2px solid #ffffff",
+    borderRadius: "50%",
+    boxShadow: "0 0 0 2px #dcebd8",
+  };
+}
+
 function BaseCard({
   selected,
-  border,
-  headerBg,
-  label,
-  Icon,
+  theme,
+  stepTag,
   title,
   subtitle,
+  content,
+  meta,
   children,
   onClick,
   inactive,
 }: {
   selected?: boolean;
-  border: string;
-  headerBg: string;
-  label: string;
-  Icon: React.ComponentType<{ size: number; strokeWidth?: number }>;
+  theme: (typeof KIND_THEME)[keyof typeof KIND_THEME];
+  stepTag?: string;
   title: string;
   subtitle?: string;
+  content?: string;
+  meta?: string;
   children?: React.ReactNode;
   onClick?: () => void;
   inactive?: boolean;
 }) {
+  const mode = useContext(FollowupNodeThemeContext);
+  const isLight = mode === "light";
+  const { Icon } = theme;
+
   return (
     <div
       role={onClick ? "button" : undefined}
@@ -78,59 +214,77 @@ function BaseCard({
         }
       }}
       style={{
-        width: NODE_W,
-        borderRadius: 12,
-        border: `2px solid ${selected ? "#c9a24a" : border}`,
-        background: inactive ? "rgba(6,13,8,0.72)" : "rgba(8,16,10,0.92)",
-        boxShadow: selected ? "0 0 0 2px rgba(201,162,74,0.35)" : "0 8px 24px rgba(0,0,0,0.28)",
+        ...cardBase,
+        background: isLight ? "#ffffff" : inactive ? "rgba(6,13,8,0.72)" : "rgba(8,16,10,0.92)",
+        border: selected
+          ? `2px solid ${theme.border}`
+          : isLight
+            ? "1px solid #dcebd8"
+            : `1px solid ${theme.border}66`,
+        boxShadow: selected
+          ? `0 0 0 2px ${theme.border}44, 0 8px 24px rgba(11, 34, 16, 0.12)`
+          : isLight
+            ? "0 4px 16px rgba(11, 34, 16, 0.08)"
+            : "0 8px 24px rgba(0,0,0,0.28)",
         opacity: inactive ? 0.72 : 1,
         cursor: onClick ? "pointer" : "default",
-        overflow: "hidden",
-        fontFamily: "inherit",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "8px 10px",
-          background: headerBg,
-          borderBottom: `1px solid ${border}55`,
-        }}
-      >
-        <Icon size={14} strokeWidth={2.2} />
-        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.04, textTransform: "uppercase" }}>
-          {label}
-        </span>
-        {inactive ? (
-          <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 700, color: "#8b949e" }}>INACTIVO</span>
+      <div style={{ ...headerBase, background: theme.headerBg }}>
+        <div style={badgeRow}>
+          <span style={{ ...badgeStyle, background: theme.badgeBg, color: theme.badgeText }}>
+            <Icon size={11} strokeWidth={2.2} />
+            {theme.label}
+          </span>
+          {stepTag ? <span style={stepTagStyle}>{stepTag}</span> : null}
+          {inactive ? (
+            <span style={{ fontSize: 9, fontWeight: 700, color: "#64748b" }}>INACTIVO</span>
+          ) : null}
+        </div>
+        <p style={{ ...titleStyle, color: theme.headerText }}>{title}</p>
+        {subtitle ? (
+          <p style={{ ...subtitleStyle, color: isLight ? "#5d7a67" : "#8b949e" }}>
+            <Clock size={10} />
+            {subtitle}
+          </p>
         ) : null}
       </div>
-      <div style={{ padding: "10px 12px 12px" }}>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "#e6edf3" }}>{title}</p>
-        {subtitle ? (
-          <p style={{ margin: "4px 0 0", fontSize: 10, color: "#8b949e", lineHeight: 1.4 }}>{subtitle}</p>
+
+      <div style={bodyBase}>
+        {content ? <p style={contentBox}>{content}</p> : null}
+        {meta ? (
+          <p style={metaLine}>
+            <Archive size={10} />
+            {meta}
+          </p>
         ) : null}
         {children}
+        <p style={legendText}>Clique para editar</p>
       </div>
     </div>
   );
 }
 
-export function FollowupStartNode({ selected }: NodeProps) {
+export function FollowupStartNode({ data, selected }: NodeProps) {
+  const d = data as FollowupFlowNodeData;
+  const theme = KIND_THEME.start;
+  const { onSelectStart } = useContext(FollowupNodeCallbacksContext);
+
   return (
     <>
       <BaseCard
         selected={selected}
-        border={KIND_THEME.start.border}
-        headerBg={KIND_THEME.start.headerBg}
-        label={KIND_THEME.start.label}
-        Icon={KIND_THEME.start.Icon}
-        title="Cliente parou de responder"
-        subtitle="O cron percorre os passos abaixo na ordem."
+        theme={theme}
+        title="Silêncio do cliente"
+        subtitle={d.gatilhoLabel || "Configure o gatilho"}
+        meta={d.textoPreview}
+        onClick={() => onSelectStart()}
       />
-      <Handle type="source" position={Position.Bottom} style={{ background: "#3fb950", width: 8, height: 8 }} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={handleStyle(theme.border, "bottom")}
+      />
     </>
   );
 }
@@ -140,18 +294,18 @@ export function FollowupPassoNode({ id, data, selected }: NodeProps) {
   const theme = KIND_THEME[d.kind === "start" ? "texto" : d.kind] ?? KIND_THEME.texto;
   const { onSelect } = useContext(FollowupNodeCallbacksContext);
   const passoId = d.passoId ?? id;
+  const preview = summarizeFollowupText(d.textoPreview ?? "", 88);
 
   return (
     <>
-      <Handle type="target" position={Position.Top} style={{ background: theme.border, width: 8, height: 8 }} />
+      <Handle type="target" position={Position.Top} style={handleStyle(theme.border, "top")} />
       <BaseCard
         selected={selected}
-        border={theme.border}
-        headerBg={theme.headerBg}
-        label={theme.label}
-        Icon={theme.Icon}
+        theme={theme}
+        stepTag={`passo_${d.ordem ?? "?"}`}
         title={`Passo ${d.ordem ?? "?"}`}
-        subtitle={`Após +${d.atrasoLabel ?? "?"} sem resposta`}
+        subtitle={`+${d.atrasoLabel ?? "?"}`}
+        content={preview}
         inactive={d.ativo === false}
         onClick={() => onSelect(passoId)}
       >
@@ -160,27 +314,16 @@ export function FollowupPassoNode({ id, data, selected }: NodeProps) {
             src={d.imagemUrl}
             alt=""
             style={{
-              marginTop: 8,
               width: "100%",
               height: 72,
               objectFit: "cover",
               borderRadius: 8,
-              border: "1px solid rgba(146,255,0,0.2)",
+              border: "1px solid #dcebd8",
             }}
           />
         ) : null}
-        <p
-          style={{
-            margin: d.imagemUrl ? "8px 0 0" : "8px 0 0",
-            fontSize: 11,
-            color: "#c9d1d9",
-            lineHeight: 1.45,
-          }}
-        >
-          {summarizeFollowupText(d.textoPreview ?? "")}
-        </p>
       </BaseCard>
-      <Handle type="source" position={Position.Bottom} style={{ background: theme.border, width: 8, height: 8 }} />
+      <Handle type="source" position={Position.Bottom} style={handleStyle(theme.border, "bottom")} />
     </>
   );
 }
@@ -190,12 +333,35 @@ export const FOLLOWUP_NODE_TYPES = {
   followupPasso: FollowupPassoNode,
 };
 
-export function FollowupFlowLegend() {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 10, color: "#8b949e" }}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-        <Bell size={12} /> Clique num passo para editar
-      </span>
-    </div>
-  );
+/** Estilos partilhados para cards de passo no sideover (variante escura) ou no canvas (claro). */
+export function followupPassoCardSurface(
+  tipo: keyof typeof KIND_THEME,
+  ativo: boolean,
+  variant: "light" | "dark" = "light"
+): {
+  theme: (typeof KIND_THEME)[keyof typeof KIND_THEME];
+  border: string;
+  background: string;
+  badgeBg: string;
+  badgeText: string;
+} {
+  const theme = KIND_THEME[tipo] ?? KIND_THEME.texto;
+
+  if (variant === "dark") {
+    return {
+      theme,
+      border: ativo ? `${theme.border}66` : "rgba(146, 255, 0, 0.12)",
+      background: ativo ? "rgba(6, 13, 8, 0.55)" : "rgba(6, 13, 8, 0.38)",
+      badgeBg: `${theme.border}22`,
+      badgeText: ativo ? theme.border : "#8b949e",
+    };
+  }
+
+  return {
+    theme,
+    border: ativo ? `${theme.border}55` : "#dcebd8",
+    background: ativo ? theme.headerBg : "#f8faf8",
+    badgeBg: theme.badgeBg,
+    badgeText: theme.badgeText,
+  };
 }

@@ -169,24 +169,29 @@ export async function PUT(
   let autoAppendedFlow = false;
 
   if (exigeFluxoWhatsapp) {
-    const fluxoEmpresa = await aplicarFluxoEmpresaAoMarkdown(supabase, slug, trimmed);
-    if (fluxoEmpresa.ok) {
-      markdownFinal = fluxoEmpresa.markdown;
-      autoAppendedFlow = fluxoEmpresa.action === "appended_flow";
+    const fluxoExistente = assessPlaybookFlowInMarkdown(trimmed);
+    if (fluxoExistente.kind === "ready") {
+      markdownFinal = trimmed;
     } else {
-      const ensured = await ensureMarkdownWithWhatsappFlow(trimmed);
-      if (!ensured.ok) {
-        return NextResponse.json(
-          {
-            error: `Publicação exige bloco de fluxo WhatsApp válido (\`${PLAYBOOK_FLOW_FENCE_TAG}\`). Use «Gerar fluxo da empresa» na calibração.`,
-            errors: ensured.errors,
-            detail: fluxoEmpresa.error,
-          },
-          { status: 400 }
-        );
+      const fluxoEmpresa = await aplicarFluxoEmpresaAoMarkdown(supabase, slug, trimmed);
+      if (fluxoEmpresa.ok) {
+        markdownFinal = fluxoEmpresa.markdown;
+        autoAppendedFlow = fluxoEmpresa.action === "appended_flow";
+      } else {
+        const ensured = await ensureMarkdownWithWhatsappFlow(trimmed);
+        if (!ensured.ok) {
+          return NextResponse.json(
+            {
+              error: `Publicação exige bloco de fluxo WhatsApp válido (\`${PLAYBOOK_FLOW_FENCE_TAG}\`). Use «Gerar fluxo da empresa» na calibração.`,
+              errors: ensured.errors,
+              detail: fluxoEmpresa.error,
+            },
+            { status: 400 }
+          );
+        }
+        markdownFinal = ensured.markdown;
+        autoAppendedFlow = ensured.auto_appended_flow;
       }
-      markdownFinal = ensured.markdown;
-      autoAppendedFlow = ensured.auto_appended_flow;
     }
   }
 

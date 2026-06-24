@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
 import { reativarFollowupLeadsAgente } from "@/lib/hub/followup-lead-state";
+import { validarAtrasoPasso, validarHoraDia } from "@/lib/hub/followup-types";
+import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 
 function db() {
   return createClient(
@@ -64,7 +66,15 @@ export async function PATCH(
   const { slug: raw } = await params;
   const slug = decodeURIComponent(raw);
 
-  let body: { ativo?: boolean; arquivar_apos_dias?: number };
+  let body: {
+    ativo?: boolean;
+    arquivar_apos_dias?: number;
+    gatilho_tipo?: string;
+    gatilho_dias?: number;
+    gatilho_horas?: number;
+    gatilho_minutos?: number;
+    gatilho_hora_dia?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
@@ -86,6 +96,58 @@ export async function PATCH(
     }
     patch.arquivar_apos_dias = d;
   }
+  if (body.gatilho_tipo != null) {
+    const t = String(body.gatilho_tipo);
+    if (t !== "silencio" && t !== "horario") {
+      return NextResponse.json({ error: "gatilho_tipo inválido." }, { status: 400 });
+    }
+    patch.gatilho_tipo = t;
+  }
+  if (body.gatilho_dias != null) {
+    const d = Number.parseInt(String(body.gatilho_dias), 10);
+    if (!Number.isFinite(d) || d < 0 || d > 365) {
+      return NextResponse.json({ error: "gatilho_dias inválido (0–365)." }, { status: 400 });
+    }
+    patch.gatilho_dias = d;
+  }
+  if (body.gatilho_horas != null) {
+    const h = Number.parseInt(String(body.gatilho_horas), 10);
+    if (!Number.isFinite(h) || h < 0 || h > 8760) {
+      return NextResponse.json({ error: "gatilho_horas inválido (0–8760)." }, { status: 400 });
+    }
+    patch.gatilho_horas = h;
+  }
+  if (body.gatilho_minutos != null) {
+    const m = Number.parseInt(String(body.gatilho_minutos), 10);
+    if (!Number.isFinite(m) || m < 0 || m > 59) {
+      return NextResponse.json({ error: "gatilho_minutos inválido (0–59)." }, { status: 400 });
+    }
+    patch.gatilho_minutos = m;
+  }
+  if (body.gatilho_hora_dia !== undefined) {
+    const hora = body.gatilho_hora_dia != null ? String(body.gatilho_hora_dia).trim() : "";
+    if (hora) {
+      const err = validarHoraDia(hora);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+      patch.gatilho_hora_dia = hora;
+    } else {
+      patch.gatilho_hora_dia = null;
+    }
+  }
+
+  if (
+    body.gatilho_dias != null ||
+    body.gatilho_horas != null ||
+    body.gatilho_minutos != null
+  ) {
+    const dias = Number(patch.gatilho_dias ?? pack.config.gatilho_dias ?? 0);
+    const horas = Number(patch.gatilho_horas ?? pack.config.gatilho_horas ?? 0);
+    const minutos = Number(patch.gatilho_minutos ?? pack.config.gatilho_minutos ?? 0);
+    const atrasoErr = validarAtrasoPasso(horas, minutos, dias);
+    if (atrasoErr && dias + horas + minutos > 0) {
+      return NextResponse.json({ error: `Gatilho: ${atrasoErr}` }, { status: 400 });
+    }
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "Nada para atualizar." }, { status: 400 });
@@ -98,7 +160,9 @@ export async function PATCH(
     .select("*")
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return NextResponse.json({ error: mensagemErroFollowupDb(error) }, { status: 500 });
+  }
 
   let leadsReativados = 0;
   if (patch.ativo === true) {

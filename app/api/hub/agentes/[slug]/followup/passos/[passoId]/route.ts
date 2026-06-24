@@ -2,7 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
-import { validarAtrasoPasso } from "@/lib/hub/followup-types";
+import { validarAtrasoPasso, validarHoraDia } from "@/lib/hub/followup-types";
+import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 
 function db() {
   return createClient(
@@ -41,12 +42,16 @@ export async function PATCH(
   }
 
   const supabase = db();
-  const { data: existente } = await supabase
+  const { data: existente, error: loadErr } = await supabase
     .from("hub_agente_followup_passo")
     .select("id, agente_slug, atraso_horas, atraso_minutos")
     .eq("id", passoId)
     .eq("agente_slug", slug)
     .maybeSingle();
+
+  if (loadErr) {
+    return NextResponse.json({ error: mensagemErroFollowupDb(loadErr) }, { status: 500 });
+  }
 
   if (!existente) {
     return NextResponse.json({ error: "Passo não encontrado" }, { status: 404 });
@@ -61,7 +66,11 @@ export async function PATCH(
     }
     patch.ordem = ordem;
   }
-  if (body.atraso_horas != null || body.atraso_minutos != null) {
+  if (body.atraso_horas != null || body.atraso_minutos != null || body.atraso_dias != null) {
+    const d =
+      body.atraso_dias != null
+        ? Number.parseInt(String(body.atraso_dias), 10)
+        : 0;
     const h =
       body.atraso_horas != null
         ? Number.parseInt(String(body.atraso_horas), 10)
@@ -70,8 +79,9 @@ export async function PATCH(
       body.atraso_minutos != null
         ? Number.parseInt(String(body.atraso_minutos), 10)
         : (existente.atraso_minutos ?? 0);
-    const atrasoErr = validarAtrasoPasso(h, m);
+    const atrasoErr = validarAtrasoPasso(h, m, d);
     if (atrasoErr) return NextResponse.json({ error: atrasoErr }, { status: 400 });
+    patch.atraso_dias = d;
     patch.atraso_horas = h;
     patch.atraso_minutos = m;
   }
@@ -90,6 +100,16 @@ export async function PATCH(
     patch.legenda_imagem = body.legenda_imagem != null ? String(body.legenda_imagem) : null;
   }
   if (typeof body.ativo === "boolean") patch.ativo = body.ativo;
+  if (body.disparo_hora_dia !== undefined) {
+    const hora = body.disparo_hora_dia != null ? String(body.disparo_hora_dia).trim() : "";
+    if (hora) {
+      const err = validarHoraDia(hora);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+      patch.disparo_hora_dia = hora;
+    } else {
+      patch.disparo_hora_dia = null;
+    }
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "Nada para atualizar" }, { status: 400 });
@@ -102,7 +122,9 @@ export async function PATCH(
     .select("*")
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return NextResponse.json({ error: mensagemErroFollowupDb(error) }, { status: 500 });
+  }
   return NextResponse.json({ passo: data });
 }
 

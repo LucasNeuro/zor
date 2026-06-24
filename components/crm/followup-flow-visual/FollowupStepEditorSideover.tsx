@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Loader2, Trash2, Upload, X } from "lucide-react";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import type { HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import { atrasoTotalMinutos, formatarAtrasoPasso } from "@/lib/hub/followup-types";
+import { passoPersistenciaIgual } from "./types";
 import {
   RF_ACCENT,
   RF_BORDER,
   RF_BORDER_STRONG,
+  RF_LIGHT_BORDER,
+  RF_LIGHT_BORDER_STRONG,
+  RF_LIGHT_INPUT_STYLE,
+  RF_LIGHT_LABEL_STYLE,
+  RF_LIGHT_TEXT_MUTED,
+  RF_LIGHT_TEXT_PRIMARY,
+  RF_LIGHT_TEXT_SECONDARY,
   RF_TEXT_MUTED,
   RF_TEXT_PRIMARY,
   RF_TEXT_SECONDARY,
@@ -17,19 +25,26 @@ import {
 } from "@/lib/crm/crm-retrofit-dark-theme";
 
 type Props = {
+  theme?: "light" | "dark";
   passo: HubAgenteFollowupPasso;
   saving: boolean;
   uploading: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onClose: () => void;
-  onSave: (passo: HubAgenteFollowupPasso) => void;
+  onSave: (passo: HubAgenteFollowupPasso) => void | Promise<void>;
   onDelete: (id: string) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onPatch: (patch: Partial<HubAgenteFollowupPasso>) => void;
   onUploadImagem: (file: File) => void;
+  onRegisterFlush?: (flush: () => Promise<void>) => void;
 };
+
+function clampDias(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.min(365, Math.max(0, v));
+}
 
 function clampMinutos(v: number): number {
   if (!Number.isFinite(v)) return 0;
@@ -42,6 +57,7 @@ function clampHoras(v: number): number {
 }
 
 export function FollowupStepEditorSideover({
+  theme = "dark",
   passo,
   saving,
   uploading,
@@ -54,12 +70,53 @@ export function FollowupStepEditorSideover({
   onMoveDown,
   onPatch,
   onUploadImagem,
+  onRegisterFlush,
 }: Props) {
+  const isLight = theme === "light";
+  const colors = {
+    border: isLight ? RF_LIGHT_BORDER : RF_BORDER,
+    borderStrong: isLight ? RF_LIGHT_BORDER_STRONG : RF_BORDER_STRONG,
+    textPrimary: isLight ? RF_LIGHT_TEXT_PRIMARY : RF_TEXT_PRIMARY,
+    textSecondary: isLight ? RF_LIGHT_TEXT_SECONDARY : RF_TEXT_SECONDARY,
+    textMuted: isLight ? RF_LIGHT_TEXT_MUTED : RF_TEXT_MUTED,
+    panelBg: isLight ? "rgba(255,255,255,0.98)" : "rgba(6,13,8,0.96)",
+    innerBg: isLight ? "#f4faf2" : "rgba(6,13,8,0.35)",
+    accent: isLight ? "#2e7d32" : RF_ACCENT,
+    accentText: isLight ? "#ffffff" : "#0b2210",
+    miniBtnBg: isLight ? "#ffffff" : "rgba(6,13,8,0.55)",
+  };
+  const inputStyle = isLight ? RF_LIGHT_INPUT_STYLE : rfInputStyle();
+  const labelStyle = isLight ? RF_LIGHT_LABEL_STYLE : rfLabelStyle();
+
   const [draft, setDraft] = useState(passo);
 
   useEffect(() => {
     setDraft(passo);
   }, [passo]);
+
+  async function flushDraftIfDirty() {
+    if (!passoPersistenciaIgual(draft, passo) && atrasoTotalMinutos(draft) >= 1) {
+      await onSave(draft);
+    }
+  }
+
+  const flushDraft = useCallback(async () => {
+    if (!passoPersistenciaIgual(draft, passo) && atrasoTotalMinutos(draft) >= 1) {
+      await onSave(draft);
+    }
+  }, [draft, passo, onSave]);
+
+  useEffect(() => {
+    onRegisterFlush?.(flushDraft);
+    return () => {
+      onRegisterFlush?.(async () => undefined);
+    };
+  }, [onRegisterFlush, flushDraft]);
+
+  async function handleClose() {
+    await flushDraftIfDirty();
+    onClose();
+  }
 
   function update(patch: Partial<HubAgenteFollowupPasso>) {
     const next = { ...draft, ...patch };
@@ -79,9 +136,9 @@ export function FollowupStepEditorSideover({
         width: 300,
         zIndex: 20,
         borderRadius: 12,
-        border: `1px solid ${RF_BORDER_STRONG}`,
-        background: "rgba(6,13,8,0.96)",
-        boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+        border: `1px solid ${colors.borderStrong}`,
+        background: colors.panelBg,
+        boxShadow: isLight ? "0 12px 40px rgba(11,31,16,0.12)" : "0 12px 40px rgba(0,0,0,0.45)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -94,23 +151,23 @@ export function FollowupStepEditorSideover({
           justifyContent: "space-between",
           gap: 8,
           padding: "12px 14px",
-          borderBottom: `1px solid ${RF_BORDER}`,
+          borderBottom: `1px solid ${colors.border}`,
         }}
       >
         <div>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: RF_TEXT_PRIMARY }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: colors.textPrimary }}>
             Passo {draft.ordem}
           </p>
-          <p style={{ margin: "2px 0 0", fontSize: 10, color: RF_TEXT_MUTED }}>Editar lembrete</p>
+          <p style={{ margin: "2px 0 0", fontSize: 10, color: colors.textMuted }}>Editar lembrete</p>
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => void handleClose()}
           aria-label="Fechar editor"
           style={{
             border: "none",
             background: "transparent",
-            color: RF_TEXT_MUTED,
+            color: colors.textMuted,
             cursor: "pointer",
             padding: 4,
           }}
@@ -121,26 +178,26 @@ export function FollowupStepEditorSideover({
 
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: draft.ativo ? "#3fb950" : RF_TEXT_MUTED }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: draft.ativo ? "#3fb950" : colors.textMuted }}>
             {draft.ativo ? "ACTIVO" : "INACTIVO"}
           </span>
           <CrmToggleSwitch
             checked={draft.ativo}
             disabled={saving}
-            variant="dark"
+            variant={isLight ? "light" : "dark"}
             labelledBy={`followup-editor-ativo-${draft.id}`}
             onCheckedChange={(v) => update({ ativo: v })}
           />
         </div>
 
         <label>
-          <span style={rfLabelStyle()}>Tipo de conteúdo</span>
+          <span style={labelStyle}>Tipo de conteúdo</span>
           <select
             value={draft.tipo_conteudo}
             onChange={(e) =>
               update({ tipo_conteudo: e.target.value as HubAgenteFollowupPasso["tipo_conteudo"] })
             }
-            style={rfInputStyle()}
+            style={inputStyle}
           >
             <option value="texto">Só texto</option>
             <option value="imagem">Só imagem</option>
@@ -148,9 +205,22 @@ export function FollowupStepEditorSideover({
           </select>
         </label>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
           <label>
-            <span style={rfLabelStyle()}>Horas</span>
+            <span style={labelStyle}>Dias</span>
+            <input
+              type="number"
+              min={0}
+              max={365}
+              value={draft.atraso_dias ?? 0}
+              onChange={(e) =>
+                update({ atraso_dias: clampDias(Number.parseInt(e.target.value, 10) || 0) })
+              }
+              style={inputStyle}
+            />
+          </label>
+          <label>
+            <span style={labelStyle}>Horas</span>
             <input
               type="number"
               min={0}
@@ -159,11 +229,11 @@ export function FollowupStepEditorSideover({
               onChange={(e) =>
                 update({ atraso_horas: clampHoras(Number.parseInt(e.target.value, 10) || 0) })
               }
-              style={rfInputStyle()}
+              style={inputStyle}
             />
           </label>
           <label>
-            <span style={rfLabelStyle()}>Minutos</span>
+            <span style={labelStyle}>Minutos</span>
             <input
               type="number"
               min={0}
@@ -172,23 +242,32 @@ export function FollowupStepEditorSideover({
               onChange={(e) =>
                 update({ atraso_minutos: clampMinutos(Number.parseInt(e.target.value, 10) || 0) })
               }
-              style={rfInputStyle()}
+              style={inputStyle}
             />
           </label>
         </div>
-        <p style={{ margin: 0, fontSize: 10, color: RF_TEXT_SECONDARY, lineHeight: 1.4 }}>
-          Envia após <strong style={{ color: RF_ACCENT }}>{formatarAtrasoPasso(draft)}</strong> sem resposta do
+        <label>
+          <span style={labelStyle}>Hora mínima do dia (opcional)</span>
+          <input
+            type="time"
+            value={draft.disparo_hora_dia?.trim() || ""}
+            onChange={(e) => update({ disparo_hora_dia: e.target.value || null })}
+            style={inputStyle}
+          />
+        </label>
+        <p style={{ margin: 0, fontSize: 10, color: colors.textSecondary, lineHeight: 1.4 }}>
+          Envia após <strong style={{ color: colors.accent }}>{formatarAtrasoPasso(draft)}</strong> sem resposta do
           cliente.
         </p>
 
         {draft.tipo_conteudo === "texto" ? (
           <label>
-            <span style={rfLabelStyle()}>Mensagem</span>
+            <span style={labelStyle}>Mensagem</span>
             <textarea
               rows={3}
               value={draft.texto_template || ""}
               onChange={(e) => update({ texto_template: e.target.value })}
-              style={{ ...rfInputStyle(), resize: "vertical" }}
+              style={{ ...inputStyle, resize: "vertical" }}
               placeholder="Olá {nome}, ainda posso ajudar?"
             />
           </label>
@@ -196,12 +275,12 @@ export function FollowupStepEditorSideover({
 
         {draft.tipo_conteudo === "texto_imagem" ? (
           <label>
-            <span style={rfLabelStyle()}>Legenda da imagem</span>
+            <span style={labelStyle}>Legenda da imagem</span>
             <textarea
               rows={3}
               value={draft.legenda_imagem || ""}
               onChange={(e) => update({ legenda_imagem: e.target.value })}
-              style={{ ...rfInputStyle(), resize: "vertical" }}
+              style={{ ...inputStyle, resize: "vertical" }}
               placeholder="Texto que acompanha a imagem"
             />
           </label>
@@ -209,27 +288,27 @@ export function FollowupStepEditorSideover({
 
         {draft.tipo_conteudo === "imagem" ? (
           <label>
-            <span style={rfLabelStyle()}>Legenda (opcional)</span>
+            <span style={labelStyle}>Legenda (opcional)</span>
             <textarea
               rows={2}
               value={draft.legenda_imagem || ""}
               onChange={(e) => update({ legenda_imagem: e.target.value })}
-              style={{ ...rfInputStyle(), resize: "vertical" }}
+              style={{ ...inputStyle, resize: "vertical" }}
             />
           </label>
         ) : null}
 
         {showImagem ? (
           <div>
-            <span style={rfLabelStyle()}>Imagem (bucket agent-followup)</span>
+            <span style={labelStyle}>Imagem (bucket agent-followup)</span>
             <label
               style={{
                 display: "block",
                 marginTop: 6,
                 padding: "14px 10px",
                 borderRadius: 10,
-                border: `2px dashed ${RF_BORDER_STRONG}`,
-                background: "rgba(6,13,8,0.35)",
+                border: `2px dashed ${colors.borderStrong}`,
+                background: colors.innerBg,
                 cursor: uploading ? "wait" : "pointer",
                 textAlign: "center",
               }}
@@ -246,11 +325,11 @@ export function FollowupStepEditorSideover({
                 }}
               />
               {uploading ? (
-                <Loader2 size={20} className="animate-spin" color={RF_ACCENT} />
+                <Loader2 size={20} className="animate-spin" color={colors.accent} />
               ) : (
-                <Upload size={20} color={RF_ACCENT} />
+                <Upload size={20} color={colors.accent} />
               )}
-              <span style={{ display: "block", marginTop: 6, fontSize: 11, fontWeight: 700, color: RF_TEXT_PRIMARY }}>
+              <span style={{ display: "block", marginTop: 6, fontSize: 11, fontWeight: 700, color: colors.textPrimary }}>
                 {uploading ? "A enviar…" : "Clique para enviar imagem"}
               </span>
             </label>
@@ -259,7 +338,7 @@ export function FollowupStepEditorSideover({
                 <img
                   src={draft.imagem_url}
                   alt=""
-                  style={{ width: "100%", borderRadius: 8, border: `1px solid ${RF_BORDER}` }}
+                  style={{ width: "100%", borderRadius: 8, border: `1px solid ${colors.border}` }}
                 />
                 <button
                   type="button"
@@ -289,7 +368,7 @@ export function FollowupStepEditorSideover({
             type="button"
             disabled={!canMoveUp || saving}
             onClick={onMoveUp}
-            style={miniBtnStyle(!canMoveUp || saving)}
+            style={miniBtnStyle(!canMoveUp || saving, colors)}
           >
             ↑ Subir
           </button>
@@ -297,7 +376,7 @@ export function FollowupStepEditorSideover({
             type="button"
             disabled={!canMoveDown || saving}
             onClick={onMoveDown}
-            style={miniBtnStyle(!canMoveDown || saving)}
+            style={miniBtnStyle(!canMoveDown || saving, colors)}
           >
             ↓ Descer
           </button>
@@ -307,7 +386,7 @@ export function FollowupStepEditorSideover({
       <div
         style={{
           padding: "12px 14px",
-          borderTop: `1px solid ${RF_BORDER}`,
+          borderTop: `1px solid ${colors.border}`,
           display: "flex",
           flexDirection: "column",
           gap: 8,
@@ -322,8 +401,8 @@ export function FollowupStepEditorSideover({
             padding: "9px 12px",
             borderRadius: 8,
             border: "none",
-            background: RF_ACCENT,
-            color: "#0b2210",
+            background: colors.accent,
+            color: colors.accentText,
             fontWeight: 800,
             fontSize: 12,
             cursor: saving ? "wait" : "pointer",
@@ -359,14 +438,22 @@ export function FollowupStepEditorSideover({
   );
 }
 
-function miniBtnStyle(disabled: boolean): React.CSSProperties {
+function miniBtnStyle(
+  disabled: boolean,
+  colors: {
+    borderStrong: string;
+    miniBtnBg: string;
+    textMuted: string;
+    textPrimary: string;
+  }
+): React.CSSProperties {
   return {
     flex: 1,
     padding: "7px 8px",
     borderRadius: 8,
-    border: `1px solid ${RF_BORDER_STRONG}`,
-    background: "rgba(6,13,8,0.55)",
-    color: disabled ? RF_TEXT_MUTED : RF_TEXT_PRIMARY,
+    border: `1px solid ${colors.borderStrong}`,
+    background: colors.miniBtnBg,
+    color: disabled ? colors.textMuted : colors.textPrimary,
     fontSize: 10,
     fontWeight: 700,
     cursor: disabled ? "not-allowed" : "pointer",

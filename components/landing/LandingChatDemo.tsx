@@ -51,21 +51,15 @@ export function LandingChatDemo({ brandNome }: { brandNome: string }) {
           </div>
           <div className="waje-orbit-avatar waje-orbit-avatar-delay absolute right-0 top-1/2 hidden -translate-y-1/2 flex-col items-center md:flex">
             <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_50%,transparent)] bg-white shadow-[0_8px_24px_rgba(20,48,28,0.1)]">
-              <Bot className="h-7 w-7 text-[var(--platform-brand-primary,#3f9848)]" />
+              <Bot className="h-7 w-7 text-[var(--platform-brand-accent,var(--platform-brand-primary,#3f9848))]" />
             </div>
             <span className="mt-2 text-center text-xs font-semibold text-[#4f6853]">Agente IA</span>
           </div>
 
           <div className="waje-chat-window w-full max-w-md overflow-hidden rounded-3xl">
-            <div className="flex items-center gap-3 border-b border-[#d7e5d3] bg-[#f4faf1] px-5 py-4">
+            <div className="waje-chat-demo-header flex items-center gap-3 border-b border-[#d7e5d3] bg-[#f4faf1] px-5 py-4">
               <div className="relative">
-                <div
-                  className="flex h-11 w-11 items-center justify-center rounded-full"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(to bottom right, var(--platform-brand-accent, #92ff00), var(--platform-brand-primary, #3f9848))",
-                  }}
-                >
+                <div className="waje-chat-demo-bot flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[var(--platform-brand-accent,#92ff00)] to-[var(--platform-brand-primary,#3f9848)]">
                   <Bot className="h-5 w-5 text-white" />
                 </div>
                 <span
@@ -75,7 +69,7 @@ export function LandingChatDemo({ brandNome }: { brandNome: string }) {
               </div>
               <div className="text-left">
                 <p className="text-sm font-bold text-[#0b1f10]">Assistente virtual</p>
-                <p className="text-xs font-medium text-[var(--platform-brand-primary,#3f9848)]">
+                <p className="text-xs font-medium text-[var(--platform-brand-accent,var(--platform-brand-primary,#3f9848))]">
                   Assistente virtual · online
                 </p>
               </div>

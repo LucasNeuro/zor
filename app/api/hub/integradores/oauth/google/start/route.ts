@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCrmApiAccess } from "@/lib/crm/crm-api-auth";
 import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 import {
-  buildGoogleOAuthAuthorizeUrl,
-  buildGoogleOAuthState,
-  googleOAuthConfigured,
+  prepareGoogleOAuthStart,
+  resolveGoogleOAuthRedirectUri,
 } from "@/lib/email/oauth-google";
 import { credentialsEncryptionConfigured } from "@/lib/hub/credentials-crypto";
+import { resolveRequestPublicOrigin } from "@/lib/platform-brands";
 
 const STATE_TTL_MS = 15 * 60 * 1000;
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const accessErr = await requireCrmApiAccess(request);
   if (accessErr) return accessErr;
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
+  const requestOrigin = resolveRequestPublicOrigin(request);
 
   if (!credentialsEncryptionConfigured()) {
     return NextResponse.json(
@@ -37,11 +37,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!googleOAuthConfigured(origin)) {
+  const redirectUri = await resolveGoogleOAuthRedirectUri(requestOrigin);
+  if (
+    !process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() ||
+    !process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() ||
+    !credentialsEncryptionConfigured() ||
+    !redirectUri
+  ) {
     return NextResponse.json(
       {
         error:
-          "Google OAuth não configurado: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET e GOOGLE_OAUTH_REDIRECT_URI.",
+          "Google OAuth não configurado: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET e redirect URI autorizado no GCP.",
       },
       { status: 503 }
     );
@@ -66,7 +72,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const state = buildGoogleOAuthState({
+  const prepared = await prepareGoogleOAuthStart(requestOrigin, {
     tenantId,
     agenteSlug,
     returnTo: returnTo || undefined,
@@ -74,14 +80,13 @@ export async function GET(request: NextRequest) {
     exp: Date.now() + STATE_TTL_MS,
   });
 
-  const authorizeUrl = buildGoogleOAuthAuthorizeUrl(state, origin);
-  if (!authorizeUrl) {
+  if (!prepared) {
     return NextResponse.json({ error: "Não foi possível montar URL de autorização." }, { status: 500 });
   }
 
   if (request.nextUrl.searchParams.get("json") === "1") {
-    return NextResponse.json({ ok: true, authorize_url: authorizeUrl });
+    return NextResponse.json({ ok: true, authorize_url: prepared.authorizeUrl });
   }
 
-  return NextResponse.redirect(authorizeUrl);
+  return NextResponse.redirect(prepared.authorizeUrl);
 }

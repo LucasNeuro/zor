@@ -1,4 +1,9 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { NextRequest } from "next/server";
+import {
+  hostIsKnownPlatformDomain,
+  resolveOAuthReturnOrigin,
+  resolveRequestPublicOrigin,
+} from "@/lib/platform-brands";
 import {
   credentialsEncryptionConfigured,
   decryptCredentialCiphertext,
@@ -26,6 +31,10 @@ export type GoogleOAuthState = {
   tenantId: string;
   agenteSlug?: string;
   returnTo?: string;
+  /** Origem onde o utilizador iniciou OAuth (ex.: https://synkronia.com.br). */
+  returnOrigin?: string;
+  /** redirect_uri exacto enviado ao Google (deve coincidir no callback). */
+  redirectUri?: string;
   /** agent_email = liga caixa no agente; integradores = só hub_integracoes (Calendar/Gmail tools). */
   purpose?: "agent_email" | "integradores";
   exp: number;
@@ -58,21 +67,53 @@ function googleClientSecret(): string | null {
   return v || null;
 }
 
+export const GOOGLE_OAUTH_CALLBACK_PATH = "/api/hub/email/oauth/google/callback";
+
+export function googleOAuthRedirectUriForOrigin(origin: string): string | null {
+  const trimmed = origin.trim().replace(/\/$/, "");
+  if (!trimmed) return null;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    return `${u.origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+  } catch {
+    return null;
+  }
+}
+
+/** redirect_uri para o pedido actual: domínio do vendor se registado, senão env/canónico. */
+export async function resolveGoogleOAuthRedirectUri(requestOrigin?: string): Promise<string | null> {
+  const origin = requestOrigin?.trim().replace(/\/$/, "");
+  if (origin) {
+    try {
+      const host = new URL(origin).host;
+      if (await hostIsKnownPlatformDomain(host)) {
+        return googleOAuthRedirectUriForOrigin(origin);
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+
+  const explicit = process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim();
+  if (explicit) return explicit;
+
+  const app = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (app) return googleOAuthRedirectUriForOrigin(app);
+
+  return origin ? googleOAuthRedirectUriForOrigin(origin) : null;
+}
+
 export function googleOAuthRedirectUri(origin?: string): string | null {
   const explicit = process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim();
   if (explicit) return explicit;
   const base = origin?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (!base) return null;
-  return `${base.replace(/\/$/, "")}/api/hub/email/oauth/google/callback`;
+  return googleOAuthRedirectUriForOrigin(base);
 }
 
 export function googleOAuthConfigured(origin?: string): boolean {
-  return Boolean(
-    googleClientId() &&
-      googleClientSecret() &&
-      googleOAuthRedirectUri(origin) &&
-      credentialsEncryptionConfigured()
-  );
+  return Boolean(googleClientId() && googleClientSecret() && googleOAuthRedirectUri(origin) && credentialsEncryptionConfigured());
 }
 
 export function buildGoogleOAuthState(state: GoogleOAuthState): string {
@@ -98,14 +139,14 @@ export function parseGoogleOAuthState(raw: string): GoogleOAuthState | null {
   }
 }
 
-export function buildGoogleOAuthAuthorizeUrl(state: string, origin?: string): string | null {
+export function buildGoogleOAuthAuthorizeUrl(state: string, redirectUri: string): string | null {
   const clientId = googleClientId();
-  const redirectUri = googleOAuthRedirectUri(origin);
-  if (!clientId || !redirectUri) return null;
+  const uri = redirectUri.trim();
+  if (!clientId || !uri) return null;
 
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: redirectUri,
+    redirect_uri: uri,
     response_type: "code",
     scope: GOOGLE_OAUTH_SCOPES,
     access_type: "offline",
@@ -118,12 +159,12 @@ export function buildGoogleOAuthAuthorizeUrl(state: string, origin?: string): st
 
 export async function exchangeGoogleOAuthCode(
   code: string,
-  origin?: string
+  redirectUri: string
 ): Promise<GoogleTokenResponse> {
   const clientId = googleClientId();
   const clientSecret = googleClientSecret();
-  const redirectUri = googleOAuthRedirectUri(origin);
-  if (!clientId || !clientSecret || !redirectUri) {
+  const uri = redirectUri.trim();
+  if (!clientId || !clientSecret || !uri) {
     throw new Error("Google OAuth não configurado no servidor.");
   }
 
@@ -131,7 +172,7 @@ export async function exchangeGoogleOAuthCode(
     code,
     client_id: clientId,
     client_secret: clientSecret,
-    redirect_uri: redirectUri,
+    redirect_uri: uri,
     grant_type: "authorization_code",
   });
 
@@ -157,6 +198,28 @@ export async function exchangeGoogleOAuthCode(
     scope: typeof json.scope === "string" ? json.scope : undefined,
     token_type: typeof json.token_type === "string" ? json.token_type : undefined,
   };
+}
+
+/** Monta state + URL de autorização respeitando domínio do vendor (redirect_uri no GCP). */
+export async function prepareGoogleOAuthStart(
+  requestOrigin: string,
+  statePayload: Omit<GoogleOAuthState, "returnOrigin" | "redirectUri">
+): Promise<{ authorizeUrl: string; redirectUri: string; returnOrigin: string } | null> {
+  const [returnOrigin, redirectUri] = await Promise.all([
+    resolveOAuthReturnOrigin(requestOrigin),
+    resolveGoogleOAuthRedirectUri(requestOrigin),
+  ]);
+  if (!redirectUri) return null;
+
+  const state = buildGoogleOAuthState({
+    ...statePayload,
+    returnOrigin,
+    redirectUri,
+  });
+  const authorizeUrl = buildGoogleOAuthAuthorizeUrl(state, redirectUri);
+  if (!authorizeUrl) return null;
+
+  return { authorizeUrl, redirectUri, returnOrigin };
 }
 
 export async function refreshGoogleAccessToken(refreshToken: string): Promise<GoogleTokenResponse> {

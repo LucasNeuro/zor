@@ -18,6 +18,8 @@ function isPublicApiPath(pathname: string): boolean {
   if (pathname.startsWith("/api/cron/")) return true;
   if (pathname.startsWith("/api/ml/ciclo")) return true;
   if (pathname.startsWith("/api/auth/")) return true;
+  /** Google OAuth: callback vem sem cookie de sessão (redirect cross-site). */
+  if (pathname.startsWith("/api/hub/email/oauth/google/")) return true;
   return false;
 }
 

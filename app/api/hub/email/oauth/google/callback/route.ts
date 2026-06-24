@@ -5,9 +5,11 @@ import {
   getGoogleProfileEmail,
   linkAgenteToGmailOAuth,
   parseGoogleOAuthState,
+  resolveGoogleOAuthRedirectUri,
   upsertGoogleWorkspaceOAuthIntegracoes,
 } from "@/lib/email/oauth-google";
 import { isEmailChannelEnabled } from "@/lib/feature-flags";
+import { resolveOAuthReturnOrigin, resolveRequestPublicOrigin } from "@/lib/platform-brands";
 
 function db() {
   return createClient(
@@ -16,15 +18,42 @@ function db() {
   );
 }
 
-function appOrigin(request: NextRequest): string {
-  return process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
+async function redirectOrigin(
+  request: NextRequest,
+  stateOrigin?: string
+): Promise<string> {
+  const fromState = stateOrigin?.trim().replace(/\/$/, "");
+  if (fromState) {
+    try {
+      const u = new URL(fromState);
+      if (u.protocol === "https:" || u.protocol === "http:") {
+        return (await resolveOAuthReturnOrigin(u.origin)).replace(/\/$/, "");
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+  const publicOrigin = resolveRequestPublicOrigin(request);
+  const resolved = await resolveOAuthReturnOrigin(publicOrigin);
+  return (
+    resolved.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ||
+    request.nextUrl.origin
+  );
 }
 
-function redirectComResultado(
+async function redirectComResultado(
   request: NextRequest,
-  opts: { ok: boolean; returnTo?: string; agenteSlug?: string; email?: string; error?: string }
-): NextResponse {
-  const origin = appOrigin(request);
+  opts: {
+    ok: boolean;
+    returnOrigin?: string;
+    returnTo?: string;
+    agenteSlug?: string;
+    email?: string;
+    error?: string;
+  }
+): Promise<NextResponse> {
+  const origin = await redirectOrigin(request, opts.returnOrigin);
   const base =
     opts.returnTo ||
     (opts.agenteSlug ? `/crm/agentes/${encodeURIComponent(opts.agenteSlug)}` : "/crm/canais");
@@ -50,17 +79,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
   }
 
-  const origin = appOrigin(request);
   const errorParam = request.nextUrl.searchParams.get("error");
   const stateRaw = request.nextUrl.searchParams.get("state")?.trim() || "";
   const code = request.nextUrl.searchParams.get("code")?.trim() || "";
 
   const state = parseGoogleOAuthState(stateRaw);
   const returnTo = state?.returnTo;
+  const returnOrigin = state?.returnOrigin;
 
   if (errorParam) {
     return redirectComResultado(request, {
       ok: false,
+      returnOrigin,
       returnTo,
       agenteSlug: state?.agenteSlug,
       error: errorParam,
@@ -70,6 +100,7 @@ export async function GET(request: NextRequest) {
   if (!state) {
     return redirectComResultado(request, {
       ok: false,
+      returnOrigin,
       returnTo,
       error: "state_invalido_ou_expirado",
     });
@@ -78,14 +109,30 @@ export async function GET(request: NextRequest) {
   if (!code) {
     return redirectComResultado(request, {
       ok: false,
+      returnOrigin,
       returnTo,
       agenteSlug: state.agenteSlug,
       error: "codigo_ausente",
     });
   }
 
+  const redirectUri =
+    state.redirectUri?.trim() ||
+    (await resolveGoogleOAuthRedirectUri(resolveRequestPublicOrigin(request))) ||
+    "";
+
+  if (!redirectUri) {
+    return redirectComResultado(request, {
+      ok: false,
+      returnOrigin,
+      returnTo,
+      agenteSlug: state.agenteSlug,
+      error: "redirect_uri_nao_configurado",
+    });
+  }
+
   try {
-    const tokens = await exchangeGoogleOAuthCode(code, origin);
+    const tokens = await exchangeGoogleOAuthCode(code, redirectUri);
     const profileEmail = await getGoogleProfileEmail(tokens.access_token);
 
     const supabase = db();
@@ -112,6 +159,7 @@ export async function GET(request: NextRequest) {
 
     return redirectComResultado(request, {
       ok: true,
+      returnOrigin,
       returnTo,
       agenteSlug: state.agenteSlug,
       email: profileEmail,
@@ -120,6 +168,7 @@ export async function GET(request: NextRequest) {
     const msg = err instanceof Error ? err.message : "oauth_falhou";
     return redirectComResultado(request, {
       ok: false,
+      returnOrigin,
       returnTo,
       agenteSlug: state.agenteSlug,
       error: msg,

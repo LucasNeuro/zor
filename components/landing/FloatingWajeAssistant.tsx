@@ -212,19 +212,16 @@ export function FloatingWajeAssistant() {
   const ui = (
     <div className="waje-float-root flex flex-col items-end gap-3">
       {open ? (
-        <div className="waje-mini-bot-panel flex max-h-[min(520px,78dvh)] w-[min(340px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_25%,transparent)] bg-[#0b1f10] shadow-[0_24px_64px_rgba(0,0,0,0.35)]">
-          <div className="flex shrink-0 items-center justify-between border-b border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_15%,transparent)] bg-[#071209] px-4 py-3">
+        <div className="waje-mini-bot-panel flex max-h-[min(520px,78dvh)] w-[min(340px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border shadow-[0_24px_64px_rgba(0,0,0,0.35)]">
+          <div className="waje-mini-bot-header flex shrink-0 items-center justify-between border-b px-4 py-3">
             <div className="flex items-center gap-2.5">
-              <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_30%,transparent)] bg-[#0b1f10]">
+              <div className="waje-mini-bot-avatar relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border">
                 <PlatformBrandLogo size={22} variant="favicon" />
-                <span
-                  className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#071209]"
-                  style={{ background: "var(--platform-brand-accent, #92ff00)" }}
-                />
+                <span className="waje-mini-bot-status-dot absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2" />
               </div>
               <div className="text-left">
                 <span className="block text-sm font-bold leading-tight text-white">Assistente {brandNome}</span>
-                <span className="text-[11px] font-medium text-[var(--platform-brand-accent,#92ff00)]">
+                <span className="waje-mini-bot-status-label text-[11px] font-medium">
                   Online · resposta rápida
                 </span>
               </div>
@@ -260,14 +257,9 @@ export function FloatingWajeAssistant() {
                 <div
                   className={`max-w-[88%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
                     msg.role === "user"
-                      ? "rounded-br-sm text-[#061008]"
+                      ? "waje-mini-bot-bubble-user rounded-br-sm"
                       : "rounded-bl-sm border border-white/10 bg-white/8 text-white/90"
                   }`}
-                  style={
-                    msg.role === "user"
-                      ? { background: "var(--platform-brand-accent, #92ff00)" }
-                      : undefined
-                  }
                 >
                   {msg.text}
                 </div>
@@ -281,7 +273,7 @@ export function FloatingWajeAssistant() {
                     key={op.id}
                     type="button"
                     onClick={() => escolherOpcao(op.id, op.label)}
-                    className="rounded-full border border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_30%,transparent)] bg-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_10%,transparent)] px-3 py-2 text-left text-xs font-medium text-[#c8ffaa] transition hover:border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_55%,transparent)] hover:bg-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_18%,transparent)]"
+                    className="waje-mini-bot-option rounded-full border px-3 py-2 text-left text-xs font-medium transition"
                   >
                     {op.label}
                   </button>
@@ -353,7 +345,7 @@ export function FloatingWajeAssistant() {
             <X className="h-3.5 w-3.5" />
           </button>
           <div className="mb-2 flex items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--platform-brand-accent,#92ff00)_35%,transparent)] bg-[#0b1f10]">
+            <div className="waje-mini-bot-teaser-logo flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border">
               <PlatformBrandLogo size={18} variant="favicon" />
             </div>
             <p className="text-sm font-bold leading-tight text-[#0b1f10]">Olá! 👋 Precisa de ajuda?</p>

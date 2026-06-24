@@ -69,7 +69,8 @@ const SYNKRON_STATIC: PlatformBrand = {
   ],
   logoUrl: "/brands/synkron/logo.png",
   faviconUrl: "/brands/synkron/logo.png",
-  corPrimaria: "#3f9848",
+  /** Ciano da marca — IA e CTAs; evita verde/amarelo Waje no vendor. */
+  corPrimaria: "#4fc3f7",
   corAccent: "#4fc3f7",
   corFundo: "#000000",
   companyName: "Synkron.IA",
@@ -216,8 +217,61 @@ export function hostFromHeaders(headers: Headers): string {
   );
 }
 
+/**
+ * Origem pública do pedido (ex.: https://synkronia.com.br).
+ * Em produção no Render, `request.nextUrl.origin` costuma ser localhost:10000 —
+ * use isto em OAuth para redirect_uri e returnOrigin do vendor.
+ */
+export function resolveRequestPublicOrigin(request: NextRequest): string {
+  const isProd = process.env.NODE_ENV === "production";
+  if (isProd) {
+    const host = hostFromHeaders(request.headers);
+    if (host && !host.includes("localhost") && !host.startsWith("127.0.0.1")) {
+      const proto =
+        request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
+      return `${proto}://${host}`.replace(/\/$/, "");
+    }
+  }
+  return request.nextUrl.origin.replace(/\/$/, "");
+}
+
 export async function resolvePlatformBrandFromRequest(
   request: NextRequest | { headers: Headers }
 ): Promise<PlatformBrand> {
   return resolvePlatformBrand(hostFromHeaders(request.headers));
+}
+
+/** true se o host pertence a alguma marca (Waje, vendor white-label, etc.). */
+export async function hostIsKnownPlatformDomain(host: string): Promise<boolean> {
+  const norm = normalizeHostname(host);
+  if (!norm) return false;
+
+  for (const brand of STATIC_BRANDS) {
+    const candidate = mergeDevSynkronDomains(brand);
+    if (candidate.dominios.some((d) => hostMatchesDomain(norm, d))) return true;
+  }
+
+  const fromDb = await loadAllBrandsFromDb();
+  if (fromDb?.length) {
+    return fromDb.some((b) => {
+      if (!b.ativo) return false;
+      const candidate = mergeDevSynkronDomains(b);
+      return candidate.dominios.some((d) => hostMatchesDomain(norm, d));
+    });
+  }
+
+  return false;
+}
+
+/** Origem HTTPS/HTTP permitida para redirect pós-OAuth (domínio do vendor ou Waje). */
+export async function resolveOAuthReturnOrigin(requestOrigin: string): Promise<string> {
+  const trimmed = requestOrigin.trim().replace(/\/$/, "");
+  try {
+    const host = new URL(trimmed).host;
+    if (await hostIsKnownPlatformDomain(host)) return trimmed;
+  } catch {
+    /* fallback */
+  }
+  const app = process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/$/, "");
+  return app || trimmed;
 }

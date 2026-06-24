@@ -69,27 +69,42 @@ export function PlatformBrandProvider({
   const [brand, setBrand] = useState<PlatformBrandPublic | null>(initialBrand);
   const [loading, setLoading] = useState(!initialBrand);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options?: { background?: boolean }) => {
+    const background = options?.background ?? false;
+    if (!background) setLoading(true);
     try {
       const res = await fetch("/api/public/platform-brand", { credentials: "include" });
       const json = (await res.json()) as { data?: PlatformBrandPublic };
       if (res.ok && json.data) {
-        setBrand(json.data);
+        setBrand((prev) => {
+          if (prev?.slug === json.data!.slug) {
+            return { ...prev, ...json.data! };
+          }
+          return json.data!;
+        });
         applyBrandToDocument(json.data);
       }
     } catch {
       /* mantém fallback estático */
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (initialBrand) applyBrandToDocument(initialBrand);
+    if (initialBrand) {
+      applyBrandToDocument(initialBrand);
+      void refresh({ background: true });
+      return;
+    }
     void refresh();
   }, [initialBrand, refresh]);
 
-  const value = useMemo(() => ({ brand, loading, refresh }), [brand, loading, refresh]);
+  const ready = Boolean(brand) && !loading;
+  const value = useMemo(
+    () => ({ brand, loading, ready, refresh: () => refresh() }),
+    [brand, loading, ready, refresh]
+  );
 
   return <PlatformBrandContext.Provider value={value}>{children}</PlatformBrandContext.Provider>;
 }

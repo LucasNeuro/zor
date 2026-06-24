@@ -49,7 +49,7 @@ export function CrmAccessGuard({
   }, [pathname, baseRole, permissoes, wajeOwner, tenantId, accessLoaded, router]);
 
   if (!accessLoaded || ctxLooksUninitialized(ctx)) {
-    return <>{children}</>;
+    return null;
   }
 
   if (!canAccessCrmPath(pathname, ctx)) {

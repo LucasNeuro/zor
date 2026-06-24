@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Plus, X, ChevronRight, ChevronDown, Menu } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { CrmShellBootstrap } from "@/components/crm/CrmShellBootstrap";
 import { CrmAccessGuard } from "@/components/crm/CrmAccessGuard";
 import { filterCrmNavGroupsForAccess, isPlatformTeamAccess } from "@/lib/crm/access-permissions";
 import { appendWajeOwnerNav } from "@/lib/crm/waje-owner-nav";
@@ -467,27 +468,16 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     return (
       <CrmQueryProvider>
         <CrmLogoutOverlayProvider>
-        <CrmFeedbackProvider>
-          <CrmListPrefetcher />
-          <CrmHeaderProvider>
-            <CrmShellProvider value={{ sidebarExpanded: false, toggleSidebar: () => {} }}>
-              <div
-                className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain"
-                style={{ background: CRM_SURFACE_MAIN, WebkitOverflowScrolling: "touch" }}
-              >
-                <CrmAccessGuard
-                  baseRole={accessCtx.baseRole}
-                  permissoes={accessCtx.permissoes}
-                  wajeOwner={accessCtx.wajeOwner}
-                  tenantId={accessCtx.tenantId}
-                  accessLoaded={accessLoaded}
-                >
-                  {children}
-                </CrmAccessGuard>
-              </div>
-            </CrmShellProvider>
-          </CrmHeaderProvider>
-        </CrmFeedbackProvider>
+          <CrmFeedbackProvider>
+            <CrmListPrefetcher />
+            <CrmHeaderProvider>
+              <CrmShellProvider value={{ sidebarExpanded: false, toggleSidebar: () => {} }}>
+                <CrmShellBootstrap layoutReady={layoutReady} accessLoaded={accessLoaded}>
+                  {null}
+                </CrmShellBootstrap>
+              </CrmShellProvider>
+            </CrmHeaderProvider>
+          </CrmFeedbackProvider>
         </CrmLogoutOverlayProvider>
       </CrmQueryProvider>
     );
@@ -502,20 +492,22 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           <CrmListPrefetcher />
         <CrmHeaderProvider>
           <CrmShellProvider value={{ sidebarExpanded: false, toggleSidebar: () => {} }}>
-            <div
+            <CrmShellBootstrap layoutReady={layoutReady} accessLoaded={accessLoaded}>
+              <div
                 className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain"
                 style={{ background: CRM_SURFACE_MAIN, WebkitOverflowScrolling: "touch" }}
-            >
-              <CrmAccessGuard
-                baseRole={accessCtx.baseRole}
-                permissoes={accessCtx.permissoes}
-                wajeOwner={accessCtx.wajeOwner}
-                tenantId={accessCtx.tenantId}
-                accessLoaded={accessLoaded}
               >
-              {children}
-              </CrmAccessGuard>
-            </div>
+                <CrmAccessGuard
+                  baseRole={accessCtx.baseRole}
+                  permissoes={accessCtx.permissoes}
+                  wajeOwner={accessCtx.wajeOwner}
+                  tenantId={accessCtx.tenantId}
+                  accessLoaded={accessLoaded}
+                >
+                  {children}
+                </CrmAccessGuard>
+              </div>
+            </CrmShellBootstrap>
           </CrmShellProvider>
         </CrmHeaderProvider>
         </CrmFeedbackProvider>
@@ -532,6 +524,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     <CrmListPrefetcher />
     <CrmHeaderProvider>
       <CrmShellProvider value={{ sidebarExpanded, toggleSidebar }}>
+          <CrmShellBootstrap layoutReady={layoutReady} accessLoaded={accessLoaded}>
           <div className="flex h-[100dvh] overflow-hidden" style={{ background: CRM_SURFACE_ALT }}>
 
             {/* ── Sidebar shell ──────────────────── */}
@@ -738,6 +731,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
       </div>
 
         </div>
+          </CrmShellBootstrap>
       </CrmShellProvider>
     </CrmHeaderProvider>
     </CrmFeedbackProvider>

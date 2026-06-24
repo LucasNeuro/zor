@@ -4,14 +4,10 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import {
   Bell,
   ChevronRight,
-  GripVertical,
   Loader2,
   Play,
-  Plus,
-  Trash2,
-  Upload,
-  X,
 } from "lucide-react";
+import { FollowupFlowReactFlowPanel } from "@/components/crm/followup-flow-visual/FollowupFlowReactFlowPanel";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { hubApiHeaders } from "@/lib/internal-api-headers-client";
@@ -29,6 +25,7 @@ import {
   rfInnerPanelStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
 import {
   atrasoTotalMinutos,
   formatarAtrasoPasso,
@@ -47,16 +44,6 @@ function normalizarPasso(p: HubAgenteFollowupPasso): HubAgenteFollowupPasso {
   };
 }
 
-function clampMinutos(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.min(59, Math.max(0, v));
-}
-
-function clampHoras(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.min(8760, Math.max(0, v));
-}
-
 export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }: Props) {
   const isCard = layout === "card";
   const [loading, setLoading] = useState(true);
@@ -68,9 +55,6 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   const [okMsg, setOkMsg] = useState("");
   const [sideoverOpen, setSideoverOpen] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
-  const [dragPassoId, setDragPassoId] = useState<string | null>(null);
-  const [dragOverPassoId, setDragOverPassoId] = useState<string | null>(null);
-  const [dragOverImagemId, setDragOverImagemId] = useState<string | null>(null);
 
   const base = `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/followup`;
 
@@ -198,6 +182,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }
 
   async function persistirOrdem(reordered: HubAgenteFollowupPasso[]) {
+    setPassos(reordered);
     setSaving(true);
     setErro("");
     try {
@@ -217,20 +202,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     }
   }
 
-  function reorderLocal(fromId: string, toId: string) {
-    if (fromId === toId) return;
-    const sorted = [...passosOrdenados];
-    const fromIdx = sorted.findIndex((p) => p.id === fromId);
-    const toIdx = sorted.findIndex((p) => p.id === toId);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const [moved] = sorted.splice(fromIdx, 1);
-    sorted.splice(toIdx, 0, moved);
-    const reordered = sorted.map((p, i) => ({ ...p, ordem: i + 1 }));
-    setPassos(reordered);
-    void persistirOrdem(reordered);
-  }
-
-  async function adicionarPasso() {
+  async function adicionarPasso(tipo: FollowupTipoConteudo = "texto") {
     const maxOrdem = passos.reduce((m, p) => Math.max(m, p.ordem), 0);
     const ultimo = passos.find((p) => p.ordem === maxOrdem);
     const totalMin = ultimo ? atrasoTotalMinutos(ultimo) * 2 : 120;
@@ -245,8 +217,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
           ordem: maxOrdem + 1,
           atraso_horas,
           atraso_minutos,
-          tipo_conteudo: "texto",
-          texto_template: "Olá {nome}, ainda posso ajudar?",
+          tipo_conteudo: tipo,
+          texto_template: tipo === "texto" ? "Olá {nome}, ainda posso ajudar?" : null,
+          legenda_imagem: tipo === "texto_imagem" ? "Olá {nome}, ainda posso ajudar?" : null,
         }),
       });
       const data = (await res.json()) as { error?: string; passo?: HubAgenteFollowupPasso };
@@ -531,342 +504,18 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: RF_ACCENT }}>
-          Passos ({passosOrdenados.length})
-        </p>
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => void adicionarPasso()}
-          style={{
-            ...btnSecondaryDark(saving),
-            width: "auto",
-            padding: "6px 10px",
-            fontSize: 11,
-          }}
-        >
-          <Plus size={14} /> Adicionar
-        </button>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {passosOrdenados.map((passo) => (
-          <div
-            key={passo.id}
-            draggable={!saving}
-            onDragStart={() => setDragPassoId(passo.id)}
-            onDragEnd={() => {
-              setDragPassoId(null);
-              setDragOverPassoId(null);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOverPassoId(passo.id);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (dragPassoId) reorderLocal(dragPassoId, passo.id);
-              setDragOverPassoId(null);
-            }}
-            style={{
-              border: `1px solid ${dragOverPassoId === passo.id ? RF_ACCENT : RF_BORDER}`,
-              borderRadius: 12,
-              padding: 12,
-              background: "rgba(6,13,8,0.45)",
-              opacity: dragPassoId === passo.id ? 0.55 : 1,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <span style={{ cursor: "grab", color: RF_TEXT_MUTED }} title="Arrastar">
-                <GripVertical size={18} />
-              </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  color: RF_ACCENT,
-                  background: "rgba(146,255,0,0.14)",
-                  padding: "4px 10px",
-                  borderRadius: 999,
-                }}
-              >
-                Passo {passo.ordem}
-              </span>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginLeft: "auto",
-                }}
-              >
-                <span
-                  id={`followup-passo-ativo-${passo.id}`}
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: passo.ativo ? "#3fb950" : RF_TEXT_MUTED,
-                  }}
-                >
-                  {passo.ativo ? "ACTIVO" : "INACTIVO"}
-                </span>
-                <CrmToggleSwitch
-                  checked={passo.ativo}
-                  disabled={saving}
-                  variant="dark"
-                  labelledBy={`followup-passo-ativo-${passo.id}`}
-                  onCheckedChange={(v) => {
-                    atualizarPassoLocal(passo.id, { ativo: v });
-                    void salvarPasso({ ...passo, ativo: v });
-                  }}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void excluirPasso(passo.id)}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: "#f85149",
-                  cursor: "pointer",
-                  padding: 4,
-                }}
-                aria-label="Excluir"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-                gap: 10,
-              }}
-            >
-              <label>
-                <span style={rfLabelStyle()}>Horas</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={8760}
-                  value={passo.atraso_horas}
-                  onChange={(e) =>
-                    atualizarPassoLocal(passo.id, {
-                      atraso_horas: clampHoras(Number.parseInt(e.target.value, 10) || 0),
-                    })
-                  }
-                  style={rfInputStyle()}
-                />
-              </label>
-              <label>
-                <span style={rfLabelStyle()}>Minutos</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={passo.atraso_minutos ?? 0}
-                  onChange={(e) =>
-                    atualizarPassoLocal(passo.id, {
-                      atraso_minutos: clampMinutos(Number.parseInt(e.target.value, 10) || 0),
-                    })
-                  }
-                  style={rfInputStyle()}
-                />
-              </label>
-              <label>
-                <span style={rfLabelStyle()}>Conteúdo</span>
-                <select
-                  value={passo.tipo_conteudo}
-                  onChange={(e) =>
-                    atualizarPassoLocal(passo.id, {
-                      tipo_conteudo: e.target.value as HubAgenteFollowupPasso["tipo_conteudo"],
-                    })
-                  }
-                  style={rfInputStyle()}
-                >
-                  <option value="texto">Só texto</option>
-                  <option value="imagem">Só imagem</option>
-                  <option value="texto_imagem">Imagem + legenda</option>
-                </select>
-              </label>
-            </div>
-            <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.4 }}>
-              Envia após{" "}
-              <strong style={{ color: RF_ACCENT }}>{formatarAtrasoPasso(passo)}</strong> sem resposta
-              do cliente (desde a última mensagem recebida).
-              {atrasoTotalMinutos(passo) < 60 ? (
-                <> Ideal para testes em produção.</>
-              ) : null}
-            </p>
-
-            <label style={{ display: "block", marginTop: 10 }}>
-              <span style={rfLabelStyle()}>Mensagem</span>
-              <textarea
-                rows={2}
-                value={passo.texto_template || ""}
-                onChange={(e) => atualizarPassoLocal(passo.id, { texto_template: e.target.value })}
-                style={{ ...rfInputStyle(), resize: "vertical" }}
-              />
-            </label>
-
-            {(passo.tipo_conteudo === "imagem" || passo.tipo_conteudo === "texto_imagem") && (
-              <div style={{ marginTop: 10 }}>
-                <span style={rfLabelStyle()}>Imagem (bucket agent-followup)</span>
-                <label
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragOverImagemId(passo.id);
-                  }}
-                  onDragLeave={() =>
-                    setDragOverImagemId((id) => (id === passo.id ? null : id))
-                  }
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragOverImagemId(null);
-                    const f = e.dataTransfer.files?.[0];
-                    if (f && f.type.startsWith("image/")) void uploadImagem(passo.id, f);
-                  }}
-                  style={{
-                    display: "block",
-                    marginTop: 6,
-                    padding: "16px 12px",
-                    borderRadius: 10,
-                    border: `2px dashed ${dragOverImagemId === passo.id ? RF_ACCENT : RF_BORDER_STRONG}`,
-                    background:
-                      dragOverImagemId === passo.id
-                        ? "rgba(146,255,0,0.08)"
-                        : "rgba(6,13,8,0.35)",
-                    cursor: uploadingId === passo.id ? "wait" : "pointer",
-                    textAlign: "center",
-                  }}
-                >
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    hidden
-                    disabled={uploadingId === passo.id}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) void uploadImagem(passo.id, f);
-                      e.target.value = "";
-                    }}
-                    id={`followup-img-${passo.id}`}
-                  />
-                  <label
-                    htmlFor={`followup-img-${passo.id}`}
-                    style={{
-                      cursor: "inherit",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <Upload size={22} color={RF_ACCENT} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: RF_TEXT_PRIMARY }}>
-                      {uploadingId === passo.id ? "A enviar…" : "Clique ou arraste a imagem"}
-                    </span>
-                  </label>
-                </label>
-
-                {passo.imagem_url ? (
-                  <div
-                    style={{
-                      marginTop: 10,
-                      border: `1px solid ${RF_BORDER}`,
-                      borderRadius: 10,
-                      overflow: "hidden",
-                      background: "rgba(6,13,8,0.35)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "52px 1fr auto 36px",
-                        gap: 8,
-                        alignItems: "center",
-                        padding: "8px 10px",
-                      }}
-                    >
-                      <img
-                        src={passo.imagem_url}
-                        alt=""
-                        style={{
-                          width: 44,
-                          height: 44,
-                          objectFit: "cover",
-                          borderRadius: 8,
-                          border: `1px solid ${RF_BORDER}`,
-                        }}
-                      />
-                      <div style={{ minWidth: 0 }}>
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: RF_TEXT_PRIMARY,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          Imagem do passo {passo.ordem}
-                        </p>
-                        <p style={{ margin: "2px 0 0", fontSize: 10, color: RF_TEXT_MUTED }}>
-                          Enviada · URL pública para WhatsApp
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          atualizarPassoLocal(passo.id, { imagem_url: null });
-                          void salvarPasso({ ...passo, imagem_url: null });
-                        }}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: RF_TEXT_MUTED,
-                          cursor: "pointer",
-                          padding: 4,
-                        }}
-                        aria-label="Remover imagem"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void salvarPasso(passo)}
-              style={{
-                ...btnPrimaryDark(saving),
-                marginTop: 10,
-                width: "auto",
-                padding: "8px 14px",
-                fontSize: 12,
-              }}
-            >
-              Guardar passo
-            </button>
-          </div>
-        ))}
-      </div>
+      <FollowupFlowReactFlowPanel
+        passos={passosOrdenados}
+        saving={saving}
+        uploadingId={uploadingId}
+        disabled={loading || !config}
+        onAdicionarPasso={adicionarPasso}
+        onSalvarPasso={salvarPasso}
+        onExcluirPasso={excluirPasso}
+        onReorder={persistirOrdem}
+        onUploadImagem={uploadImagem}
+        onAtualizarLocal={atualizarPassoLocal}
+      />
 
       {okMsg ? <p style={{ margin: 0, fontSize: 12, color: RF_ACCENT }}>{okMsg}</p> : null}
       {erro ? <p style={{ margin: 0, fontSize: 12, color: "#f85149" }}>{erro}</p> : null}
@@ -1008,7 +657,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         open={sideoverOpen}
         onClose={() => setSideoverOpen(false)}
         title={agenteNome?.trim() || agenteSlug}
-        subtitle="Mensagens fixas por passo — texto e imagem no bucket agent-followup"
+        subtitle="Diagrama visual dos passos — texto e imagem no bucket agent-followup"
         footer={sideoverFooter}
         theme="dark"
         sectionLabel="Follow-up WhatsApp"

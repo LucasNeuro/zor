@@ -20,6 +20,11 @@ export type PlatformBrandRow = {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  landing_assistant_ativo: boolean;
+  tenants_total?: number;
+  tenants_ativos?: number;
+  usuarios_total?: number;
+  usuarios_ativos?: number;
   criado_em: string | null;
   atualizado_em: string | null;
 };
@@ -47,6 +52,11 @@ export function mapPlatformBrandRow(row: Record<string, unknown>): PlatformBrand
     contact_name: typeof row.contact_name === "string" ? row.contact_name : null,
     contact_email: typeof row.contact_email === "string" ? row.contact_email : null,
     contact_phone: typeof row.contact_phone === "string" ? row.contact_phone : null,
+    landing_assistant_ativo: row.landing_assistant_ativo !== false,
+    tenants_total: typeof row.tenants_total === "number" ? row.tenants_total : undefined,
+    tenants_ativos: typeof row.tenants_ativos === "number" ? row.tenants_ativos : undefined,
+    usuarios_total: typeof row.usuarios_total === "number" ? row.usuarios_total : undefined,
+    usuarios_ativos: typeof row.usuarios_ativos === "number" ? row.usuarios_ativos : undefined,
     criado_em: typeof row.criado_em === "string" ? row.criado_em : null,
     atualizado_em: typeof row.atualizado_em === "string" ? row.atualizado_em : null,
   };

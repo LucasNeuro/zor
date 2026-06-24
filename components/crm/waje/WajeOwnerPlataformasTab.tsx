@@ -8,6 +8,8 @@ import {
 } from "@/components/crm/CrmResizableDataTable";
 import { CrmIconButtonGroup } from "@/components/crm/CrmIconButtonGroup";
 import { OpsStatusBadge } from "@/components/ops/OpsStatusBadge";
+import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
+import { sparklineFromSeed } from "@/lib/crm/metric-visuals";
 import {
   WajeOwnerPlataformaSideover,
   type PlatformBrandRow,
@@ -66,6 +68,44 @@ export function WajeOwnerPlataformasTab() {
     });
   }, [rows, search]);
 
+  const metrics = useMemo(() => {
+    const vendors = rows.filter((r) => !r.is_principal);
+    const vendorsAtivos = vendors.filter((r) => r.ativo);
+    const clientesAtivos = vendors.reduce((s, r) => s + (r.tenants_ativos ?? 0), 0);
+    const utilizadoresTotal = vendors.reduce((s, r) => s + (r.usuarios_total ?? 0), 0);
+    const principal = rows.find((r) => r.is_principal);
+    return [
+      {
+        label: "Vendors white-label",
+        valor: vendorsAtivos.length,
+        sub: `${vendors.length} registados`,
+        tone: "brand" as const,
+        seed: 21,
+      },
+      {
+        label: "Clientes activos",
+        valor: clientesAtivos,
+        sub: "Tenants activos nos vendors",
+        tone: "success" as const,
+        seed: 22,
+      },
+      {
+        label: "Utilizadores (vendors)",
+        valor: utilizadoresTotal,
+        sub: "Controlo financeiro",
+        tone: "warning" as const,
+        seed: 23,
+      },
+      {
+        label: "Plataforma principal",
+        valor: principal?.nome ?? "Waje",
+        sub: principal ? `${principal.tenants_ativos ?? 0} clientes activos` : "Owner",
+        tone: "muted" as const,
+        seed: 24,
+      },
+    ];
+  }, [rows]);
+
   const columns = useMemo<CrmResizableColumn<PlatformBrandRow>[]>(
     () => [
       { id: "nome", label: "Marca", defaultWidth: 160, render: (r) => r.nome },
@@ -75,6 +115,37 @@ export function WajeOwnerPlataformasTab() {
         label: "Domínios",
         defaultWidth: 220,
         render: (r) => (r.dominios.length ? r.dominios.join(", ") : "—"),
+      },
+      {
+        id: "clientes",
+        label: "Clientes",
+        defaultWidth: 100,
+        render: (r) => (
+          <span title="Tenants activos / total">
+            {r.tenants_ativos ?? 0}/{r.tenants_total ?? 0}
+          </span>
+        ),
+      },
+      {
+        id: "utilizadores",
+        label: "Utilizadores",
+        defaultWidth: 100,
+        render: (r) => (
+          <span title="Utilizadores activos / total">
+            {r.usuarios_ativos ?? 0}/{r.usuarios_total ?? 0}
+          </span>
+        ),
+      },
+      {
+        id: "assistente",
+        label: "Assistente",
+        defaultWidth: 88,
+        render: (r) => (
+          <OpsStatusBadge
+            variant={r.landing_assistant_ativo !== false ? "ativo" : "inativo"}
+            label={r.landing_assistant_ativo !== false ? "Ligado" : "Off"}
+          />
+        ),
       },
       {
         id: "tipo",
@@ -137,6 +208,18 @@ export function WajeOwnerPlataformasTab() {
     <>
       <div className="flex min-h-0 flex-col">
         <div className="shrink-0 border-b border-[#eef5ec] px-4 py-3">
+          <CrmMetricsGrid cols={4} className="mb-3">
+            {metrics.map((m) => (
+              <CrmMetricCard
+                key={m.label}
+                label={m.label}
+                valor={m.valor}
+                sub={m.sub}
+                tone={m.tone}
+                sparkline={sparklineFromSeed(m.seed)}
+              />
+            ))}
+          </CrmMetricsGrid>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto_auto]">
             <div className="flex h-10 items-center gap-2 rounded-xl border border-[#d4ecd0] bg-white px-3">
               <Search size={14} className="text-[#6b8a76]" />

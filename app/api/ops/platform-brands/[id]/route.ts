@@ -42,6 +42,9 @@ export async function PATCH(request: NextRequest, ctx: RouteCtx) {
   if (body.cor_fundo != null) patch.cor_fundo = String(body.cor_fundo).trim();
   if (body.company_name != null) patch.company_name = String(body.company_name).trim() || null;
   if (body.ativo != null) patch.ativo = body.ativo === true;
+  if (body.landing_assistant_ativo != null) {
+    patch.landing_assistant_ativo = body.landing_assistant_ativo === true;
+  }
 
   if (body.dominios != null) {
     patch.dominios = Array.isArray(body.dominios)

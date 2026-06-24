@@ -23,6 +23,7 @@ export type PlatformBrand = {
   corFundo: string;
   companyName?: string | null;
   isPrincipal: boolean;
+  landingAssistantAtivo?: boolean;
 };
 
 export type PlatformBrandPublic = Pick<
@@ -38,6 +39,7 @@ export type PlatformBrandPublic = Pick<
   | "corFundo"
   | "companyName"
   | "isPrincipal"
+  | "landingAssistantAtivo"
 >;
 
 const WAJE_STATIC: PlatformBrand = {
@@ -126,6 +128,7 @@ function rowToBrand(row: Record<string, unknown>): PlatformBrand {
     corFundo: String(row.cor_fundo ?? BRAND_MARK_BG),
     companyName: typeof row.company_name === "string" ? row.company_name : null,
     isPrincipal: row.is_principal === true,
+    landingAssistantAtivo: row.landing_assistant_ativo !== false,
   };
 }
 
@@ -142,6 +145,7 @@ export function toPlatformBrandPublic(brand: PlatformBrand): PlatformBrandPublic
     corFundo: brand.corFundo,
     companyName: brand.companyName,
     isPrincipal: brand.isPrincipal,
+    landingAssistantAtivo: brand.landingAssistantAtivo !== false,
   };
 }
 

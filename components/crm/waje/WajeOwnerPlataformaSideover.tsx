@@ -16,6 +16,7 @@ import { WajeOwnerSectionHeading } from "@/components/crm/waje/WajeOwnerRetrofit
 import { WajeOwnerStatusBadge } from "@/components/crm/waje/WajeOwnerUi";
 import type { PlatformBrandRow } from "@/lib/ops/platform-brand-map";
 import { isUsableAssetUrl } from "@/lib/ops/platform-brand-asset-url";
+import type { PlatformBrandUserRow } from "@/lib/ops/platform-brand-stats";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
 
 export type { PlatformBrandRow };
@@ -42,6 +43,7 @@ type FormState = {
   cor_fundo: string;
   company_name: string;
   ativo: boolean;
+  landing_assistant_ativo: boolean;
   registration_type: string;
   document_type: string;
   document: string;
@@ -64,6 +66,7 @@ function emptyForm(): FormState {
     cor_fundo: "#0b1f10",
     company_name: "",
     ativo: true,
+    landing_assistant_ativo: true,
     registration_type: "",
     document_type: "",
     document: "",
@@ -87,6 +90,7 @@ function rowToForm(row: PlatformBrandRow): FormState {
     cor_fundo: row.cor_fundo,
     company_name: row.company_name ?? "",
     ativo: row.ativo,
+    landing_assistant_ativo: row.landing_assistant_ativo !== false,
     registration_type: row.registration_type ?? "",
     document_type: row.document_type ?? "",
     document: row.document ?? "",
@@ -110,6 +114,7 @@ function payloadFromForm(form: FormState) {
     cor_fundo: form.cor_fundo,
     company_name: form.company_name,
     ativo: form.ativo,
+    landing_assistant_ativo: form.landing_assistant_ativo,
     registration_type: form.registration_type || null,
     document_type: form.document_type || null,
     document: form.document,
@@ -520,6 +525,14 @@ export function WajeOwnerPlataformaSideover({
   const [form, setForm] = useState<FormState>(emptyForm());
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [utilizadores, setUtilizadores] = useState<PlatformBrandUserRow[]>([]);
+  const [utilStats, setUtilStats] = useState({
+    tenants_total: 0,
+    tenants_ativos: 0,
+    usuarios_total: 0,
+    usuarios_ativos: 0,
+  });
+  const [utilLoading, setUtilLoading] = useState(false);
 
   const isCreate = createMode || !row;
 
@@ -528,6 +541,38 @@ export function WajeOwnerPlataformaSideover({
     else if (createMode) setForm(emptyForm());
     setErro("");
   }, [row, createMode, open]);
+
+  useEffect(() => {
+    if (!open || !row?.id) {
+      setUtilizadores([]);
+      return;
+    }
+    let cancelled = false;
+    setUtilLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/ops/platform-brands/${encodeURIComponent(row.id)}/utilizadores`, {
+          headers: await opsApiHeaders(),
+          credentials: "include",
+        });
+        const json = (await res.json()) as {
+          data?: { stats: typeof utilStats; usuarios: PlatformBrandUserRow[] };
+          error?: string;
+        };
+        if (!cancelled && res.ok && json.data) {
+          setUtilStats(json.data.stats);
+          setUtilizadores(json.data.usuarios);
+        }
+      } catch {
+        if (!cancelled) setUtilizadores([]);
+      } finally {
+        if (!cancelled) setUtilLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, row?.id]);
 
   const handleLogoUploaded = useCallback(
     (kind: AssetKind, updated: PlatformBrandRow) => {
@@ -745,6 +790,24 @@ export function WajeOwnerPlataformaSideover({
           </p>
         )}
 
+        <WajeOwnerSectionHeading>Landing pública</WajeOwnerSectionHeading>
+        <p className="text-xs text-[#7a9a7e]">
+          Assistente flutuante na landing («Olá! Precisa de ajuda?») — 3 perguntas e formulário de
+          contacto para captar leads.
+        </p>
+        <Field label="Assistente de leads">
+          <select
+            className={inputCls}
+            value={form.landing_assistant_ativo ? "ativo" : "inativo"}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, landing_assistant_ativo: e.target.value === "ativo" }))
+            }
+          >
+            <option value="ativo">Activo — visível na landing</option>
+            <option value="inativo">Inactivo — oculto</option>
+          </select>
+        </Field>
+
         <WajeOwnerSectionHeading>Cadastro do revendedor (opcional)</WajeOwnerSectionHeading>
         <p className="text-xs text-[#7a9a7e]">
           Dados de PJ ou PF que opera esta marca — não obrigatório para activar o white-label.
@@ -816,6 +879,80 @@ export function WajeOwnerPlataformaSideover({
             />
           </Field>
         </div>
+
+        {!isCreate && row ? (
+          <>
+            <WajeOwnerSectionHeading>Controlo financeiro — clientes e utilizadores</WajeOwnerSectionHeading>
+            <p className="text-xs text-[#7a9a7e]">
+              Leitura apenas — total de empresas (tenants) e utilizadores desta marca para facturação
+              e acompanhamento. Não apaga contas daqui.
+            </p>
+            <div
+              className="grid gap-2 sm:grid-cols-2"
+              style={{ border: `1px solid ${RF_BORDER}`, borderRadius: 12, padding: 12 }}
+            >
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a9a7e]">
+                  Clientes (tenants)
+                </span>
+                <p className="text-lg font-bold" style={{ color: RF_TEXT_PRIMARY }}>
+                  {utilStats.tenants_ativos}
+                  <span className="text-sm font-normal text-[#7a9a7e]"> / {utilStats.tenants_total} total</span>
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a9a7e]">
+                  Utilizadores
+                </span>
+                <p className="text-lg font-bold" style={{ color: RF_TEXT_PRIMARY }}>
+                  {utilStats.usuarios_ativos}
+                  <span className="text-sm font-normal text-[#7a9a7e]"> / {utilStats.usuarios_total} total</span>
+                </p>
+              </div>
+            </div>
+            {utilLoading ? (
+              <p className="flex items-center gap-2 text-xs text-[#7a9a7e]">
+                <Loader2 size={14} className="animate-spin" /> A carregar utilizadores…
+              </p>
+            ) : utilizadores.length === 0 ? (
+              <p className="text-xs text-[#7a9a7e]">Nenhum utilizador associado a clientes desta marca.</p>
+            ) : (
+              <div
+                className="max-h-52 overflow-y-auto rounded-xl"
+                style={{ border: `1px solid ${RF_BORDER}`, background: "rgba(6,13,8,0.35)" }}
+              >
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${RF_BORDER}` }}>
+                      <th className="px-3 py-2 font-bold text-[#7a9a7e]">E-mail</th>
+                      <th className="px-3 py-2 font-bold text-[#7a9a7e]">Nome</th>
+                      <th className="px-3 py-2 font-bold text-[#7a9a7e]">Cliente</th>
+                      <th className="px-3 py-2 font-bold text-[#7a9a7e]">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {utilizadores.map((u) => (
+                      <tr key={u.id} style={{ borderBottom: `1px solid ${RF_BORDER}` }}>
+                        <td className="px-3 py-2" style={{ color: RF_TEXT_PRIMARY }}>
+                          {u.email || "—"}
+                        </td>
+                        <td className="px-3 py-2" style={{ color: RF_TEXT_SECONDARY }}>
+                          {u.name || "—"}
+                        </td>
+                        <td className="px-3 py-2" style={{ color: RF_TEXT_SECONDARY }}>
+                          {u.tenant_nome || "—"}
+                        </td>
+                        <td className="px-3 py-2" style={{ color: RF_TEXT_MUTED }}>
+                          {u.status}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : null}
 
         <p className="text-[11px] text-[#7a9a7e]">
           Webhook WhatsApp (UAZAPI) permanece em <strong className="text-[#b8d4bc]">waje.com.br</strong> para todas

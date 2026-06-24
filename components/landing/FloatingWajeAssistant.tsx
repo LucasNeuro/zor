@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { PlatformBrandLogo } from "@/components/brand/PlatformBrandLogo";
-import { useBrandNome } from "@/components/brand/PlatformBrandProvider";
+import { useBrandNome, usePlatformBrand } from "@/components/brand/PlatformBrandProvider";
 import {
   miniBotIntro,
   miniBotSuccessMessage,
@@ -23,6 +23,7 @@ type ChatMsg = { role: "bot" | "user"; text: string };
 type Fase = "perguntas" | "formulario" | "sucesso";
 
 export function FloatingWajeAssistant() {
+  const { brand } = usePlatformBrand();
   const brandNome = useBrandNome();
   const introText = miniBotIntro(brandNome);
   const [mounted, setMounted] = useState(false);
@@ -206,6 +207,7 @@ export function FloatingWajeAssistant() {
   };
 
   if (!mounted) return null;
+  if (brand && brand.landingAssistantAtivo === false) return null;
 
   const ui = (
     <div className="waje-float-root flex flex-col items-end gap-3">

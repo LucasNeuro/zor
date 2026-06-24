@@ -3,6 +3,7 @@ import { crmDb } from "@/lib/crm/supabase-server";
 import { clearPlatformBrandCache } from "@/lib/platform-brands";
 import { enrichPlatformBrandRowAssets } from "@/lib/ops/platform-brand-asset-url";
 import { cadastroPatchFromBody, mapPlatformBrandRow } from "@/lib/ops/platform-brand-map";
+import { loadPlatformBrandStatsMap } from "@/lib/ops/platform-brand-stats";
 import { requireOpsApiAccess } from "@/lib/ops/ops-api-auth";
 
 export async function GET(request: NextRequest) {
@@ -28,8 +29,27 @@ export async function GET(request: NextRequest) {
     })
   );
 
+  const principalId = rows.find((r) => r.is_principal)?.id ?? null;
+  let statsMap: Map<string, import("@/lib/ops/platform-brand-stats").PlatformBrandStats>;
+  try {
+    statsMap = await loadPlatformBrandStatsMap(db, principalId);
+  } catch {
+    statsMap = new Map();
+  }
+
+  const withStats = rows.map((r) => {
+    const s = statsMap.get(r.id);
+    return {
+      ...r,
+      tenants_total: s?.tenants_total ?? 0,
+      tenants_ativos: s?.tenants_ativos ?? 0,
+      usuarios_total: s?.usuarios_total ?? 0,
+      usuarios_ativos: s?.usuarios_ativos ?? 0,
+    };
+  });
+
   clearPlatformBrandCache();
-  return NextResponse.json({ data: rows });
+  return NextResponse.json({ data: withStats });
 }
 
 export async function POST(request: NextRequest) {
@@ -75,6 +95,7 @@ export async function POST(request: NextRequest) {
       company_name: body.company_name ? String(body.company_name).trim() : null,
       is_principal: false,
       ativo: body.ativo !== false,
+      landing_assistant_ativo: body.landing_assistant_ativo !== false,
       ...cadastroPatchFromBody(body),
     })
     .select("*")

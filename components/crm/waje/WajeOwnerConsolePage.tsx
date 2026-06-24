@@ -53,7 +53,7 @@ const TAB_COPY: Record<WajeOwnerTab, { label: string; description: string }> = {
   },
   plataformas: {
     label: "White-label",
-    description: "Marcas e domínios (Waje, Synkron.IA, revendedores) — logos, cores e hostnames.",
+    description: "Vendors, clientes activos, utilizadores por marca e assistente de leads na landing.",
   },
 };
 
@@ -182,12 +182,7 @@ export function WajeOwnerConsolePage() {
 
   const metrics = useMemo(() => {
     if (tab === "plataformas") {
-      return [
-        { label: "White-label", valor: "Marcas", sub: "Waje + revendedores", tone: "brand" as const, seed: 21 },
-        { label: "Domínios", valor: "DNS", sub: "Render + registro.br", tone: "success" as const, seed: 22 },
-        { label: "Webhook WA", valor: "waje.com.br", sub: "Não alterar por marca", tone: "warning" as const, seed: 23 },
-        { label: "Owner", valor: "Waje", sub: "Plataforma principal", tone: "muted" as const, seed: 24 },
-      ];
+      return [];
     }
     if (tab === "tenants") {
       const ativos = tenants.filter((t) => t.ativo).length;
@@ -346,17 +341,19 @@ export function WajeOwnerConsolePage() {
         ) : null}
 
         <CrmMetricsGrid cols={4} className="mb-4">
-          {metrics.map((m) => (
-            <CrmMetricCard
-              key={m.label}
-              label={m.label}
-              valor={m.valor}
-              sub={"sub" in m ? m.sub : undefined}
-              tone={m.tone}
-              sparkline={sparklineFromSeed(m.seed)}
-              ocultavel={"ocultavel" in m ? Boolean(m.ocultavel) : false}
-            />
-          ))}
+          {tab !== "plataformas"
+            ? metrics.map((m) => (
+                <CrmMetricCard
+                  key={m.label}
+                  label={m.label}
+                  valor={m.valor}
+                  sub={"sub" in m ? m.sub : undefined}
+                  tone={m.tone}
+                  sparkline={sparklineFromSeed(m.seed)}
+                  ocultavel={"ocultavel" in m ? Boolean(m.ocultavel) : false}
+                />
+              ))
+            : null}
         </CrmMetricsGrid>
 
         <div className="flex w-full min-w-0 flex-col rounded-2xl border border-[#dcebd8] bg-white shadow-[0_2px_8px_rgba(11,31,16,0.05)]">

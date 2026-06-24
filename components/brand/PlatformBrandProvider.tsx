@@ -13,13 +13,17 @@ import type { PlatformBrandPublic } from "@/lib/platform-brands";
 
 type PlatformBrandContextValue = {
   brand: PlatformBrandPublic | null;
+  /** true enquanto a marca ainda não está disponível para render branded UI */
   loading: boolean;
+  /** true quando marca + tema no documento estão prontos */
+  ready: boolean;
   refresh: () => Promise<void>;
 };
 
 const PlatformBrandContext = createContext<PlatformBrandContextValue>({
   brand: null,
   loading: true,
+  ready: false,
   refresh: async () => {},
 });
 

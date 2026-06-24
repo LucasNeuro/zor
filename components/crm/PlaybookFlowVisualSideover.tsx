@@ -27,6 +27,8 @@ type Props = {
   onBuilderError?: (message: string) => void;
   /** Grava o markdown no bucket (playbook.md) sem fechar o editor. */
   onPersistDraft?: (markdown: string) => Promise<void>;
+  /** Gera fluxo a partir de docs empresa/agente. */
+  onGenerateFromEmpresa?: () => Promise<boolean>;
 };
 
 type BuilderErrorBoundaryProps = {
@@ -74,6 +76,7 @@ export function PlaybookFlowVisualSideover({
   disabled = false,
   onBuilderError,
   onPersistDraft,
+  onGenerateFromEmpresa,
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [draftMarkdown, setDraftMarkdown] = useState(markdown);
@@ -164,6 +167,7 @@ export function PlaybookFlowVisualSideover({
             toolbarTheme="dark"
             hasUnsavedChanges={hasUnsavedChanges}
             onCanvasDirty={() => setCanvasDirty(true)}
+            onGenerateFromEmpresa={onGenerateFromEmpresa}
             onSaveDraft={(nextMd) => {
               void (async () => {
                 setSavingDraft(true);

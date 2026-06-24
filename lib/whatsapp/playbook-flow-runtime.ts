@@ -11,7 +11,7 @@ import {
   mensagemEhSaudacaoSimples,
   mensagemPedeMenuOuOpcoes,
 } from "@/lib/whatsapp/menu-triagem-uazapi";
-import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
+import { whatsappSendText, whatsappSendMedia } from "@/lib/whatsapp/whatsapp-send";
 import {
   executeFlowEngine,
   type FlowEngineDefinition,
@@ -23,6 +23,7 @@ import {
   extrairTransferDoPassoComplete,
 } from "@/lib/playbook/flow-transfer-actions";
 import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
+import { aplicarFluxoEmpresaAoMarkdown } from "@/lib/playbook/playbook-flow-from-context";
 import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
@@ -276,6 +277,19 @@ export function convertStructuredFlowToEngine(definition: PlaybookFlowDefinition
       continue;
     }
 
+    if (step.kind === "media") {
+      const nextStep = typeof step.next === "string" && step.next.trim() ? step.next.trim() : undefined;
+      steps[stepId] = {
+        id: stepId,
+        type: "send_media",
+        media_type: step.media_type,
+        file: step.file.trim(),
+        caption: step.caption?.trim() || undefined,
+        next_step: nextStep,
+      };
+      continue;
+    }
+
     if (step.kind === "menu") {
       const choices = step.options.map((option) => {
         let nextStep = typeof option.next === "string" && option.next.trim() ? option.next.trim() : undefined;
@@ -302,12 +316,22 @@ export function convertStructuredFlowToEngine(definition: PlaybookFlowDefinition
           ? step.field.trim()
           : stepId;
 
+      const resolvedMenuType =
+        step.menu_type === "button" || step.menu_type === "list"
+          ? step.menu_type
+          : choices.length <= 3
+            ? "button"
+            : "list";
+
       steps[stepId] = {
         id: stepId,
         type: "menu",
         text: step.prompt.trim(),
-        menu_type: choices.length <= 3 ? "button" : "list",
-        list_button: choices.length <= 3 ? undefined : "Ver opções",
+        menu_type: resolvedMenuType,
+        list_button:
+          resolvedMenuType === "list"
+            ? (step.list_button?.trim() || "Ver opções")
+            : undefined,
         answer_key: menuField,
         invalid_prompt: "Escolha uma opção válida no menu para continuarmos.",
         choices,
@@ -540,6 +564,20 @@ function mensagemPareceEmail(mensagem: string): boolean {
 
 async function enviarTexto(telefone: string, texto: string, instanceToken: string) {
   await whatsappSendText(telefone, texto, { instanceToken });
+}
+
+async function enviarMedia(
+  telefone: string,
+  instanceToken: string,
+  args: { mediaType: "image" | "document" | "video"; file: string; caption?: string }
+) {
+  const out = await whatsappSendMedia(telefone, {
+    type: args.mediaType,
+    file: args.file,
+    caption: args.caption,
+    instanceToken,
+  });
+  return { ok: out.ok, erro: out.ok ? undefined : out.error };
 }
 
 async function enviarLista(
@@ -1415,15 +1453,33 @@ export async function carregarDynamicPlaybookRuntime(
   let markdownForFlow = loaded.rawMarkdown;
   let parsed = parsePlaybookFlowFromMarkdown(markdownForFlow);
   if (!parsed.ok && parsed.reason === "not_found") {
-    const ensured = await ensureMarkdownWithWhatsappFlow(markdownForFlow);
-    if (ensured.ok) {
-      console.info("[playbook-flow] runtime auto-adapted missing whatsapp flow block", {
+    const contextual = await aplicarFluxoEmpresaAoMarkdown(supabase, agenteSlug, markdownForFlow);
+    if (contextual.ok) {
+      console.info("[playbook-flow] runtime auto-generated flow from empresa context", {
         agente: agenteSlug,
-        auto_appended_flow: ensured.auto_appended_flow,
-        markdown_bytes: ensured.markdown.length,
+        action: contextual.action,
+        empresa: contextual.resumo.empresa_label,
+        markdown_bytes: contextual.markdown.length,
       });
-      markdownForFlow = ensured.markdown;
+      markdownForFlow = contextual.markdown;
       parsed = parsePlaybookFlowFromMarkdown(markdownForFlow);
+    } else {
+      const ensured = await ensureMarkdownWithWhatsappFlow(markdownForFlow);
+      if (ensured.ok) {
+        console.info("[playbook-flow] runtime auto-adapted missing whatsapp flow block", {
+          agente: agenteSlug,
+          auto_appended_flow: ensured.auto_appended_flow,
+          markdown_bytes: ensured.markdown.length,
+        });
+        markdownForFlow = ensured.markdown;
+        parsed = parsePlaybookFlowFromMarkdown(markdownForFlow);
+      } else {
+        console.warn("[playbook-flow] runtime flow auto-fix failed", {
+          agente: agenteSlug,
+          contextual_error: contextual.error,
+          template_errors: ensured.errors,
+        });
+      }
     }
   }
   if (!parsed.ok) {
@@ -1735,6 +1791,8 @@ async function processarPlaybookInboundDynamicLegacy(params: {
       sendText: async (text) => {
         await enviarTexto(params.telefone, text, params.instanceToken);
       },
+      sendMedia: async ({ mediaType, file, caption }) =>
+        enviarMedia(params.telefone, params.instanceToken, { mediaType, file, caption }),
       sendMenu: async ({ text, menuType, choices, listButton }) => {
         const footer = await rodapeMenuTenant(params.supabase, params.agenteSlug);
         const out = await enviarMenuUazapi({

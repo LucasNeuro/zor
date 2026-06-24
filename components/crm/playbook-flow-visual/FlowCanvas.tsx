@@ -362,7 +362,7 @@ function buildInitialEdges(def?: PlaybookFlowDefinition): Edge[] {
   const edges: Edge[] = [];
 
   for (const step of def.steps) {
-    if ((step.kind === "message" || step.kind === "input") && step.next) {
+    if ((step.kind === "message" || step.kind === "input" || step.kind === "media") && step.next) {
       edges.push({
         id: `${step.id}__${step.next}`,
         source: step.id,
@@ -538,6 +538,17 @@ function toDefinition(
           kind: "message",
           title,
           message: node.data.content,
+          next: firstTarget,
+        };
+      }
+      if (node.data.kind === "media") {
+        return {
+          id: node.id,
+          kind: "media",
+          title,
+          media_type: node.data.mediaType ?? "image",
+          file: String(node.data.mediaUrl ?? "").trim() || "https://",
+          caption: node.data.content?.trim() || undefined,
           next: firstTarget,
         };
       }

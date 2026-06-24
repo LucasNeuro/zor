@@ -56,6 +56,7 @@ export type FlowEngineResult =
 export type FlowEngineStepType =
   | "await_name"
   | "send_text"
+  | "send_media"
   | "menu"
   | "ask_text"
   | "branch_imob_sub"
@@ -77,6 +78,14 @@ export type FlowAwaitNameStep = BaseStep & {
 export type FlowSendTextStep = BaseStep & {
   type: "send_text";
   text: string;
+  next_step?: string;
+};
+
+export type FlowSendMediaStep = BaseStep & {
+  type: "send_media";
+  media_type: "image" | "document" | "video";
+  file: string;
+  caption?: string;
   next_step?: string;
 };
 
@@ -132,6 +141,7 @@ export type FlowCompleteStep = BaseStep & {
 export type FlowEngineStep =
   | FlowAwaitNameStep
   | FlowSendTextStep
+  | FlowSendMediaStep
   | FlowMenuStep
   | FlowAskTextStep
   | FlowBranchImobSubStep
@@ -160,6 +170,11 @@ export type FlowEnginePersistPatch = {
 
 export type FlowEngineAdapter = {
   sendText: (text: string) => Promise<void>;
+  sendMedia?: (args: {
+    mediaType: "image" | "document" | "video";
+    file: string;
+    caption?: string;
+  }) => Promise<{ ok: boolean; erro?: string }>;
   sendMenu: (args: {
     text: string;
     menuType: "list" | "button";
@@ -355,6 +370,45 @@ export async function executeFlowEngine(
       case "send_text": {
         if (!adapter.stateOnly && step.text.trim()) {
           await adapter.sendText(step.text.trim());
+        }
+        if (!step.next_step) {
+          await adapter.persistState({
+            step: currentStepId,
+            answers,
+            active: true,
+            complete: false,
+          });
+          return { handled: true, skipIa: skipIaForAdapter(adapter), step: currentStepId };
+        }
+        currentStepId = step.next_step;
+        continue;
+      }
+
+      case "send_media": {
+        if (!adapter.stateOnly && step.file.trim()) {
+          if (adapter.sendMedia) {
+            const sent = await adapter.sendMedia({
+              mediaType: step.media_type,
+              file: step.file.trim(),
+              caption: step.caption?.trim() || undefined,
+            });
+            if (!sent.ok) {
+              const fallback = step.caption?.trim() || step.file.trim();
+              await adapter.sendText(
+                `Não consegui enviar a mídia agora. Link: ${fallback}`
+              );
+            }
+          } else {
+            const label =
+              step.media_type === "image"
+                ? "Imagem"
+                : step.media_type === "video"
+                  ? "Vídeo"
+                  : "Documento";
+            await adapter.sendText(
+              `${label}: ${step.file.trim()}${step.caption?.trim() ? `\n\n${step.caption.trim()}` : ""}`
+            );
+          }
         }
         if (!step.next_step) {
           await adapter.persistState({

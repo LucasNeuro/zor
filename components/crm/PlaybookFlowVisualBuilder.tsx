@@ -19,6 +19,7 @@ import { upsertPlaybookFlowBlockInMarkdown } from "@/lib/playbook/playbook-flow-
 import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 import { PLAYBOOK_FLOW_FENCE_TAG } from "@/lib/playbook/flow-schema";
+import { buildStarterPlaybookFlowDefinition } from "@/lib/playbook/playbook-flow-starter";
 
 type Props = {
   markdown: string;
@@ -83,51 +84,8 @@ function makeDefaultStep(kind: PlaybookFlowStep["kind"], id: string): PlaybookFl
   };
 }
 
-function buildStarterDefinition(): PlaybookFlowDefinition {
-  return {
-    waje_playbook_flow_schema: 1,
-    id: "flow_mvp",
-    version: "1.0.0",
-    entry_step_id: "inicio",
-    steps: [
-      {
-        id: "inicio",
-        kind: "message",
-        title: "Boas-vindas",
-        message: "Olá! Vou te ajudar em alguns passos rápidos.",
-        next: "menu_principal",
-      },
-      {
-        id: "menu_principal",
-        kind: "menu",
-        title: "Menu principal",
-        prompt: "Qual opção faz mais sentido para você agora?",
-        field: "intencao_inicial",
-        options: [
-          { id: "quero_orcamento", label: "Quero orçamento", next: "coleta_nome" },
-          { id: "quero_falar_time", label: "Quero falar com o time", next: "encerramento" },
-        ],
-      },
-      {
-        id: "coleta_nome",
-        kind: "input",
-        title: "Coletar nome",
-        prompt: "Qual seu nome?",
-        field: "nome_contato",
-        input_type: "text",
-        next: "encerramento",
-      },
-      {
-        id: "encerramento",
-        kind: "complete",
-        title: "Finalização",
-        complete: {
-          type: "complete",
-          summary: "Encaminhar para atendimento humano com contexto coletado.",
-        },
-      },
-    ],
-  };
+function buildStarterDefinition(agenteSlug?: string) {
+  return buildStarterPlaybookFlowDefinition(agenteSlug);
 }
 
 export function PlaybookFlowVisualBuilder({
@@ -202,7 +160,7 @@ export function PlaybookFlowVisualBuilder({
   }
 
   if (!parsed.ok) {
-    const starter = buildStarterDefinition();
+    const starter = buildStarterDefinition(agenteSlug);
     return (
       <div style={panelStyle}>
         <p style={{ ...hintStyle, color: "#d29922", fontWeight: 700, marginBottom: 8 }}>

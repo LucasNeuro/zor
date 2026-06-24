@@ -23,7 +23,7 @@ export function assessPlaybookFlowInMarkdown(markdown: string): PlaybookFlowUiSt
       return {
         kind: "no_flow_block",
         message:
-          `Este playbook ainda não tem bloco de fluxo dinâmico. Use «Gerar fluxo da empresa» ou adicione \`json ${PLAYBOOK_FLOW_FENCE_TAG}\` com \`waje_playbook_flow_schema: 1\` para menus e passos no WhatsApp.`,
+          `Blocos de fluxo organizam menus e passos fixos no WhatsApp (não usam IA). A IA do agente continua livre fora do fluxo. Use «Gerar fluxo» (fonte: docs da empresa e do agente) ou «Editor visual» → «Iniciar em branco».`,
       };
     }
     return { kind: "invalid", errors: parsed.errors, reason: parsed.reason };

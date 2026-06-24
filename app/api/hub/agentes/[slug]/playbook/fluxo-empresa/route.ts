@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { loadCurrentPlaybookMarkdown } from "@/lib/playbook/custom-playbook";
 import { aplicarFluxoEmpresaAoMarkdown } from "@/lib/playbook/playbook-flow-from-context";
+import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
 
 function db() {
   return createClient(
@@ -47,7 +48,25 @@ export async function POST(
 
   const result = await aplicarFluxoEmpresaAoMarkdown(supabase, slug, markdown);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    const fallback = await ensureMarkdownWithWhatsappFlow(markdown);
+    if (!fallback.ok) {
+      return NextResponse.json(
+        {
+          error: result.error,
+          errors: fallback.errors,
+          hint: "Enriqueça a base documental da empresa ou use «Iniciar fluxo em branco» no editor visual.",
+        },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({
+      sucesso: true,
+      markdown: fallback.markdown,
+      action: "appended_flow",
+      message: "Fluxo base acrescentado (template). Revise menus no editor visual ou regenere quando a base documental estiver completa.",
+      resumo_contexto: null,
+      fallback_template: true,
+    });
   }
 
   return NextResponse.json({

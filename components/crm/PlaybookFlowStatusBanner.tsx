@@ -54,7 +54,7 @@ export function PlaybookFlowStatusBanner({
         theme={theme}
         tone="warning"
         icon={<Info size={14} />}
-        title="Só prompt narrativo (sem fluxo WA dinâmico)"
+        title="Só prompt narrativo (sem blocos de fluxo WA)"
         body={status.message}
       />
     );

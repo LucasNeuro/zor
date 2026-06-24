@@ -14,7 +14,10 @@ export type PlaybookFlowJourney =
   | "arquitetura"
   | "imobiliario";
 
-export type PlaybookFlowStepKind = "message" | "menu" | "input" | "complete";
+export type PlaybookFlowStepKind = "message" | "menu" | "input" | "complete" | "media";
+
+/** Tipos de mídia UAZAPI (/send/media) suportados nos blocos de fluxo. */
+export type PlaybookFlowMediaType = "image" | "document" | "video";
 
 /** Tipos de transferência (metadata + editor visual). */
 export type PlaybookFlowTransferKind =
@@ -87,8 +90,21 @@ export type PlaybookFlowMenuStep = PlaybookFlowBaseStep & {
   prompt: string;
   /** Chave em wa_playbook_answers; padrão: id do step. */
   field?: string;
+  /** Força botões (≤3) ou lista UAZAPI; se omitido, escolhe por quantidade de opções. */
+  menu_type?: "button" | "list";
+  /** Texto do botão que abre a lista (UAZAPI listButton). */
+  list_button?: string;
   options: PlaybookFlowMenuOption[];
   on_select?: Record<string, string>;
+};
+
+export type PlaybookFlowMediaStep = PlaybookFlowBaseStep & {
+  kind: "media";
+  media_type: PlaybookFlowMediaType;
+  /** URL pública https ou link Supabase storage. */
+  file: string;
+  caption?: string;
+  next?: string;
 };
 
 export type PlaybookFlowInputStep = PlaybookFlowBaseStep & {
@@ -111,7 +127,8 @@ export type PlaybookFlowStep =
   | PlaybookFlowMessageStep
   | PlaybookFlowMenuStep
   | PlaybookFlowInputStep
-  | PlaybookFlowCompleteStep;
+  | PlaybookFlowCompleteStep
+  | PlaybookFlowMediaStep;
 
 export type PlaybookFlowDefinition = {
   /** Chave canónica Waje (escrita em playbooks novos). */

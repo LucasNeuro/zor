@@ -158,6 +158,18 @@ function validateStepInternalSemantics(step: PlaybookFlowStep, errors: string[])
       errors.push(`Step "${step.id}" (${step.kind}) exige bloco complete.`);
     }
   }
+
+  if (step.kind === "media") {
+    const mediaType = step.media_type;
+    if (!mediaType || !["image", "document", "video"].includes(mediaType)) {
+      errors.push(`Step "${step.id}" (media) media_type inválido (image|document|video).`);
+    }
+    if (!step.file?.trim()) {
+      errors.push(`Step "${step.id}" (media) exige file (URL pública).`);
+    } else if (!/^https?:\/\//i.test(step.file.trim())) {
+      errors.push(`Step "${step.id}" (media) file deve ser URL https.`);
+    }
+  }
 }
 
 export function validatePlaybookFlowDefinition(
@@ -206,7 +218,7 @@ export function validatePlaybookFlowDefinition(
     }
     stepIds.add(id);
 
-    if (!["message", "menu", "input", "complete"].includes(kind)) {
+    if (!["message", "menu", "input", "complete", "media"].includes(kind)) {
       errors.push(`Step "${id}" possui kind inválido: "${kind}".`);
       continue;
     }

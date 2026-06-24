@@ -5,6 +5,7 @@ import type { Node } from "@xyflow/react";
 import {
   CheckCircle,
   ClipboardList,
+  Image as ImageIcon,
   Link2,
   MessageSquare,
   Pencil,
@@ -31,6 +32,7 @@ type FlowNodeEditorSideoverProps = {
 
 const KIND_COLOR: Record<string, string> = {
   message: "#388bfd",
+  media: "#58a6ff",
   input: "#e08a14",
   menu: "#9254de",
   complete: "#2ea043",
@@ -39,6 +41,7 @@ const KIND_COLOR: Record<string, string> = {
 
 const KIND_LABEL: Record<string, string> = {
   message: "Mensagem",
+  media: "Imagem / mídia",
   input: "Entrada",
   menu: "Menu",
   complete: "Conclusao",
@@ -47,6 +50,7 @@ const KIND_LABEL: Record<string, string> = {
 
 const KIND_ICON: Record<string, React.ComponentType<{ size: number; strokeWidth: number }>> = {
   message: MessageSquare,
+  media: ImageIcon,
   input: Pencil,
   menu: ClipboardList,
   complete: CheckCircle,
@@ -106,11 +110,13 @@ export function FlowNodeEditorSideover({
       ? "Prompt do menu"
       : data.kind === "input"
         ? "Prompt da entrada"
-        : data.kind === "transfer"
-          ? "Resumo enviado na transferencia"
-          : data.kind === "complete"
-            ? "Mensagem de conclusao"
-            : "Mensagem";
+        : data.kind === "media"
+          ? "Legenda (caption)"
+          : data.kind === "transfer"
+            ? "Resumo enviado na transferencia"
+            : data.kind === "complete"
+              ? "Mensagem de conclusao"
+              : "Mensagem";
 
   return (
     <>
@@ -174,6 +180,32 @@ export function FlowNodeEditorSideover({
               style={textareaStyle}
             />
           </FieldRow>
+
+          {data.kind === "media" && (
+            <>
+              <FieldRow label="URL da mídia (https)">
+                <input
+                  value={String(data.mediaUrl ?? "")}
+                  onChange={(event) => update({ mediaUrl: event.target.value })}
+                  placeholder="https://..."
+                  style={inputStyle}
+                />
+              </FieldRow>
+              <FieldRow label="Tipo UAZAPI">
+                <select
+                  value={String(data.mediaType ?? "image")}
+                  onChange={(event) =>
+                    update({ mediaType: event.target.value as "image" | "document" | "video" })
+                  }
+                  style={selectStyle}
+                >
+                  <option value="image">image</option>
+                  <option value="document">document</option>
+                  <option value="video">video</option>
+                </select>
+              </FieldRow>
+            </>
+          )}
 
           {(data.kind === "input" || data.kind === "menu") && (
             <FieldRow label="Field (chave)">

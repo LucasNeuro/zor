@@ -13,4 +13,5 @@ export const FLOW_NODE_PALETTE_COLORS: Record<string, string> = {
   input: FLOW_WAJE_AMBER,
   menu: FLOW_WAJE_GREEN,
   complete: FLOW_WAJE_LIME,
+  media: "#58a6ff",
 };

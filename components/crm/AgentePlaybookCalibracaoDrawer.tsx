@@ -606,22 +606,26 @@ export function AgentePlaybookCalibracaoDrawer({
     }
   }
 
-  async function gerarFluxoDaEmpresa(forcarSubstituir = false) {
-    if (carregando || publicando || uploadStatus === "enviando" || adaptandoMotor) return;
+  async function gerarFluxoDaEmpresa(
+    forcarSubstituir = false,
+    opts?: { abrirEditorVisual?: boolean; perguntarPublicar?: boolean }
+  ): Promise<boolean> {
+    if (carregando || publicando || uploadStatus === "enviando" || adaptandoMotor) return false;
     if (!temConteudo) {
       setErro("Cole ou carregue o playbook no editor antes de gerar o fluxo.");
-      return;
+      return false;
     }
     if (flowStatus.kind === "ready" && !forcarSubstituir) {
       toastInfo("O rascunho já tem fluxo WhatsApp válido. Pode publicar ou regenerar o fluxo da empresa.");
-      if (dirty) {
+      if (opts?.abrirEditorVisual) setVisualSideoverOpen(true);
+      if (dirty && opts?.perguntarPublicar !== false) {
         await confirmarEPublicar(markdown, {
           title: "Publicar rascunho agora?",
           message: "Fluxo WA já está válido. Deseja publicar este rascunho agora?",
           confirmLabel: "Publicar",
         });
       }
-      return;
+      return true;
     }
 
     setAdaptandoMotor(true);
@@ -640,37 +644,50 @@ export function AgentePlaybookCalibracaoDrawer({
         markdown?: string;
         message?: string;
         resumo_contexto?: { empresa_label?: string; nicho?: string | null; opcoes_triagem?: string[] };
+        fallback_template?: boolean;
       };
       if (!res.ok) {
         setErro(data.error ?? `Falha ao gerar fluxo (HTTP ${res.status}).`);
-        return;
+        return false;
       }
       const outMarkdown = typeof data.markdown === "string" ? data.markdown : "";
       if (!outMarkdown.trim()) {
         setErro("Resposta sem markdown do fluxo.");
-        return;
+        return false;
       }
 
       setMarkdown(outMarkdown);
+      setMarkdownOrigem("visual");
       setAnaliseResultado(null);
       setAnaliseErro("");
 
       const empresa = data.resumo_contexto?.empresa_label ?? "empresa";
       const nicho = data.resumo_contexto?.nicho;
       toastSuccess(
-        nicho
-          ? `Fluxo gerado para ${empresa} (${nicho}). Revise no editor visual e publique.`
-          : `Fluxo gerado para ${empresa}. Revise no editor visual e publique.`
+        data.fallback_template
+          ? "Fluxo base criado. Revise no editor visual e publique."
+          : nicho
+            ? `Fluxo gerado para ${empresa} (${nicho}). Revise no editor visual e publique.`
+            : `Fluxo gerado para ${empresa}. Revise no editor visual e publique.`
       );
 
-      await confirmarEPublicar(outMarkdown, {
-        title: "Publicar playbook com fluxo da empresa?",
-        message: data.message ?? "Fluxo contextual pronto. Deseja publicar agora?",
-        confirmLabel: "Publicar agora",
-        variant: "success",
-      });
+      if (opts?.abrirEditorVisual !== false && visualBuilderEnabled) {
+        setVisualSideoverOpen(true);
+      }
+
+      if (opts?.perguntarPublicar) {
+        await confirmarEPublicar(outMarkdown, {
+          title: "Publicar playbook com fluxo da empresa?",
+          message: data.message ?? "Fluxo contextual pronto. Deseja publicar agora?",
+          confirmLabel: "Publicar agora",
+          variant: "success",
+        });
+      }
+
+      return true;
     } catch {
       setErro("Falha de rede ao gerar fluxo da empresa.");
+      return false;
     } finally {
       setAdaptandoMotor(false);
     }
@@ -820,7 +837,7 @@ export function AgentePlaybookCalibracaoDrawer({
                         setVisualSideoverOpen(true);
                       }}
                       style={calibToolbarBtn("ghost")}
-                      title="Abrir editor visual do fluxo WhatsApp"
+                      title="Organizar blocos de fluxo WhatsApp (menus, perguntas fixas). A IA do agente decide fora do fluxo."
                     >
                       <LayoutGrid size={14} /> Editor visual
                     </button>
@@ -839,7 +856,7 @@ export function AgentePlaybookCalibracaoDrawer({
                       flowStatus.kind === "ready" ? "ghost" : "accent",
                       { disabled: carregando || publicando || uploadStatus === "enviando" || adaptandoMotor || !temConteudo, isLast: true }
                     )}
-                    title={`Gera o bloco json ${PLAYBOOK_FLOW_FENCE_TAG} a partir do cargo, conhecimento e docs da empresa`}
+                    title="Gera blocos a partir dos documentos da empresa e do agente (cargo, serviços, base RAG)"
                   >
                     <GitBranch size={14} />
                     {adaptandoMotor ? "A gerar…" : "Gerar fluxo"}
@@ -925,7 +942,7 @@ export function AgentePlaybookCalibracaoDrawer({
                 lineHeight: 1.45,
               }}
             >
-              Este agente não usa fluxo dinâmico WhatsApp — edite o playbook como texto/instruções para a IA. O
+              Este agente não usa blocos de fluxo WhatsApp — edite o playbook como texto/instruções para a IA. O
               editor visual de menus e perguntas pré-prontas fica disponível só em agentes «Atendimento (WhatsApp)».
             </p>
           )}
@@ -1068,6 +1085,9 @@ export function AgentePlaybookCalibracaoDrawer({
           agenteNome={agenteNome}
           disabled={carregando || publicando || uploadStatus === "enviando"}
           onPersistDraft={salvarRascunhoPlaybookNoBucket}
+          onGenerateFromEmpresa={() =>
+            gerarFluxoDaEmpresa(false, { abrirEditorVisual: false, perguntarPublicar: false })
+          }
           onBuilderError={(message) => {
             void emitFlowVisualTelemetry({
               event: "playbook.flow_visual.builder_fallback",

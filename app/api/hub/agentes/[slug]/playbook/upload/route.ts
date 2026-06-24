@@ -65,33 +65,41 @@ export async function POST(
       const ensured = await ensureMarkdownWithWhatsappFlow(markdown);
       if (!ensured.ok) {
         return NextResponse.json(
-          { error: "Fluxo WhatsApp inválido ou ausente.", errors: ensured.errors },
+          {
+            error:
+              "Fluxo WhatsApp inválido ou ausente. Abra a calibração do playbook e use «Gerar fluxo da empresa».",
+            errors: ensured.errors,
+            detail: fluxoEmpresa.error,
+          },
           { status: 400 }
         );
       }
       markdown = ensured.markdown;
       flowAutoAppended = ensured.auto_appended_flow;
     }
+  } else {
+    const fluxoEmpresa = await aplicarFluxoEmpresaAoMarkdown(supabase, slug, markdown);
+    if (fluxoEmpresa.ok) {
+      markdown = fluxoEmpresa.markdown;
+      flowAutoAppended = fluxoEmpresa.action === "appended_flow";
+    }
   }
 
   const parsed = parsePlaybookFlowFromMarkdown(markdown);
-  const noFlowBlock = !parsed.ok && parsed.reason === "not_found";
+  if (!parsed.ok) {
+    const reason =
+      parsed.reason === "not_found"
+        ? "Fluxo WhatsApp ausente. Use «Gerar fluxo da empresa» na calibração do playbook."
+        : "Fluxo playbook inválido.";
+    return NextResponse.json({ error: reason, errors: parsed.errors }, { status: 400 });
+  }
 
-  if (!noFlowBlock) {
-    if (!parsed.ok) {
-      return NextResponse.json(
-        { error: "Fluxo playbook inválido.", errors: parsed.errors },
-        { status: 400 }
-      );
-    }
-
-    const validated = validatePlaybookFlowDefinition(parsed.definition);
-    if (!validated.ok) {
-      return NextResponse.json(
-        { error: "Fluxo playbook inválido.", errors: validated.errors },
-        { status: 400 }
-      );
-    }
+  const validated = validatePlaybookFlowDefinition(parsed.definition);
+  if (!validated.ok) {
+    return NextResponse.json(
+      { error: "Fluxo playbook inválido.", errors: validated.errors },
+      { status: 400 }
+    );
   }
 
   const uploadFile =

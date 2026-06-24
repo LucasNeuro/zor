@@ -11,7 +11,9 @@ import type {
 } from "@/lib/playbook/flow-definition-types";
 
 /** Tipos visuais no React Flow (transfer serializa como complete no JSON). */
-export type FlowNodeKind = Extract<PlaybookFlowStepKind, "message" | "input" | "menu" | "complete"> | "transfer";
+export type FlowNodeKind =
+  | Extract<PlaybookFlowStepKind, "message" | "input" | "menu" | "complete" | "media">
+  | "transfer";
 
 export type FlowMenuOption = {
   id: string;
@@ -37,6 +39,9 @@ export type FlowVisualNodeData = Record<string, unknown> & {
   notifyPhone?: string;
   notifyEmail?: string;
   agentSlug?: string;
+  /** Nó media — URL pública da imagem/documento/vídeo (UAZAPI /send/media). */
+  mediaUrl?: string;
+  mediaType?: "image" | "document" | "video";
 };
 
 export type FlowCanvasSnapshot = {
@@ -51,6 +56,7 @@ const DEFAULT_CONTENT: Record<FlowNodeKind, string> = {
   menu: "Escolha uma opção para continuar.",
   complete: "Fluxo concluído.",
   transfer: "Transferir atendimento. Resumo e contato do lead vão para o WhatsApp do consultor; conversa segue no CRM.",
+  media: "Legenda opcional da imagem ou arquivo.",
 };
 
 export function summarizeNodeContent(content: string, max = 64): string {
@@ -70,6 +76,8 @@ export function createDefaultNodeData(kind: FlowNodeKind, order: number): FlowVi
     inputType: kind === "input" ? "text" : undefined,
     menuOptions: kind === "menu" ? [{ id: "opcao_1", label: "Opção 1" }] : undefined,
     transferKind: kind === "transfer" ? "whatsapp_card" : undefined,
+    mediaUrl: kind === "media" ? "https://" : undefined,
+    mediaType: kind === "media" ? "image" : undefined,
   };
 }
 
@@ -81,6 +89,17 @@ export function toVisualNodeData(step: PlaybookFlowStep): FlowVisualNodeData {
       content: step.message,
       journey: step.journey,
       stepId: step.id,
+    };
+  }
+  if (step.kind === "media") {
+    return {
+      kind: "media",
+      title: step.title,
+      content: step.caption ?? "",
+      journey: step.journey,
+      stepId: step.id,
+      mediaUrl: step.file,
+      mediaType: step.media_type,
     };
   }
   if (step.kind === "input") {

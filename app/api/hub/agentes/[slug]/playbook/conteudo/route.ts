@@ -6,6 +6,7 @@ import {
 } from "@/lib/playbook/custom-playbook";
 import { assessPlaybookFlowInMarkdown, agenteUsaFluxoWhatsappPlaybook } from "@/lib/playbook/playbook-flow-ui";
 import { ensureMarkdownWithWhatsappFlow } from "@/lib/playbook/playbook-flow-template";
+import { aplicarFluxoEmpresaAoMarkdown } from "@/lib/playbook/playbook-flow-from-context";
 import { PLAYBOOK_FLOW_FENCE_TAG } from "@/lib/playbook/flow-schema";
 import { selectHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-compat";
 import { PLAYBOOK_BUCKET, playbookObjectPath } from "@/lib/playbook/persist";
@@ -168,18 +169,25 @@ export async function PUT(
   let autoAppendedFlow = false;
 
   if (exigeFluxoWhatsapp) {
-    const ensured = await ensureMarkdownWithWhatsappFlow(trimmed);
-    if (!ensured.ok) {
-      return NextResponse.json(
-        {
-          error: `Publicação exige bloco de fluxo WhatsApp válido (\`${PLAYBOOK_FLOW_FENCE_TAG}\`). Use «Gerar fluxo da empresa» na calibração.`,
-          errors: ensured.errors,
-        },
-        { status: 400 }
-      );
+    const fluxoEmpresa = await aplicarFluxoEmpresaAoMarkdown(supabase, slug, trimmed);
+    if (fluxoEmpresa.ok) {
+      markdownFinal = fluxoEmpresa.markdown;
+      autoAppendedFlow = fluxoEmpresa.action === "appended_flow";
+    } else {
+      const ensured = await ensureMarkdownWithWhatsappFlow(trimmed);
+      if (!ensured.ok) {
+        return NextResponse.json(
+          {
+            error: `Publicação exige bloco de fluxo WhatsApp válido (\`${PLAYBOOK_FLOW_FENCE_TAG}\`). Use «Gerar fluxo da empresa» na calibração.`,
+            errors: ensured.errors,
+            detail: fluxoEmpresa.error,
+          },
+          { status: 400 }
+        );
+      }
+      markdownFinal = ensured.markdown;
+      autoAppendedFlow = ensured.auto_appended_flow;
     }
-    markdownFinal = ensured.markdown;
-    autoAppendedFlow = ensured.auto_appended_flow;
   }
 
   const result = await savePlaybookMarkdownForAgent(supabase, slug, markdownFinal);

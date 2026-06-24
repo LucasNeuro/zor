@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import {
   AlertTriangle,
   CheckCircle2,
+  Image as ImageIcon,
   Link2,
   List,
   LocateFixed,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { parsePlaybookFlowFromMarkdown } from "@/lib/playbook/flow-parse";
 import { upsertPlaybookFlowBlockInMarkdown } from "@/lib/playbook/playbook-flow-markdown";
+import { buildStarterPlaybookFlowDefinition } from "@/lib/playbook/playbook-flow-starter";
 import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 import type { FlowCanvasApi } from "@/components/crm/playbook-flow-visual/FlowCanvas";
@@ -46,6 +48,8 @@ type Props = {
   onCanvasDirty?: () => void;
   onSaveDraft?: (markdownAtual: string) => void;
   onSaveDraftAndClose?: (markdownAtual: string) => void;
+  /** Gera fluxo a partir de docs da empresa/agente (API fluxo-empresa). */
+  onGenerateFromEmpresa?: () => Promise<boolean>;
 };
 
 function formatEntryLabel(stepId: string): string {
@@ -63,6 +67,7 @@ export function PlaybookFlowReactFlowPanel({
   onCanvasDirty,
   onSaveDraft,
   onSaveDraftAndClose,
+  onGenerateFromEmpresa,
 }: Props) {
   const isDark = theme === "dark";
   const styles = useMemo(() => buildPanelStyles(isDark), [isDark]);
@@ -70,6 +75,7 @@ export function PlaybookFlowReactFlowPanel({
   const canSave = hasUnsavedChanges;
   const parsed = useMemo(() => parsePlaybookFlowFromMarkdown(markdown), [markdown]);
   const canvasApiRef = useRef<FlowCanvasApi | null>(null);
+  const [generatingEmpresa, setGeneratingEmpresa] = useState(false);
 
   const validation = useMemo(
     () => (parsed.ok ? validatePlaybookFlowDefinition(parsed.definition) : null),
@@ -140,6 +146,29 @@ export function PlaybookFlowReactFlowPanel({
     return validation.errors.find((error) => error.includes("órfãos")) ?? null;
   }, [validation]);
 
+  function startBlankFlow() {
+    const definition = buildStarterPlaybookFlowDefinition(agenteSlug);
+    const next = upsertPlaybookFlowBlockInMarkdown(markdown, definition);
+    lastCanvasMarkdownRef.current = next;
+    onMarkdownChange(next);
+    onCanvasDirty?.();
+    void emitFlowVisualTelemetry({
+      event: "playbook.flow_visual.starter_flow_created",
+      agente_slug: agenteSlug,
+      metadata: { source: "blank_starter" },
+    });
+  }
+
+  async function handleGenerateFromEmpresa() {
+    if (!onGenerateFromEmpresa || generatingEmpresa) return;
+    setGeneratingEmpresa(true);
+    try {
+      await onGenerateFromEmpresa();
+    } finally {
+      setGeneratingEmpresa(false);
+    }
+  }
+
   if (!markdown.trim()) {
     return (
       <div style={emptyState}>
@@ -160,19 +189,41 @@ export function PlaybookFlowReactFlowPanel({
         )}
         <p style={{ ...emptyText, color: isMissingBlock ? "#5d7a67" : "#c47f17" }}>
           {isMissingBlock
-            ? "Ainda não há fluxo configurado neste playbook."
+            ? "Ainda não há blocos de fluxo neste playbook."
             : "O fluxo encontrado está inválido."}
         </p>
         <p style={hintText}>
           {isMissingBlock ? (
             <>
-              Feche este editor, volte à calibração e clique em <strong>Gerar fluxo da empresa</strong> para criar o
-              fluxo automaticamente. Depois reabra «Editar fluxo visual».
+              Os blocos organizam menus e passos fixos no WhatsApp — não usam IA. A IA do agente decide quando
+              seguir o fluxo ou responder livremente (como ferramentas e integrações).
             </>
           ) : (
-            <>Corrija o fluxo no editor textual ou regenere com «Gerar fluxo da empresa».</>
+            <>Corrija o fluxo no editor textual ou regenere com «Gerar fluxo».</>
           )}
         </p>
+        {isMissingBlock ? (
+          <div style={emptyActions}>
+            {onGenerateFromEmpresa ? (
+              <button
+                type="button"
+                style={primaryActionBtn}
+                disabled={disabled || generatingEmpresa}
+                onClick={() => void handleGenerateFromEmpresa()}
+              >
+                {generatingEmpresa ? "A gerar…" : "Gerar fluxo da empresa"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              style={secondaryActionBtn}
+              disabled={disabled}
+              onClick={startBlankFlow}
+            >
+              Iniciar fluxo em branco
+            </button>
+          </div>
+        ) : null}
         {!isMissingBlock && parsed.errors.length > 0 && (
           <ul style={errorList}>
             {parsed.errors.slice(0, 3).map((e, i) => (
@@ -206,6 +257,10 @@ export function PlaybookFlowReactFlowPanel({
           <button type="button" style={toolbarStyles.toolButtonStyle} onClick={() => addNode("message")}>
             <MessageSquare size={13} strokeWidth={2.2} />
             Mensagem
+          </button>
+          <button type="button" style={toolbarStyles.toolButtonStyle} onClick={() => addNode("media")}>
+            <ImageIcon size={13} strokeWidth={2.2} />
+            Imagem
           </button>
           <button type="button" style={toolbarStyles.toolButtonStyle} onClick={() => addNode("input")}>
             <PencilLine size={13} strokeWidth={2.2} />
@@ -495,6 +550,36 @@ const errorItem: CSSProperties = {
   fontSize: 11,
   color: "#c62828",
   lineHeight: 1.5,
+};
+
+const emptyActions: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  justifyContent: "center",
+  marginTop: 4,
+};
+
+const primaryActionBtn: CSSProperties = {
+  border: "1px solid #2e7d32",
+  background: "#e8f5e9",
+  color: "#1b5e20",
+  borderRadius: 8,
+  padding: "8px 14px",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const secondaryActionBtn: CSSProperties = {
+  border: "1px solid #b8d4bc",
+  background: "#f4faf2",
+  color: "#2d4a35",
+  borderRadius: 8,
+  padding: "8px 14px",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
 };
 
 const loadingStyle: CSSProperties = {

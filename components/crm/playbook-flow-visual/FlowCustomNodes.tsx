@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Link2,
   MessageSquare,
+  Image as ImageIcon,
   Plus,
   Check,
   Pencil,
@@ -57,6 +58,15 @@ const KIND_THEME: Record<FlowNodeKind, KindTheme> = {
     badgeText: "#1b5e20",
     label: "Mensagem",
     Icon: MessageSquare,
+  },
+  media: {
+    border: "#58a6ff",
+    headerBg: "#e3f2fd",
+    headerText: "#0d47a1",
+    badgeBg: "#bbdefb",
+    badgeText: "#1565c0",
+    label: "Imagem / mídia",
+    Icon: ImageIcon,
   },
   input: {
     border: "#d4a017",
@@ -283,6 +293,22 @@ export function MessageNode({ id, data, selected, isConnectable }: NodeProps<Nod
   );
 }
 
+export function MediaNode({ id, data, selected, isConnectable }: NodeProps<Node<FlowVisualNodeData>>) {
+  const url = String(data.mediaUrl ?? "").trim();
+  const hint = url ? `URL: ${url.length > 42 ? `${url.slice(0, 41)}…` : url}` : "Defina a URL da mídia no painel lateral.";
+  return (
+    <BaseCard
+      id={id}
+      kind="media"
+      title={data.title}
+      content={data.content || hint}
+      selected={selected}
+      isConnectable={isConnectable}
+      isOrphan={data.isOrphan === true}
+    />
+  );
+}
+
 export function InputNode({ id, data, selected, isConnectable }: NodeProps<Node<FlowVisualNodeData>>) {
   return (
     <BaseCard id={id} kind="input" title={data.title} content={data.content}
@@ -427,6 +453,7 @@ export function TransferNode({ id, data, selected, isConnectable }: NodeProps<No
 
 export const FLOW_NODE_TYPES = {
   message: MessageNode,
+  media: MediaNode,
   input: InputNode,
   menu: MenuNode,
   complete: CompleteNode,

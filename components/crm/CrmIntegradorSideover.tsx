@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Plug, Save, Unplug, X } from "lucide-react";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import { CrmFerramentaAgentesPanel } from "@/components/crm/CrmFerramentaAgentesPanel";
 import {
   RF_ACCENT,
@@ -50,6 +51,7 @@ export function CrmIntegradorSideover({
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState("");
   const [agentesSel, setAgentesSel] = useState<Set<string>>(new Set());
+  const [confirmDesconectarGoogle, setConfirmDesconectarGoogle] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -136,13 +138,6 @@ export function CrmIntegradorSideover({
   }, []);
 
   const desconectarContaGoogle = useCallback(async () => {
-    if (
-      !confirm(
-        "Desligar a conta Google desta empresa?\n\nGmail e Calendar deixam de funcionar nos agentes até ligar outra conta."
-      )
-    ) {
-      return;
-    }
     setBusy(true);
     setErro("");
     try {
@@ -155,6 +150,7 @@ export function CrmIntegradorSideover({
       if (!res.ok) {
         throw new Error(typeof data?.error === "string" ? data.error : "Falha ao desligar Google.");
       }
+      setConfirmDesconectarGoogle(false);
       onSaved?.();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao desligar Google");
@@ -243,7 +239,7 @@ export function CrmIntegradorSideover({
                     {configurado ? (
                       <button
                         type="button"
-                        onClick={() => void desconectarContaGoogle()}
+                        onClick={() => setConfirmDesconectarGoogle(true)}
                         disabled={busy}
                         style={{
                           display: "inline-flex",
@@ -407,6 +403,24 @@ export function CrmIntegradorSideover({
           </button>
         </footer>
       </aside>
+
+      <CrmConfirmDialog
+        open={confirmDesconectarGoogle}
+        title="Desligar conta Google?"
+        variant="destructive"
+        theme="dark"
+        confirmLabel="Desconectar"
+        cancelLabel="Cancelar"
+        loading={busy}
+        loadingLabel="A desligar…"
+        zIndex={350}
+        onCancel={() => !busy && setConfirmDesconectarGoogle(false)}
+        onConfirm={() => void desconectarContaGoogle()}
+      >
+        <p style={{ margin: 0 }}>
+          Gmail e Calendar deixam de funcionar nos agentes até ligar outra conta Google da empresa.
+        </p>
+      </CrmConfirmDialog>
     </>
   );
 }

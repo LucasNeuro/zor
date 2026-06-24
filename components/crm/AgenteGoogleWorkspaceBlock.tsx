@@ -5,6 +5,7 @@ import { Calendar, Check, ChevronRight, Loader2, Plug, Unplug, Video } from "luc
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
+import { CrmConfirmDialog } from "@/components/crm/CrmConfirmDialog";
 import { CRM_ACCENT, crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import {
@@ -101,6 +102,7 @@ export function AgenteGoogleWorkspaceBlock({
   });
   const [agendaCfgCarregando, setAgendaCfgCarregando] = useState(false);
   const [agendaCfgSalvo, setAgendaCfgSalvo] = useState(false);
+  const [confirmDesconectarOpen, setConfirmDesconectarOpen] = useState(false);
 
   const badge = googleBadge(ligado);
 
@@ -243,13 +245,6 @@ export function AgenteGoogleWorkspaceBlock({
   }, [agenteSlug, onUsoSynced, usoFerramentas]);
 
   const desconectarContaGoogle = useCallback(async () => {
-    if (
-      !confirm(
-        "Desligar a conta Google desta empresa?\n\nO agente deixa de enviar e-mail e criar eventos na agenda até ligar outra conta."
-      )
-    ) {
-      return;
-    }
     setBusy(true);
     setErro("");
     setTeste(null);
@@ -264,6 +259,7 @@ export function AgenteGoogleWorkspaceBlock({
       setLigado(false);
       setEmail(null);
       onOauthEmail?.(null);
+      setConfirmDesconectarOpen(false);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao desligar Google");
     } finally {
@@ -425,7 +421,7 @@ export function AgenteGoogleWorkspaceBlock({
       {ligado ? (
         <button
           type="button"
-          onClick={() => void desconectarContaGoogle()}
+          onClick={() => setConfirmDesconectarOpen(true)}
           disabled={busy}
           style={isCard ? btnDangerDark(busy) : {
             display: "inline-flex",
@@ -736,6 +732,31 @@ export function AgenteGoogleWorkspaceBlock({
     ? `Conta ligada${email ? ` (${email})` : ""} — teste a ligação, troque de conta ou desconecte.`
     : "Autorize o e-mail Google da empresa para o agente enviar e-mails e criar reuniões Meet.";
 
+  const confirmDesconectarDialog = (
+    <CrmConfirmDialog
+      open={confirmDesconectarOpen}
+      title="Desligar conta Google?"
+      variant="destructive"
+      theme={isCard || isDark ? "dark" : "light"}
+      confirmLabel="Desconectar"
+      cancelLabel="Cancelar"
+      loading={busy}
+      loadingLabel="A desligar…"
+      zIndex={350}
+      onCancel={() => !busy && setConfirmDesconectarOpen(false)}
+      onConfirm={() => void desconectarContaGoogle()}
+    >
+      <p style={{ margin: 0 }}>
+        O agente deixa de enviar e-mail e criar eventos na agenda até ligar outra conta Google da empresa.
+      </p>
+      {email ? (
+        <p style={{ margin: "10px 0 0" }}>
+          Conta actual: <strong>{email}</strong>
+        </p>
+      ) : null}
+    </CrmConfirmDialog>
+  );
+
   if (isCard) {
     return (
       <>
@@ -845,11 +866,13 @@ export function AgenteGoogleWorkspaceBlock({
         >
           {painelConteudo}
         </CrmIntegracaoSideoverShell>
+        {confirmDesconectarDialog}
       </>
     );
   }
 
   return (
+    <>
     <section
       style={{
         borderRadius: 14,
@@ -932,5 +955,7 @@ export function AgenteGoogleWorkspaceBlock({
 
       <div style={{ padding: "14px 16px" }}>{painelConteudo}</div>
     </section>
+    {confirmDesconectarDialog}
+    </>
   );
 }

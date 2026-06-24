@@ -37,7 +37,7 @@ export const PAINEL_TABS: PainelTabDef[] = [
   {
     id: "visao-geral",
     label: "Visão geral",
-    description: "Gráficos do funil comercial, obra e atendimento.",
+    description: "Gráficos do funil comercial e atendimento.",
     reports: [
       { id: "leads", label: "Leads" },
       { id: "negocios", label: "Negócios" },
@@ -64,12 +64,8 @@ export const PAINEL_TABS: PainelTabDef[] = [
   {
     id: "operacao",
     label: "Operação",
-    description: "Negócios, obras, imóveis e encaminhamentos.",
-    reports: [
-      { id: "negocios", label: "Negócios" },
-      { id: "imoveis", label: "Imóveis" },
-      { id: "empresas", label: "Empresas" },
-    ],
+    description: "Negócios e pipeline operacional.",
+    reports: [{ id: "negocios", label: "Negócios" }],
     defaultReport: "negocios",
   },
   {
@@ -207,34 +203,26 @@ export function kpisForPainelTab(
           tone: "brand",
         },
         {
-          key: "obras",
-          label: "Obras em andamento",
-          valor: m.operacao.obrasEmAndamento,
-          sub: "execução",
-          tone: "success",
-        },
-        {
-          key: "pedidos",
-          label: "Pedidos de material",
-          valor: m.operacao.pedidosAbertos,
-          sub: "rascunho a aprovado",
+          key: "leads-hoje",
+          label: "Leads hoje",
+          valor: m.leadsHoje,
+          sub: "captação do dia",
           tone: "brand",
         },
-        ...(CRM_MODULE_PARCEIROS_ENABLED
-          ? [{
-              key: "enc-hoje",
-              label: "Encaminhamentos hoje",
-              valor: m.encaminhamentosHoje,
-              sub: "rede de parceiros",
-              tone: "success" as CrmMetricTone,
-            }]
-          : [{
-              key: "leads-hoje",
-              label: "Leads hoje",
-              valor: m.leadsHoje,
-              sub: "captação do dia",
-              tone: "brand" as CrmMetricTone,
-            }]),
+        {
+          key: "fila",
+          label: "Mensagens na fila",
+          valor: m.mensagensFilaPendentes,
+          sub: "WhatsApp / canais",
+          tone: m.mensagensFilaPendentes > 0 ? "warning" : "muted",
+        },
+        {
+          key: "qualif",
+          label: "Taxa qualificação",
+          valor: `${m.taxaQualificacao}%`,
+          sub: "do total de leads",
+          tone: "success",
+        },
       ];
     case "financeiro": {
       const fin = finance?.kpis;

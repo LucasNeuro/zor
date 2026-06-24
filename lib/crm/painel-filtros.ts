@@ -71,8 +71,6 @@ export function rowMatchesPainelFiltros(
 export const PAINEL_ENTIDADES_BUILDER: Array<{ id: RelatorioEntidade; label: string }> = [
   { id: "leads", label: "Leads" },
   { id: "negocios", label: "Negócios" },
-  { id: "empresas", label: "Empresas" },
-  { id: "imoveis", label: "Imóveis" },
   { id: "financeiro", label: "Financeiro (resumo)" },
   { id: "contas_receber", label: "Contas a receber" },
   { id: "contas_pagar", label: "Contas a pagar" },

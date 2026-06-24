@@ -13,8 +13,10 @@ import { garantirCodigoLead, prepararRowHubLeadInsert } from "@/lib/crm/lead-cad
 import { gerarCodigoPessoa } from "@/lib/crm/pessoa-cadastro";
 import {
   ensureConversaAtiva,
+  gravarMensagemEntradaConversa,
   gravarParMensagensConversa,
 } from "@/lib/crm/conversa-canal";
+import { humanoBloqueiaRespostaIa } from "@/lib/crm/resolve-crm-actor";
 
 export type ProcessInboundEmailResult =
   | {
@@ -225,6 +227,106 @@ async function mensagemEmailJaProcessada(
   return Array.isArray(data) && data.length > 0;
 }
 
+async function gravarEmailInboundSemIa(
+  supabase: SupabaseClient,
+  opts: {
+    inbound: ParsedInboundEmail;
+    lead: Record<string, unknown>;
+    agenteSlug: string;
+    tenantId: string;
+    dedupeId?: string | null;
+    provider?: string;
+  }
+): Promise<ProcessInboundEmailResult> {
+  const leadId = String(opts.lead.id);
+  const humano = typeof opts.lead.humano_responsavel === "string" ? opts.lead.humano_responsavel.trim() : "";
+
+  const conversaId = await ensureConversaAtiva(supabase, {
+    leadId,
+    canal: "email",
+    tenantId: opts.tenantId,
+    pessoaId: (opts.lead.pessoa_id as string | null) ?? null,
+    preview: opts.inbound.text,
+  });
+
+  if (conversaId) {
+    await gravarMensagemEntradaConversa(supabase, {
+      conversaId,
+      leadId,
+      tenantId: opts.tenantId,
+      canal: "email",
+      conteudo: opts.inbound.text,
+      emailSubject: opts.inbound.subject,
+      emailMessageId: opts.inbound.messageId,
+      metadados: {
+        from: opts.inbound.fromEmail,
+        resend_email_id: opts.inbound.resendEmailId,
+        gmail_message_id: opts.inbound.gmailMessageId,
+        provider: opts.provider ?? "resend",
+        skip_ia: true,
+        humano_responsavel: humano || null,
+      },
+    });
+  }
+
+  const dedupeId = opts.dedupeId?.trim();
+  if (dedupeId) {
+    const jobRow = {
+      tenant_id: opts.tenantId,
+      canal: "email",
+      telefone: opts.inbound.fromEmail,
+      lead_id: opts.lead.id,
+      agente_slug: opts.agenteSlug,
+      message_id: dedupeId,
+      payload: {
+        from: opts.inbound.fromEmail,
+        subject: opts.inbound.subject,
+        skip_ia: true,
+        humano_responsavel: humano || null,
+      },
+    };
+    const { error: jobErr } = await supabase
+      .from("hub_msg_jobs")
+      .upsert(jobRow, { onConflict: "canal,message_id", ignoreDuplicates: true });
+    if (jobErr && !isMissingPgColumn(jobErr)) {
+      console.warn("[email/inbound] hub_msg_jobs (sem IA):", jobErr.message);
+    }
+  }
+
+  const agora = new Date().toISOString();
+  await supabase
+    .from("hub_leads_crm")
+    .update({ ultimo_contato: agora, atualizado_em: agora })
+    .eq("id", leadId);
+
+  try {
+    await supabase.from("hub_atividades").insert({
+      lead_id: leadId,
+      tipo: "email",
+      descricao: `E-mail recebido — humano (${humano}) a atender — IA não acionada.`,
+      feito_por: "sistema",
+      feito_por_tipo: "ia",
+      tenant_id: opts.tenantId,
+      metadata: {
+        skip_ia: true,
+        humano_responsavel: humano,
+        subject: opts.inbound.subject,
+        from: opts.inbound.fromEmail,
+      },
+    });
+  } catch (e) {
+    console.warn("[email/inbound] atividade sem IA:", e);
+  }
+
+  return {
+    ok: true,
+    status: "processed",
+    lead_id: leadId,
+    agente_slug: opts.agenteSlug,
+    reason: "humano_responsavel_ativo",
+  };
+}
+
 /** Processa e-mail inbound: lead + IA + resposta Resend. */
 export async function processInboundEmail(
   supabase: SupabaseClient,
@@ -263,6 +365,17 @@ export async function processInboundEmail(
 
   if (!lead) {
     return { ok: false, error: "Falha ao criar ou atualizar lead", status: 500 };
+  }
+
+  if (humanoBloqueiaRespostaIa(lead as { humano_responsavel?: string | null; metadata?: unknown })) {
+    return gravarEmailInboundSemIa(supabase, {
+      inbound,
+      lead: lead as Record<string, unknown>,
+      agenteSlug,
+      tenantId,
+      dedupeId,
+      provider: "resend",
+    });
   }
 
   const resultado = await processarMensagem({
@@ -450,6 +563,28 @@ export async function processOAuthInboundEmail(
 
   if (!lead) {
     return { ok: false, error: "Falha ao criar ou atualizar lead", status: 500 };
+  }
+
+  if (humanoBloqueiaRespostaIa(lead as { humano_responsavel?: string | null; metadata?: unknown })) {
+    const skip = await gravarEmailInboundSemIa(supabase, {
+      inbound: inboundMsg,
+      lead: lead as Record<string, unknown>,
+      agenteSlug,
+      tenantId,
+      dedupeId,
+      provider: "oauth_google",
+    });
+    if (inboundMsg.gmailMessageId?.trim()) {
+      await registrarEmailSyncState(supabase, {
+        tenantId,
+        integracaoRowId: opts.integracaoRowId,
+        gmailMessageId: inboundMsg.gmailMessageId,
+        rfcMessageId: inboundMsg.messageId,
+        agenteSlug,
+        leadId: lead.id as string,
+      });
+    }
+    return skip;
   }
 
   const resultado = await processarMensagem({

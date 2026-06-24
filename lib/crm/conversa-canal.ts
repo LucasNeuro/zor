@@ -140,6 +140,53 @@ export async function gravarParMensagensConversa(
     .eq("id", opts.conversaId);
 }
 
+export async function gravarMensagemEntradaConversa(
+  supabase: SupabaseClient,
+  opts: {
+    conversaId: string;
+    leadId: string;
+    tenantId?: string;
+    canal: CanalConversa;
+    conteudo: string;
+    enviadaEm?: string;
+    emailSubject?: string | null;
+    emailMessageId?: string | null;
+    metadados?: Record<string, unknown>;
+  }
+): Promise<boolean> {
+  const tenantId = opts.tenantId?.trim() || defaultTenantId();
+  const agora = opts.enviadaEm ?? new Date().toISOString();
+
+  const { error } = await supabase.from("hub_mensagens").insert({
+    conversa_id: opts.conversaId,
+    lead_id: opts.leadId,
+    remetente: "lead",
+    tipo_conteudo: "texto",
+    conteudo: opts.conteudo,
+    email_subject: opts.emailSubject ?? null,
+    email_message_id: opts.emailMessageId ?? null,
+    enviada_em: agora,
+    tenant_id: tenantId,
+    metadados: { canal: opts.canal, ...(opts.metadados ?? {}) },
+  });
+
+  if (error) {
+    console.error(`[conversa-canal] gravarMensagemEntrada ${opts.canal}:`, error.message);
+    return false;
+  }
+
+  await supabase
+    .from("hub_conversas")
+    .update({
+      ultima_mensagem_em: agora,
+      ultima_mensagem_preview: opts.conteudo.slice(0, 100),
+      atualizado_em: agora,
+    })
+    .eq("id", opts.conversaId);
+
+  return true;
+}
+
 export async function gravarMensagemSaidaConversa(
   supabase: SupabaseClient,
   opts: {

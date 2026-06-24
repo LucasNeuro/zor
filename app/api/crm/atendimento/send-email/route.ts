@@ -1,5 +1,4 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import {
   humanoResponsavelFromActor,
   resolveActorFromRequest,
@@ -8,35 +7,24 @@ import {
   ensureConversaAtiva,
   gravarMensagemSaidaConversa,
 } from "@/lib/crm/conversa-canal";
-import { sendEmail } from "@/lib/email/resend-send";
-import { resendConfigured } from "@/lib/email/resend-config";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { normalizarEnderecoEmail } from "@/lib/email/inbound-parser";
+import { sendEmailViaAgente } from "@/lib/email/send-via-agente";
 import {
   EMAIL_CHANNEL_DISABLED_CODE,
   EMAIL_CHANNEL_DISABLED_MESSAGE,
   isEmailChannelEnabled,
 } from "@/lib/feature-flags";
-
-function db() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
 
 export async function POST(request: NextRequest) {
   try {
+    const configErr = crmConfigError();
+    if (configErr) return NextResponse.json({ error: configErr }, { status: 503 });
+
     if (!isEmailChannelEnabled()) {
       return NextResponse.json(
         { error: EMAIL_CHANNEL_DISABLED_MESSAGE, code: EMAIL_CHANNEL_DISABLED_CODE },
-        { status: 503 }
-      );
-    }
-
-    if (!resendConfigured()) {
-      return NextResponse.json(
-        { error: "Resend não configurado: defina RESEND_API_KEY" },
         { status: 503 }
       );
     }
@@ -54,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "leadId e texto são obrigatórios" }, { status: 400 });
     }
 
-    const supabase = db();
+    const supabase = crmDb();
     const actor = await resolveActorFromRequest(supabase, request.headers);
     const feitoPor = humanoResponsavelFromActor(actor);
     const tenantId = defaultTenantId();
@@ -83,21 +71,35 @@ export async function POST(request: NextRequest) {
 
     const agenteSlug =
       typeof lead.agente_responsavel === "string" ? lead.agente_responsavel.trim() : "";
-    let emailFrom: string | null = null;
-    let emailFromName: string | null = null;
-    let replyTo: string | null = null;
+
+    let agenteRow: {
+      email_from: string | null;
+      email_from_name: string | null;
+      email_inbound: string | null;
+      email_provider: string | null;
+      email_integracao_id: string | null;
+      modo_operacao: string | null;
+      email_ativo: boolean | null;
+    } | null = null;
 
     if (agenteSlug) {
       const { data: agente } = await supabase
         .from("hub_agente_identidade")
-        .select("email_from, email_from_name, email_inbound, modo_operacao, email_ativo")
+        .select(
+          "email_from, email_from_name, email_inbound, email_provider, email_integracao_id, modo_operacao, email_ativo"
+        )
         .eq("agente_slug", agenteSlug)
         .maybeSingle();
       if (agente?.modo_operacao === "canal_email" && agente.email_ativo !== false) {
-        emailFrom = typeof agente.email_from === "string" ? agente.email_from : null;
-        emailFromName = typeof agente.email_from_name === "string" ? agente.email_from_name : null;
-        replyTo = typeof agente.email_inbound === "string" ? agente.email_inbound : null;
+        agenteRow = agente;
       }
+    }
+
+    if (!agenteRow) {
+      return NextResponse.json(
+        { error: "Nenhum agente de e-mail activo associado a este lead." },
+        { status: 409 }
+      );
     }
 
     const { data: conversas } = await supabase
@@ -110,17 +112,24 @@ export async function POST(request: NextRequest) {
 
     let lastSubject: string | null = null;
     let lastMessageId: string | null = null;
+    let gmailThreadId: string | null = null;
 
     if (conversas?.id) {
       const { data: ultima } = await supabase
         .from("hub_mensagens")
-        .select("email_subject, email_message_id")
+        .select("email_subject, email_message_id, metadados")
         .eq("conversa_id", conversas.id)
         .order("enviada_em", { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
       lastSubject = typeof ultima?.email_subject === "string" ? ultima.email_subject : null;
       lastMessageId = typeof ultima?.email_message_id === "string" ? ultima.email_message_id : null;
+      const meta =
+        ultima?.metadados && typeof ultima.metadados === "object" && !Array.isArray(ultima.metadados)
+          ? (ultima.metadados as Record<string, unknown>)
+          : {};
+      gmailThreadId =
+        typeof meta.gmail_thread_id === "string" ? meta.gmail_thread_id : null;
     }
 
     const subjectInput = body.subject?.trim();
@@ -132,19 +141,28 @@ export async function POST(request: NextRequest) {
           : `Re: ${lastSubject}`
         : `Atendimento — ${typeof lead.nome === "string" ? lead.nome : "lead"}`;
 
-    const send = await sendEmail({
-      to: destino,
-      subject,
-      text: texto,
-      from: emailFrom,
-      fromName: emailFromName,
-      inReplyTo: lastMessageId,
-      references: lastMessageId,
-      replyTo: replyTo || undefined,
-    });
+    const origin = request.nextUrl.origin;
+    const send = await sendEmailViaAgente(
+      supabase,
+      tenantId,
+      agenteRow,
+      {
+        to: destino,
+        subject,
+        text: texto,
+        inReplyTo: lastMessageId,
+        references: lastMessageId,
+        threadId: gmailThreadId,
+        replyTo: agenteRow.email_inbound,
+      },
+      { origin }
+    );
 
     if (!send.ok) {
-      return NextResponse.json({ error: send.error, resend: send.body ?? null }, { status: 502 });
+      return NextResponse.json(
+        { error: send.error, provider: send.provider ?? null, detail: send.body ?? null },
+        { status: send.status && send.status >= 400 ? send.status : 502 }
+      );
     }
 
     const conversaId = await ensureConversaAtiva(supabase, {
@@ -167,6 +185,10 @@ export async function POST(request: NextRequest) {
         emailMessageId: send.id ?? null,
         emailInReplyTo: lastMessageId,
         emailStatus: "enviado",
+        metadata: {
+          provider: send.provider,
+          gmail_thread_id: send.threadId ?? null,
+        },
       });
     }
 
@@ -178,7 +200,7 @@ export async function POST(request: NextRequest) {
       feito_por: feitoPor,
       feito_por_tipo: "humano",
       tenant_id: tenantId,
-      metadata: { origem: "crm_atendimento_email", subject },
+      metadata: { origem: "crm_atendimento_email", subject, provider: send.provider },
     });
 
     await supabase
@@ -186,7 +208,14 @@ export async function POST(request: NextRequest) {
       .update({ ultimo_contato: agora, atualizado_em: agora })
       .eq("id", leadId);
 
-    return NextResponse.json({ ok: true, to: destino, subject, resend_id: send.id ?? null });
+    return NextResponse.json({
+      ok: true,
+      to: destino,
+      subject,
+      provider: send.provider,
+      message_id: send.id ?? null,
+      gmail_thread_id: send.threadId ?? null,
+    });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

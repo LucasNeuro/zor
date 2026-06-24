@@ -42,7 +42,12 @@ import {
   loadNotasPreviewMap,
   notasParaLead,
 } from "@/lib/crm/load-notas-preview";
+import { leadEhCanalEmail, leadEhCanalWhatsapp } from "@/lib/crm/lead-canal";
+import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
+import { CrmSegmentedPills } from "@/components/crm/CrmSegmentedPills";
 import type { NotaPreview } from "@/components/crm/CrmKanbanNotesSection";
+
+type AtendimentoCanalFilter = "whatsapp" | "email";
 
 const LeadRapidoSideover = dynamic(
   () =>
@@ -115,6 +120,10 @@ type Lead = {
   _email_exibicao?: string | null;
   ultima_mensagem_fila?: string | null;
   ultima_mensagem_fila_em?: string | null;
+  ultima_mensagem_email?: string | null;
+  ultima_mensagem_email_em?: string | null;
+  ultimo_assunto_email?: string | null;
+  tem_resposta_humana?: boolean;
   pessoa_cidade?: string | null;
   pessoa_estado?: string | null;
 };
@@ -219,7 +228,12 @@ export default function LeadsPage() {
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [estagiosKanban, setEstagiosKanban] = useState<EstagioUi[]>(ESTAGIOS_FALLBACK);
   const [estagiosAtendimento, setEstagiosAtendimento] = useState<EstagioUi[]>(ESTAGIOS_ATENDIMENTO_UI);
-  const [sideoverInitialTab, setSideoverInitialTab] = useState<"chat" | undefined>(undefined);
+  const [sideoverInitialTab, setSideoverInitialTab] = useState<
+    "chat" | "conversas_email" | undefined
+  >(undefined);
+  const [atendimentoCanal, setAtendimentoCanal] = useState<AtendimentoCanalFilter>("whatsapp");
+  const [emailAtendimentos, setEmailAtendimentos] = useState<Lead[]>([]);
+  const [loadingEmailAtendimentos, setLoadingEmailAtendimentos] = useState(false);
   const [sucessoLead, setSucessoLead] = useState<string | null>(null);
   const pendingStageMovesRef = useRef(new Set<string>());
 
@@ -396,10 +410,28 @@ export default function LeadsPage() {
     setEditLead(lead);
   }, []);
 
-  const abrirAtendimentoLead = useCallback((lead: Lead) => {
-    setSideoverInitialTab("chat");
+  const abrirAtendimentoLead = useCallback((lead: Lead, canal: AtendimentoCanalFilter = "whatsapp") => {
+    setSideoverInitialTab(canal === "email" ? "conversas_email" : "chat");
     setEditLead(lead);
   }, []);
+
+  const carregarEmailAtendimentos = useCallback(async () => {
+    if (!isEmailChannelEnabledClient()) return;
+    setLoadingEmailAtendimentos(true);
+    try {
+      const headers = await crmApiHeaders();
+      const params = new URLSearchParams();
+      if (filtroEstagioAtendimento) params.set("estagio_atendimento", filtroEstagioAtendimento);
+      const q = params.toString();
+      const res = await fetch(`/api/crm/atendimento/email${q ? `?${q}` : ""}`, { headers });
+      const json = (await res.json()) as { leads?: Lead[] };
+      if (res.ok) setEmailAtendimentos(json.leads ?? []);
+    } catch {
+      setEmailAtendimentos([]);
+    } finally {
+      setLoadingEmailAtendimentos(false);
+    }
+  }, [filtroEstagioAtendimento]);
 
   async function moverEstagio(
     leadId: string,
@@ -534,10 +566,52 @@ export default function LeadsPage() {
     [filtrados, filtroEstagioAtendimento]
   );
 
-  const totalAtendimentoAberto = useMemo(
-    () => leadsDoPipeline.filter(leadEmAtendimentoAberto).length,
-    [leadsDoPipeline]
+  const filtradosAtendimentoWhatsapp = useMemo(
+    () =>
+      filtradosAtendimento.filter(
+        (l) => leadEhCanalWhatsapp(l) && !leadEhCanalEmail(l)
+      ),
+    [filtradosAtendimento]
   );
+
+  const filtradosAtendimentoEmail = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return emailAtendimentos.filter((l) => {
+      if (!leadEmAtendimentoAberto(l)) return false;
+      if (!termo) return true;
+      const hay = [
+        l.nome,
+        l.email,
+        l._email_exibicao,
+        l.ultima_mensagem_email,
+        l.ultimo_assunto_email,
+        l.agente_responsavel,
+        l.humano_responsavel,
+        l.codigo,
+        l._pessoa_codigo,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(termo);
+    });
+  }, [emailAtendimentos, busca]);
+
+  const atendimentoRows =
+    atendimentoCanal === "email" ? filtradosAtendimentoEmail : filtradosAtendimentoWhatsapp;
+
+  useEffect(() => {
+    if (view === "atendimentos" && atendimentoCanal === "email") {
+      void carregarEmailAtendimentos();
+    }
+  }, [view, atendimentoCanal, carregarEmailAtendimentos]);
+
+  const totalAtendimentoAberto = useMemo(() => {
+    if (atendimentoCanal === "email") {
+      return emailAtendimentos.filter(leadEmAtendimentoAberto).length;
+    }
+    return leadsDoPipeline.filter(leadEmAtendimentoAberto).length;
+  }, [atendimentoCanal, emailAtendimentos, leadsDoPipeline]);
 
   const filtradosIdsKey = useMemo(
     () => filtrados.map((l) => l.id).join(","),
@@ -842,6 +916,104 @@ export default function LeadsPage() {
     ];
   }, [estagiosAtendimento, notasMap]);
 
+  const colunasAtendimentosEmail = useMemo((): CrmResizableColumn<Lead>[] => {
+    const estagioAtendimentoInfo = (lead: Lead) =>
+      estagiosAtendimento.find((e) => e.id === (lead.estagio_atendimento || "novo"));
+
+    return [
+      {
+        id: "nome",
+        label: "Lead",
+        defaultWidth: 160,
+        minWidth: 120,
+        render: (lead) => (
+          <span className="font-semibold text-[#0b2210]">{lead.nome}</span>
+        ),
+      },
+      {
+        id: "email",
+        label: "E-mail",
+        defaultWidth: 180,
+        minWidth: 140,
+        render: (lead) => lead.email || lead._email_exibicao || "—",
+      },
+      {
+        id: "assunto",
+        label: "Assunto",
+        defaultWidth: 160,
+        minWidth: 120,
+        render: (lead) => lead.ultimo_assunto_email || "—",
+      },
+      {
+        id: "estagio_atendimento",
+        label: "Estágio",
+        defaultWidth: 120,
+        minWidth: 100,
+        render: (lead) => {
+          const est = estagioAtendimentoInfo(lead);
+          if (!est) return "—";
+          return crmTableStagePill(est.label, est.color);
+        },
+      },
+      {
+        id: "humano",
+        label: "Consultor",
+        defaultWidth: 120,
+        minWidth: 100,
+        render: (lead) => {
+          const h = effectiveHumanoResponsavel(lead.humano_responsavel);
+          return h ? formatHumanoDisplayName(h) : "—";
+        },
+      },
+      {
+        id: "ultima_msg",
+        label: "Última mensagem",
+        defaultWidth: 220,
+        minWidth: 140,
+        render: (lead) => {
+          const txt = lead.ultima_mensagem_email?.trim();
+          if (!txt) return <span className="text-[#6b8a76]">—</span>;
+          return (
+            <span className="line-clamp-2 text-[13px] text-[#374151]" title={txt}>
+              {txt}
+            </span>
+          );
+        },
+      },
+      {
+        id: "resposta_humana",
+        label: "Humano",
+        defaultWidth: 90,
+        minWidth: 70,
+        render: (lead) =>
+          lead.tem_resposta_humana
+            ? crmTableStatusPill("Respondido", true)
+            : crmTableStatusPill("Só IA", false),
+      },
+      {
+        id: "agente",
+        label: "Agente IA",
+        defaultWidth: 110,
+        minWidth: 90,
+        render: (lead) => lead.agente_responsavel || "—",
+      },
+      {
+        id: "atualizado",
+        label: "Atualizado",
+        defaultWidth: 110,
+        minWidth: 90,
+        render: (lead) => {
+          const iso = lead.ultima_mensagem_email_em || lead.atualizado_em;
+          return (
+            <span className="text-[#6b8a76]" title={formatData(iso)}>
+              {tempo(iso)}
+            </span>
+          );
+        },
+      },
+    ];
+  }, [estagiosAtendimento]);
+
   const leadsExportConfig = useMemo(
     () => ({
       filename: `leads-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -910,9 +1082,13 @@ export default function LeadsPage() {
   );
 
   const atendimentosFooterSummary =
-    filtradosAtendimento.length > 0
-      ? `Exibindo 1-${filtradosAtendimento.length} de ${totalAtendimentoAberto} atendimentos abertos`
-      : `Exibindo 0 de ${totalAtendimentoAberto} atendimentos abertos`;
+    atendimentoRows.length > 0
+      ? `Exibindo 1-${atendimentoRows.length} de ${totalAtendimentoAberto} atendimentos abertos${
+          atendimentoCanal === "email" ? " (e-mail)" : " (WhatsApp)"
+        }`
+      : `Exibindo 0 de ${totalAtendimentoAberto} atendimentos abertos${
+          atendimentoCanal === "email" ? " (e-mail)" : " (WhatsApp)"
+        }`;
 
   const leadsFooterSummary =
     filtrados.length > 0
@@ -947,7 +1123,9 @@ export default function LeadsPage() {
       onSearchChange={setBusca}
       searchPlaceholder={
         view === "atendimentos"
-          ? "Buscar lead em atendimento…"
+          ? atendimentoCanal === "email"
+            ? "Buscar lead, e-mail ou assunto…"
+            : "Buscar lead em atendimento…"
           : "Buscar nome, telefone ou código…"
       }
       stageValue={view === "atendimentos" ? filtroEstagioAtendimento : filtroEstagio}
@@ -962,8 +1140,29 @@ export default function LeadsPage() {
       stageFilterLabel={
         view === "atendimentos" ? "Todos os estágios de atendimento" : "Todos os estágios"
       }
-      showingCount={view === "atendimentos" ? filtradosAtendimento.length : filtrados.length}
+      showingCount={view === "atendimentos" ? atendimentoRows.length : filtrados.length}
       showingLabel={view === "atendimentos" ? "atendimentos" : "leads"}
+      extra={
+        view === "atendimentos" && isEmailChannelEnabledClient() ? (
+          <CrmSegmentedPills
+            items={[
+              {
+                key: "whatsapp",
+                label: "WhatsApp",
+                active: atendimentoCanal === "whatsapp",
+                onClick: () => setAtendimentoCanal("whatsapp"),
+              },
+              {
+                key: "email",
+                label: "E-mail",
+                active: atendimentoCanal === "email",
+                onClick: () => setAtendimentoCanal("email"),
+              },
+            ]}
+            aria-label="Canal de atendimento"
+          />
+        ) : null
+      }
       onCreatePipeline={() => {
         setPipelineConfigFocusCreate(true);
         setPipelineConfigOpen(true);
@@ -1104,18 +1303,32 @@ export default function LeadsPage() {
 
           /* ATENDIMENTOS */
           <div className={`h-full overflow-y-auto pb-4 pt-3 ${crmRetrofitPageXClass}`}>
-            <CrmRetrofitTablePanel
-              tableId="crm-leads-atendimentos"
-              columns={colunasAtendimentos}
-              rows={filtradosAtendimento}
-              rowKey={(lead) => lead.id}
-              emptyMessage="Nenhum atendimento aberto neste pipeline"
-              footerSummary={atendimentosFooterSummary}
-              onRowClick={abrirAtendimentoLead}
-              onEditRow={abrirAtendimentoLead}
-              onViewRow={abrirAtendimentoLead}
-              exportConfig={atendimentosExportConfig}
-            />
+            {atendimentoCanal === "email" && loadingEmailAtendimentos ? (
+              <p className="px-4 py-8 text-center text-sm text-[#6b8a76]">A carregar atendimentos de e-mail…</p>
+            ) : (
+              <CrmRetrofitTablePanel
+                tableId={
+                  atendimentoCanal === "email"
+                    ? "crm-leads-atendimentos-email"
+                    : "crm-leads-atendimentos"
+                }
+                columns={
+                  atendimentoCanal === "email" ? colunasAtendimentosEmail : colunasAtendimentos
+                }
+                rows={atendimentoRows}
+                rowKey={(lead) => lead.id}
+                emptyMessage={
+                  atendimentoCanal === "email"
+                    ? "Nenhum atendimento de e-mail aberto"
+                    : "Nenhum atendimento aberto neste pipeline"
+                }
+                footerSummary={atendimentosFooterSummary}
+                onRowClick={(lead) => abrirAtendimentoLead(lead, atendimentoCanal)}
+                onEditRow={(lead) => abrirAtendimentoLead(lead, atendimentoCanal)}
+                onViewRow={(lead) => abrirAtendimentoLead(lead, atendimentoCanal)}
+                exportConfig={atendimentosExportConfig}
+              />
+            )}
           </div>
 
         ) : (

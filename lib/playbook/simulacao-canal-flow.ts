@@ -237,10 +237,11 @@ export function buildBlocoContextoFluxoParaLlm(
     "- Responda primeiro ao que o cliente disse; use ferramentas CRM para gravar dados novos.",
     ...(step?.type === "menu" && menuEnhanceOn
       ? [
-          "- Se for menu: escreva APENAS uma introdução curta (1–2 frases) contextualizando o assunto.",
-          "- NÃO liste opções numeradas nem bullets — o menu interativo UAZAPI será enviado logo após sua mensagem.",
+          "- Se for passo de menu e o cliente **ainda não triou**: pode usar 1 frase de introdução.",
+          "- **Não** liste opções no texto — o menu interativo só será enviado se a política do canal permitir (1ª interação).",
+          "- Se o cliente já está conversando (link, reunião, dúvida): responda em texto; **não** force menu.",
         ]
-      : ["- Se for menu: apresente as opções de forma clara (lista numerada), contextualizando com o negócio."]),
+      : ["- Se for menu: apresente opções só se o cliente pedir ou for triagem inicial; caso contrário responda em texto."]),
     ...(step?.type === "await_name" ||
     (step?.type === "ask_text" && (step.answer_key === "nome" || !step.answer_key))
       ? passoCoberto

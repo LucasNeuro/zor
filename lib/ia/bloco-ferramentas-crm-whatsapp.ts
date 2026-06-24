@@ -39,21 +39,13 @@ export function blocoInstrucoesFerramentasCrmWhatsapp(opcoes?: {
   ];
 
   if (opcoes?.temMenuWhatsapp) {
+    linhas.push(
+      "7. **hub_whatsapp_menu** — use **somente quando necessário**: triagem inicial (1ª interação) ou decisão com 2–3 opções fixas.",
+      "   **Não** envie menu após cada resposta. Se o cliente já está conversando (link, reunião, dúvida), responda em texto com a base de conhecimento.",
+      "   Decisões binárias: tipo `button` (máx. 3). Triagem inicial: tipo `list` (máx. 5), **uma vez** por conversa."
+    );
     if (opcoes.playbookUnificado) {
-      linhas.push(
-        "7. **hub_whatsapp_menu** — triagem inicial: tipo `list` com **5 opções** (após nome + agradecimento):"
-      );
       linhas.push(...formatarOpcoesTriagemParaPrompt().split("\n").map((l) => `   ${l}`));
-      linhas.push(
-        "   Decisões com **2 opções** (vender/alugar, cadastro/parceria, faixas m²/prazo): tipo `button`. Máx. 3 botões."
-      );
-    } else {
-      linhas.push(
-        "7. **hub_whatsapp_menu** — triagem inicial: tipo `list` com 5 opções (arquitetura, imobiliário, homologação, proprietário, outro); texto = saudação Mari + pedido de nome quando aplicável."
-      );
-      linhas.push(
-        "   Decisões binárias: tipo `button`. Formato UAZAPI: «Rótulo|id». Não use texto plano quando deveria enviar menu."
-      );
     }
     linhas.push("   Nunca escreva <<<UAZ_LIST>>> ou <<<UAZ_BUTTONS>>> no texto da mensagem.");
   }

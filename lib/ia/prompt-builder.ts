@@ -244,7 +244,9 @@ ${playbookPublicado.prompt}`);
       );
     } else {
       secoes.push(`═══ REGRAS DE FLUXO ═══
-- Siga apenas o playbook publicado de **${nomeAgente}** — não use fluxos de triagem ou saudação de outros assistentes.
+- Priorize **base de conhecimento + Mistral**; o playbook é guia, não script fixo.
+- Responda primeiro ao pedido do cliente (link, reunião, preço) — **não** reenvie menu de triagem.
+- hub_whatsapp_menu: só se activo no agente e **necessário** (triagem inicial ou 2–3 botões).
 - Uma pergunta por mensagem quando estiver coletando dados.
 - Não repita saudação nem menu já respondidos no histórico.`);
     }

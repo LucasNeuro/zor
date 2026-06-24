@@ -11,6 +11,7 @@ import {
   mensagemEhSaudacaoSimples,
   mensagemPedeMenuOuOpcoes,
 } from "@/lib/whatsapp/menu-triagem-uazapi";
+import { deveAnexarMenuTriagemAutomatico } from "@/lib/whatsapp/menu-triagem-policy";
 import { whatsappSendText, whatsappSendMedia } from "@/lib/whatsapp/whatsapp-send";
 import {
   executeFlowEngine,
@@ -1693,8 +1694,15 @@ async function processarPlaybookInboundDynamic(params: {
     playbookMenuUazapiEnhancementEnabled() && avancado.pendingMenu
       ? avancado.pendingMenu
       : undefined;
+  const flowAnswers = avancado.flowState.answers ?? {};
   const pendingMenu =
-    pendingMenuRaw && !mensagemJaIndicaIntentTriagem(params.mensagem)
+    pendingMenuRaw &&
+    deveAnexarMenuTriagemAutomatico({
+      metadata: params.metadata,
+      mensagem: params.mensagem,
+      isNovo: false,
+      flowAnswers,
+    })
       ? { ...pendingMenuRaw, footerText: nomeEmpresaFluxo || pendingMenuRaw.footerText }
       : undefined;
 

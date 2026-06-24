@@ -23,7 +23,7 @@ describe("wa-conversacao-preset", () => {
     expect(hints.cargo_slug).toBe(WA_PRESET_CARGO_SLUG);
     expect(hints.modo_operacao).toBe("canal_whatsapp");
     expect(hints.motor_ferramentas_habilitado).toBe(true);
-    expect(hints.uso_ferramentas_ia.hub_whatsapp_menu).toBe(true);
+    expect(hints.uso_ferramentas_ia.hub_whatsapp_menu).toBe(false);
     expect(hints.uso_ferramentas_ia.hub_atualizar_lead).toBe(true);
   });
 });

@@ -589,7 +589,7 @@ export function mergeUsoFerramentasWhatsappCanal(
     if (coalesceFerramentaBool(uso.hub_atualizar_lead) !== false) merged.hub_atualizar_lead = true;
     if (coalesceFerramentaBool(uso.hub_lead_memorias) !== false) merged.hub_lead_memorias = true;
     if (coalesceFerramentaBool(uso.hub_lead_resumo) !== false) merged.hub_lead_resumo = true;
-    if (modoOperacao === "canal_whatsapp" && coalesceFerramentaBool(uso.hub_whatsapp_menu) !== false) {
+    if (modoOperacao === "canal_whatsapp" && coalesceFerramentaBool(uso.hub_whatsapp_menu) === true) {
       merged.hub_whatsapp_menu = true;
     }
     if (coalesceFerramentaBool(uso.hub_registar_nota_lead) !== false) merged.hub_registar_nota_lead = true;

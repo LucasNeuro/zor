@@ -1,12 +1,10 @@
 /**
  * Fluxo embutido no código — primeiro atendimento WhatsApp sem depender de hub_fluxos no CRM.
- * Alinhado ao Playbook Unificado — Maria (Obra10+), secções 2–3.
+ * Modo Waje: conversa livre com base de conhecimento; menus só quando necessário.
  */
 
-import { formatarOpcoesTriagemParaPrompt } from "@/lib/ia/mari-triagem-opcoes";
-
 export type BlocoPrimeiroAtendimentoOpcoes = {
-  /** Playbook publicado no bucket — bloco mais curto (detalhe no playbook + REGRAS DE FLUXO). */
+  /** Playbook publicado no bucket — detalhe no playbook + roteiro híbrido. */
   playbookPublicado?: boolean;
 };
 
@@ -14,48 +12,36 @@ export function blocoFluxoPrimeiroAtendimentoWhatsapp(
   turnosAnteriores: number,
   opcoes?: BlocoPrimeiroAtendimentoOpcoes
 ): string {
-  const opcoesTriagem = formatarOpcoesTriagemParaPrompt();
-
   if (turnosAnteriores <= 0) {
     if (opcoes?.playbookPublicado) {
       return `═══ FLUXO WHATSAPP — PRIMEIRO CONTACTO (com playbook publicado) ═══
-Siga o playbook publicado para texto e ramos; neste turno:
-1. Saudação + Mari / HUB Obra 10+ + pedir nome (se ainda não confirmado nesta sessão).
-2. Após nome: agradecimento obrigatório + hub_atualizar_lead (nome).
-3. Triagem: **hub_whatsapp_menu** tipo **list** (5 opções, uma vez):
-${opcoesTriagem}
-4. Uma pergunta por mensagem; decisões com 2 opções → menu **button**.
+Siga o playbook e a **base de conhecimento** como fonte principal.
+1. Saudação curta + seu nome + empresa; peça o nome se ainda não souber (CRM/histórico).
+2. Após nome: agradeça e grave com hub_atualizar_lead.
+3. **Menu/lista:** só se fizer sentido para triagem inicial — **uma vez**; use hub_whatsapp_menu se estiver activo.
+4. Responda primeiro ao que o cliente perguntou; uma pergunta por mensagem.
 
-Telefone já está no CRM — não peça número. Registe dados com hub_atualizar_lead em paralelo ao atendimento.`;
+Telefone já está no CRM — não peça número.`;
     }
 
-    return `═══ FLUXO OBRIGATÓRIO — PRIMEIRO CONTACTO (WhatsApp) ═══
-Você é o primeiro atendimento do lead. Objetivo: acolher, classificar e avançar.
+    return `═══ FLUXO — PRIMEIRO CONTACTO (WhatsApp) ═══
+Objetivo: acolher com naturalidade usando a **base de conhecimento** e o Mistral.
 
-Passos no primeiro contacto:
-1. Saudação curta (Mari + HUB Obra 10+) e **pedir o nome** («Me fale qual é o seu nome, por gentileza?»).
-2. Quando o cliente informar o nome: **agradecimento obrigatório** («Obrigado pela informação. É um prazer te atender.») + **hub_atualizar_lead** (campo nome).
-3. **Obrigatório:** chame **hub_whatsapp_menu** com tipo **list** e **5 opções** de triagem:
-${opcoesTriagem}
-   O texto do menu pode incluir saudação; não envie só texto plano quando deveria enviar o menu.
-4. Depois da escolha do ramo, **uma pergunta por mensagem** (sequencial conforme arquitetura ou imobiliário).
-5. Decisões com 2 opções (vender/alugar, faixas, etc.): **hub_whatsapp_menu** tipo **button**.
-6. Sempre indique o próximo passo; ao encerrar fluxo use hub_registar_nota_lead + hub_atualizar_lead.
+1. Saudação curta + seu nome + empresa; peça o nome se necessário.
+2. Grave dados com hub_atualizar_lead assim que souber (nome, interesse, etc.).
+3. **Não** envie menu de triagem por defeito — só se o cliente pedir opções ou o playbook exigir triagem inicial.
+4. Uma pergunta por mensagem; máximo 3 linhas.
 
-Não escreva <<<UAZ_LIST>>> ou <<<UAZ_BUTTONS>>> no texto — use sempre **hub_whatsapp_menu**.
-
-O telefone já veio do WhatsApp no CRM — não peça número. Use hub_atualizar_lead assim que souber nome, interesse, orçamento, cidade ou prazo (na mesma resposta, sem dizer «vou salvar»).`;
+Não escreva <<<UAZ_LIST>>> ou <<<UAZ_BUTTONS>>> — use hub_whatsapp_menu apenas quando precisar de botões/lista.`;
   }
 
-  return `═══ FLUXO OBRIGATÓRIO — CONTINUAR CONVERSA ═══
-A conversa JÁ começou. PROIBIDO nesta mensagem: "Olá", "Oi, tudo bem?", "Meu nome é...", "da Obra10+", "como posso te ajudar hoje" — isso já foi dito.
+  return `═══ FLUXO — CONTINUAR CONVERSA ═══
+A conversa JÁ começou. PROIBIDO: repetir saudação completa, reapresentar a empresa ou reenviar menu de triagem.
 
 Regras:
-- Comece respondendo direto ao pedido do cliente (ex.: orçamento → "Perfeito, vamos ao orçamento do seu projeto...").
-- Não repita o menu de triagem (5 opções) se o cliente já escolheu um ramo (fluxo_arquitetura, fluxo1, fluxo2, fluxo_homologacao, fluxo_outro, etc.).
-- Arquitetura: tipo de imóvel → m² → localização → prazo — uma pergunta por vez.
-- Imobiliário: siga o subfluxo do ramo escolhido; menus **button** só para decisões binárias.
-- Uma pergunta por mensagem; máximo 3 linhas; sem emojis.
-- Sempre deixe claro o próximo passo.
-- Se surgir dado novo (nome, tipo de obra, valor, cidade), chame hub_atualizar_lead na mesma resposta. Use hub_lead_resumo se precisar confirmar o que já está gravado.`;
+- Responda **directamente** ao pedido (link, reunião, preço, dúvida) com a base de conhecimento.
+- **Não** repita menu de opções salvo se o cliente pedir «menu» ou «opções».
+- Uma pergunta por mensagem; máximo 3 linhas.
+- Dados novos → hub_atualizar_lead na mesma resposta.
+- hub_whatsapp_menu: **somente** decisões binárias (2–3 botões) quando realmente precisar — não após cada mensagem.`;
 }

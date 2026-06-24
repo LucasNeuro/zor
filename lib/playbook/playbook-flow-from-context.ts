@@ -91,13 +91,31 @@ function inferirOpcoesTriagem(params: {
   const imob = /imobili|obra|arquitet|projeto|reforma|constru|incorpor|corretor/.test(corpus);
   const comercial = /comercial|vendas|orçamento|orcamento|produto|serviço|servico/.test(corpus);
   const suporte = /suporte|assist[eê]ncia|sac|pós-venda|pos-venda|técnico|tecnico/.test(corpus);
+  const saasEscritorio =
+    /saas|crm|automa|software|atendimento|whatsapp|waje|synkron|escrit[oó]rio virtual|plataforma/.test(
+      corpus
+    ) || /saas|crm|software|automa/.test(String(nicho ?? "").toLowerCase());
   const alimentacao =
-    /restaur|delivery|deliver|comida|alimenta|cantina|refei|card[aá]pio|lanchonete|pizz|hamburg|food|cozinha|marmita|ifood|entrega/.test(
+    !saasEscritorio &&
+    (/restaur|delivery|deliver|comida|cantina|refei[cç][aã]o|card[aá]pio|lanchonete|pizz|hamburg|food|cozinha|marmita|ifood/.test(
       corpus
     ) ||
-    /restaur|delivery|comida|alimenta|cantina|food|refei/.test(String(nicho ?? "").toLowerCase());
+      /restaur|delivery|food|cantina|pizz/.test(String(nicho ?? "").toLowerCase()));
 
-  if (alimentacao) {
+  if (saasEscritorio) {
+    push("triagem_produto", "Conhecer produtos ou serviços", "ramo_qualificacao_0", {
+      interesse_principal: "comercial",
+      fluxo_ativo: "comercial",
+    });
+    push("triagem_suporte", "Suporte ou dúvidas", "ramo_suporte", {
+      interesse_principal: "suporte",
+      fluxo_ativo: "suporte",
+    });
+    push("triagem_demo", "Agendar demonstração", "ramo_qualificacao_0", {
+      interesse_principal: "demo",
+      fluxo_ativo: "comercial",
+    });
+  } else if (alimentacao) {
     push("triagem_pedido_delivery", "Fazer pedido (delivery)", "ramo_qualificacao_0", {
       interesse_principal: "pedido_delivery",
       fluxo_ativo: "delivery",

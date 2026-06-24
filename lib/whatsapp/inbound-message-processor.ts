@@ -416,11 +416,20 @@ export async function processarMensagemInboundWhatsapp(params: {
           playbookMotor = playbookOut.motor === "playbook_flow" ? "playbook_flow" : "playbook_ia";
         }
         if (playbookOut.pendingMenu) {
-          const { mensagemJaIndicaIntentTriagem } = await import("@/lib/whatsapp/menu-intent");
-          if (!mensagemJaIndicaIntentTriagem(params.mensagemFinal)) {
+          const { deveAnexarMenuTriagemAutomatico } = await import("@/lib/whatsapp/menu-triagem-policy");
+          const { lerEstadoPlaybook } = await import("@/lib/whatsapp/playbook-flow-runtime");
+          const flowAnswers = lerEstadoPlaybook(leadMetaRow?.metadata).answers;
+          if (
+            deveAnexarMenuTriagemAutomatico({
+              metadata: leadMetaRow?.metadata,
+              mensagem: params.mensagemFinal,
+              isNovo: params.isNovo,
+              flowAnswers,
+            })
+          ) {
             playbookPendingMenu = playbookOut.pendingMenu;
           } else {
-            log.info("wa.processor.playbook_menu_skip", { reason: "intent_ja_na_mensagem" });
+            log.info("wa.processor.playbook_menu_skip", { reason: "politica_conversa_livre" });
           }
         }
       } else if (playbookRouting.bloquearIa) {
@@ -626,6 +635,18 @@ export async function processarMensagemInboundWhatsapp(params: {
       }
 
       if (playbookPendingMenu && !menuJaEnviado) {
+        const { deveAnexarMenuTriagemAutomatico } = await import("@/lib/whatsapp/menu-triagem-policy");
+        const { lerEstadoPlaybook } = await import("@/lib/whatsapp/playbook-flow-runtime");
+        const flowAnswers = lerEstadoPlaybook(leadMetaRow?.metadata).answers;
+        const podeAnexarMenu = deveAnexarMenuTriagemAutomatico({
+          metadata: leadMetaRow?.metadata,
+          mensagem: params.mensagemFinal,
+          isNovo: params.isNovo,
+          flowAnswers,
+        });
+        if (!podeAnexarMenu) {
+          log.info("wa.processor.playbook_menu_uazapi_skip", { reason: "politica_conversa_livre" });
+        } else {
         let tokenMenuPlaybook = String(params.waSendOpts?.instanceToken || "").trim();
         if (!tokenMenuPlaybook) {
           tokenMenuPlaybook =
@@ -666,6 +687,7 @@ export async function processarMensagemInboundWhatsapp(params: {
               erro: "erro" in menuPlaybook ? menuPlaybook.erro : "falha_menu",
             });
           }
+        }
         }
       }
     } else {

@@ -761,13 +761,6 @@ export default function AgentePage() {
               </span>
             ) : null}
             <HeaderActionGroup aria-label="Ações do agente">
-              <HeaderActionButton
-                icon={<Activity size={15} />}
-                label="Ver Logs de Atividade"
-                onClick={() => router.push(`/crm/agentes?abrir=${encodeURIComponent(slug)}`)}
-                variant="secondary"
-                position="first"
-              />
               {!agente.arquivado_em ? (
                 <HeaderActionButton
                   icon={null}

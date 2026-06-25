@@ -15,6 +15,7 @@ import {
   RF_TEXT_MUTED,
   RF_TEXT_PRIMARY,
   RF_TEXT_SECONDARY,
+  rfInputStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import {
   GOOGLE_INTEGRADOR_FERRAMENTA_KEYS,
@@ -51,9 +52,15 @@ type GoogleTestResult = {
   calendar?: { total?: number; eventos?: unknown[] };
 };
 
-function googleBadge(ligado: boolean): { bg: string; fg: string; bar: string; rotulo: string } {
+function googleBadge(
+  ligado: boolean,
+  dark: boolean
+): { bg: string; fg: string; bar: string; rotulo: string } {
   if (ligado) {
     return { bg: "#23863633", fg: "#3fb950", bar: "#3fb950", rotulo: "LIGADO" };
+  }
+  if (dark) {
+    return { bg: "rgba(11, 31, 16, 0.9)", fg: RF_TEXT_MUTED, bar: "#484f58", rotulo: "NÃO LIGADO" };
   }
   return { bg: "#dcebd8", fg: "#5d7a67", bar: "#484f58", rotulo: "NÃO LIGADO" };
 }
@@ -104,7 +111,19 @@ export function AgenteGoogleWorkspaceBlock({
   const [agendaCfgSalvo, setAgendaCfgSalvo] = useState(false);
   const [confirmDesconectarOpen, setConfirmDesconectarOpen] = useState(false);
 
-  const badge = googleBadge(ligado);
+  const badge = googleBadge(ligado, isDark);
+
+  const fieldInputStyle = (): CSSProperties =>
+    isDark
+      ? { ...rfInputStyle(), fontSize: 12, padding: "8px 10px" }
+      : {
+          padding: "8px 10px",
+          borderRadius: 8,
+          border: `1px solid ${border}`,
+          fontSize: 12,
+          background: "#ffffff",
+          color: BRAND_TEXT_DARK,
+        };
 
   const carregarAgendaConfig = useCallback(async () => {
     setAgendaCfgCarregando(true);
@@ -451,8 +470,8 @@ export function AgenteGoogleWorkspaceBlock({
           position: "relative",
           padding: "14px 16px",
           borderRadius: 12,
-          border: `1px solid ${isCard ? RF_BORDER : border}`,
-          background: isCard ? "rgba(6, 13, 8, 0.72)" : cardBg,
+          border: `1px solid ${border}`,
+          background: isDark ? "rgba(6, 13, 8, 0.72)" : cardBg,
         }}
       >
         <div
@@ -482,14 +501,14 @@ export function AgenteGoogleWorkspaceBlock({
             {carregando ? "A VERIFICAR…" : badge.rotulo}
           </span>
           {email ? (
-            <p style={{ margin: "10px 0 0", fontSize: 12, color: isCard ? RF_TEXT_SECONDARY : body, lineHeight: 1.5 }}>
-              Conta: <strong style={{ color: isCard ? RF_TEXT_PRIMARY : title }}>{email}</strong>
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: body, lineHeight: 1.5 }}>
+              Conta: <strong style={{ color: title }}>{email}</strong>
             </p>
           ) : null}
         </div>
       </div>
 
-      <p style={{ margin: 0, fontSize: 12, color: isCard ? RF_TEXT_SECONDARY : body, lineHeight: 1.55 }}>
+      <p style={{ margin: 0, fontSize: 12, color: body, lineHeight: 1.55 }}>
         {agendamento
           ? "Autorize o e-mail Google da empresa contratante. O agente consulta horários e cria reservas com link Meet quando o cliente pedir pelo WhatsApp."
           : "Uma autorização OAuth liga envio de e-mail e criação de eventos com link Meet para este tenant."}
@@ -535,11 +554,11 @@ export function AgenteGoogleWorkspaceBlock({
         style={{
           padding: "12px 14px",
           borderRadius: 10,
-          border: `1px solid ${isCard ? RF_BORDER : border}`,
-          background: isCard ? "rgba(6, 13, 8, 0.45)" : "#f8fbf8",
+          border: `1px solid ${border}`,
+          background: isDark ? "rgba(6, 13, 8, 0.45)" : "#f8fbf8",
         }}
       >
-        <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 800, color: isCard ? RF_TEXT_PRIMARY : title }}>
+        <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 800, color: title }}>
           Horário da agenda (esta empresa)
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 11, color: muted, lineHeight: 1.45 }}>
@@ -559,7 +578,7 @@ export function AgenteGoogleWorkspaceBlock({
                 setAgendaCfgSalvo(false);
                 setAgendaCfg((c) => ({ ...c, duracao_reserva_min: Number(e.target.value) || 90 }));
               }}
-              style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${border}`, fontSize: 12 }}
+              style={fieldInputStyle()}
             />
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: muted }}>
@@ -572,7 +591,7 @@ export function AgenteGoogleWorkspaceBlock({
                 setAgendaCfgSalvo(false);
                 setAgendaCfg((c) => ({ ...c, timezone: e.target.value }));
               }}
-              style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${border}`, fontSize: 12 }}
+              style={fieldInputStyle()}
             />
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: muted }}>
@@ -585,7 +604,7 @@ export function AgenteGoogleWorkspaceBlock({
                 setAgendaCfgSalvo(false);
                 setAgendaCfg((c) => ({ ...c, abertura: e.target.value }));
               }}
-              style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${border}`, fontSize: 12 }}
+              style={fieldInputStyle()}
             />
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: muted }}>
@@ -598,7 +617,7 @@ export function AgenteGoogleWorkspaceBlock({
                 setAgendaCfgSalvo(false);
                 setAgendaCfg((c) => ({ ...c, fechamento: e.target.value }));
               }}
-              style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${border}`, fontSize: 12 }}
+              style={fieldInputStyle()}
             />
           </label>
         </div>
@@ -695,7 +714,27 @@ export function AgenteGoogleWorkspaceBlock({
         <button
           type="button"
           disabled={busy || agendaCfgCarregando}
-          style={{ ...btnSecondaryDark(busy || agendaCfgCarregando), marginTop: 10 }}
+          style={{
+            ...(isDark
+              ? btnSecondaryDark(busy || agendaCfgCarregando)
+              : {
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  width: "100%",
+                  minHeight: 40,
+                  padding: "9px 14px",
+                  borderRadius: 8,
+                  border: `1px solid ${border}`,
+                  background: "#ffffff",
+                  color: title,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: busy || agendaCfgCarregando ? "not-allowed" : "pointer",
+                }),
+            marginTop: 10,
+          }}
           onClick={() => void salvarAgendaConfig()}
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : null}

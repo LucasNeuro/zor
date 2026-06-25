@@ -337,6 +337,7 @@ async function executarSimulacaoCanalLlm(params: {
   sessaoId?: string;
   tenantId?: string | null;
   modoOperacao?: string | null;
+  agenteNome?: string | null;
 }): Promise<SimulacaoCanalReplyResult> {
   const turnosConversa = params.historico.map((m) => ({
     role: (m.papel === "user" ? "user" : "assistant") as "user" | "assistant",
@@ -352,6 +353,7 @@ async function executarSimulacaoCanalLlm(params: {
       sessaoId: params.sessaoId,
       agenteSlug: params.agenteSlug,
       tenantId: params.tenantId,
+      agenteNome: params.agenteNome,
     });
     leadId = leadSim.leadId;
     telefoneSim = leadSim.telefone;
@@ -540,6 +542,7 @@ export async function executarSimulacaoCanalReply(params: {
   sessaoId?: string;
   modoOperacao?: string | null;
   tenantId?: string | null;
+  agenteNome?: string | null;
 }): Promise<SimulacaoCanalReplyResult> {
   let flowState: SimFlowState | undefined;
   let blocoFluxoExtra = "";
@@ -581,5 +584,6 @@ export async function executarSimulacaoCanalReply(params: {
     sessaoId: params.sessaoId,
     tenantId: params.tenantId,
     modoOperacao: params.modoOperacao,
+    agenteNome: params.agenteNome,
   });
 }

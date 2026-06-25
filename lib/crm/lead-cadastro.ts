@@ -24,6 +24,7 @@ export const LEAD_ORIGENS = [
   "linkedin",
   "site",
   "indicacao",
+  "interno",
   "outro",
 ] as const;
 

@@ -10,6 +10,7 @@ import {
   Linkedin,
   Megaphone,
   MessageCircle,
+  Monitor,
   Phone,
   Sparkles,
   Star,
@@ -27,6 +28,8 @@ const ORIGEM_ICONS: Record<string, LucideIcon> = {
   linkedin: Linkedin,
   site: Globe,
   indicacao: UserPlus,
+  interno: Monitor,
+  simulacao_ia: Monitor,
   outro: CircleDot,
 };
 

@@ -131,6 +131,7 @@ export function AgenteBriefingDrawer({
       if (data.sessao_id) setSessaoId(data.sessao_id);
       if (Array.isArray(data.mensagens)) setMensagens(data.mensagens);
       void queryClient.invalidateQueries({ queryKey: hubQueryKeys.agentes.operacao(agenteSlug) });
+      void queryClient.invalidateQueries({ queryKey: ["crm", "leads"] });
     } catch {
       setMensagens((prev) => prev.filter((m) => m.id !== tempId));
       setErro("Falha de rede ao enviar.");

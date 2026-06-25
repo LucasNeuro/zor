@@ -8,6 +8,7 @@ import { LeadNotesCollapsible } from "@/components/crm/leads/LeadNotesCollapsibl
 import type { NotaPreview } from "@/components/crm/CrmKanbanNotesSection";
 import { CRM_KANBAN } from "@/lib/crm/crm-kanban-card-styles";
 import { estagioIcon, origemIcon } from "@/lib/crm/pipeline-card-icons";
+import { leadCanalExibicao } from "@/lib/crm/lead-canal-exibicao";
 
 const ORIGENS_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp",
@@ -17,6 +18,8 @@ const ORIGENS_LABEL: Record<string, string> = {
   linkedin: "LinkedIn",
   site: "Site",
   indicacao: "Indicação",
+  interno: "Interno (teste)",
+  simulacao_ia: "Simulação IA",
   outro: "Outro",
 };
 
@@ -28,6 +31,8 @@ const ORIGENS_COLOR: Record<string, string> = {
   linkedin: "#0A66C2",
   site: "#6366F1",
   indicacao: "#F59E0B",
+  interno: "#94a3b8",
+  simulacao_ia: "#94a3b8",
   outro: "#6B7280",
 };
 
@@ -105,8 +110,9 @@ export function LeadKanbanCard({
   onDragStart,
   onDragEnd,
 }: Props) {
-  const origemCor = ORIGENS_COLOR[lead.origem || ""] || "#6B7280";
-  const OrigemIcon = origemIcon(lead.origem);
+  const canal = leadCanalExibicao(lead);
+  const origemCor = ORIGENS_COLOR[canal.origem] || ORIGENS_COLOR[lead.origem || ""] || "#6B7280";
+  const OrigemIcon = origemIcon(canal.origem);
   const StageIcon = estagioIcon(lead.estagio);
   const local = [lead.pessoa_cidade, lead.pessoa_estado].filter(Boolean).join(" / ") || null;
   const preview =
@@ -115,7 +121,7 @@ export function LeadKanbanCard({
     null;
   const codigo = lead.codigo || lead._pessoa_codigo || null;
   const contato = lead.telefone || lead._email_exibicao || local || "Sem contato";
-  const origemLabel = lead.origem ? ORIGENS_LABEL[lead.origem] || lead.origem : "—";
+  const origemLabel = canal.label;
 
   const metrics = [
     {
@@ -191,6 +197,25 @@ export function LeadKanbanCard({
       extra={notas.length > 0 ? <LeadNotesCollapsible notas={notas} /> : undefined}
       footer={
         <>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              marginRight: 8,
+              padding: "3px 8px",
+              borderRadius: 999,
+              background: canal.ehTeste ? "rgba(148, 163, 184, 0.16)" : "rgba(37, 211, 102, 0.1)",
+              color: origemCor,
+              fontSize: 10,
+              fontWeight: 700,
+              lineHeight: 1.2,
+            }}
+            title={canal.ehTeste ? "Conversa de teste no Copiloto IA" : `Canal: ${origemLabel}`}
+          >
+            <OrigemIcon size={12} strokeWidth={2.2} aria-hidden />
+            {canal.ehTeste ? "Interno · teste" : origemLabel}
+          </span>
           <span style={{ color: CRM_KANBAN.muted, fontSize: 10, fontWeight: 600, marginRight: 4 }}>
             {tempo(lead.atualizado_em)}
           </span>

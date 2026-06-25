@@ -303,6 +303,7 @@ export async function POST(
         modoOperacao:
           typeof agente.modo_operacao === "string" ? agente.modo_operacao : null,
         tenantId: typeof agente.tenant_id === "string" ? agente.tenant_id : null,
+        agenteNome: typeof agente.nome === "string" ? agente.nome : null,
       });
     } else {
       const snapshot = await montarSnapshotOperacionalReadOnly(
@@ -382,6 +383,7 @@ export async function POST(
         sessaoId,
         agenteSlug: slug,
         tenantId: typeof agente.tenant_id === "string" ? agente.tenant_id : null,
+        agenteNome: typeof agente.nome === "string" ? agente.nome : null,
       });
       leadIdSim = leadSim.leadId;
     } catch {

@@ -214,3 +214,38 @@ export function readWizardOAuthResume(): WizardOAuthResume | null {
     }
   }
 }
+
+/** Parâmetros de query usados só na volta OAuth / deep-link do assistente. */
+export const WIZARD_QUERY_PARAM_KEYS = [
+  "novo",
+  "wizard_google",
+  "agente",
+  "google_oauth",
+  "email",
+  "email_oauth",
+  "email_oauth_error",
+  "email_oauth_message",
+] as const;
+
+export function stripWizardQueryParams(params: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(params.toString());
+  for (const key of WIZARD_QUERY_PARAM_KEYS) {
+    next.delete(key);
+  }
+  return next;
+}
+
+export function pathnameWithStrippedWizardParams(pathname: string, params: URLSearchParams): string {
+  const next = stripWizardQueryParams(params);
+  const qs = next.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+export function clearWizardOAuthResume(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(WIZARD_OAUTH_RESUME_KEY);
+  } catch {
+    /* ignore */
+  }
+}

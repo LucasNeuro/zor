@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Suspense, useState, useEffect, useRef, useMemo, type ReactNode } from "react";
+import { Suspense, useState, useEffect, useRef, useMemo, useCallback, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -48,6 +48,10 @@ import { invalidateHubCiclosList } from "@/hooks/useCrmDataQueries";
 import type { HubAgentesListMode } from "@/lib/hub/hub-query-keys";
 import { hubAgentesRootKey } from "@/lib/hub/hub-query-keys";
 import { useCrmListLiveRefresh } from "@/hooks/useCrmListLiveRefresh";
+import {
+  clearWizardOAuthResume,
+  pathnameWithStrippedWizardParams,
+} from "@/lib/hub/agente-wizard-google";
 
 /** Wizard ~3k linhas — carregar só ao abrir o drawer evita ChunkLoadError no dev (compile > timeout). */
 const AgenteNovoWizard = dynamic(
@@ -240,6 +244,7 @@ function AgentesView() {
   const carregando = agentes.length === 0 && (listaPendente || listaBuscando) && !listaQueryError;
   const erroLista = listaQueryError?.message ?? null;
   const [drawerNovoOpen, setDrawerNovoOpen] = useState(false);
+  const [wizardInstanceKey, setWizardInstanceKey] = useState(0);
   const [drawerCargosOpen, setDrawerCargosOpen] = useState(false);
   const [alternandoAtivoSlug, setAlternandoAtivoSlug] = useState<string | null>(null);
   const [excluindoAgenteSlug, setExcluindoAgenteSlug] = useState<string | null>(null);
@@ -299,6 +304,25 @@ function AgentesView() {
     });
   }, [detailAgente, operacao]);
 
+  const fecharWizardNovo = useCallback(() => {
+    clearWizardOAuthResume();
+    router.replace(
+      pathnameWithStrippedWizardParams(pathname, new URLSearchParams(searchParams.toString())),
+      { scroll: false }
+    );
+    setDrawerNovoOpen(false);
+  }, [pathname, router, searchParams]);
+
+  const abrirWizardNovo = useCallback(() => {
+    clearWizardOAuthResume();
+    router.replace(
+      pathnameWithStrippedWizardParams(pathname, new URLSearchParams(searchParams.toString())),
+      { scroll: false }
+    );
+    setWizardInstanceKey((k) => k + 1);
+    setDrawerNovoOpen(true);
+  }, [pathname, router, searchParams]);
+
   useEffect(() => {
     if (!detailAgente) return;
     setEditNome(String(detailAgente.nome || ""));
@@ -330,23 +354,27 @@ function AgentesView() {
     const wizardGoogle = searchParams.get("wizard_google") === "1";
     if (novo || wizardGoogle) {
       openedFromQuery.current = true;
+      setWizardInstanceKey((k) => k + 1);
       setDrawerNovoOpen(true);
       if (novo && !wizardGoogle) {
-        router.replace("/crm/agentes", { scroll: false });
+        router.replace(
+          pathnameWithStrippedWizardParams(pathname, new URLSearchParams(searchParams.toString())),
+          { scroll: false }
+        );
       }
     }
-  }, [searchParams, router]);
+  }, [searchParams, router, pathname]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (detalheAberto) setSelectedSlug(null);
       else if (drawerCargosOpen) setDrawerCargosOpen(false);
-      else if (drawerNovoOpen) setDrawerNovoOpen(false);
+      else if (drawerNovoOpen) fecharWizardNovo();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [detalheAberto, drawerCargosOpen, drawerNovoOpen]);
+  }, [detalheAberto, drawerCargosOpen, drawerNovoOpen, fecharWizardNovo]);
 
   useEffect(() => {
     if (!selectedSlug) return;
@@ -416,7 +444,7 @@ function AgentesView() {
           </button>
           <button
             type="button"
-            onClick={() => setDrawerNovoOpen(true)}
+            onClick={() => abrirWizardNovo()}
             style={{
               background: "#0b1f10",
               color: "#92ff00",
@@ -434,7 +462,7 @@ function AgentesView() {
       ),
     });
     return () => setSlot(null);
-  }, [pathname, setSlot]);
+  }, [pathname, setSlot, abrirWizardNovo]);
 
   async function alternarAtivo(agente: Agente, e: React.MouseEvent) {
     e.stopPropagation();
@@ -699,7 +727,7 @@ function AgentesView() {
           <button
             type="button"
             aria-label="Fechar painel"
-            onClick={() => setDrawerNovoOpen(false)}
+            onClick={fecharWizardNovo}
             style={{ position: "fixed", inset: 0, zIndex: 40, background: RF_OVERLAY, border: "none", cursor: "pointer", padding: 0 }}
           />
           <aside
@@ -719,8 +747,9 @@ function AgentesView() {
             }}
           >
             <AgenteNovoWizard
+              key={wizardInstanceKey}
               variant="drawer"
-              onClose={() => setDrawerNovoOpen(false)}
+              onClose={fecharWizardNovo}
               onCreated={() => void invalidateHubAgentes(queryClient)}
             />
           </aside>

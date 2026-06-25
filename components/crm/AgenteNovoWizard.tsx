@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Clock, Mail, MessageSquare, Webhook, Zap } from "lucide-react";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 import {
@@ -77,6 +77,8 @@ import {
   cargoRecomendaGoogleWorkspace,
   patchFerramentasGoogleAgendamento,
   readWizardOAuthResume,
+  clearWizardOAuthResume,
+  pathnameWithStrippedWizardParams,
 } from "@/lib/hub/agente-wizard-google";
 
 // --- Constants ---
@@ -333,6 +335,7 @@ export type AgenteNovoWizardProps = {
 
 export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWizardProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const [passo, setPasso] = useState(1);
@@ -618,21 +621,35 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
   useEffect(() => {
     const resume = readWizardOAuthResume();
+    const params = new URLSearchParams(searchParams.toString());
+    const oauth = params.get("google_oauth");
+    const wizardGoogle = params.get("wizard_google") === "1";
+    const agenteParam = params.get("agente")?.trim() ?? "";
+    const shouldStripUrl =
+      Boolean(resume?.agenteSlug) ||
+      oauth === "connected" ||
+      (wizardGoogle && agenteParam.length > 0);
+
     if (resume?.agenteSlug) {
       setAgenteSlugCriado(resume.agenteSlug);
       setPasso(resume.passo);
     }
-    const oauth = searchParams.get("google_oauth");
     if (oauth === "connected") {
-      const email = searchParams.get("email")?.trim();
+      const email = params.get("email")?.trim();
       if (email) setGoogleOauthEmail(email);
-      const agente = searchParams.get("agente")?.trim();
-      if (agente) setAgenteSlugCriado(agente);
-      if (searchParams.get("wizard_google") === "1") {
+      if (agenteParam) setAgenteSlugCriado(agenteParam);
+      if (wizardGoogle && !resume) {
         setPasso(agenteEhModoCanal(modoOperacao) ? 8 : 9);
       }
+    } else if (wizardGoogle && agenteParam && !resume) {
+      setAgenteSlugCriado(agenteParam);
+      setPasso(agenteEhModoCanal(modoOperacao) ? 8 : 9);
     }
-  }, [searchParams, modoOperacao]);
+
+    if (shouldStripUrl) {
+      router.replace(pathnameWithStrippedWizardParams(pathname, params), { scroll: false });
+    }
+  }, [searchParams, modoOperacao, router, pathname]);
 
   useEffect(() => {
     if (passo !== 8 || !agenteSlugCriado || !agenteEhModoCanal(modoOperacao)) {
@@ -1237,7 +1254,16 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     return salvarPlaybookPorUpload(file, slug);
   }
 
+  function limparEstadoWizardNaUrl() {
+    clearWizardOAuthResume();
+    router.replace(
+      pathnameWithStrippedWizardParams(pathname, new URLSearchParams(searchParams.toString())),
+      { scroll: false }
+    );
+  }
+
   function concluirPosCriacao() {
+    limparEstadoWizardNaUrl();
     if (variant === "drawer" && onClose) onClose();
     else router.push("/crm/agentes");
   }
@@ -1404,6 +1430,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   }
 
   function fecharAssistente() {
+    limparEstadoWizardNaUrl();
     if (variant === "drawer" && onClose) onClose();
     else router.back();
   }

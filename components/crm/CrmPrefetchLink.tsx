@@ -9,6 +9,7 @@ import {
   prefetchHubCiclosList,
 } from "@/hooks/useCrmDataQueries";
 import { prefetchHubAgentesList } from "@/hooks/useHubAgentesQueries";
+import { prefetchCrmLeadsList } from "@/hooks/useCrmLeadsQueries";
 
 type Props = ComponentProps<typeof Link>;
 
@@ -42,6 +43,7 @@ export function CrmPrefetchLink({ prefetch = true, href, onMouseEnter, ...props 
     }
     if (path.startsWith("/crm/leads")) {
       void prefetchCrmPipelines(qc, "lead");
+      void prefetchCrmLeadsList(qc);
     }
     if (path.startsWith("/crm/negocios")) {
       void prefetchCrmPipelines(qc, "negocio");

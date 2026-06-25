@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   ...(process.env.NODE_ENV === "development"
     ? { distDir: process.env.NEXT_DIST_DIR?.trim() || ".next-dev" }
-    : {}),
+    : { output: "standalone" as const }),
   /**
    * Mantemos bloco turbos explícito para compatibilizar Next 16 quando
    * também há customizações de webpack (usadas no modo dev --webpack).

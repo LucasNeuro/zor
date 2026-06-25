@@ -15,25 +15,53 @@ import {
   prefetchHubCiclosList,
 } from "@/hooks/useCrmDataQueries";
 import { prefetchHubAgentesList } from "@/hooks/useHubAgentesQueries";
+import { prefetchCrmLeadsList } from "@/hooks/useCrmLeadsQueries";
 
-/** Pré-carrega listas CRM/Hub ao abrir o módulo — cache de sessão (TanStack Query). */
+function scheduleIdle(task: () => void, delayMs: number) {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(() => task(), { timeout: delayMs + 500 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const t = setTimeout(task, delayMs);
+  return () => clearTimeout(t);
+}
+
+/**
+ * Pré-carrega listas CRM/Hub em ondas — evita burst de API/memória no arranque.
+ */
 export function CrmListPrefetcher() {
   const queryClient = useQueryClient();
   const pathname = usePathname();
 
   useEffect(() => {
-    void prefetchCrmPessoasList(queryClient, {});
-    void prefetchCrmEmpresasList(queryClient, {});
-    if (CRM_MODULE_PARCEIROS_ENABLED) {
-      void prefetchCrmParceirosList(queryClient);
-    }
-    void prefetchHubAgentesList(queryClient, "todos");
-    void prefetchHubAgentesList(queryClient, "ativos");
     void prefetchCrmPipelines(queryClient, "lead");
-    void prefetchCrmPipelines(queryClient, "negocio");
     void prefetchCrmPipelines(queryClient, "atendimento");
-    void prefetchCrmNegociosList(queryClient, { offset: 0 });
-    void prefetchHubCiclosList(queryClient);
+    void prefetchHubAgentesList(queryClient, "todos");
+
+    const cancelA = scheduleIdle(() => {
+      void prefetchCrmLeadsList(queryClient);
+    }, 400);
+
+    const cancelB = scheduleIdle(() => {
+      void prefetchCrmPipelines(queryClient, "negocio");
+      void prefetchHubAgentesList(queryClient, "ativos");
+    }, 1200);
+
+    const cancelC = scheduleIdle(() => {
+      void prefetchCrmPessoasList(queryClient, {});
+      void prefetchCrmEmpresasList(queryClient, {});
+      if (CRM_MODULE_PARCEIROS_ENABLED) {
+        void prefetchCrmParceirosList(queryClient);
+      }
+      void prefetchCrmNegociosList(queryClient, { offset: 0 });
+      void prefetchHubCiclosList(queryClient);
+    }, 2500);
+
+    return () => {
+      cancelA();
+      cancelB();
+      cancelC();
+    };
   }, [queryClient]);
 
   useEffect(() => {
@@ -46,6 +74,7 @@ export function CrmListPrefetcher() {
     }
     if (pathname.startsWith("/crm/leads")) {
       void prefetchCrmPipelines(queryClient, "lead");
+      void prefetchCrmLeadsList(queryClient);
     }
     if (pathname.startsWith("/crm/negocios")) {
       void prefetchCrmPipelines(queryClient, "negocio");

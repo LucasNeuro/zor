@@ -44,8 +44,8 @@ services:
     name: escritorio-virtual
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
+    buildCommand: NODE_OPTIONS=--max-old-space-size=2048 npm install && NODE_OPTIONS=--max-old-space-size=2048 npm run build
+    startCommand: NODE_OPTIONS=--max-old-space-size=460 npm run start
     envVars:
       - key: NODE_VERSION
         value: "20"

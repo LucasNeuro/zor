@@ -1,6 +1,6 @@
-import { PlatformBrandLoading } from "@/components/brand/PlatformBrandLoading";
+import { CrmLeadsPageSkeleton } from "@/components/crm/leads/CrmLeadsPageSkeleton";
 
-/** Loading do segmento CRM — spinner de marca até o layout estar pronto. */
+/** Loading do segmento CRM — skeleton leve (shell já visível no layout). */
 export default function CrmLoading() {
-  return <PlatformBrandLoading label="A carregar…" />;
+  return <CrmLeadsPageSkeleton />;
 }

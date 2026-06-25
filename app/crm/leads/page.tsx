@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { CrmPipelinePageToolbar, type CrmPipelineViewMode } from "@/components/crm/pipelines/CrmPipelinePageToolbar";
@@ -46,6 +47,15 @@ import { leadEhCanalEmail, leadEhCanalWhatsapp } from "@/lib/crm/lead-canal";
 import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import { CrmSegmentedPills } from "@/components/crm/CrmSegmentedPills";
 import type { NotaPreview } from "@/components/crm/CrmKanbanNotesSection";
+import {
+  invalidateCrmLeadsList,
+  patchCrmLeadsListCache,
+  useCrmLeadsList,
+  type CrmLeadRow,
+} from "@/hooks/useCrmLeadsQueries";
+import { useCrmPipelines } from "@/hooks/useCrmDataQueries";
+import { crmQueryKeys } from "@/lib/crm/crm-query-keys";
+import { CrmLeadsPageSkeleton } from "@/components/crm/leads/CrmLeadsPageSkeleton";
 
 type AtendimentoCanalFilter = "whatsapp" | "email";
 
@@ -91,42 +101,7 @@ const NegocioDetailSideover = dynamic(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Lead = {
-  id: string;
-  nome: string;
-  telefone: string | null;
-  email: string | null;
-  origem: string | null;
-  campanha: string | null;
-  estagio: string;
-  estagio_funil?: string | null;
-  estagio_atendimento?: string | null;
-  score: number;
-  valor_estimado: number;
-  agente_responsavel: string | null;
-  humano_responsavel: string | null;
-  proxima_acao: string | null;
-  data_proxima_acao: string | null;
-  motivo_perda: string | null;
-  tags: string[];
-  criado_em: string;
-  atualizado_em: string;
-  pessoa_id?: string | null;
-  codigo?: string | null;
-  metadata?: unknown;
-  pipeline_id?: string | null;
-  /** Enriquecimento (hub_pessoas / view) */
-  _pessoa_codigo?: string | null;
-  _email_exibicao?: string | null;
-  ultima_mensagem_fila?: string | null;
-  ultima_mensagem_fila_em?: string | null;
-  ultima_mensagem_email?: string | null;
-  ultima_mensagem_email_em?: string | null;
-  ultimo_assunto_email?: string | null;
-  tem_resposta_humana?: boolean;
-  pessoa_cidade?: string | null;
-  pessoa_estado?: string | null;
-};
+type Lead = CrmLeadRow;
 
 type EstagioUi = { id: string; label: string; color: string };
 
@@ -201,11 +176,23 @@ export default function LeadsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { setSlot } = useCrmHeaderSlot();
   const { error: toastError } = useCrmToast();
   const narrow = useNarrowViewport();
   const isMobile = narrow !== false;
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const leadsQuery = useCrmLeadsList();
+  const leads = leadsQuery.data ?? [];
+  const leadsInitialLoading = leadsQuery.isPending && leadsQuery.data === undefined;
+  const pipelinesLeadQuery = useCrmPipelines("lead");
+  const pipelinesAtendimentoQuery = useCrmPipelines("atendimento");
+  const patchLeads = useCallback(
+    (updater: (prev: Lead[]) => Lead[]) => patchCrmLeadsListCache(queryClient, updater),
+    [queryClient]
+  );
+  const refreshLeads = useCallback(() => {
+    void invalidateCrmLeadsList(queryClient);
+  }, [queryClient]);
   const [view, setView] = useState<CrmPipelineViewMode>("kanban");
   const [busca, setBusca] = useState("");
   const [filtroEstagio, setFiltroEstagio] = useState("");
@@ -224,10 +211,8 @@ export default function LeadsPage() {
   const [leadRapidoOpen, setLeadRapidoOpen] = useState(false);
   const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
   const [pipelineConfigFocusCreate, setPipelineConfigFocusCreate] = useState(false);
-  const [pipelines, setPipelines] = useState<PipelineUi[]>([]);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [estagiosKanban, setEstagiosKanban] = useState<EstagioUi[]>(ESTAGIOS_FALLBACK);
-  const [estagiosAtendimento, setEstagiosAtendimento] = useState<EstagioUi[]>(ESTAGIOS_ATENDIMENTO_UI);
   const [sideoverInitialTab, setSideoverInitialTab] = useState<
     "chat" | "conversas_email" | undefined
   >(undefined);
@@ -236,117 +221,42 @@ export default function LeadsPage() {
   const [loadingEmailAtendimentos, setLoadingEmailAtendimentos] = useState(false);
   const [sucessoLead, setSucessoLead] = useState<string | null>(null);
   const pendingStageMovesRef = useRef(new Set<string>());
+  const realtimeInvalidateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const carregarPipeline = useCallback(async () => {
-    try {
-      const headers = await crmApiHeaders();
-      const [resLead, resAt] = await Promise.all([
-        fetch("/api/crm/pipelines?tipo=lead", { headers }),
-        fetch("/api/crm/pipelines?tipo=atendimento", { headers }),
-      ]);
-      const jsonLead = await resLead.json();
-      const list = (jsonLead.data || []) as PipelineUi[];
-      if (list.length) {
-        setPipelines(list);
-        setPipelineId((prev) => {
-          if (prev && list.some((p) => p.id === prev)) return prev;
-          return list[0]?.id ?? null;
-        });
-      }
-      const jsonAt = await resAt.json();
-      const pipeAt = ((jsonAt.data || []) as PipelineUi[])[0];
-      const colsAt =
-        pipeAt?.estagios
-          ?.filter((e) => e.ativo !== false)
-          .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
-          .map((e) => ({ id: e.slug, label: e.label, color: e.cor || "#6B7280" })) ?? [];
-      setEstagiosAtendimento(colsAt.length ? colsAt : ESTAGIOS_ATENDIMENTO_UI);
-    } catch {
-      /* fallback ESTAGIOS_FALLBACK */
-    }
-  }, []);
+  const pipelines = useMemo((): PipelineUi[] => {
+    const list = pipelinesLeadQuery.data ?? [];
+    return list.map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      nome: p.nome,
+      mercado_sigla: p.mercado_sigla ?? null,
+      estagios: (p.estagios ?? []).map((e) => ({
+        slug: e.slug,
+        label: e.label,
+        cor: e.cor || "#6B7280",
+        ativo: e.ativo !== false,
+        ordem: e.ordem,
+      })),
+    }));
+  }, [pipelinesLeadQuery.data]);
 
-  const carregar = useCallback(async () => {
-    const vw = await supabase
-      .from("vw_hub_leads_crm_enriquecido")
-      .select("*")
-      .order("criado_em", { ascending: false });
+  const estagiosAtendimento = useMemo(() => {
+    const pipeAt = pipelinesAtendimentoQuery.data?.[0];
+    const cols =
+      pipeAt?.estagios
+        ?.filter((e) => e.ativo !== false)
+        .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+        .map((e) => ({ id: e.slug, label: e.label, color: e.cor || "#6B7280" })) ?? [];
+    return cols.length ? cols : ESTAGIOS_ATENDIMENTO_UI;
+  }, [pipelinesAtendimentoQuery.data]);
 
-    if (!vw.error && vw.data) {
-      const rawRows = vw.data as Record<string, unknown>[];
-      const ids = rawRows
-        .map((r) => (r.id != null ? String(r.id) : null))
-        .filter(Boolean) as string[];
-      const pipelineMap = new Map<string, string | null>();
-
-      if (ids.length) {
-        const { data: baseRows } = await supabase
-          .from("hub_leads_crm")
-          .select("id, pipeline_id")
-          .in("id", ids);
-        for (const row of baseRows || []) {
-          pipelineMap.set(String(row.id), row.pipeline_id != null ? String(row.pipeline_id) : null);
-        }
-      }
-
-      const merged: Lead[] = rawRows.map((r) => {
-        const {
-          pessoa_codigo,
-          pessoa_nome_completo: _pn,
-          email_exibicao,
-          ...base
-        } = r;
-        const leadId = r.id != null ? String(r.id) : null;
-        const emailDisp =
-          email_exibicao != null && String(email_exibicao).trim()
-            ? String(email_exibicao).trim()
-            : null;
-        return {
-          ...(base as Omit<Lead, "_pessoa_codigo" | "_email_exibicao">),
-          _pessoa_codigo: pessoa_codigo != null ? String(pessoa_codigo) : null,
-          _email_exibicao: emailDisp,
-          pipeline_id:
-            r.pipeline_id != null
-              ? String(r.pipeline_id)
-              : (leadId ? pipelineMap.get(leadId) ?? null : null),
-          ultima_mensagem_fila:
-            r.ultima_mensagem_fila != null ? String(r.ultima_mensagem_fila) : null,
-          ultima_mensagem_fila_em:
-            r.ultima_mensagem_fila_em != null ? String(r.ultima_mensagem_fila_em) : null,
-          pessoa_cidade: r.pessoa_cidade != null ? String(r.pessoa_cidade) : null,
-          pessoa_estado: r.pessoa_estado != null ? String(r.pessoa_estado) : null,
-          metadata: r.metadata,
-        };
-      });
-      setLeads(merged);
-      return;
-    }
-
-    const { data } = await supabase.from("hub_leads_crm").select("*").order("criado_em", { ascending: false });
-    const raw = (data || []) as Lead[];
-    const pids = [...new Set(raw.map((r) => r.pessoa_id).filter(Boolean))] as string[];
-    const map = new Map<string, { codigo: string | null; email: string | null }>();
-    if (pids.length) {
-      const { data: pes } = await supabase.from("hub_pessoas").select("id, codigo, email").in("id", pids);
-      for (const p of pes || []) {
-        map.set(String(p.id), {
-          codigo: p.codigo != null ? String(p.codigo) : null,
-          email: p.email != null ? String(p.email) : null,
-        });
-      }
-    }
-    const merged: Lead[] = raw.map((r) => {
-      const pe = r.pessoa_id ? map.get(r.pessoa_id) : undefined;
-      const emailLead = (r.email && String(r.email).trim()) || "";
-      const emailP = (pe?.email && String(pe.email).trim()) || "";
-      return {
-        ...r,
-        _pessoa_codigo: pe?.codigo ?? null,
-        _email_exibicao: emailLead || emailP || null,
-      };
+  useEffect(() => {
+    if (!pipelines.length) return;
+    setPipelineId((prev) => {
+      if (prev && pipelines.some((p) => p.id === prev)) return prev;
+      return pipelines[0]?.id ?? null;
     });
-    setLeads(merged);
-  }, []);
+  }, [pipelines]);
 
   useEffect(() => {
     const est = searchParams.get("estagio");
@@ -369,10 +279,6 @@ export default function LeadsPage() {
     }
   }, [searchParams, isMobile, router, leads]);
 
-  useEffect(() => {
-    void carregarPipeline();
-  }, [carregarPipeline]);
-
   const pipelineAtivo = useMemo(
     () => pipelines.find((p) => p.id === pipelineId) ?? null,
     [pipelines, pipelineId]
@@ -393,18 +299,23 @@ export default function LeadsPage() {
   }, [pipelineAtivo]);
 
   useEffect(() => {
-    carregar();
     const ch = supabase.channel("leads_rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "hub_leads_crm" }, (payload) => {
         const leadId =
           (payload.new as { id?: string } | null)?.id ??
           (payload.old as { id?: string } | null)?.id;
         if (leadId && pendingStageMovesRef.current.has(leadId)) return;
-        carregar();
+        if (realtimeInvalidateRef.current) clearTimeout(realtimeInvalidateRef.current);
+        realtimeInvalidateRef.current = setTimeout(() => {
+          void invalidateCrmLeadsList(queryClient);
+        }, 600);
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [carregar]);
+    return () => {
+      if (realtimeInvalidateRef.current) clearTimeout(realtimeInvalidateRef.current);
+      supabase.removeChannel(ch);
+    };
+  }, [queryClient]);
 
   const abrirEditLead = useCallback((lead: Lead) => {
     setEditLead(lead);
@@ -447,7 +358,7 @@ export default function LeadsPage() {
         return true;
       }
       pendingStageMovesRef.current.add(leadId);
-      setLeads((prev) =>
+      patchLeads((prev) =>
         prev.map((l) =>
           l.id === leadId ? { ...l, estagio: novoEstagio, estagio_funil: novoEstagio } : l
         )
@@ -471,7 +382,7 @@ export default function LeadsPage() {
 
     if (!res.ok) {
       if (options?.optimistic && estagioAnterior) {
-        setLeads((prev) =>
+        patchLeads((prev) =>
           prev.map((l) =>
             l.id === leadId ? { ...l, estagio: estagioAnterior, estagio_funil: estagioAnterior } : l
           )
@@ -488,14 +399,14 @@ export default function LeadsPage() {
 
     const data = res.data as { estagio?: string; estagio_funil?: string };
     const est = String(data.estagio_funil ?? data.estagio ?? novoEstagio);
-    setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, estagio: est, estagio_funil: est } : l)));
+    patchLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, estagio: est, estagio_funil: est } : l)));
     if (editLead?.id === leadId) setEditLead((d) => (d ? { ...d, estagio: est, estagio_funil: est } : null));
     return true;
   }
 
   async function onNegocioCreated(lead: Lead, negocioId: string) {
     await moverEstagio(lead.id, "convertido_negocio");
-    void carregar();
+    refreshLeads();
     setEditLead(null);
     setSelectedNegocioId(negocioId);
   }
@@ -1174,6 +1085,10 @@ export default function LeadsPage() {
     />
   );
 
+  if (leadsInitialLoading) {
+    return <CrmLeadsPageSkeleton />;
+  }
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f8fcf6]">
 
@@ -1441,7 +1356,7 @@ export default function LeadsPage() {
           setSideoverInitialTab(undefined);
         }}
         onUpdated={(updated) => {
-          setLeads((prev) =>
+          patchLeads((prev) =>
             prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l))
           );
           setEditLead((prev) =>
@@ -1451,7 +1366,7 @@ export default function LeadsPage() {
         onNotasChanged={recarregarNotasPreviews}
         onEncaminhado={(lead) => {
           void moverEstagio(lead.id, "encaminhado");
-          void carregar();
+          refreshLeads();
         }}
         onNegocioCreated={(lead, negocioId) => void onNegocioCreated(lead as Lead, negocioId)}
         onOpenNegocio={(negocioId) => setSelectedNegocioId(negocioId)}
@@ -1471,7 +1386,7 @@ export default function LeadsPage() {
           onSaved={(lead) => {
             const cod = lead.codigo ? ` (${lead.codigo})` : "";
             setSucessoLead(`Lead criado${cod}.`);
-            void carregar();
+            refreshLeads();
           }}
         />
       )}
@@ -1487,7 +1402,7 @@ export default function LeadsPage() {
         focusCreate={pipelineConfigFocusCreate}
         onSelectPipeline={(id) => setPipelineId(id)}
         onUpdated={() => {
-          void carregarPipeline();
+          void queryClient.invalidateQueries({ queryKey: crmQueryKeys.pipelines("lead") });
         }}
       />
     </div>

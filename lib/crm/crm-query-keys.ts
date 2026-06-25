@@ -24,6 +24,7 @@ export type CrmNegociosFiltros = {
 
 export const crmQueryKeys = {
   all: ["crm"] as const,
+  leads: () => [...crmQueryKeys.all, "leads", "lista"] as const,
   pessoas: (f: CrmPessoasFiltros = {}) => [...crmQueryKeys.all, "pessoas", f] as const,
   empresas: (f: CrmEmpresasFiltros = {}) => [...crmQueryKeys.all, "empresas", f] as const,
   parceiros: () => [...crmQueryKeys.all, "parceiros", "lista"] as const,

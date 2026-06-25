@@ -4,6 +4,7 @@ import { validateAndNormalizeCicloConfiguracoes } from "@/lib/hub-ciclos-configu
 import { purgeOrphanHubCiclos } from "@/lib/hub/purge-orphan-hub-ciclos";
 import { repararCiclosAusentesParaAgentes } from "@/lib/hub/provision-hub-ciclo-padrao";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
+import { resolveValidatedTenantId } from "@/lib/crm/resolve-tenant-from-caller";
 
 type CicloTipo = "continuo" | "programado" | "gatilho";
 
@@ -30,8 +31,10 @@ export async function GET(request: NextRequest) {
   const tipo = searchParams.get("tipo");
   const q = searchParams.get("q");
 
-  const tenantResolved = await requireHubTenantId(request);
-  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const tenantResolved = await resolveValidatedTenantId(request);
+  if (!tenantResolved.ok) {
+    return NextResponse.json({ ciclos: [] });
+  }
   const tenantId = tenantResolved.tenantId;
 
   await purgeOrphanHubCiclos(supabase);
@@ -57,7 +60,17 @@ export async function GET(request: NextRequest) {
     }
     query = query.in("agente_slug", slugs);
   } else {
-    return NextResponse.json({ error: tenantProbe.error.message }, { status: 500 });
+    const { data: slugsRows } = await supabase
+      .from("hub_agente_identidade")
+      .select("agente_slug")
+      .eq("tenant_id", tenantId);
+    const slugs = (slugsRows ?? [])
+      .map((r) => (typeof r.agente_slug === "string" ? r.agente_slug.trim() : ""))
+      .filter(Boolean);
+    if (slugs.length === 0) {
+      return NextResponse.json({ ciclos: [] });
+    }
+    query = query.in("agente_slug", slugs);
   }
 
   if (ativo === "true") query = query.eq("ativo", true);

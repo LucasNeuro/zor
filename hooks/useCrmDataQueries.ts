@@ -2,6 +2,7 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { crmQueryKeys, type CrmNegociosFiltros } from "@/lib/crm/crm-query-keys";
 import { listQueryDefaults, ciclosListQueryDefaults } from "@/lib/crm/query-config";
@@ -49,10 +50,19 @@ async function fetchCrmNegociosPage(f: CrmNegociosFiltros): Promise<CrmNegociosP
 }
 
 async function fetchHubCiclosList(): Promise<Record<string, unknown>[]> {
-  const res = await fetch("/api/hub/ciclos", { headers: internalApiHeaders() });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error("Falha ao carregar ciclos.");
-  return Array.isArray(json?.ciclos) ? json.ciclos : [];
+  const res = await fetch("/api/hub/ciclos", { headers: await hubApiHeaders() });
+  const json = (await res.json().catch(() => ({}))) as { ciclos?: unknown; error?: string };
+  if (!res.ok) {
+    if (res.status === 400 || res.status === 404) {
+      return [];
+    }
+    throw new Error(
+      typeof json.error === "string" && json.error.trim()
+        ? json.error
+        : "Falha ao carregar ciclos."
+    );
+  }
+  return Array.isArray(json.ciclos) ? json.ciclos : [];
 }
 
 export function prefetchCrmPipelines(qc: QueryClient, tipo: CrmPipelineTipo) {

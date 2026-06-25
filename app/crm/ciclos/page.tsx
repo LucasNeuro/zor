@@ -1024,12 +1024,12 @@ export default function CiclosPage() {
                   <Zap size={28} color={BRAND_GREEN_BRIGHT} strokeWidth={2} aria-hidden />
                 </div>
                 <h3 style={{ margin: "0 0 8px", color: BRAND_TEXT_DARK, fontSize: 17, fontWeight: 800 }}>
-                  Nenhum ciclo cadastrado
+                  Não há ciclos de agente no momento
                 </h3>
                 <p style={{ margin: "0 auto", maxWidth: 420, color: "#5d7a67", fontSize: 13, lineHeight: 1.55 }}>
-                  Os ciclos são criados automaticamente ao cadastrar um agente IA. Use esta página para
-                  consultar execuções, activar ou editar ciclos de agentes existentes. Follow-up WhatsApp
-                  configura-se em <strong>Agentes → Integrações</strong>.
+                  Os ciclos são criados automaticamente ao cadastrar um agente IA. Quando existirem agentes
+                  activos, aparecerão aqui para consulta, activação e edição. Follow-up WhatsApp configura-se
+                  em <strong>Agentes → Integrações</strong>.
                 </p>
               </div>
             ) : null}

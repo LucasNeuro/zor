@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
+import {
+  compactarOrdemPassosFollowup,
+  reconciliarFollowupPassoLeadsAgente,
+} from "@/lib/hub/followup-db";
 
 function db() {
   return createClient(
@@ -69,12 +73,13 @@ export async function POST(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data: atualizados, error: fetchErr } = await supabase
-    .from("hub_agente_followup_passo")
-    .select("*")
-    .eq("agente_slug", slug)
-    .order("ordem");
+  const { passos: compactados, erro: compactErr } = await compactarOrdemPassosFollowup(
+    supabase,
+    slug
+  );
+  if (compactErr) return NextResponse.json({ error: compactErr }, { status: 500 });
 
-  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
-  return NextResponse.json({ passos: atualizados ?? [] });
+  await reconciliarFollowupPassoLeadsAgente(supabase, slug, compactados);
+
+  return NextResponse.json({ passos: compactados });
 }

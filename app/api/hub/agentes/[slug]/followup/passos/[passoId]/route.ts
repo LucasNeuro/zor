@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
+import {
+  compactarOrdemPassosFollowup,
+  reconciliarFollowupPassoLeadsAgente,
+} from "@/lib/hub/followup-db";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
 import { validarAtrasoPasso, validarHoraDia } from "@/lib/hub/followup-types";
 import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
@@ -151,5 +155,13 @@ export async function DELETE(
     .eq("agente_slug", slug);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+
+  const { passos, erro: compactErr } = await compactarOrdemPassosFollowup(supabase, slug);
+  if (compactErr) {
+    return NextResponse.json({ error: compactErr }, { status: 500 });
+  }
+
+  await reconciliarFollowupPassoLeadsAgente(supabase, slug, passos);
+
+  return NextResponse.json({ ok: true, passos });
 }

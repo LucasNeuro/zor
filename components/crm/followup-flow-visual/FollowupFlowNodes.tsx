@@ -294,6 +294,7 @@ export function FollowupPassoNode({ id, data, selected }: NodeProps) {
   const theme = KIND_THEME[d.kind === "start" ? "texto" : d.kind] ?? KIND_THEME.texto;
   const { onSelect } = useContext(FollowupNodeCallbacksContext);
   const passoId = d.passoId ?? id;
+  const posicao = d.posicao ?? d.ordem ?? "?";
   const preview = summarizeFollowupText(d.textoPreview ?? "", 88);
 
   return (
@@ -302,8 +303,8 @@ export function FollowupPassoNode({ id, data, selected }: NodeProps) {
       <BaseCard
         selected={selected}
         theme={theme}
-        stepTag={`passo_${d.ordem ?? "?"}`}
-        title={`Passo ${d.ordem ?? "?"}`}
+        stepTag={`passo_${posicao}`}
+        title={`Passo ${posicao}`}
         subtitle={`+${d.atrasoLabel ?? "?"}`}
         content={preview}
         inactive={d.ativo === false}

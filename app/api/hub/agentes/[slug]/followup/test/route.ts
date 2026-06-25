@@ -43,7 +43,8 @@ export async function POST(
   const resultado = await executarFollowupParaAgente(
     supabase,
     config,
-    passos as HubAgenteFollowupPasso[]
+    passos as HubAgenteFollowupPasso[],
+    { diagnostico: true }
   );
 
   return NextResponse.json({

@@ -1,5 +1,12 @@
-import type { FollowupGatilhoTipo } from "@/lib/hub/followup-types";
+import type { FollowupGatilhoTipo, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import { atrasoTotalMinutos, validarHoraDia } from "@/lib/hub/followup-types";
+
+export type MotivoFollowupSkip =
+  | "cadencia_concluida"
+  | "aguardando_gatilho"
+  | "aguardando_atraso_passo"
+  | "aguardando_hora_disparo"
+  | "sem_ultimo_followup";
 
 const TZ_PADRAO = "America/Sao_Paulo";
 
@@ -69,4 +76,93 @@ export function gatilhoDisparoPermitido(params: {
   }
 
   return true;
+}
+
+export type AvaliacaoDisparoPasso = {
+  permitido: boolean;
+  motivo?: MotivoFollowupSkip;
+  detalhe?: string;
+};
+
+/** Primeiro passo: silêncio ≥ gatilho (+ atraso opcional). Demais: tempo desde o passo anterior enviado. */
+export function avaliarDisparoPasso(params: {
+  indicePasso: number;
+  passo: HubAgenteFollowupPasso;
+  gatilho_tipo?: FollowupGatilhoTipo | null;
+  gatilho_dias?: number | null;
+  gatilho_horas?: number | null;
+  gatilho_minutos?: number | null;
+  gatilho_hora_dia?: string | null;
+  minutosSilencio: number;
+  minutosDesdeUltimoFollowup: number | null;
+}): AvaliacaoDisparoPasso {
+  const { indicePasso, passo, minutosSilencio, minutosDesdeUltimoFollowup } = params;
+  const atrasoPasso = atrasoTotalMinutos(passo);
+  const gatilhoMin = gatilhoSilencioMinutos(params);
+
+  if (indicePasso === 0) {
+    if (gatilhoMin > 0 && minutosSilencio < gatilhoMin) {
+      const falta = Math.ceil(gatilhoMin - minutosSilencio);
+      return {
+        permitido: false,
+        motivo: "aguardando_gatilho",
+        detalhe: `faltam ${falta} min de silêncio do cliente`,
+      };
+    }
+
+    if (params.gatilho_tipo === "horario" && params.gatilho_hora_dia?.trim()) {
+      if (!horaDiaAtingida(params.gatilho_hora_dia)) {
+        return {
+          permitido: false,
+          motivo: "aguardando_hora_disparo",
+          detalhe: `gatilho às ${params.gatilho_hora_dia.trim()}`,
+        };
+      }
+    }
+
+    if (atrasoPasso > 0) {
+      const totalSilencio = gatilhoMin + atrasoPasso;
+      if (minutosSilencio < totalSilencio) {
+        const falta = Math.ceil(totalSilencio - minutosSilencio);
+        return {
+          permitido: false,
+          motivo: "aguardando_atraso_passo",
+          detalhe: `passo 1: faltam ${falta} min após o gatilho`,
+        };
+      }
+    }
+
+    if (passo.disparo_hora_dia?.trim() && !horaDiaAtingida(passo.disparo_hora_dia)) {
+      return {
+        permitido: false,
+        motivo: "aguardando_hora_disparo",
+        detalhe: `passo às ${passo.disparo_hora_dia.trim()}`,
+      };
+    }
+
+    return { permitido: true };
+  }
+
+  if (minutosDesdeUltimoFollowup == null) {
+    return { permitido: false, motivo: "sem_ultimo_followup" };
+  }
+
+  if (atrasoPasso > 0 && minutosDesdeUltimoFollowup < atrasoPasso) {
+    const falta = Math.ceil(atrasoPasso - minutosDesdeUltimoFollowup);
+    return {
+      permitido: false,
+      motivo: "aguardando_atraso_passo",
+      detalhe: `faltam ${falta} min após o passo anterior`,
+    };
+  }
+
+  if (passo.disparo_hora_dia?.trim() && !horaDiaAtingida(passo.disparo_hora_dia)) {
+    return {
+      permitido: false,
+      motivo: "aguardando_hora_disparo",
+      detalhe: `passo às ${passo.disparo_hora_dia.trim()}`,
+    };
+  }
+
+  return { permitido: true };
 }

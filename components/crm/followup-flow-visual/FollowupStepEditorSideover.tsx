@@ -28,6 +28,7 @@ import {
 type Props = {
   agenteSlug: string;
   passosAnteriores?: string[];
+  posicaoVisual?: number;
   theme?: "light" | "dark";
   passo: HubAgenteFollowupPasso;
   saving: boolean;
@@ -62,6 +63,7 @@ function clampHoras(v: number): number {
 export function FollowupStepEditorSideover({
   agenteSlug,
   passosAnteriores = [],
+  posicaoVisual,
   theme = "dark",
   passo,
   saving,
@@ -130,9 +132,10 @@ export function FollowupStepEditorSideover({
   }
 
   const showImagem = draft.tipo_conteudo === "imagem" || draft.tipo_conteudo === "texto_imagem";
+  const posicao = posicaoVisual ?? draft.ordem;
 
   const metaFollowup = {
-    passo_ordem: draft.ordem,
+    passo_ordem: posicao,
     tipo_conteudo: draft.tipo_conteudo,
     atraso_label: formatarAtrasoPasso(draft),
     passos_anteriores: passosAnteriores,
@@ -168,9 +171,11 @@ export function FollowupStepEditorSideover({
       >
         <div>
           <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: colors.textPrimary }}>
-            Passo {draft.ordem}
+            Passo {posicao}
           </p>
-          <p style={{ margin: "2px 0 0", fontSize: 10, color: colors.textMuted }}>Editar lembrete</p>
+          <p style={{ margin: "2px 0 0", fontSize: 10, color: colors.textMuted }}>
+            {posicao === 1 ? "Após o gatilho" : "Após o passo anterior"} · +{formatarAtrasoPasso(draft)}
+          </p>
         </div>
         <button
           type="button"

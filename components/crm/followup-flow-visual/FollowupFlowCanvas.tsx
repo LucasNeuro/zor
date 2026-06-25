@@ -85,7 +85,7 @@ function buildGraph(
       id: passo.id,
       type: "followupPasso",
       position: { x: 0, y },
-      data: passoToNodeData(passo),
+      data: passoToNodeData(passo, index + 1),
       draggable: false,
     });
 
@@ -171,9 +171,9 @@ function FollowupFlowCanvasInner({
 
   const passosAnterioresTexto = useMemo(() => {
     if (!selectedPasso || selectedIndex <= 0) return [];
-    return passosOrdenados.slice(0, selectedIndex).map((p) => {
+    return passosOrdenados.slice(0, selectedIndex).map((p, i) => {
       const t = (p.texto_template || p.legenda_imagem || "").trim();
-      return t || `(passo ${p.ordem} sem texto)`;
+      return t || `(passo ${i + 1} sem texto)`;
     });
   }, [passosOrdenados, selectedPasso, selectedIndex]);
 
@@ -293,6 +293,7 @@ function FollowupFlowCanvasInner({
             <FollowupStepEditorSideover
               agenteSlug={agenteSlug}
               passosAnteriores={passosAnterioresTexto}
+              posicaoVisual={selectedIndex + 1}
               theme={theme}
               passo={selectedPasso}
               saving={saving}

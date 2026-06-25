@@ -201,9 +201,6 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }
 
   async function salvarPassoInner(passo: HubAgenteFollowupPasso): Promise<HubAgenteFollowupPasso> {
-    if (atrasoTotalMinutos(passo) < 1) {
-      throw new Error(`Passo ${passo.ordem}: defina pelo menos 1 minuto de atraso.`);
-    }
     const res = await fetch(`${base}/passos/${encodeURIComponent(passo.id)}`, {
       method: "PATCH",
       headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
@@ -358,20 +355,19 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }
 
   async function adicionarPasso(tipo: FollowupTipoConteudo = "texto") {
-    const maxOrdem = passos.reduce((m, p) => Math.max(m, p.ordem), 0);
-    const ultimo = passos.find((p) => p.ordem === maxOrdem);
-    const totalMin = ultimo ? atrasoTotalMinutos(ultimo) * 2 : 120;
-    const atraso_horas = Math.min(8760, Math.floor(totalMin / 60));
-    const atraso_minutos = totalMin % 60;
+    const proximaOrdem = passosOrdenados.length + 1;
+    const ultimo = passosOrdenados[passosOrdenados.length - 1];
+    const totalMin = ultimo ? Math.max(atrasoTotalMinutos(ultimo) * 2, 120) : 0;
     setSaving(true);
     try {
       const res = await fetch(`${base}/passos`, {
         method: "POST",
         headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
-          ordem: maxOrdem + 1,
-          atraso_horas,
-          atraso_minutos,
+          ordem: proximaOrdem,
+          atraso_dias: 0,
+          atraso_horas: proximaOrdem === 1 ? 0 : Math.min(8760, Math.floor(totalMin / 60)),
+          atraso_minutos: proximaOrdem === 1 ? 0 : totalMin % 60,
           tipo_conteudo: tipo,
           texto_template: tipo === "texto" ? "Olá {nome}, ainda posso ajudar?" : null,
           legenda_imagem: tipo === "texto_imagem" ? "Olá {nome}, ainda posso ajudar?" : null,
@@ -405,11 +401,14 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         method: "DELETE",
         headers: await hubApiHeaders(),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; passos?: HubAgenteFollowupPasso[] };
       if (!res.ok) throw new Error(data.error || "Falha ao excluir");
-      const restantes = passosOrdenados.filter((p) => p.id !== id).map((p, i) => ({ ...p, ordem: i + 1 }));
-      setPassos(restantes);
-      if (restantes.length > 0) await persistirOrdem(restantes);
+      if (data.passos?.length) {
+        setPassos(data.passos);
+      } else {
+        const restantes = passosOrdenados.filter((p) => p.id !== id);
+        setPassos(restantes);
+      }
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao excluir");
     } finally {
@@ -500,14 +499,44 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
           leads_elegiveis: number;
           erros: string[];
           acoes: string[];
+          resumo_skip?: Record<string, number>;
+          diagnosticos?: Array<{ lead_nome: string; motivo: string; detalhe?: string }>;
         };
       };
       if (!res.ok) throw new Error(data.error || "Falha ao testar");
       const r = data.resultado;
       if (r?.erros?.length) setErro(r.erros.slice(0, 3).join(" · "));
+
+      const skipLabels: Record<string, string> = {
+        aguardando_gatilho: "aguardando gatilho",
+        aguardando_atraso_passo: "aguardando atraso do passo",
+        aguardando_hora_disparo: "aguardando horário",
+        cadencia_concluida: "cadência concluída",
+        sem_ultimo_followup: "sem follow-up anterior",
+        sem_passo: "sem passo na fila",
+        sem_telefone: "sem telefone",
+      };
+
+      const skipResumo =
+        r?.resumo_skip && Object.keys(r.resumo_skip).length > 0
+          ? Object.entries(r.resumo_skip)
+              .map(([k, n]) => `${n} ${skipLabels[k] ?? k}`)
+              .join(", ")
+          : "";
+
+      const amostraDiag =
+        r?.diagnosticos && r.diagnosticos.length > 0 && r.enviados === 0
+          ? r.diagnosticos
+              .slice(0, 2)
+              .map((d) => `${d.lead_nome}: ${d.detalhe || skipLabels[d.motivo] || d.motivo}`)
+              .join(" · ")
+          : "";
+
       setOkMsg(
         r
-          ? `Teste: ${r.leads_elegiveis ?? 0} lead(s) elegível(eis), ${r.enviados} enviado(s), ${r.arquivados} arquivado(s).`
+          ? `Teste: ${r.leads_elegiveis ?? 0} lead(s), ${r.enviados} enviado(s), ${r.arquivados} arquivado(s).${
+              skipResumo ? ` Motivos: ${skipResumo}.` : ""
+            }${amostraDiag ? ` Ex.: ${amostraDiag}.` : ""}`
           : "Teste concluído."
       );
     } catch (e) {

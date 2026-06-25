@@ -11,6 +11,8 @@ export type FollowupFlowNodeData = {
   kind: FollowupFlowNodeKind;
   passoId?: string;
   ordem?: number;
+  /** Posição na fila (1..N) — preferir sobre `ordem` na UI. */
+  posicao?: number;
   atrasoLabel?: string;
   gatilhoLabel?: string;
   textoPreview?: string;
@@ -29,7 +31,10 @@ export function configToStartNodeData(config: HubAgenteFollowupConfig | null | u
   };
 }
 
-export function passoToNodeData(passo: HubAgenteFollowupPasso): FollowupFlowNodeData {
+export function passoToNodeData(
+  passo: HubAgenteFollowupPasso,
+  posicao?: number
+): FollowupFlowNodeData {
   const texto =
     passo.tipo_conteudo === "imagem"
       ? passo.legenda_imagem || "Imagem sem legenda"
@@ -39,6 +44,7 @@ export function passoToNodeData(passo: HubAgenteFollowupPasso): FollowupFlowNode
     kind: passo.tipo_conteudo,
     passoId: passo.id,
     ordem: passo.ordem,
+    posicao: posicao ?? passo.ordem,
     atrasoLabel: formatarAtrasoPasso(passo),
     textoPreview: texto,
     imagemUrl: passo.imagem_url,

@@ -70,9 +70,49 @@ export function validarAtrasoPasso(
   if (n.atraso_dias > 365) return "Dias inválidos (0–365).";
   if (n.atraso_horas > 8760) return "Horas inválidas (0–8760).";
   const total = atrasoTotalMinutos(n);
-  if (total < 1) return "Atraso mínimo: 1 minuto.";
+  if (total < 0) return "Atraso inválido.";
   if (total > 8760 * 60) return "Atraso máximo excedido.";
   return null;
+}
+
+export function passosAtivosOrdenados(passos: HubAgenteFollowupPasso[]): HubAgenteFollowupPasso[] {
+  return passos.filter((p) => p.ativo).sort((a, b) => a.ordem - b.ordem);
+}
+
+export function ordemPassosSequencial(passos: HubAgenteFollowupPasso[]): boolean {
+  const sorted = [...passos].sort((a, b) => a.ordem - b.ordem);
+  return sorted.every((p, i) => p.ordem === i + 1);
+}
+
+/**
+ * Quantos passos da cadência já foram enviados (0 = nenhum).
+ * Compatível com legado (valor = ordem DB do último passo) e novo modelo (contagem 1..N).
+ */
+export function passosEnviadosCount(
+  followup_passo: number | null | undefined,
+  passosAtivos: HubAgenteFollowupPasso[]
+): number {
+  const v = followup_passo ?? 0;
+  if (v <= 0 || passosAtivos.length === 0) return 0;
+
+  const idxPorOrdem = passosAtivos.findIndex((p) => p.ordem === v);
+  if (idxPorOrdem >= 0) return idxPorOrdem + 1;
+
+  if (v <= passosAtivos.length && ordemPassosSequencial(passosAtivos)) {
+    return v;
+  }
+
+  if (v <= passosAtivos.length) return v;
+
+  return passosAtivos.length;
+}
+
+/** Índice 0-based do próximo passo a enviar na fila ordenada. */
+export function indiceProximoPasso(
+  followup_passo: number | null | undefined,
+  passosAtivos: HubAgenteFollowupPasso[]
+): number {
+  return passosEnviadosCount(followup_passo, passosAtivos);
 }
 
 export function validarHoraDia(v: string | null | undefined): string | null {
@@ -99,7 +139,7 @@ export function formatarAtrasoPasso(p: AtrasoCampos): string {
   if (n.atraso_dias > 0) parts.push(n.atraso_dias === 1 ? "1d" : `${n.atraso_dias}d`);
   if (n.atraso_horas > 0) parts.push(n.atraso_horas === 1 ? "1h" : `${n.atraso_horas}h`);
   if (n.atraso_minutos > 0) parts.push(n.atraso_minutos === 1 ? "1min" : `${n.atraso_minutos}min`);
-  if (parts.length === 0) return "1min";
+  if (parts.length === 0) return "imediato";
   return parts.join(" ");
 }
 

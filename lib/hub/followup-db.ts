@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   FOLLOWUP_PASSOS_DEFAULT,
+  passosAtivosOrdenados,
+  passosEnviadosCount,
   type HubAgenteFollowupConfig,
   type HubAgenteFollowupPasso,
 } from "@/lib/hub/followup-types";
@@ -85,4 +87,81 @@ export async function provisionHubAgenteFollowupConfig(
   const pack = await obterOuCriarFollowupConfig(supabase, agenteSlug, tenantId);
   if (!pack) return { criado: false, erro: "Não foi possível provisionar follow-up." };
   return { criado: true };
+}
+
+/** Renumera passos para ordem contígua 1..N (idempotente). */
+export async function compactarOrdemPassosFollowup(
+  supabase: SupabaseClient,
+  agenteSlug: string
+): Promise<{ passos: HubAgenteFollowupPasso[]; erro?: string }> {
+  const { data: passos, error: listErr } = await supabase
+    .from("hub_agente_followup_passo")
+    .select("*")
+    .eq("agente_slug", agenteSlug)
+    .order("ordem");
+
+  if (listErr) return { passos: [], erro: listErr.message };
+  const lista = (passos || []) as HubAgenteFollowupPasso[];
+  if (lista.length === 0) return { passos: [] };
+
+  const ids = lista.map((p) => p.id);
+  for (let i = 0; i < ids.length; i++) {
+    const { error } = await supabase
+      .from("hub_agente_followup_passo")
+      .update({ ordem: 1000 + i })
+      .eq("id", ids[i]!)
+      .eq("agente_slug", agenteSlug);
+    if (error) return { passos: lista, erro: error.message };
+  }
+
+  for (let i = 0; i < ids.length; i++) {
+    const { error } = await supabase
+      .from("hub_agente_followup_passo")
+      .update({ ordem: i + 1 })
+      .eq("id", ids[i]!)
+      .eq("agente_slug", agenteSlug);
+    if (error) return { passos: lista, erro: error.message };
+  }
+
+  const { data: atualizados, error: fetchErr } = await supabase
+    .from("hub_agente_followup_passo")
+    .select("*")
+    .eq("agente_slug", agenteSlug)
+    .order("ordem");
+
+  if (fetchErr) return { passos: lista, erro: fetchErr.message };
+  return { passos: (atualizados || []) as HubAgenteFollowupPasso[] };
+}
+
+/** Normaliza followup_passo nos leads após mudança na cadência (apaga buracos / legado por ordem). */
+export async function reconciliarFollowupPassoLeadsAgente(
+  supabase: SupabaseClient,
+  agenteSlug: string,
+  passos: HubAgenteFollowupPasso[]
+): Promise<number> {
+  const passosAtivos = passosAtivosOrdenados(passos);
+  const maxEnviados = passosAtivos.length;
+
+  const { data: leads, error } = await supabase
+    .from("hub_leads_crm")
+    .select("id, followup_passo")
+    .eq("agente_responsavel", agenteSlug)
+    .gt("followup_passo", 0);
+
+  if (error || !leads?.length) return 0;
+
+  let ajustados = 0;
+  for (const lead of leads) {
+    const normalizado = passosEnviadosCount(lead.followup_passo, passosAtivos);
+    const capped = Math.min(normalizado, maxEnviados);
+    if (capped !== lead.followup_passo) {
+      const { error: upErr } = await supabase
+        .from("hub_leads_crm")
+        .update({ followup_passo: capped })
+        .eq("id", lead.id);
+      if (!upErr) ajustados += 1;
+    }
+  }
+
+  return ajustados;
 }

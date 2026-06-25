@@ -1,12 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsapp";
 import {
-  atrasoTotalMinutos,
+  indiceProximoPasso,
   interpolarTemplateFollowup,
+  passosAtivosOrdenados,
+  passosEnviadosCount,
   type HubAgenteFollowupConfig,
   type HubAgenteFollowupPasso,
 } from "@/lib/hub/followup-types";
-import { gatilhoDisparoPermitido } from "@/lib/hub/followup-schedule";
+import { avaliarDisparoPasso, type MotivoFollowupSkip } from "@/lib/hub/followup-schedule";
 import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
 type LeadFollowupRow = {
@@ -26,6 +28,14 @@ type LeadFollowupRow = {
   humano_responsavel: string | null;
 };
 
+export type FollowupLeadDiagnostico = {
+  lead_id: string;
+  lead_nome: string;
+  motivo: MotivoFollowupSkip | "sem_passo" | "sem_telefone";
+  detalhe?: string;
+  proximo_passo?: number;
+};
+
 export type FollowupRunResult = {
   agente_slug: string;
   enviados: number;
@@ -33,6 +43,13 @@ export type FollowupRunResult = {
   leads_elegiveis: number;
   erros: string[];
   acoes: string[];
+  diagnosticos?: FollowupLeadDiagnostico[];
+  resumo_skip?: Partial<Record<MotivoFollowupSkip | "sem_passo" | "sem_telefone", number>>;
+};
+
+export type FollowupRunOptions = {
+  /** Inclui motivos de skip por lead (útil no botão "Testar envio"). */
+  diagnostico?: boolean;
 };
 
 function relogioCliente(lead: LeadFollowupRow): Date {
@@ -45,6 +62,23 @@ function relogioCliente(lead: LeadFollowupRow): Date {
   if (!raw) return new Date(0);
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? new Date(0) : d;
+}
+
+function minutosDesde(iso: string | null | undefined, agoraMs: number): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return (agoraMs - d.getTime()) / 60_000;
+}
+
+function registrarSkip(
+  result: FollowupRunResult,
+  diag: FollowupLeadDiagnostico
+): void {
+  if (!result.diagnosticos) result.diagnosticos = [];
+  if (!result.resumo_skip) result.resumo_skip = {};
+  result.diagnosticos.push(diag);
+  result.resumo_skip[diag.motivo] = (result.resumo_skip[diag.motivo] ?? 0) + 1;
 }
 
 async function enviarPassoFollowup(params: {
@@ -85,7 +119,8 @@ async function enviarPassoFollowup(params: {
 export async function executarFollowupParaAgente(
   supabase: SupabaseClient,
   config: HubAgenteFollowupConfig,
-  passos: HubAgenteFollowupPasso[]
+  passos: HubAgenteFollowupPasso[],
+  options?: FollowupRunOptions
 ): Promise<FollowupRunResult> {
   const slug = config.agente_slug;
   const result: FollowupRunResult = {
@@ -97,9 +132,14 @@ export async function executarFollowupParaAgente(
     acoes: [],
   };
 
+  if (options?.diagnostico) {
+    result.diagnosticos = [];
+    result.resumo_skip = {};
+  }
+
   if (!config.ativo || passos.length === 0) return result;
 
-  const passosAtivos = passos.filter((p) => p.ativo).sort((a, b) => a.ordem - b.ordem);
+  const passosAtivos = passosAtivosOrdenados(passos);
   if (passosAtivos.length === 0) return result;
 
   const { token: instanceToken } = await resolverTokenInstanciaWhatsapp(supabase, slug);
@@ -112,7 +152,6 @@ export async function executarFollowupParaAgente(
     return result;
   }
 
-  const maxOrdem = passosAtivos[passosAtivos.length - 1]?.ordem ?? 0;
   const arquivarHoras = config.arquivar_apos_dias * 24;
 
   const { data: leads, error } = await supabase
@@ -137,16 +176,26 @@ export async function executarFollowupParaAgente(
 
   for (const lead of listaLeads) {
     const tel = (lead.telefone || "").trim();
-    if (!tel) continue;
+    if (!tel) {
+      if (options?.diagnostico) {
+        registrarSkip(result, {
+          lead_id: lead.id,
+          lead_nome: lead.nome,
+          motivo: "sem_telefone",
+        });
+      }
+      continue;
+    }
 
-    const passoAtual = lead.followup_passo ?? 0;
-    const proximaOrdem = passoAtual + 1;
-    const passo = passosAtivos.find((p) => p.ordem === proximaOrdem);
+    const enviadosCount = passosEnviadosCount(lead.followup_passo, passosAtivos);
+    const indicePasso = indiceProximoPasso(lead.followup_passo, passosAtivos);
+    const passo = passosAtivos[indicePasso];
     const inicioSilencio = relogioCliente(lead);
     const minutosSilencio = (agora - inicioSilencio.getTime()) / 60_000;
     const horasSilencio = minutosSilencio / 60;
+    const minutosDesdeUltimoFollowup = minutosDesde(lead.ultimo_followup, agora);
 
-    if (!passo && passoAtual >= maxOrdem && horasSilencio >= arquivarHoras) {
+    if (!passo && enviadosCount >= passosAtivos.length && horasSilencio >= arquivarHoras) {
       await supabase
         .from("hub_leads_crm")
         .update({ estagio: "arquivado", followup_pausado: true })
@@ -156,20 +205,41 @@ export async function executarFollowupParaAgente(
       continue;
     }
 
-    if (!passo) continue;
-    if (minutosSilencio < atrasoTotalMinutos(passo)) continue;
+    if (!passo) {
+      if (options?.diagnostico) {
+        registrarSkip(result, {
+          lead_id: lead.id,
+          lead_nome: lead.nome,
+          motivo: "cadencia_concluida",
+          detalhe: `${enviadosCount}/${passosAtivos.length} passos enviados`,
+        });
+      }
+      continue;
+    }
 
-    if (
-      !gatilhoDisparoPermitido({
-        gatilho_tipo: config.gatilho_tipo ?? "silencio",
-        gatilho_dias: config.gatilho_dias,
-        gatilho_horas: config.gatilho_horas,
-        gatilho_minutos: config.gatilho_minutos,
-        gatilho_hora_dia: config.gatilho_hora_dia,
-        minutosSilencio,
-        disparo_hora_dia: passo.disparo_hora_dia,
-      })
-    ) {
+    const posicaoPasso = indicePasso + 1;
+    const avaliacao = avaliarDisparoPasso({
+      indicePasso,
+      passo,
+      gatilho_tipo: config.gatilho_tipo ?? "silencio",
+      gatilho_dias: config.gatilho_dias,
+      gatilho_horas: config.gatilho_horas,
+      gatilho_minutos: config.gatilho_minutos,
+      gatilho_hora_dia: config.gatilho_hora_dia,
+      minutosSilencio,
+      minutosDesdeUltimoFollowup,
+    });
+
+    if (!avaliacao.permitido) {
+      if (options?.diagnostico && avaliacao.motivo) {
+        registrarSkip(result, {
+          lead_id: lead.id,
+          lead_nome: lead.nome,
+          motivo: avaliacao.motivo,
+          detalhe: avaliacao.detalhe,
+          proximo_passo: posicaoPasso,
+        });
+      }
       continue;
     }
 
@@ -195,6 +265,7 @@ export async function executarFollowupParaAgente(
     }
 
     const agoraIso = new Date().toISOString();
+    const novoEnviadosCount = enviadosCount + 1;
 
     await supabase.from("hub_fila_mensagens").insert({
       lead_id: lead.id,
@@ -205,7 +276,9 @@ export async function executarFollowupParaAgente(
       status: "enviado",
       metadata: {
         tipo: "followup_automatico",
-        passo: proximaOrdem,
+        passo: posicaoPasso,
+        passo_id: passo.id,
+        passo_ordem: passo.ordem,
         agente_slug: slug,
         imagem_url: passo.imagem_url,
       },
@@ -214,7 +287,7 @@ export async function executarFollowupParaAgente(
     await supabase
       .from("hub_leads_crm")
       .update({
-        followup_passo: proximaOrdem,
+        followup_passo: novoEnviadosCount,
         ultimo_followup: agoraIso,
         proximo_followup: null,
       })
@@ -235,7 +308,8 @@ export async function executarFollowupParaAgente(
         acoes_tomadas: {
           acao: "followup_automatico",
           lead_id: lead.id,
-          passo: proximaOrdem,
+          passo: posicaoPasso,
+          passo_id: passo.id,
         },
         iniciado_em: agoraIso,
         finalizado_em: agoraIso,
@@ -256,7 +330,7 @@ export async function executarFollowupParaAgente(
     }
 
     result.enviados += 1;
-    result.acoes.push(`Passo ${proximaOrdem} → ${lead.nome}`);
+    result.acoes.push(`Passo ${posicaoPasso} → ${lead.nome}`);
   }
 
   return result;

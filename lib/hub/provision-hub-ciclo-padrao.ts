@@ -135,8 +135,11 @@ export async function ensureHubCicloPadraoParaAgente(
 /** Garante linha em hub_ciclos_ia para agentes sem ciclo (ex.: falha no wizard). */
 export async function repararCiclosAusentesParaAgentes(
   supabase: SupabaseClient,
-  maxAgentes = 48
+  opts?: { tenantId?: string | null; maxAgentes?: number }
 ): Promise<{ reparados: number; erros: string[] }> {
+  const maxAgentes = opts?.maxAgentes ?? 48;
+  const tenantId = typeof opts?.tenantId === "string" && opts.tenantId.trim() ? opts.tenantId.trim() : null;
+
   const { data: ciclos, error: cErr } = await supabase.from("hub_ciclos_ia").select("agente_slug");
   if (cErr) return { reparados: 0, erros: [cErr.message] };
 
@@ -146,11 +149,34 @@ export async function repararCiclosAusentesParaAgentes(
       .filter(Boolean)
   );
 
-  const { data: agentes, error: aErr } = await supabase
-    .from("hub_agente_identidade")
-    .select("agente_slug")
-    .order("nome")
-    .limit(maxAgentes);
+  let agentesResult;
+  if (tenantId) {
+    agentesResult = await supabase
+      .from("hub_agente_identidade")
+      .select("agente_slug")
+      .eq("tenant_id", tenantId)
+      .order("nome")
+      .limit(maxAgentes);
+    if (
+      agentesResult.error &&
+      /tenant_id/i.test(agentesResult.error.message) &&
+      /column|schema cache|could not find/i.test(agentesResult.error.message)
+    ) {
+      agentesResult = await supabase
+        .from("hub_agente_identidade")
+        .select("agente_slug")
+        .order("nome")
+        .limit(maxAgentes);
+    }
+  } else {
+    agentesResult = await supabase
+      .from("hub_agente_identidade")
+      .select("agente_slug")
+      .order("nome")
+      .limit(maxAgentes);
+  }
+
+  const { data: agentes, error: aErr } = agentesResult;
   if (aErr) return { reparados: 0, erros: [aErr.message] };
 
   let reparados = 0;

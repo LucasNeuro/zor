@@ -5,6 +5,7 @@ import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
 import { reativarFollowupLeadsAgente } from "@/lib/hub/followup-lead-state";
 import { validarAtrasoPasso, validarHoraDia } from "@/lib/hub/followup-types";
 import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
+import { WA_LIVE_STATUSES } from "@/lib/whatsapp/resolver-linha-whatsapp";
 
 function db() {
   return createClient(
@@ -30,7 +31,9 @@ export async function GET(
 
   const { data: agente } = await supabase
     .from("hub_agente_identidade")
-    .select("agente_slug, tenant_id, modo_operacao")
+    .select(
+      "agente_slug, tenant_id, modo_operacao, uazapi_instance_id, uazapi_instance_name, uazapi_connection_status, uazapi_instance_token"
+    )
     .eq("agente_slug", slug)
     .maybeSingle();
 
@@ -45,10 +48,33 @@ export async function GET(
     return NextResponse.json({ error: "Falha ao carregar follow-up." }, { status: 500 });
   }
 
+  const modoOperacao =
+    typeof agente.modo_operacao === "string" ? agente.modo_operacao.trim() : "";
+  const instanceId =
+    typeof agente.uazapi_instance_id === "string" ? agente.uazapi_instance_id.trim() : "";
+  const instanceName =
+    typeof agente.uazapi_instance_name === "string" ? agente.uazapi_instance_name.trim() : "";
+  const connectionStatus =
+    typeof agente.uazapi_connection_status === "string"
+      ? agente.uazapi_connection_status.trim().toLowerCase()
+      : "";
+  const hasToken =
+    typeof agente.uazapi_instance_token === "string" &&
+    agente.uazapi_instance_token.trim().length > 0;
+  const whatsappConectado = connectionStatus ? WA_LIVE_STATUSES.has(connectionStatus) : false;
+
   return NextResponse.json({
     config: pack.config,
     passos: pack.passos,
-    modo_operacao: agente.modo_operacao ?? null,
+    modo_operacao: modoOperacao || null,
+    canal_whatsapp: {
+      modo_whatsapp: modoOperacao === "canal_whatsapp",
+      instance_id: instanceId || null,
+      instance_name: instanceName || null,
+      connection_status: connectionStatus || null,
+      has_instance_token: hasToken,
+      pronto_para_envio: modoOperacao === "canal_whatsapp" && hasToken && whatsappConectado,
+    },
   });
 }
 

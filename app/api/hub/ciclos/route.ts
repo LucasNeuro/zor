@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { validateAndNormalizeCicloConfiguracoes } from "@/lib/hub-ciclos-configuracoes";
+import { purgeOrphanHubCiclos } from "@/lib/hub/purge-orphan-hub-ciclos";
 import { repararCiclosAusentesParaAgentes } from "@/lib/hub/provision-hub-ciclo-padrao";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 
@@ -29,7 +30,35 @@ export async function GET(request: NextRequest) {
   const tipo = searchParams.get("tipo");
   const q = searchParams.get("q");
 
+  const tenantResolved = await requireHubTenantId(request);
+  if (tenantResolved instanceof NextResponse) return tenantResolved;
+  const tenantId = tenantResolved.tenantId;
+
+  await purgeOrphanHubCiclos(supabase);
+
   let query = supabase.from("hub_ciclos_ia").select("*").order("agente_slug").order("nome");
+
+  const tenantProbe = await supabase.from("hub_ciclos_ia").select("id").eq("tenant_id", tenantId).limit(1);
+  if (!tenantProbe.error) {
+    query = query.eq("tenant_id", tenantId);
+  } else if (
+    /tenant_id/i.test(tenantProbe.error.message) &&
+    /column|schema cache|could not find/i.test(tenantProbe.error.message)
+  ) {
+    const { data: slugsRows } = await supabase
+      .from("hub_agente_identidade")
+      .select("agente_slug")
+      .eq("tenant_id", tenantId);
+    const slugs = (slugsRows ?? [])
+      .map((r) => (typeof r.agente_slug === "string" ? r.agente_slug.trim() : ""))
+      .filter(Boolean);
+    if (slugs.length === 0) {
+      return NextResponse.json({ ciclos: [] });
+    }
+    query = query.in("agente_slug", slugs);
+  } else {
+    return NextResponse.json({ error: tenantProbe.error.message }, { status: 500 });
+  }
 
   if (ativo === "true") query = query.eq("ativo", true);
   if (ativo === "false") query = query.eq("ativo", false);
@@ -42,7 +71,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const repair = await repararCiclosAusentesParaAgentes(supabase);
+  const repair = await repararCiclosAusentesParaAgentes(supabase, { tenantId });
   if (repair.reparados > 0) {
     ({ data, error } = await query);
     if (error) {

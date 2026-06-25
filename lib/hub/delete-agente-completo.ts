@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { invalidateTenantCachePrefix } from "@/lib/cache/tenant-cache";
 import { apagarStorageRagAgente } from "@/lib/hub/delete-agente-rag-storage";
+import { purgeOrphanHubCiclos } from "@/lib/hub/purge-orphan-hub-ciclos";
 import { PLAYBOOK_BUCKET, playbookAgentFolderPath, playbookObjectPath } from "@/lib/playbook/persist";
-import { deleteUazapiInstanceRemotely } from "@/lib/whatsapp/uazapi-delete-instance";
+import { deleteUazapiInstanceForAgent } from "@/lib/whatsapp/uazapi-delete-instance";
+import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 
 function ignorable(msg: string): boolean {
   return /does not exist|schema cache|could not find/i.test(msg);
@@ -15,6 +18,8 @@ type IdentRow = {
   tenant_id?: string | null;
   playbook_object_path?: string | null;
   uazapi_instance_token?: string | null;
+  uazapi_instance_id?: string | null;
+  uazapi_instance_name?: string | null;
 };
 
 /** Carrega identidade com colunas mínimas — evita falso 404 quando migrações antigas faltam colunas. */
@@ -23,6 +28,7 @@ async function carregarIdentidadeAgente(
   slug: string
 ): Promise<{ row: IdentRow | null; error: string | null }> {
   const selects = [
+    "id, agente_slug, tenant_id, playbook_object_path, uazapi_instance_token, uazapi_instance_id, uazapi_instance_name",
     "id, agente_slug, tenant_id, playbook_object_path, uazapi_instance_token",
     "id, agente_slug, tenant_id, playbook_object_path",
     "id, agente_slug, tenant_id",
@@ -61,6 +67,37 @@ function erroRpcNaoInstalado(msg: string): boolean {
   return /hub_delete_agente_cascade|PGRST202|42883|function.*does not exist/i.test(msg);
 }
 
+async function apagarFollowupStorageAgente(
+  supabase: SupabaseClient,
+  tenantId: string | null,
+  slug: string
+): Promise<void> {
+  const prefixes = [
+    tenantId ? `${tenantId}/${slug}` : null,
+    slug,
+  ].filter((p): p is string => Boolean(p));
+
+  for (const prefix of prefixes) {
+    const listed = await supabase.storage.from("agent-followup").list(prefix, { limit: 200 });
+    if (listed.error && !ignorable(listed.error.message)) {
+      console.warn("[agente-delete] list followup storage", prefix, listed.error.message);
+      continue;
+    }
+    const paths = (listed.data || [])
+      .map((item) => {
+        const name = String(item.name || "").trim();
+        return name ? `${prefix}/${name}` : "";
+      })
+      .filter(Boolean);
+    if (paths.length > 0) {
+      const { error } = await supabase.storage.from("agent-followup").remove(paths);
+      if (error && !ignorable(error.message)) {
+        console.warn("[agente-delete] remove followup storage", error.message);
+      }
+    }
+  }
+}
+
 /** Apaga satélites do agente + identidade via RPC; depois Storage (playbook + RAG). */
 export async function deleteAgenteHubCompleto(
   supabase: SupabaseClient,
@@ -87,7 +124,24 @@ export async function deleteAgenteHubCompleto(
 
   let uazapiRemoteDeleted = false;
   let uazapiDeleteWarning: string | undefined;
-  const uazapiDel = await deleteUazapiInstanceRemotely(ident.uazapi_instance_token);
+
+  const tokenInst =
+    typeof ident.uazapi_instance_token === "string" ? ident.uazapi_instance_token.trim() : "";
+  if (tokenInst) {
+    const disc = await uazapiFetchJson<Record<string, unknown>>("/instance/disconnect", {
+      method: "POST",
+      instanceToken: tokenInst,
+    });
+    if (!disc.ok) {
+      console.warn("[agente-delete] uazapi disconnect", trimmed, disc.error);
+    }
+  }
+
+  const uazapiDel = await deleteUazapiInstanceForAgent({
+    instanceToken: ident.uazapi_instance_token,
+    instanceId: ident.uazapi_instance_id,
+    instanceName: ident.uazapi_instance_name,
+  });
   if (uazapiDel.ok) {
     uazapiRemoteDeleted = uazapiDel.deleted;
   } else {
@@ -141,7 +195,7 @@ export async function deleteAgenteHubCompleto(
       return {
         ok: false,
         error:
-          "Exclusão em cascata não está instalada no Supabase. Aplique a migração 20260618150000_hub_delete_agente_cascade_v2.sql e tente novamente.",
+          "Exclusão em cascata não está instalada no Supabase. Aplique a migração 20260724120000_hub_delete_agente_cascade_v3.sql e tente novamente.",
       };
     }
     return { ok: false, error: rpcErr.message };
@@ -154,13 +208,14 @@ export async function deleteAgenteHubCompleto(
       return {
         ok: false,
         error:
-          "Exclusão em cascata não está instalada no Supabase. Aplique a migração 20260618150000_hub_delete_agente_cascade_v2.sql e tente novamente.",
+          "Exclusão em cascata não está instalada no Supabase. Aplique a migração 20260724120000_hub_delete_agente_cascade_v3.sql e tente novamente.",
       };
     }
     return { ok: false, error: rpcMsg };
   }
 
   await apagarStorageRagAgente(supabase, trimmed, ragPaths);
+  await apagarFollowupStorageAgente(supabase, tenantId, trimmed);
 
   for (const p of paths) {
     if (!p) continue;
@@ -169,6 +224,11 @@ export async function deleteAgenteHubCompleto(
       console.warn("[agente-delete] storage playbook", p, stErr.message);
     }
   }
+
+  if (tenantId) {
+    await invalidateTenantCachePrefix(tenantId, "agentes:");
+  }
+  await purgeOrphanHubCiclos(supabase);
 
   return {
     ok: true,

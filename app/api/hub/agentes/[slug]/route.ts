@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse, after } from "next/server";
 import { runPlaybookPipeline } from "@/lib/playbook/orchestrate";
+import { resolveValidatedTenantId } from "@/lib/crm/resolve-tenant-from-caller";
 import { deleteAgenteHubCompleto } from "@/lib/hub/delete-agente-completo";
 import {
   serializarUsoFerramentasParaDb,
@@ -241,17 +242,41 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });
   }
 
+  const tenantResolved = await resolveValidatedTenantId(req);
+  if (!tenantResolved.ok) {
+    return NextResponse.json({ error: tenantResolved.error }, { status: tenantResolved.status });
+  }
+
   const { slug: raw } = await params;
   const slug = decodeURIComponent(raw);
 
   const supabase = db();
+  const { data: row, error: rowErr } = await supabase
+    .from("hub_agente_identidade")
+    .select("agente_slug, tenant_id")
+    .eq("agente_slug", slug)
+    .maybeSingle();
+
+  if (rowErr) {
+    return NextResponse.json({ error: rowErr.message }, { status: 500 });
+  }
+  if (!row) {
+    return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 });
+  }
+
+  const rowTenant =
+    typeof row.tenant_id === "string" && row.tenant_id.trim() ? row.tenant_id.trim() : null;
+  if (rowTenant && rowTenant !== tenantResolved.tenantId) {
+    return NextResponse.json({ error: "Agente não pertence ao seu tenant." }, { status: 403 });
+  }
+
   const result = await deleteAgenteHubCompleto(supabase, slug);
 
   if (!result.ok) {

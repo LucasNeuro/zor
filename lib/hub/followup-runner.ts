@@ -102,14 +102,13 @@ export async function executarFollowupParaAgente(
   const passosAtivos = passos.filter((p) => p.ativo).sort((a, b) => a.ordem - b.ordem);
   if (passosAtivos.length === 0) return result;
 
-  if (!whatsappConfigured()) {
-    result.erros.push(`${slug}: WhatsApp não configurado.`);
-    return result;
-  }
-
   const { token: instanceToken } = await resolverTokenInstanciaWhatsapp(supabase, slug);
-  if (!instanceToken) {
-    result.erros.push(`${slug}: sem token UAZAPI para o agente.`);
+  if (!whatsappConfigured({ instanceToken })) {
+    result.erros.push(
+      instanceToken
+        ? `${slug}: UAZAPI_BASE_URL não configurado no servidor.`
+        : `${slug}: sem token UAZAPI — configure a instância WhatsApp do agente em Integrações.`
+    );
     return result;
   }
 

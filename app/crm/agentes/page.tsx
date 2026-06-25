@@ -44,6 +44,7 @@ import {
   useHubAgentesList,
   type HubAgenteRow,
 } from "@/hooks/useHubAgentesQueries";
+import { invalidateHubCiclosList } from "@/hooks/useCrmDataQueries";
 import type { HubAgentesListMode } from "@/lib/hub/hub-query-keys";
 import { hubAgentesRootKey } from "@/lib/hub/hub-query-keys";
 import { useCrmListLiveRefresh } from "@/hooks/useCrmListLiveRefresh";
@@ -488,7 +489,7 @@ function AgentesView() {
             : `Erro ${res.status} ao excluir.`;
         toastError(
           msg.includes("hub_delete_agente_cascade") || msg.includes("Exclusão em cascata")
-            ? `${msg} (SQL Editor → supabase/migrations/20260618150000_hub_delete_agente_cascade_v2.sql)`
+            ? `${msg} (SQL Editor → supabase/migrations/20260724120000_hub_delete_agente_cascade_v3.sql)`
             : msg,
           "Falha ao excluir agente"
         );
@@ -503,6 +504,7 @@ function AgentesView() {
           : `Agente «${agente.nome}» excluído.`,
       );
       removeHubAgenteFromCaches(queryClient, agente.agente_slug);
+      invalidateHubCiclosList(queryClient);
       if (selectedSlug === agente.agente_slug) {
         setSelectedSlug(null);
         setDetailErroLocal(null);

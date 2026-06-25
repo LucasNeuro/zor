@@ -5,6 +5,7 @@ import {
   Bell,
   ChevronRight,
   Loader2,
+  MessageCircle,
   Play,
   Workflow,
 } from "lucide-react";
@@ -30,6 +31,15 @@ import {
   configGatilhoPadrao,
   formatarGatilhoConfig,
 } from "@/lib/hub/followup-types";
+
+type FollowupCanalWhatsapp = {
+  modo_whatsapp: boolean;
+  instance_id: string | null;
+  instance_name: string | null;
+  connection_status: string | null;
+  has_instance_token: boolean;
+  pronto_para_envio: boolean;
+};
 
 type Props = {
   agenteSlug: string;
@@ -76,6 +86,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   const [sideoverOpen, setSideoverOpen] = useState(false);
   const [editorFullscreenOpen, setEditorFullscreenOpen] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [canalWhatsapp, setCanalWhatsapp] = useState<FollowupCanalWhatsapp | null>(null);
   const passosRef = useRef<HubAgenteFollowupPasso[]>([]);
 
   const base = `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/followup`;
@@ -120,9 +131,11 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         error?: string;
         config?: HubAgenteFollowupConfig;
         passos?: HubAgenteFollowupPasso[];
+        canal_whatsapp?: FollowupCanalWhatsapp;
       };
       if (!res.ok) throw new Error(data.error || "Falha ao carregar");
       setConfig((prev) => (data.config ? normalizarConfig(data.config) : prev));
+      setCanalWhatsapp(data.canal_whatsapp ?? null);
       const normalizados = Array.isArray(data.passos)
         ? data.passos.map((p) => normalizarPasso(p as HubAgenteFollowupPasso))
         : [];
@@ -503,8 +516,77 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
 
   const gatilhoResumo = config ? formatarGatilhoConfig(config) : "—";
 
+  const whatsappRotuloInstancia =
+    canalWhatsapp?.instance_name?.trim() ||
+    canalWhatsapp?.instance_id?.trim() ||
+    "Sem instância";
+  const whatsappStatus = (canalWhatsapp?.connection_status || "").toLowerCase();
+  const whatsappConectado = whatsappStatus === "connected";
+  const whatsappPronto = canalWhatsapp?.pronto_para_envio === true;
+
   const painelConteudo = (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: whatsappPronto ? "rgba(63, 185, 80, 0.16)" : "rgba(248, 81, 73, 0.12)",
+              border: `1px solid ${whatsappPronto ? "rgba(63, 185, 80, 0.35)" : "rgba(248, 81, 73, 0.35)"}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <MessageCircle size={18} color={whatsappPronto ? "#86efac" : "#f85149"} aria-hidden />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: RF_TEXT_PRIMARY }}>Canal WhatsApp (UAZAPI)</span>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: whatsappPronto ? "#3fb950" : whatsappConectado ? "#d29922" : "#f85149",
+                  textTransform: "uppercase",
+                }}
+              >
+                {whatsappPronto ? "Pronto" : whatsappConectado ? "Parcial" : whatsappStatus || "Não ligado"}
+              </span>
+            </div>
+            <p style={{ margin: "4px 0 0", fontSize: 11, lineHeight: 1.45, color: RF_TEXT_SECONDARY }}>
+              Instância:{" "}
+              <span style={{ fontFamily: "monospace", color: RF_TEXT_PRIMARY }}>{whatsappRotuloInstancia}</span>
+              {canalWhatsapp?.instance_id && canalWhatsapp.instance_name ? (
+                <>
+                  {" "}
+                  · ID{" "}
+                  <span style={{ fontFamily: "monospace", fontSize: 10, color: RF_TEXT_MUTED }}>
+                    {canalWhatsapp.instance_id}
+                  </span>
+                </>
+              ) : null}
+            </p>
+            {!whatsappPronto ? (
+              <p style={{ margin: "6px 0 0", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+                {canalWhatsapp?.modo_whatsapp === false
+                  ? "Defina o modo de operação WhatsApp no agente."
+                  : !canalWhatsapp?.has_instance_token
+                    ? "Vincule a instância UAZAPI em Integrações para o follow-up poder enviar."
+                    : "Instância sem conexão ativa — reconecte o número na UAZAPI."}
+              </p>
+            ) : (
+              <p style={{ margin: "6px 0 0", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+                Os lembretes saem por esta instância (webhook global + token do agente).
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
         <div
           style={{

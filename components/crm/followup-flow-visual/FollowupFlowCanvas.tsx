@@ -40,6 +40,7 @@ const NODE_H = 180;
 const V_GAP = 96;
 
 type Props = {
+  agenteSlug: string;
   config: HubAgenteFollowupConfig;
   passos: HubAgenteFollowupPasso[];
   saving: boolean;
@@ -111,6 +112,7 @@ function buildGraph(
 }
 
 function FollowupFlowCanvasInner({
+  agenteSlug,
   config,
   passos,
   saving,
@@ -166,6 +168,14 @@ function FollowupFlowCanvasInner({
   const selectedIndex = selectedPasso
     ? passosOrdenados.findIndex((p) => p.id === selectedPasso.id)
     : -1;
+
+  const passosAnterioresTexto = useMemo(() => {
+    if (!selectedPasso || selectedIndex <= 0) return [];
+    return passosOrdenados.slice(0, selectedIndex).map((p) => {
+      const t = (p.texto_template || p.legenda_imagem || "").trim();
+      return t || `(passo ${p.ordem} sem texto)`;
+    });
+  }, [passosOrdenados, selectedPasso, selectedIndex]);
 
   useEffect(() => {
     if (selectedId && !passosOrdenados.some((p) => p.id === selectedId)) {
@@ -281,6 +291,8 @@ function FollowupFlowCanvasInner({
 
           {selectedPasso ? (
             <FollowupStepEditorSideover
+              agenteSlug={agenteSlug}
+              passosAnteriores={passosAnterioresTexto}
               theme={theme}
               passo={selectedPasso}
               saving={saving}

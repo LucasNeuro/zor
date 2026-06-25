@@ -20,6 +20,7 @@ import { configPersistenciaSnapshot, passoPersistenciaSnapshot } from "./types";
 type Props = {
   open: boolean;
   onClose: () => void;
+  agenteSlug: string;
   agenteNome: string;
   config: HubAgenteFollowupConfig;
   passos: HubAgenteFollowupPasso[];
@@ -47,6 +48,7 @@ function fluxoSnapshot(config: HubAgenteFollowupConfig, passos: HubAgenteFollowu
 export function FollowupFlowVisualFullscreen({
   open,
   onClose,
+  agenteSlug,
   agenteNome,
   config,
   passos,
@@ -153,6 +155,7 @@ export function FollowupFlowVisualFullscreen({
 
       <main style={mainStyle}>
         <FollowupFlowReactFlowPanel
+          agenteSlug={agenteSlug}
           config={config}
           passos={passos}
           saving={saving || savingDraft}

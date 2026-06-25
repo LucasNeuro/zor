@@ -734,6 +734,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         <FollowupFlowVisualFullscreen
           open
           onClose={() => setEditorFullscreenOpen(false)}
+          agenteSlug={agenteSlug}
           agenteNome={nomeAgente}
           config={config}
           passos={passosOrdenados}
@@ -864,6 +865,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       <FollowupFlowVisualFullscreen
         open
         onClose={() => setEditorFullscreenOpen(false)}
+        agenteSlug={agenteSlug}
         agenteNome={nomeAgente}
         config={config}
         passos={passosOrdenados}

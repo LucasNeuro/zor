@@ -34,6 +34,7 @@ const FollowupFlowCanvas = dynamic(
 export type { FollowupFlowCanvasApi };
 
 type Props = {
+  agenteSlug: string;
   config: HubAgenteFollowupConfig;
   passos: HubAgenteFollowupPasso[];
   saving: boolean;
@@ -58,6 +59,7 @@ type Props = {
 };
 
 export function FollowupFlowReactFlowPanel({
+  agenteSlug,
   config,
   passos,
   saving,
@@ -235,6 +237,7 @@ export function FollowupFlowReactFlowPanel({
         }}
       >
         <FollowupFlowCanvas
+          agenteSlug={agenteSlug}
           config={config}
           passos={passos}
           saving={saving}

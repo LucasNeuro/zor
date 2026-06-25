@@ -20,6 +20,7 @@ import { emitFlowVisualTelemetry } from "@/lib/playbook/flow-visual-telemetry";
 import { validatePlaybookFlowDefinition } from "@/lib/playbook/flow-validate";
 import { PLAYBOOK_FLOW_FENCE_TAG } from "@/lib/playbook/flow-schema";
 import { buildStarterPlaybookFlowDefinition } from "@/lib/playbook/playbook-flow-starter";
+import { TextareaComSugestaoIa } from "@/components/crm/TextareaComSugestaoIa";
 
 type Props = {
   markdown: string;
@@ -359,17 +360,23 @@ export function PlaybookFlowVisualBuilder({
           </div>
 
           {selectedStep.kind === "message" ? (
-            <MessageStepEditor step={selectedStep} disabled={disabled} onChange={(nextStep) => {
+            <MessageStepEditor
+              agenteSlug={agenteSlug}
+              step={selectedStep}
+              disabled={disabled}
+              onChange={(nextStep) => {
               updateDraft((current) => {
                 const next = [...current.steps];
                 next[selectedIndex] = nextStep;
                 return { ...current, steps: next };
               });
-            }} />
+            }}
+            />
           ) : null}
 
           {selectedStep.kind === "menu" ? (
             <MenuStepEditor
+              agenteSlug={agenteSlug}
               step={selectedStep}
               disabled={disabled}
               onChange={(nextStep) => {
@@ -383,42 +390,53 @@ export function PlaybookFlowVisualBuilder({
           ) : null}
 
           {selectedStep.kind === "input" ? (
-            <InputStepEditor step={selectedStep} disabled={disabled} onChange={(nextStep) => {
+            <InputStepEditor
+              agenteSlug={agenteSlug}
+              step={selectedStep}
+              disabled={disabled}
+              onChange={(nextStep) => {
               updateDraft((current) => {
                 const next = [...current.steps];
                 next[selectedIndex] = nextStep;
                 return { ...current, steps: next };
               });
-            }} />
+            }}
+            />
           ) : null}
 
           {selectedStep.kind === "complete" ? (
-            <label style={smallLabelStyle}>
-              Resumo final
-              <textarea
-                value={selectedStep.complete?.summary ?? ""}
-                disabled={disabled}
-                onChange={(e) => {
-                  const summary = e.target.value;
-                  updateDraft((current) => {
-                    const next = [...current.steps];
-                    const existing = next[selectedIndex];
-                    if (existing.kind !== "complete") return current;
-                    next[selectedIndex] = {
-                      ...existing,
-                      complete: {
-                        ...(existing.complete ?? { type: "complete" as const }),
-                        type: "complete",
-                        summary,
-                      },
-                    };
-                    return { ...current, steps: next };
-                  });
-                }}
-                rows={3}
-                style={textareaStyle}
-              />
-            </label>
+            <TextareaComSugestaoIa
+              agenteSlug={agenteSlug}
+              contexto="playbook_complete"
+              label="Resumo final"
+              value={selectedStep.complete?.summary ?? ""}
+              onChange={(summary) => {
+                updateDraft((current) => {
+                  const next = [...current.steps];
+                  const existing = next[selectedIndex];
+                  if (existing.kind !== "complete") return current;
+                  next[selectedIndex] = {
+                    ...existing,
+                    complete: {
+                      ...(existing.complete ?? { type: "complete" as const }),
+                      type: "complete",
+                      summary,
+                    },
+                  };
+                  return { ...current, steps: next };
+                });
+              }}
+              rows={3}
+              disabled={disabled}
+              theme="light"
+              inputStyle={textareaStyle}
+              labelStyle={smallLabelStyle}
+              meta={{
+                step_id: selectedStep.id,
+                step_kind: selectedStep.kind,
+                step_title: selectedStep.title,
+              }}
+            />
           ) : null}
         </div>
       ) : null}
@@ -450,26 +468,36 @@ export function PlaybookFlowVisualBuilder({
 }
 
 function MessageStepEditor({
+  agenteSlug,
   step,
   disabled,
   onChange,
 }: {
+  agenteSlug: string;
   step: PlaybookFlowMessageStep;
   disabled: boolean;
   onChange: (step: PlaybookFlowMessageStep) => void;
 }) {
+  const stepMeta = {
+    step_id: step.id,
+    step_kind: step.kind,
+    step_title: step.title,
+  };
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <label style={smallLabelStyle}>
-        Mensagem
-        <textarea
-          value={step.message}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...step, message: e.target.value })}
-          rows={4}
-          style={textareaStyle}
-        />
-      </label>
+      <TextareaComSugestaoIa
+        agenteSlug={agenteSlug}
+        contexto="playbook_mensagem"
+        label="Mensagem"
+        value={step.message}
+        onChange={(message) => onChange({ ...step, message })}
+        rows={4}
+        disabled={disabled}
+        theme="light"
+        inputStyle={textareaStyle}
+        labelStyle={smallLabelStyle}
+        meta={stepMeta}
+      />
       <label style={smallLabelStyle}>
         Próximo step (next)
         <input
@@ -484,26 +512,36 @@ function MessageStepEditor({
 }
 
 function InputStepEditor({
+  agenteSlug,
   step,
   disabled,
   onChange,
 }: {
+  agenteSlug: string;
   step: PlaybookFlowInputStep;
   disabled: boolean;
   onChange: (step: PlaybookFlowInputStep) => void;
 }) {
+  const stepMeta = {
+    step_id: step.id,
+    step_kind: step.kind,
+    step_title: step.title,
+  };
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <label style={smallLabelStyle}>
-        Prompt
-        <textarea
-          value={step.prompt}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...step, prompt: e.target.value })}
-          rows={3}
-          style={textareaStyle}
-        />
-      </label>
+      <TextareaComSugestaoIa
+        agenteSlug={agenteSlug}
+        contexto="playbook_input_prompt"
+        label="Prompt"
+        value={step.prompt}
+        onChange={(prompt) => onChange({ ...step, prompt })}
+        rows={3}
+        disabled={disabled}
+        theme="light"
+        inputStyle={textareaStyle}
+        labelStyle={smallLabelStyle}
+        meta={stepMeta}
+      />
       <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr 1fr" }}>
         <label style={smallLabelStyle}>
           Field
@@ -543,26 +581,36 @@ function InputStepEditor({
 }
 
 function MenuStepEditor({
+  agenteSlug,
   step,
   disabled,
   onChange,
 }: {
+  agenteSlug: string;
   step: PlaybookFlowMenuStep;
   disabled: boolean;
   onChange: (step: PlaybookFlowMenuStep) => void;
 }) {
+  const stepMeta = {
+    step_id: step.id,
+    step_kind: step.kind,
+    step_title: step.title,
+  };
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <label style={smallLabelStyle}>
-        Prompt do menu
-        <textarea
-          value={step.prompt}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...step, prompt: e.target.value })}
-          rows={3}
-          style={textareaStyle}
-        />
-      </label>
+      <TextareaComSugestaoIa
+        agenteSlug={agenteSlug}
+        contexto="playbook_menu_prompt"
+        label="Prompt do menu"
+        value={step.prompt}
+        onChange={(prompt) => onChange({ ...step, prompt })}
+        rows={3}
+        disabled={disabled}
+        theme="light"
+        inputStyle={textareaStyle}
+        labelStyle={smallLabelStyle}
+        meta={stepMeta}
+      />
       <label style={smallLabelStyle}>
         Field
         <input

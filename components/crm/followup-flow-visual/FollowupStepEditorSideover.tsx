@@ -6,6 +6,7 @@ import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import type { HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import { atrasoTotalMinutos, formatarAtrasoPasso } from "@/lib/hub/followup-types";
 import { passoPersistenciaIgual } from "./types";
+import { TextareaComSugestaoIa } from "@/components/crm/TextareaComSugestaoIa";
 import {
   RF_ACCENT,
   RF_BORDER,
@@ -25,6 +26,8 @@ import {
 } from "@/lib/crm/crm-retrofit-dark-theme";
 
 type Props = {
+  agenteSlug: string;
+  passosAnteriores?: string[];
   theme?: "light" | "dark";
   passo: HubAgenteFollowupPasso;
   saving: boolean;
@@ -57,6 +60,8 @@ function clampHoras(v: number): number {
 }
 
 export function FollowupStepEditorSideover({
+  agenteSlug,
+  passosAnteriores = [],
   theme = "dark",
   passo,
   saving,
@@ -125,6 +130,13 @@ export function FollowupStepEditorSideover({
   }
 
   const showImagem = draft.tipo_conteudo === "imagem" || draft.tipo_conteudo === "texto_imagem";
+
+  const metaFollowup = {
+    passo_ordem: draft.ordem,
+    tipo_conteudo: draft.tipo_conteudo,
+    atraso_label: formatarAtrasoPasso(draft),
+    passos_anteriores: passosAnteriores,
+  };
 
   return (
     <div
@@ -261,41 +273,53 @@ export function FollowupStepEditorSideover({
         </p>
 
         {draft.tipo_conteudo === "texto" ? (
-          <label>
-            <span style={labelStyle}>Mensagem</span>
-            <textarea
-              rows={3}
-              value={draft.texto_template || ""}
-              onChange={(e) => update({ texto_template: e.target.value })}
-              style={{ ...inputStyle, resize: "vertical" }}
-              placeholder="Olá {nome}, ainda posso ajudar?"
-            />
-          </label>
+          <TextareaComSugestaoIa
+            agenteSlug={agenteSlug}
+            contexto="followup_passo"
+            label="Mensagem"
+            value={draft.texto_template || ""}
+            onChange={(t) => update({ texto_template: t })}
+            rows={3}
+            placeholder="Olá {nome}, ainda posso ajudar?"
+            disabled={saving}
+            theme={theme}
+            inputStyle={inputStyle}
+            labelStyle={labelStyle}
+            meta={metaFollowup}
+          />
         ) : null}
 
         {draft.tipo_conteudo === "texto_imagem" ? (
-          <label>
-            <span style={labelStyle}>Legenda da imagem</span>
-            <textarea
-              rows={3}
-              value={draft.legenda_imagem || ""}
-              onChange={(e) => update({ legenda_imagem: e.target.value })}
-              style={{ ...inputStyle, resize: "vertical" }}
-              placeholder="Texto que acompanha a imagem"
-            />
-          </label>
+          <TextareaComSugestaoIa
+            agenteSlug={agenteSlug}
+            contexto="followup_passo"
+            label="Legenda da imagem"
+            value={draft.legenda_imagem || ""}
+            onChange={(t) => update({ legenda_imagem: t })}
+            rows={3}
+            placeholder="Texto que acompanha a imagem"
+            disabled={saving}
+            theme={theme}
+            inputStyle={inputStyle}
+            labelStyle={labelStyle}
+            meta={metaFollowup}
+          />
         ) : null}
 
         {draft.tipo_conteudo === "imagem" ? (
-          <label>
-            <span style={labelStyle}>Legenda (opcional)</span>
-            <textarea
-              rows={2}
-              value={draft.legenda_imagem || ""}
-              onChange={(e) => update({ legenda_imagem: e.target.value })}
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          </label>
+          <TextareaComSugestaoIa
+            agenteSlug={agenteSlug}
+            contexto="followup_passo"
+            label="Legenda (opcional)"
+            value={draft.legenda_imagem || ""}
+            onChange={(t) => update({ legenda_imagem: t })}
+            rows={2}
+            disabled={saving}
+            theme={theme}
+            inputStyle={inputStyle}
+            labelStyle={labelStyle}
+            meta={metaFollowup}
+          />
         ) : null}
 
         {showImagem ? (

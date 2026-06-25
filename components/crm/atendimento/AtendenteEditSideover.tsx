@@ -15,6 +15,7 @@ import {
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { crmApiHeaders, hubApiHeaders } from "@/lib/internal-api-headers-client";
 import type { AtendenteCrm } from "@/lib/crm/atendentes-crm";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 type HubAgenteOption = {
   agente_slug: string;
@@ -44,6 +45,7 @@ function formatData(iso: string | null | undefined) {
 }
 
 export function AtendenteEditSideover({ open, onClose, onSaved, atendente }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const editando = Boolean(atendente?.id);
   const [agentes, setAgentes] = useState<HubAgenteOption[]>([]);
   const [salvando, setSalvando] = useState(false);
@@ -132,7 +134,15 @@ export function AtendenteEditSideover({ open, onClose, onSaved, atendente }: Pro
 
   async function excluir() {
     if (!atendente?.id) return;
-    if (!window.confirm(`Desativar ${atendente.nome}? Pode reativar depois na edição.`)) return;
+    const ok = await confirmDialog({
+      title: "Desativar atendente?",
+      message: `Desativar ${atendente.nome}? Pode reativar depois na edição.`,
+      variant: "warning",
+      confirmLabel: "Desativar",
+      theme: "dark",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setErro("");
     setExcluindo(true);
     try {

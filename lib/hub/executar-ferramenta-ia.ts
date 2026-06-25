@@ -24,16 +24,37 @@ import {
 } from "@/lib/crm/isolamento-conversa-lead";
 
 export type FerramentaHubContexto = {
-  leadId: string;
+  leadId?: string | null;
   agenteSlug: string;
   tenantId?: string;
   /** Telefone WhatsApp da sessão (identificador global da conversa). */
   telefoneSessao?: string | null;
   /** hub_agente_identidade.modo_operacao — usado para gates de escrita seguros */
   modoOperacao?: string | null;
-  /** Simulação interna do CRM — não envia WhatsApp real; CRM de teste permitido. */
+  /** Simulação interna do CRM — não envia WhatsApp real nem grava leads no funil. */
   simulacaoCanal?: boolean;
 };
+
+const FERRAMENTAS_CRM_LEAD_ESCRITA: HubAgenteFerramentaId[] = [
+  "hub_atualizar_lead",
+  "hub_criar_negocio",
+  "hub_registar_nota_lead",
+];
+
+function respostaFerramentaPainelCopiloto(
+  ferramenta: string,
+  aviso: string,
+  extra?: Record<string, unknown>
+): string {
+  return JSON.stringify({
+    ok: true,
+    simulacao: true,
+    painel_copiloto: true,
+    ferramenta,
+    aviso,
+    ...extra,
+  });
+}
 
 function db(): SupabaseClient {
   return createClient(
@@ -58,7 +79,43 @@ async function executarFerramentaHubBuiltin(
   supabase: SupabaseClient
 ): Promise<string> {
   const telSessao = telefoneConversaId(ctx.telefoneSessao ?? "");
-  if (telSessao.length >= 10) {
+
+  if (ctx.simulacaoCanal) {
+    if (FERRAMENTAS_CRM_LEAD_ESCRITA.includes(toolName)) {
+      return respostaFerramentaPainelCopiloto(
+        toolName,
+        "No Copiloto IA não grava leads, negócios nem notas no CRM. Isto só acontece na conversa WhatsApp real com o cliente."
+      );
+    }
+    if (toolName === "hub_lead_resumo" && !ctx.leadId) {
+      return respostaFerramentaPainelCopiloto(
+        toolName,
+        "Contacto fictício de simulação — sem card no funil de leads.",
+        {
+          lead: {
+            nome: "Cliente (simulação)",
+            telefone: telSessao.length >= 10 ? telSessao : null,
+            estagio: "novo",
+            valor_estimado: 0,
+            interesse_principal: null,
+            agente_responsavel: ctx.agenteSlug,
+          },
+        }
+      );
+    }
+    if (toolName === "hub_lead_memorias" && !ctx.leadId) {
+      return respostaFerramentaPainelCopiloto(toolName, "Sem memórias de lead — simulação sem registo CRM.", {
+        memorias: [],
+      });
+    }
+    if (toolName === "hub_lead_lookup_por_telefone" && !ctx.leadId) {
+      return respostaFerramentaPainelCopiloto(toolName, "Sem lead real associado a este teste.", {
+        encontrado: false,
+      });
+    }
+  }
+
+  if (telSessao.length >= 10 && ctx.leadId) {
     const isolamento = await validarLeadTelefoneSessao(supabase, ctx.leadId, telSessao);
     if (!isolamento.ok) {
       return JSON.stringify({ erro: isolamento.codigo, detalhe: isolamento.detalhe });
@@ -67,6 +124,9 @@ async function executarFerramentaHubBuiltin(
 
   switch (toolName) {
     case "hub_lead_resumo": {
+      if (!ctx.leadId) {
+        return JSON.stringify({ erro: "lead_id_ausente" });
+      }
       const { data, error } = await supabase
         .from("hub_leads_crm")
         .select(
@@ -214,7 +274,7 @@ async function executarFerramentaHubBuiltin(
         nome: `relatorio_ia_${Date.now()}.html`,
         tipo: "relatorio",
         origem: "ia_gerado",
-        leadId: ctx.leadId,
+        leadId: ctx.leadId ?? undefined,
         agenteSlug: ctx.agenteSlug,
         contentType: "text/html; charset=utf-8",
         metadata: { ferramenta: "hub_relatorio_html_simples" },
@@ -319,6 +379,9 @@ async function executarFerramentaHubBuiltin(
           modo_actual: ctx.modoOperacao ?? null,
         });
       }
+      if (!ctx.leadId) {
+        return JSON.stringify({ erro: "lead_id_ausente" });
+      }
 
       const tenantId = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
       const servicoNome =
@@ -341,7 +404,7 @@ async function executarFerramentaHubBuiltin(
 
       const result = await criarNegocioParaLead(supabase, {
         tenantId,
-        leadId: ctx.leadId,
+        leadId: ctx.leadId ?? undefined,
         servicoCatalogoId,
         servicoNome,
         titulo,
@@ -621,7 +684,7 @@ export async function executarFerramentaHub(
     if (toolName.startsWith("hub_int_")) {
       const { executarFerramentaIntegrador } = await import("@/lib/hub/executar-integrador");
       return executarFerramentaIntegrador(supabase, tenant, toolName, args, {
-        leadId: ctx.leadId,
+        leadId: ctx.leadId ?? undefined,
         telefone: ctx.telefoneSessao,
       });
     }

@@ -24,6 +24,7 @@ import { crmHeaderPrimaryBtnStyle } from "@/lib/crm/crm-list-pill-styles";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import type { AtendenteCrm } from "@/lib/crm/atendentes-crm";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 const AtendenteEditSideover = dynamic(
   () =>
@@ -49,6 +50,7 @@ function metadataResumo(meta: Record<string, unknown> | undefined) {
 }
 
 export default function EquipeAtendimentoPage() {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const pathname = usePathname();
   const { setSlot } = useCrmHeaderSlot();
   const narrow = useNarrowViewport();
@@ -105,7 +107,15 @@ export default function EquipeAtendimentoPage() {
   }, []);
 
   async function excluirAtendente(a: AtendenteCrm) {
-    if (!window.confirm(`Desativar ${a.nome}? Pode reativar depois na edição.`)) return;
+    const ok = await confirmDialog({
+      title: "Desativar atendente?",
+      message: `Desativar ${a.nome}? Pode reativar depois na edição.`,
+      variant: "warning",
+      confirmLabel: "Desativar",
+      theme: "light",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setErro("");
     try {
       const res = await fetch(`/api/crm/atendentes/${encodeURIComponent(a.id)}`, {

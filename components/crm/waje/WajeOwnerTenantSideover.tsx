@@ -27,6 +27,7 @@ import {
   rfBodyOnDarkStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 export type TenantRow = {
   id: string;
@@ -148,6 +149,7 @@ function vencimentoPadrao() {
 }
 
 export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBillingChanged }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const [salvando, setSalvando] = useState(false);
   const [carregandoPag, setCarregandoPag] = useState(false);
   const [carregandoCadastro, setCarregandoCadastro] = useState(false);
@@ -488,7 +490,15 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
   }
 
   async function apagarMensalidade(id: string) {
-    if (!window.confirm("Apagar esta cobrança? Só é possível se o boleto ainda não foi emitido.")) return;
+    const ok = await confirmDialog({
+      title: "Apagar cobrança?",
+      message: "Só é possível se o boleto ainda não foi emitido.",
+      variant: "destructive",
+      confirmLabel: "Apagar",
+      theme: "dark",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setSalvando(true);
     setErro("");
     try {
@@ -509,13 +519,15 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
 
   async function apagarTodasSemBoleto() {
     if (!tenant) return;
-    if (
-      !window.confirm(
-        `Apagar ${semBoletoCount} cobrança(s) pendentes sem boleto emitido? Use isto para limpar testes antes de gerar de verdade.`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmDialog({
+      title: "Apagar cobranças pendentes?",
+      message: `Apagar ${semBoletoCount} cobrança(s) pendentes sem boleto emitido? Use isto para limpar testes antes de gerar de verdade.`,
+      variant: "destructive",
+      confirmLabel: "Apagar todas",
+      theme: "dark",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setSalvando(true);
     setErro("");
     setInfo("");

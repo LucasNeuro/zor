@@ -12,6 +12,7 @@ import {
   type HubIntegracaoTipoAuth,
 } from "@/lib/hub/fetch-hub-integracoes";
 import { FERRAMENTAS_LIGHT as L } from "@/lib/hub/ferramentas-catalogo-ui";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 type Props = {
   open: boolean;
@@ -77,6 +78,7 @@ function rowToForm(row: HubIntegracaoRow): Form {
 }
 
 export function CrmIntegracaoSideover({ open, onClose, onSaved, initialIntegracaoId, initialHubId }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const [rows, setRows] = useState<HubIntegracaoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [apiErro, setApiErro] = useState<string | null>(null);
@@ -170,7 +172,15 @@ export function CrmIntegracaoSideover({ open, onClose, onSaved, initialIntegraca
 
   const eliminar = async () => {
     if (!focusId || !focusRow) return;
-    if (!window.confirm(`Eliminar integração «${focusRow.nome}»?`)) return;
+    const ok = await confirmDialog({
+      title: "Eliminar integração?",
+      message: `A integração «${focusRow.nome}» será removida.`,
+      variant: "destructive",
+      confirmLabel: "Eliminar",
+      theme: "light",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setBusy(true);
     setErro(null);
     try {

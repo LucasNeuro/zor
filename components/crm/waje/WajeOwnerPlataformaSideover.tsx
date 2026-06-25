@@ -18,6 +18,7 @@ import type { PlatformBrandRow } from "@/lib/ops/platform-brand-map";
 import { isUsableAssetUrl } from "@/lib/ops/platform-brand-asset-url";
 import type { PlatformBrandUserRow } from "@/lib/ops/platform-brand-stats";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 export type { PlatformBrandRow };
 
@@ -522,6 +523,7 @@ export function WajeOwnerPlataformaSideover({
   onCreated,
   onDeactivated,
 }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const [form, setForm] = useState<FormState>(emptyForm());
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -621,7 +623,15 @@ export function WajeOwnerPlataformaSideover({
 
   async function desativar() {
     if (!row || row.is_principal) return;
-    if (!confirm(`Desativar a plataforma «${row.nome}»?`)) return;
+    const ok = await confirmDialog({
+      title: "Desativar plataforma?",
+      message: `Desativar a plataforma «${row.nome}»?`,
+      variant: "warning",
+      confirmLabel: "Desativar",
+      theme: "dark",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setSalvando(true);
     try {
       const res = await fetch(`/api/ops/platform-brands/${encodeURIComponent(row.id)}`, {

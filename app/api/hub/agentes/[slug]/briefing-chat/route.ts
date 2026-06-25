@@ -17,7 +17,6 @@ import {
 import { extrairESalvarMemoriasAgente, formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 import { registrarInteracaoPainelAgente } from "@/lib/hub/registrar-interacao-painel";
-import { garantirLeadSimulacaoCanal } from "@/lib/simulacao-canal/lead-simulacao";
 
 function erroBriefingJson(message: string, status: number) {
   return NextResponse.json({ error: mensagemErroBriefingChat(message) }, { status });
@@ -376,21 +375,6 @@ export async function POST(
     /* hub_memorias_agente opcional até migração aplicada */
   }
 
-  let leadIdSim: string | null = null;
-  if (modo === "simulacao_canal") {
-    try {
-      const leadSim = await garantirLeadSimulacaoCanal(supabase, {
-        sessaoId,
-        agenteSlug: slug,
-        tenantId: typeof agente.tenant_id === "string" ? agente.tenant_id : null,
-        agenteNome: typeof agente.nome === "string" ? agente.nome : null,
-      });
-      leadIdSim = leadSim.leadId;
-    } catch {
-      leadIdSim = null;
-    }
-  }
-
   try {
     await registrarInteracaoPainelAgente(supabase, {
       agenteSlug: slug,
@@ -403,7 +387,7 @@ export async function POST(
       tokens_output: resultado.tokens_output,
       custo_brl: resultado.custo_brl,
       motor: resultado.motor,
-      leadId: leadIdSim,
+      leadId: null,
       ehCopilotoInterno,
     });
   } catch (e) {

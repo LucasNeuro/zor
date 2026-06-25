@@ -3,7 +3,10 @@ import { prepararRowHubLeadInsert } from "@/lib/crm/lead-cadastro";
 import { normalizarTelefoneWhatsapp } from "@/lib/crm/sincronizar-contato-whatsapp";
 import { defaultTenantId } from "@/lib/tenant-default";
 
-/** Telefone fictício estável por agente (prefixo 5598 = teste Copiloto IA). */
+/**
+ * Telefone fictício estável por agente (prefixo 5598 = teste Copiloto IA).
+ * Usado só no prompt da simulação — não cria registo em hub_leads_crm.
+ */
 export function telefoneSimulacaoFromAgente(agenteSlug: string): string {
   const slug = agenteSlug.replace(/\W/g, "").toLowerCase().slice(0, 9);
   const suffix = slug.padEnd(9, "0").slice(0, 9);
@@ -24,8 +27,8 @@ export type LeadSimulacaoCanal = {
 };
 
 /**
- * Um único lead de teste por agente + tenant (Copiloto IA / simulação interna).
- * Conversas reais de WhatsApp ou outros canais usam outros fluxos — não passam por aqui.
+ * @deprecated O Copiloto IA não cria mais leads no funil. Mantido apenas para migração de dados antigos.
+ * Conversas reais de WhatsApp usam outros fluxos — não passam por aqui.
  */
 export async function garantirLeadSimulacaoCanal(
   supabase: SupabaseClient,

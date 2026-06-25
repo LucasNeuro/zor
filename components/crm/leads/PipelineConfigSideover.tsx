@@ -23,6 +23,7 @@ import {
   RF_LIGHT_TEXT_SECONDARY,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { isPipelinePrincipal, labelPipelineTab } from "@/lib/crm/tenant-pipelines";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 type PipelineComEstagios = {
   id: string;
@@ -68,6 +69,7 @@ export function PipelineConfigSideover({
   showPipelineAdmin = true,
   focusCreate = false,
 }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const [pipelines, setPipelines] = useState<PipelineComEstagios[]>([]);
   const [pipeline, setPipeline] = useState<PipelineComEstagios | null>(null);
   const [loading, setLoading] = useState(false);
@@ -301,10 +303,15 @@ export function PipelineConfigSideover({
 
   async function excluirEstagio(est: PipelineEstagioRow) {
     if (!pipeline?.id || pipeline.id === "fallback" || !isUuidValido(pipeline.id)) return;
-    const ok = window.confirm(
-      `Excluir o estágio «${est.label}»? Só é possível se não houver leads/negócios nesta coluna.`
-    );
+    const ok = await confirmDialog({
+      title: "Excluir estágio?",
+      message: `Excluir o estágio «${est.label}»? Só é possível se não houver leads/negócios nesta coluna.`,
+      variant: "destructive",
+      confirmLabel: "Excluir",
+      theme: "light",
+    });
     if (!ok) return;
+    closeConfirmDialog();
     const res = await fetch(
       `/api/crm/pipelines/${pipeline.id}/estagios?slug=${encodeURIComponent(est.slug)}`,
       { method: "DELETE", headers: await crmApiHeaders() }
@@ -408,10 +415,15 @@ export function PipelineConfigSideover({
       return;
     }
 
-    const ok = window.confirm(
-      `Excluir o pipeline «${labelPipelineTab(item)}»? Só é possível se não houver leads neste funil.`
-    );
+    const ok = await confirmDialog({
+      title: "Excluir pipeline?",
+      message: `Excluir o pipeline «${labelPipelineTab(item)}»? Só é possível se não houver leads neste funil.`,
+      variant: "destructive",
+      confirmLabel: "Excluir",
+      theme: "light",
+    });
     if (!ok) return;
+    closeConfirmDialog();
 
     const res = await fetch(`/api/crm/pipelines/${item.id}`, {
       method: "DELETE",

@@ -5,6 +5,7 @@ import { Loader2, Mail, Save, Trash2 } from "lucide-react";
 import { CrmRetrofitSideoverShell } from "@/components/crm/CrmRetrofitSideoverShell";
 import { RF_ACCENT, rfBodyOnDarkStyle } from "@/lib/crm/crm-retrofit-dark-theme";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 export type LeadInteresseRow = {
   id: string;
@@ -43,6 +44,7 @@ const inputCls =
   "w-full rounded-xl border border-[rgba(146,255,0,0.2)] bg-[#0b1f10] px-3 py-2 text-sm text-[#e8f5e9] outline-none focus:border-[#92ff00]";
 
 export function WajeOwnerLeadSideover({ open, lead, onClose, onUpdated, onDeleted }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const [form, setForm] = useState<Partial<LeadInteresseRow>>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -76,7 +78,16 @@ export function WajeOwnerLeadSideover({ open, lead, onClose, onUpdated, onDelete
   }
 
   async function apagar() {
-    if (!lead || !confirm("Apagar este lead permanentemente?")) return;
+    if (!lead) return;
+    const ok = await confirmDialog({
+      title: "Apagar lead?",
+      message: "Este lead será removido permanentemente.",
+      variant: "destructive",
+      confirmLabel: "Apagar",
+      theme: "dark",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setSalvando(true);
     try {
       const res = await fetch(`/api/ops/landing-interesse/${encodeURIComponent(lead.id)}`, {

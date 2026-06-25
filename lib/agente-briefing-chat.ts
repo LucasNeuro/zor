@@ -29,7 +29,7 @@ import { defaultTenantId } from "@/lib/tenant-default";
 import { blocoDadosCanalWhatsappCrm } from "@/lib/crm/sincronizar-contato-whatsapp";
 import { blocoIsolamentoConversaWhatsapp } from "@/lib/crm/isolamento-conversa-lead";
 import { WHATSAPP_CANAL_PREAMBLE } from "@/lib/ia/atendimento-fluido";
-import { garantirLeadSimulacaoCanal } from "@/lib/simulacao-canal/lead-simulacao";
+import { telefoneSimulacaoFromAgente } from "@/lib/simulacao-canal/lead-simulacao";
 import { agenteEhCopilotoInterno, isModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { blocoEscopoFuncaoCopilotoInterno } from "@/lib/hub/copiloto-interno-escopo";
 import { loadPublishedPlaybookRuntimeSource } from "@/lib/playbook/published-runtime";
@@ -78,7 +78,9 @@ export const SIMULACAO_CANAL_PREAMBLE = `${WHATSAPP_CANAL_PREAMBLE}
 
 ### SIMULAÇÃO INTERNA (painel CRM)
 - Não diga que está em simulação, briefing ou teste interno.
-- WhatsApp real não envia mensagens neste painel — menus ficam simulados; ferramentas CRM e **Google Calendar/Gmail** funcionam de verdade (criam eventos na conta ligada).`;
+- **Não cria nem altera leads no funil CRM** — o contacto é fictício só para conversa.
+- WhatsApp real não envia mensagens neste painel — menus ficam simulados.
+- Integrações externas (Google Calendar/Gmail, HTTP) podem funcionar de verdade; ferramentas CRM de lead ficam em modo simulado.`;
 
 export type BriefingModoSessao = "briefing_interno" | "simulacao_canal";
 
@@ -344,25 +346,11 @@ async function executarSimulacaoCanalLlm(params: {
     content: m.conteudo,
   }));
 
-  let leadId: string | undefined;
-  let telefoneSim = "";
-  let pushNameSim: string | undefined;
-
-  if (params.supabase && params.sessaoId) {
-    const leadSim = await garantirLeadSimulacaoCanal(params.supabase, {
-      sessaoId: params.sessaoId,
-      agenteSlug: params.agenteSlug,
-      tenantId: params.tenantId,
-      agenteNome: params.agenteNome,
-    });
-    leadId = leadSim.leadId;
-    telefoneSim = leadSim.telefone;
-    pushNameSim = leadSim.nome;
-  }
+  const telefoneSim = telefoneSimulacaoFromAgente(params.agenteSlug);
+  const pushNameSim = "Cliente (simulação)";
 
   const pc = await construirPrompt({
     agenteSlug: params.agenteSlug,
-    leadId,
     canal: "whatsapp",
     turnosAnteriores: params.historico.length,
     mensagemAtual: params.mensagemUsuario,
@@ -389,13 +377,10 @@ Você é **${pc.agenteNome}** neste teste. Responda sempre com o nome, tom e fun
     if (blocoCtx) systemPrompt = `${systemPrompt}\n\n${blocoCtx}`;
   }
 
-  if (telefoneSim) {
-    systemPrompt = `${systemPrompt}\n\n${blocoDadosCanalWhatsappCrm({
-      telefone: telefoneSim,
-      pushName: pushNameSim,
-      leadId,
-    })}\n\n${blocoIsolamentoConversaWhatsapp(telefoneSim)}`;
-  }
+  systemPrompt = `${systemPrompt}\n\n${blocoDadosCanalWhatsappCrm({
+    telefone: telefoneSim,
+    pushName: pushNameSim,
+  })}\n\n${blocoIsolamentoConversaWhatsapp(telefoneSim)}`;
 
   const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
   for (const m of params.historico) {
@@ -427,7 +412,7 @@ Você é **${pc.agenteNome}** neste teste. Responda sempre com o nome, tom e fun
     agentReasoningEnabled = agenteRaciocinioAvancadoAtivo(usoMeta);
   }
 
-  if (params.supabase && leadId) {
+  if (params.supabase) {
     const tenantForTools = (params.tenantId && params.tenantId.trim()) || defaultTenantId();
     const { data: ferrIaRow } = await params.supabase
       .from("hub_agente_identidade")
@@ -492,7 +477,6 @@ Você é **${pc.agenteNome}** neste teste. Responda sempre com o nome, tom e fun
         agentReasoningEnabled,
         executarTool: (nome, argumentosSerializados) =>
           executarFerramentaHub(nome, argumentosSerializados, {
-            leadId,
             agenteSlug: params.agenteSlug,
             tenantId: params.tenantId ?? tenantForTools,
             telefoneSessao: telefoneSim,

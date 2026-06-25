@@ -7,6 +7,7 @@ import { RF_ACCENT, rfBodyOnDarkStyle } from "@/lib/crm/crm-retrofit-dark-theme"
 import { WajeOwnerStatusBadge } from "@/components/crm/waje/WajeOwnerUi";
 import type { TenantRow } from "@/components/crm/waje/WajeOwnerTenantSideover";
 import { opsApiHeaders } from "@/lib/ops-api-headers-client";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 export type UsuarioRow = {
   id: string;
@@ -63,6 +64,7 @@ export function WajeOwnerUsuarioSideover({
   onUpdated,
   onDeleted,
 }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const [form, setForm] = useState<Partial<UsuarioRow>>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -109,7 +111,16 @@ export function WajeOwnerUsuarioSideover({
   }
 
   async function desativar() {
-    if (!usuario || !confirm("Desativar este utilizador?")) return;
+    if (!usuario) return;
+    const ok = await confirmDialog({
+      title: "Desativar utilizador?",
+      message: "Este utilizador deixará de ter acesso à plataforma.",
+      variant: "warning",
+      confirmLabel: "Desativar",
+      theme: "dark",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setSalvando(true);
     try {
       const res = await fetch(`/api/ops/users/${encodeURIComponent(usuario.id)}`, {

@@ -131,7 +131,6 @@ export function AgenteBriefingDrawer({
       if (data.sessao_id) setSessaoId(data.sessao_id);
       if (Array.isArray(data.mensagens)) setMensagens(data.mensagens);
       void queryClient.invalidateQueries({ queryKey: hubQueryKeys.agentes.operacao(agenteSlug) });
-      void queryClient.invalidateQueries({ queryKey: ["crm", "leads"] });
     } catch {
       setMensagens((prev) => prev.filter((m) => m.id !== tempId));
       setErro("Falha de rede ao enviar.");
@@ -261,7 +260,7 @@ export function AgenteBriefingDrawer({
                   : "Converse com o copiloto como num chat: função do agente, leads, ciclos e registos. Memórias são guardadas só para este assistente."
                 : modoChat === "briefing_interno"
                   ? "Consulte o histórico de operação deste assistente. Ações automáticas só funcionam na conversa real com o cliente."
-                  : "Espelha o WhatsApp real: conhecimento, catálogo de preços, RAG e ferramentas CRM. Não envia mensagens reais."}
+                  : "Espelha o WhatsApp real: conhecimento, RAG e ferramentas — sem criar leads no funil nem enviar mensagens reais."}
             </p>
           </div>
           <button

@@ -12,6 +12,7 @@ import {
 import { FollowupFlowVisualFullscreen } from "@/components/crm/followup-flow-visual/FollowupFlowVisualFullscreen";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { CRM_ACCENT, crmBtnPrimary, crmBtnPrimaryLg, crmBtnSecondary } from "@/lib/crm/crm-button-styles";
 import { BRAND_TEXT_DARK } from "@/lib/brand";
@@ -75,6 +76,7 @@ const cardSurfaceDark: CSSProperties = {
 };
 
 export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const isCard = layout === "card";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -386,7 +388,17 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }
 
   async function excluirPasso(id: string, skipConfirm = false) {
-    if (!skipConfirm && !confirm("Excluir este lembrete?")) return;
+    if (!skipConfirm) {
+      const ok = await confirmDialog({
+        title: "Excluir lembrete?",
+        message: "Este passo será removido da cadência.",
+        variant: "destructive",
+        confirmLabel: "Excluir",
+        theme: "dark",
+      });
+      if (!ok) return;
+      closeConfirmDialog();
+    }
     setSaving(true);
     try {
       const res = await fetch(`${base}/passos/${encodeURIComponent(id)}`, {
@@ -406,9 +418,16 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }
 
   async function excluirCadenciaCompleta() {
-    if (!confirm("Excluir toda a cadência de follow-up? Os passos serão removidos e o follow-up desactivado.")) {
-      return;
-    }
+    const ok = await confirmDialog({
+      title: "Excluir cadência?",
+      message:
+        "Toda a cadência de follow-up será removida e o follow-up desactivado.",
+      variant: "destructive",
+      confirmLabel: "Excluir cadência",
+      theme: "dark",
+    });
+    if (!ok) return;
+    closeConfirmDialog();
     setSaving(true);
     setErro("");
     try {

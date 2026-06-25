@@ -16,6 +16,7 @@ import { FollowupFlowReactFlowPanel } from "@/components/crm/followup-flow-visua
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
 import { configPersistenciaSnapshot, passoPersistenciaSnapshot } from "./types";
+import { useCrmConfirm } from "@/lib/crm/crm-feedback";
 
 type Props = {
   open: boolean;
@@ -65,6 +66,7 @@ export function FollowupFlowVisualFullscreen({
   onAtualizarLocal,
   onAtualizarConfigLocal,
 }: Props) {
+  const { confirmDialog, closeConfirmDialog } = useCrmConfirm();
   const [mounted, setMounted] = useState(false);
   const [canvasDirty, setCanvasDirty] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
@@ -127,9 +129,17 @@ export function FollowupFlowVisualFullscreen({
     }
   }
 
-  function handleClose() {
-    if (hasUnsavedChanges && !confirm("Há alterações não guardadas. Fechar mesmo assim?")) {
-      return;
+  async function handleClose() {
+    if (hasUnsavedChanges) {
+      const ok = await confirmDialog({
+        title: "Alterações não guardadas",
+        message: "Fechar o editor sem guardar a cadência?",
+        variant: "warning",
+        confirmLabel: "Fechar",
+        theme: "light",
+      });
+      if (!ok) return;
+      closeConfirmDialog();
     }
     onClose();
   }
@@ -148,7 +158,7 @@ export function FollowupFlowVisualFullscreen({
             {saveNotice ? <span style={savedHintStyle}> · {saveNotice}</span> : null}
           </p>
         </div>
-        <button type="button" onClick={handleClose} aria-label="Fechar editor" style={rfCloseButtonStyle("light")}>
+        <button type="button" onClick={() => void handleClose()} aria-label="Fechar editor" style={rfCloseButtonStyle("light")}>
           <X size={18} />
         </button>
       </header>

@@ -15,7 +15,7 @@ import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
 import { FilterPills } from "@/components/crm/FilterPills";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { CrmCanalSideover, type CanalAgenteRow } from "@/components/crm/CrmCanalSideover";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import {
   sparklineFromCounts,
@@ -93,7 +93,7 @@ export default function CanaisPage() {
     if (opts?.silent) setRefreshing(true);
     else setLoadingInicial(true);
     try {
-      const r = await fetch("/api/hub/canais", { headers: internalApiHeaders() });
+      const r = await fetch("/api/hub/canais", { headers: await hubApiHeaders() });
       const json: unknown = await r.json();
       if (!r.ok) {
         const msg =

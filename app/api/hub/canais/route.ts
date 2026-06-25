@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const tenantResolved = await resolveValidatedTenantId(request);
   if (!tenantResolved.ok) {
-    return NextResponse.json({ error: tenantResolved.error }, { status: tenantResolved.status });
+    return NextResponse.json([]);
   }
 
   const supabase = db();

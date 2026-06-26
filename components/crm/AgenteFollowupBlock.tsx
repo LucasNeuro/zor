@@ -515,6 +515,8 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         aguardando_espera: "aguardando tempo configurado",
         aguardando_hora_disparo: "aguardando horário",
         cadencia_concluida: "cadência concluída",
+        passo_ja_enviado: "passo já enviado nesta cadência",
+        cliente_respondeu: "cliente respondeu — cadência reinicia",
         sem_ultimo_followup: "sem follow-up anterior",
         sem_ultima_msg_cliente: "sem msg do cliente no relógio",
         sem_passo: "sem passo na fila",

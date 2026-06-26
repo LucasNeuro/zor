@@ -5,6 +5,7 @@ import {
   interpolarTemplateFollowup,
   corpoTemplateFollowupPasso,
   textoExibicaoFollowupPasso,
+  esperaMinutosDoPasso,
   passosAtivosOrdenados,
   passosEnviadosCount,
   type HubAgenteFollowupConfig,
@@ -13,6 +14,8 @@ import {
 import { avaliarDisparoPasso, type MotivoFollowupSkip } from "@/lib/hub/followup-schedule";
 import {
   backfillUltimaMsgClienteEm,
+  clienteRespondeuAposUltimoFollowup,
+  followupPassoEnviadoRecentemente,
   minutosSilencioDesdeUltimaMsgCliente,
 } from "@/lib/hub/followup-relogio";
 import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
@@ -248,9 +251,9 @@ export async function executarFollowupParaAgente(
       continue;
     }
 
-    const enviadosCount = passosEnviadosCount(lead.followup_passo, passosAtivos);
-    const indicePasso = indiceProximoPasso(lead.followup_passo, passosAtivos);
-    const passo = passosAtivos[indicePasso];
+    let enviadosCount = passosEnviadosCount(lead.followup_passo, passosAtivos);
+    let indicePasso = indiceProximoPasso(lead.followup_passo, passosAtivos);
+    let passo = passosAtivos[indicePasso];
 
     let ultimaMsgClienteEm = lead.ultima_msg_cliente_em?.trim() || null;
     if (!ultimaMsgClienteEm && !options?.simular) {
@@ -261,6 +264,39 @@ export async function executarFollowupParaAgente(
     const minutosSilencio = minutosSilencioDesdeUltimaMsgCliente(ultimaMsgClienteEm, agora);
     const horasSilencio = minutosSilencio != null ? minutosSilencio / 60 : null;
     const minutosDesdeUltimoFollowup = minutosDesde(lead.ultimo_followup, agora);
+    const clienteRespondeuDepois = clienteRespondeuAposUltimoFollowup(
+      ultimaMsgClienteEm,
+      lead.ultimo_followup
+    );
+
+    if (!options?.simular && clienteRespondeuDepois && enviadosCount > 0) {
+      await supabase
+        .from("hub_leads_crm")
+        .update({
+          followup_passo: 0,
+          ultimo_followup: null,
+          proximo_followup: null,
+        })
+        .eq("id", lead.id);
+      enviadosCount = 0;
+      indicePasso = 0;
+      passo = passosAtivos[0];
+      lead.followup_passo = 0;
+      lead.ultimo_followup = null;
+    }
+
+    if (!options?.simular && enviadosCount === 0 && lead.ultimo_followup?.trim()) {
+      const { error: repErr } = await supabase
+        .from("hub_leads_crm")
+        .update({ followup_passo: 1 })
+        .eq("id", lead.id);
+      if (!repErr) {
+        enviadosCount = 1;
+        indicePasso = indiceProximoPasso(1, passosAtivos);
+        passo = passosAtivos[indicePasso];
+        lead.followup_passo = 1;
+      }
+    }
 
     if (minutosSilencio == null) {
       if (coletarDiagnostico) {
@@ -305,6 +341,8 @@ export async function executarFollowupParaAgente(
       config,
       minutosSilencio,
       minutosDesdeUltimoFollowup,
+      enviadosCount,
+      clienteRespondeuAposUltimoFollowup: clienteRespondeuDepois,
     });
 
     if (!avaliacao.permitido) {
@@ -318,6 +356,27 @@ export async function executarFollowupParaAgente(
         });
       }
       continue;
+    }
+
+    if (!options?.simular) {
+      const duplicado = await followupPassoEnviadoRecentemente(
+        supabase,
+        lead.id,
+        passo.id,
+        15
+      );
+      if (duplicado) {
+        if (coletarDiagnostico) {
+          registrarSkip(result, {
+            lead_id: lead.id,
+            lead_nome: lead.nome,
+            motivo: "passo_ja_enviado",
+            detalhe: `passo ${posicaoPasso} já enviado recentemente`,
+            proximo_passo: posicaoPasso,
+          });
+        }
+        continue;
+      }
     }
 
     const mercado =
@@ -350,7 +409,7 @@ export async function executarFollowupParaAgente(
     const agoraIso = new Date().toISOString();
     const novoEnviadosCount = enviadosCount + 1;
 
-    await supabase.from("hub_fila_mensagens").insert({
+    const { error: filaErr } = await supabase.from("hub_fila_mensagens").insert({
       lead_id: lead.id,
       agente_id: slug,
       canal: "whatsapp",
@@ -367,7 +426,12 @@ export async function executarFollowupParaAgente(
       },
     });
 
-    await supabase
+    if (filaErr) {
+      result.erros.push(`${lead.nome}: falha ao registrar follow-up na fila (${filaErr.message})`);
+      continue;
+    }
+
+    const { error: leadErr } = await supabase
       .from("hub_leads_crm")
       .update({
         followup_passo: novoEnviadosCount,
@@ -375,6 +439,13 @@ export async function executarFollowupParaAgente(
         proximo_followup: null,
       })
       .eq("id", lead.id);
+
+    if (leadErr) {
+      result.erros.push(
+        `${lead.nome}: mensagem enviada mas falha ao gravar estado (${leadErr.message})`
+      );
+      continue;
+    }
 
     try {
       const { data: ciclo } = await supabase

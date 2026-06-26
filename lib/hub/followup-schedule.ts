@@ -9,7 +9,9 @@ export type MotivoFollowupSkip =
   | "aguardando_espera"
   | "aguardando_hora_disparo"
   | "sem_ultimo_followup"
-  | "sem_ultima_msg_cliente";
+  | "sem_ultima_msg_cliente"
+  | "passo_ja_enviado"
+  | "cliente_respondeu";
 
 const TZ_PADRAO = "America/Sao_Paulo";
 
@@ -77,13 +79,34 @@ export function avaliarDisparoPasso(params: {
   >;
   minutosSilencio: number;
   minutosDesdeUltimoFollowup: number | null;
+  /** Quantos passos já foram enviados nesta cadência (0 = nenhum). */
+  enviadosCount?: number;
+  /** Cliente respondeu depois do último follow-up automático? */
+  clienteRespondeuAposUltimoFollowup?: boolean;
 }): AvaliacaoDisparoPasso {
   const { indicePasso, passo, minutosSilencio, minutosDesdeUltimoFollowup } = params;
+  const enviadosCount = params.enviadosCount ?? 0;
   const config = params.config ?? {};
   const espera = esperaMinutosDoPasso(passo, config, indicePasso);
   const esperaLabel = formatarEsperaMinutos(espera, indicePasso);
 
+  if (params.clienteRespondeuAposUltimoFollowup && enviadosCount > 0) {
+    return {
+      permitido: false,
+      motivo: "cliente_respondeu",
+      detalhe: "cliente respondeu após o último follow-up — cadência reinicia no passo 1",
+    };
+  }
+
   if (indicePasso === 0) {
+    if (enviadosCount === 0 && minutosDesdeUltimoFollowup != null) {
+      return {
+        permitido: false,
+        motivo: "passo_ja_enviado",
+        detalhe: "passo 1 já enviado nesta cadência — aguardando próximo passo ou resposta do cliente",
+      };
+    }
+
     if (minutosSilencio < espera) {
       const falta = Math.ceil(espera - minutosSilencio);
       return {

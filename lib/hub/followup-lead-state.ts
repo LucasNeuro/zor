@@ -17,6 +17,8 @@ export async function resetFollowupAoReceberMensagemCliente(
   if (!options?.pausado) {
     patch.followup_passo = 0;
     patch.followup_pausado = false;
+    patch.ultimo_followup = null;
+    patch.proximo_followup = null;
   }
   try {
     await supabase.from("hub_leads_crm").update(patch).eq("id", leadId);

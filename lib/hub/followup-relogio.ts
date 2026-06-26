@@ -53,3 +53,40 @@ export async function backfillUltimaMsgClienteEm(
 
   return iso;
 }
+
+/** Verdadeiro quando o cliente falou depois do último follow-up automático. */
+export function clienteRespondeuAposUltimoFollowup(
+  ultimaMsgClienteEm: string | null | undefined,
+  ultimoFollowup: string | null | undefined
+): boolean {
+  const msg = parseFollowupTimestamp(ultimaMsgClienteEm);
+  const fu = parseFollowupTimestamp(ultimoFollowup);
+  if (!msg || !fu) return false;
+  return msg.getTime() > fu.getTime();
+}
+
+/** Evita reenvio do mesmo passo (cron + worker ou falha ao gravar contador). */
+export async function followupPassoEnviadoRecentemente(
+  supabase: SupabaseClient,
+  leadId: string,
+  passoId: string,
+  janelaMinutos: number
+): Promise<boolean> {
+  const janela = Math.max(2, Math.floor(janelaMinutos));
+  const limite = new Date(Date.now() - janela * 60_000).toISOString();
+  const { data, error } = await supabase
+    .from("hub_fila_mensagens")
+    .select("id, metadata")
+    .eq("lead_id", leadId)
+    .eq("direcao", "saida")
+    .gte("criado_em", limite)
+    .order("criado_em", { ascending: false })
+    .limit(15);
+
+  if (error || !data?.length) return false;
+
+  return data.some((row) => {
+    const meta = row.metadata as Record<string, unknown> | null;
+    return meta?.tipo === "followup_automatico" && meta?.passo_id === passoId;
+  });
+}

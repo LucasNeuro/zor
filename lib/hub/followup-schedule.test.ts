@@ -72,10 +72,23 @@ describe("avaliarDisparoPasso — passo 1 (espera_minutos)", () => {
       passo: { ...passoBase, ordem: 2, espera_minutos: 720 },
       minutosSilencio: 999,
       minutosDesdeUltimoFollowup: 60,
+      enviadosCount: 1,
     });
     expect(r.permitido).toBe(false);
     expect(r.motivo).toBe("aguardando_espera");
     expect(r.detalhe).toContain("passo anterior");
+  });
+
+  it("não reenvia passo 1 se ultimo_followup já existe", () => {
+    const r = avaliarDisparoPasso({
+      indicePasso: 0,
+      passo: passoBase,
+      minutosSilencio: 60,
+      minutosDesdeUltimoFollowup: 5,
+      enviadosCount: 0,
+    });
+    expect(r.permitido).toBe(false);
+    expect(r.motivo).toBe("passo_ja_enviado");
   });
 });
 

@@ -39,6 +39,8 @@ const MOTIVO_LABEL: Record<string, string> = {
   sem_ultimo_followup: "Sem follow-up anterior",
   sem_ultima_msg_cliente: "Sem mensagem do cliente",
   cadencia_concluida: "Cadência concluída",
+  passo_ja_enviado: "Passo já enviado",
+  cliente_respondeu: "Cliente respondeu",
   sem_telefone: "Sem telefone",
 };
 

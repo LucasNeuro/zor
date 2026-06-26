@@ -21,9 +21,11 @@ import {
 } from "@/lib/hub/followup-agenda";
 import {
   contarEnviosFollowupHoje,
+  estadoCadenciaFromLedger,
   followupPassoJaEnviado,
   limparLedgerCadenciaLead,
   registrarFollowupEnvio,
+  sincronizarFollowupPassoComLedger,
 } from "@/lib/hub/followup-ledger";
 import {
   clienteRespondeuAposUltimoFollowup,
@@ -307,6 +309,62 @@ export async function executarFollowupParaAgente(
       continue;
     }
 
+    let enviadosCount = passosEnviadosCount(lead.followup_passo, passosAtivos);
+    let indicePasso = indiceProximoPasso(lead.followup_passo, passosAtivos);
+    let passo = passosAtivos[indicePasso];
+    const followupPassoAntesLedger = lead.followup_passo;
+
+    const estadoLedger = await estadoCadenciaFromLedger(supabase, lead.id, passosAtivos);
+    if (estadoLedger.ledgerOk) {
+      enviadosCount = estadoLedger.enviadosCount;
+      indicePasso = enviadosCount;
+      passo = passosAtivos[indicePasso];
+      if (estadoLedger.todosEnviados) {
+        if (!options?.simular) {
+          await sincronizarFollowupPassoComLedger(
+            supabase,
+            lead.id,
+            enviadosCount,
+            followupPassoAntesLedger
+          );
+          if (lead.proximo_followup?.trim()) {
+            await supabase
+              .from("hub_leads_crm")
+              .update({ proximo_followup: null })
+              .eq("id", lead.id);
+          }
+        }
+        if (coletarDiagnostico) {
+          registrarSkip(result, {
+            lead_id: lead.id,
+            lead_nome: lead.nome,
+            motivo: "cadencia_concluida",
+            detalhe: `${enviadosCount}/${passosAtivos.length} passos no ledger — nada a enviar`,
+          });
+        }
+        continue;
+      }
+      lead.followup_passo = enviadosCount;
+      if (!options?.simular) {
+        await sincronizarFollowupPassoComLedger(
+          supabase,
+          lead.id,
+          enviadosCount,
+          followupPassoAntesLedger
+        );
+      }
+    } else if (!passo && enviadosCount >= passosAtivos.length) {
+      if (coletarDiagnostico) {
+        registrarSkip(result, {
+          lead_id: lead.id,
+          lead_nome: lead.nome,
+          motivo: "cadencia_concluida",
+          detalhe: `${enviadosCount}/${passosAtivos.length} passos enviados`,
+        });
+      }
+      continue;
+    }
+
     if (foraDaJanela) {
       if (coletarDiagnostico) {
         registrarSkip(result, {
@@ -314,14 +372,11 @@ export async function executarFollowupParaAgente(
           lead_nome: lead.nome,
           motivo: "aguardando_hora_disparo",
           detalhe: detalheJanelaFechada ?? undefined,
+          proximo_passo: passo ? indicePasso + 1 : undefined,
         });
       }
       continue;
     }
-
-    let enviadosCount = passosEnviadosCount(lead.followup_passo, passosAtivos);
-    let indicePasso = indiceProximoPasso(lead.followup_passo, passosAtivos);
-    let passo = passosAtivos[indicePasso];
 
     // Só mensagem inbound registrada pelo webhook — sem backfill (evita msg antiga na fila).
     const ultimaMsgClienteEm = lead.ultima_msg_cliente_em?.trim() || null;
@@ -349,36 +404,6 @@ export async function executarFollowupParaAgente(
       passo = passosAtivos[0];
       lead.followup_passo = 0;
       lead.ultimo_followup = null;
-    }
-
-    if (!options?.simular && enviadosCount === 0 && lead.ultimo_followup?.trim()) {
-      const esperaP1 = esperaMinutosDoPasso(passosAtivos[0]!, config, 0);
-      const janelaP1 = janelaAntiduplicataMinutos(esperaP1, 0);
-      const minsFu = minutosDesdeUltimoFollowup;
-
-      if (minsFu != null && minsFu < janelaP1) {
-        const { error: syncErr } = await supabase
-          .from("hub_leads_crm")
-          .update({ followup_passo: 1 })
-          .eq("id", lead.id);
-        if (!syncErr) {
-          enviadosCount = 1;
-          indicePasso = indiceProximoPasso(1, passosAtivos);
-          passo = passosAtivos[indicePasso];
-          lead.followup_passo = 1;
-        }
-      } else {
-        const { error: repErr } = await supabase
-          .from("hub_leads_crm")
-          .update({ followup_passo: 1 })
-          .eq("id", lead.id);
-        if (!repErr) {
-          enviadosCount = 1;
-          indicePasso = indiceProximoPasso(1, passosAtivos);
-          passo = passosAtivos[indicePasso];
-          lead.followup_passo = 1;
-        }
-      }
     }
 
     if (minutosSilencio == null) {
@@ -421,8 +446,9 @@ export async function executarFollowupParaAgente(
     if (!options?.simular) {
       let guard = 0;
       while (passo && guard < passosAtivos.length) {
-        const jaEnviado = await followupPassoJaEnviado(supabase, lead.id, passo.id);
-        if (!jaEnviado) break;
+        const check = await followupPassoJaEnviado(supabase, lead.id, passo.id);
+        if (!check.ledgerOk) break;
+        if (!check.jaEnviado) break;
         enviadosCount += 1;
         indicePasso = enviadosCount;
         passo = passosAtivos[indicePasso];
@@ -456,7 +482,10 @@ export async function executarFollowupParaAgente(
       continue;
     }
 
-    const maxPorDia = Math.max(1, config.max_envios_por_dia ?? 1);
+    const maxPorDia = Math.max(
+      passosAtivos.length,
+      Math.min(10, config.max_envios_por_dia ?? passosAtivos.length)
+    );
     if (!options?.simular) {
       const enviosHoje = await contarEnviosFollowupHoje(supabase, lead.id, slug, config.timezone);
       if (enviosHoje >= maxPorDia) {
@@ -498,8 +527,8 @@ export async function executarFollowupParaAgente(
     }
 
     if (!options?.simular) {
-      const jaNoLedger = await followupPassoJaEnviado(supabase, lead.id, passo.id);
-      if (jaNoLedger) {
+      const check = await followupPassoJaEnviado(supabase, lead.id, passo.id);
+      if (check.jaEnviado) {
         if (coletarDiagnostico) {
           registrarSkip(result, {
             lead_id: lead.id,
@@ -509,6 +538,19 @@ export async function executarFollowupParaAgente(
             proximo_passo: posicaoPasso,
           });
         }
+        continue;
+      }
+      if (!check.ledgerOk) {
+        if (coletarDiagnostico) {
+          registrarSkip(result, {
+            lead_id: lead.id,
+            lead_nome: lead.nome,
+            motivo: "passo_ja_enviado",
+            detalhe: "ledger indisponível — envio bloqueado por segurança (aplique migração hub_followup_envio)",
+            proximo_passo: posicaoPasso,
+          });
+        }
+        result.erros.push(`${lead.nome}: ledger hub_followup_envio indisponível`);
         continue;
       }
 

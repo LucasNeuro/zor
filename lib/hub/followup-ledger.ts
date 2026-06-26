@@ -16,7 +16,7 @@ export async function followupPassoJaEnviado(
   supabase: SupabaseClient,
   leadId: string,
   passoId: string
-): Promise<boolean> {
+): Promise<{ jaEnviado: boolean; ledgerOk: boolean }> {
   const { data, error } = await supabase
     .from("hub_followup_envio")
     .select("id")
@@ -26,9 +26,73 @@ export async function followupPassoJaEnviado(
 
   if (error) {
     console.warn("[followup-ledger] followupPassoJaEnviado:", error.message);
-    return false;
+    return { jaEnviado: false, ledgerOk: false };
   }
-  return data != null;
+  return { jaEnviado: data != null, ledgerOk: true };
+}
+
+/**
+ * Conta passos consecutivos já enviados (ledger = fonte de verdade).
+ * Impede reenvio em cada slot horário quando followup_passo estiver dessincronizado.
+ */
+export async function estadoCadenciaFromLedger(
+  supabase: SupabaseClient,
+  leadId: string,
+  passosAtivos: Array<{ id: string }>
+): Promise<{
+  enviadosCount: number;
+  ledgerOk: boolean;
+  todosEnviados: boolean;
+  passoIdsEnviados: Set<string>;
+}> {
+  if (passosAtivos.length === 0) {
+    return { enviadosCount: 0, ledgerOk: true, todosEnviados: true, passoIdsEnviados: new Set() };
+  }
+
+  const { data, error } = await supabase
+    .from("hub_followup_envio")
+    .select("passo_id")
+    .eq("lead_id", leadId);
+
+  if (error) {
+    console.warn("[followup-ledger] estadoCadenciaFromLedger:", error.message);
+    return { enviadosCount: 0, ledgerOk: false, todosEnviados: false, passoIdsEnviados: new Set() };
+  }
+
+  const passoIdsEnviados = new Set(
+    (data || [])
+      .map((r) => (typeof r.passo_id === "string" ? r.passo_id : ""))
+      .filter(Boolean)
+  );
+
+  let enviadosCount = 0;
+  for (const p of passosAtivos) {
+    if (passoIdsEnviados.has(p.id)) enviadosCount += 1;
+    else break;
+  }
+
+  return {
+    enviadosCount,
+    ledgerOk: true,
+    todosEnviados: enviadosCount >= passosAtivos.length,
+    passoIdsEnviados,
+  };
+}
+
+/** Sincroniza followup_passo no lead com o ledger (best-effort). */
+export async function sincronizarFollowupPassoComLedger(
+  supabase: SupabaseClient,
+  leadId: string,
+  enviadosCount: number,
+  atualNoLead: number | null | undefined
+): Promise<void> {
+  const atual = atualNoLead ?? 0;
+  if (atual === enviadosCount) return;
+  try {
+    await supabase.from("hub_leads_crm").update({ followup_passo: enviadosCount }).eq("id", leadId);
+  } catch (e) {
+    console.warn("[followup-ledger] sincronizarFollowupPassoComLedger:", e);
+  }
 }
 
 /** Registra envio bem-sucedido no ledger (idempotente via UNIQUE). */

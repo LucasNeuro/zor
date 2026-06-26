@@ -272,7 +272,11 @@ export async function buildFollowupOperacaoSnapshot(
   const envios_24h = fromFila.filter((e) => e.status === "sucesso").length;
 
   const aguardando: FollowupTimelineEvento[] = (estado_atual?.diagnosticos ?? [])
-    .filter((d) => d.motivo.startsWith("aguardando") || d.motivo === "sem_ultima_msg_cliente")
+    .filter(
+      (d) =>
+        (d.motivo.startsWith("aguardando") || d.motivo === "sem_ultima_msg_cliente") &&
+        d.motivo !== "cadencia_concluida"
+    )
     .slice(0, 5)
     .map((d) => ({
       id: `pendente-${d.lead_id}`,

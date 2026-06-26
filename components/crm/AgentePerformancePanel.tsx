@@ -7,11 +7,14 @@ import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import { CRM_ACCENT } from "@/lib/crm/crm-button-styles";
 import { CRM_BORDER_SOFT, CRM_SURFACE_CARD } from "@/lib/crm-shell-theme";
 
+import type { FollowupOperacaoSnapshot } from "@/lib/hub/followup-operacao";
+
 type OperacaoPayload = {
   ciclos: Record<string, unknown>[];
   execucoes_ciclo: Record<string, unknown>[];
   acoes: Record<string, unknown>[];
   ultimo_prompt_em: string | null;
+  followup?: FollowupOperacaoSnapshot | null;
 };
 
 export type AgentePerformancePanelProps = {
@@ -65,7 +68,7 @@ export function AgentePerformancePanel({
       })
     : null;
   const cargaPct = Math.round(cargaOperacionalVisual(agenteSlug, ativo && !arquivado) * 100);
-  const acoesRecentes = operacao?.acoes?.length ?? 0;
+  const acoesRecentes = (operacao?.acoes?.length ?? 0) + (operacao?.followup?.envios_24h ?? 0);
   const ultimoPrompt = tempoRelativo(operacao?.ultimo_prompt_em);
 
   return (

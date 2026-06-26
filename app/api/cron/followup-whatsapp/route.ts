@@ -23,7 +23,10 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = db();
-  const { resultados, erros } = await executarFollowupTodosAgentesAtivos(supabase);
+  const { resultados, erros } = await executarFollowupTodosAgentesAtivos(supabase, {
+    registrarTick: true,
+    fonteTick: "cron",
+  });
 
   const totais = resultados.reduce(
     (acc, r) => {

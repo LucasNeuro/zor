@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { backfillMensagensIaCrm } from "@/lib/crm/backfill-mensagens-ia-crm";
 import { mensagemTemCorpo, parseMidiaFromRow } from "@/lib/crm/chat-mensagem-midia";
 
 function db() {
@@ -132,6 +133,10 @@ async function mensagensEmail(supabase: ReturnType<typeof db>, leadId: string) {
 }
 
 async function mensagensWhatsapp(supabase: ReturnType<typeof db>, leadId: string) {
+  await backfillMensagensIaCrm(supabase, leadId).catch((e) => {
+    console.warn("[atendimento/mensagens] backfill IA:", e instanceof Error ? e.message : e);
+  });
+
   const { data: conversas } = await supabase
     .from("hub_conversas")
     .select("id")

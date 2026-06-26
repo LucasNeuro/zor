@@ -54,6 +54,11 @@ export type FollowupRunResult = {
 export type FollowupRunOptions = {
   /** Inclui motivos de skip por lead (útil no botão "Testar envio"). */
   diagnostico?: boolean;
+  /** Avalia sem enviar mensagens nem gravar estado de follow-up. */
+  simular?: boolean;
+  /** Grava tick em hub_ciclos_log (cron/worker). */
+  registrarTick?: boolean;
+  fonteTick?: "cron" | "worker" | "manual";
 };
 
 function minutosDesde(iso: string | null | undefined, agoraMs: number): number | null {
@@ -71,6 +76,57 @@ function registrarSkip(
   if (!result.resumo_skip) result.resumo_skip = {};
   result.diagnosticos.push(diag);
   result.resumo_skip[diag.motivo] = (result.resumo_skip[diag.motivo] ?? 0) + 1;
+}
+
+async function registrarTickFollowup(
+  supabase: SupabaseClient,
+  slug: string,
+  result: FollowupRunResult,
+  fonte: FollowupRunOptions["fonteTick"]
+): Promise<void> {
+  const agoraIso = new Date().toISOString();
+  const status =
+    result.erros.length > 0 ? "erro" : result.enviados > 0 || result.arquivados > 0 ? "sucesso" : "sem_acao";
+
+  try {
+    const { data: ciclo } = await supabase
+      .from("hub_ciclos_ia")
+      .select("id, total_execucoes")
+      .eq("agente_slug", slug)
+      .ilike("nome", "%follow%")
+      .maybeSingle();
+
+    await supabase.from("hub_ciclos_log").insert({
+      ciclo_id: ciclo?.id ?? null,
+      agente_slug: slug,
+      status,
+      erro: result.erros[0] ?? null,
+      acoes_tomadas: {
+        acao: "followup_tick",
+        fonte: fonte ?? "manual",
+        enviados: result.enviados,
+        arquivados: result.arquivados,
+        leads_elegiveis: result.leads_elegiveis,
+        diagnosticos: (result.diagnosticos ?? []).slice(0, 25),
+        resumo_skip: result.resumo_skip ?? {},
+        erros: result.erros.slice(0, 5),
+      },
+      iniciado_em: agoraIso,
+      finalizado_em: agoraIso,
+    });
+
+    if (ciclo?.id) {
+      await supabase
+        .from("hub_ciclos_ia")
+        .update({
+          ultimo_ciclo: agoraIso,
+          ultimo_status: status,
+        })
+        .eq("id", ciclo.id);
+    }
+  } catch {
+    /* telemetria opcional */
+  }
 }
 
 async function enviarPassoFollowup(params: {
@@ -124,15 +180,27 @@ export async function executarFollowupParaAgente(
     acoes: [],
   };
 
-  if (options?.diagnostico) {
+  const coletarDiagnostico =
+    options?.diagnostico === true || options?.registrarTick === true || options?.simular === true;
+  if (coletarDiagnostico) {
     result.diagnosticos = [];
     result.resumo_skip = {};
   }
 
-  if (!config.ativo || passos.length === 0) return result;
+  if (!config.ativo || passos.length === 0) {
+    if (options?.registrarTick) {
+      await registrarTickFollowup(supabase, slug, result, options.fonteTick ?? "manual");
+    }
+    return result;
+  }
 
   const passosAtivos = passosAtivosOrdenados(passos);
-  if (passosAtivos.length === 0) return result;
+  if (passosAtivos.length === 0) {
+    if (options?.registrarTick) {
+      await registrarTickFollowup(supabase, slug, result, options.fonteTick ?? "manual");
+    }
+    return result;
+  }
 
   const { token: instanceToken } = await resolverTokenInstanciaWhatsapp(supabase, slug);
   if (!whatsappConfigured({ instanceToken })) {
@@ -141,6 +209,9 @@ export async function executarFollowupParaAgente(
         ? `${slug}: UAZAPI_BASE_URL não configurado no servidor.`
         : `${slug}: sem token UAZAPI — configure a instância WhatsApp do agente em Integrações.`
     );
+    if (options?.registrarTick) {
+      await registrarTickFollowup(supabase, slug, result, options.fonteTick ?? "manual");
+    }
     return result;
   }
 
@@ -159,6 +230,9 @@ export async function executarFollowupParaAgente(
 
   if (error) {
     result.erros.push(error.message);
+    if (options?.registrarTick) {
+      await registrarTickFollowup(supabase, slug, result, options.fonteTick ?? "manual");
+    }
     return result;
   }
 
@@ -169,7 +243,7 @@ export async function executarFollowupParaAgente(
   for (const lead of listaLeads) {
     const tel = (lead.telefone || "").trim();
     if (!tel) {
-      if (options?.diagnostico) {
+      if (coletarDiagnostico) {
         registrarSkip(result, {
           lead_id: lead.id,
           lead_nome: lead.nome,
@@ -184,7 +258,7 @@ export async function executarFollowupParaAgente(
     const passo = passosAtivos[indicePasso];
 
     let ultimaMsgClienteEm = lead.ultima_msg_cliente_em?.trim() || null;
-    if (!ultimaMsgClienteEm) {
+    if (!ultimaMsgClienteEm && !options?.simular) {
       ultimaMsgClienteEm = await backfillUltimaMsgClienteEm(supabase, lead.id);
       if (ultimaMsgClienteEm) lead.ultima_msg_cliente_em = ultimaMsgClienteEm;
     }
@@ -194,7 +268,7 @@ export async function executarFollowupParaAgente(
     const minutosDesdeUltimoFollowup = minutosDesde(lead.ultimo_followup, agora);
 
     if (minutosSilencio == null) {
-      if (options?.diagnostico) {
+      if (coletarDiagnostico) {
         registrarSkip(result, {
           lead_id: lead.id,
           lead_nome: lead.nome,
@@ -206,17 +280,19 @@ export async function executarFollowupParaAgente(
     }
 
     if (!passo && enviadosCount >= passosAtivos.length && horasSilencio != null && horasSilencio >= arquivarHoras) {
-      await supabase
-        .from("hub_leads_crm")
-        .update({ estagio: "arquivado", followup_pausado: true })
-        .eq("id", lead.id);
+      if (!options?.simular) {
+        await supabase
+          .from("hub_leads_crm")
+          .update({ estagio: "arquivado", followup_pausado: true })
+          .eq("id", lead.id);
+      }
       result.arquivados += 1;
       result.acoes.push(`Arquivado ${lead.nome} após ${config.arquivar_apos_dias}d sem resposta`);
       continue;
     }
 
     if (!passo) {
-      if (options?.diagnostico) {
+      if (coletarDiagnostico) {
         registrarSkip(result, {
           lead_id: lead.id,
           lead_nome: lead.nome,
@@ -237,7 +313,7 @@ export async function executarFollowupParaAgente(
     });
 
     if (!avaliacao.permitido) {
-      if (options?.diagnostico && avaliacao.motivo) {
+      if (coletarDiagnostico && avaliacao.motivo) {
         registrarSkip(result, {
           lead_id: lead.id,
           lead_nome: lead.nome,
@@ -257,6 +333,12 @@ export async function executarFollowupParaAgente(
       nome: lead.nome,
       mercado,
     });
+
+    if (options?.simular) {
+      result.enviados += 1;
+      result.acoes.push(`[simulado] Passo ${posicaoPasso} → ${lead.nome}`);
+      continue;
+    }
 
     const envio = await enviarPassoFollowup({
       telefone: tel,
@@ -339,11 +421,16 @@ export async function executarFollowupParaAgente(
     result.acoes.push(`Passo ${posicaoPasso} → ${lead.nome}`);
   }
 
+  if (options?.registrarTick) {
+    await registrarTickFollowup(supabase, slug, result, options.fonteTick ?? "manual");
+  }
+
   return result;
 }
 
 export async function executarFollowupTodosAgentesAtivos(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  options?: FollowupRunOptions
 ): Promise<{ resultados: FollowupRunResult[]; erros: string[] }> {
   const { data: configs, error } = await supabase
     .from("hub_agente_followup_config")
@@ -377,7 +464,8 @@ export async function executarFollowupTodosAgentesAtivos(
     const r = await executarFollowupParaAgente(
       supabase,
       cfg,
-      (passos || []) as HubAgenteFollowupPasso[]
+      (passos || []) as HubAgenteFollowupPasso[],
+      options
     );
     resultados.push(r);
   }

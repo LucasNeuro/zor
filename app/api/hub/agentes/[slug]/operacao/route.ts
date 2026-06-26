@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureHubCicloPadraoParaAgente } from "@/lib/hub/provision-hub-ciclo-padrao";
+import { buildFollowupOperacaoSnapshot } from "@/lib/hub/followup-operacao";
 
 function db() {
   return createClient(
@@ -43,7 +44,7 @@ export async function GET(
     }
   }
 
-  const [logsR, acoesR, promptR] = await Promise.all([
+  const [logsR, acoesR, promptR, followup] = await Promise.all([
     supabase
       .from("hub_ciclos_log")
       .select("id, ciclo_id, status, erro, iniciado_em, finalizado_em, tokens_usados, custo_brl, acoes_tomadas")
@@ -63,6 +64,7 @@ export async function GET(
       .order("criado_em", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    buildFollowupOperacaoSnapshot(supabase, slug),
   ]);
 
   const errors = [ciclosR.error, logsR.error, acoesR.error, promptR.error].filter(Boolean);
@@ -75,5 +77,6 @@ export async function GET(
     execucoes_ciclo: logsR.data || [],
     acoes: acoesR.data || [],
     ultimo_prompt_em: promptR.data?.criado_em ?? null,
+    followup,
   });
 }

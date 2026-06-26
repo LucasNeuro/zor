@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { limparSessaoConversaExpirada } from "@/lib/ia/sessao-conversa-ttl";
+import { backfillMensagensIaCrm } from "@/lib/crm/backfill-mensagens-ia-crm";
 
 /** Tabela/coluna ainda não migrada — PostgREST: "schema cache" / Postgres: "does not exist". */
 function tabelaInexistente(msg: string, tabela: string): boolean {
@@ -98,7 +99,11 @@ async function limparEstadoLeadsDoAgente(
 
     if (!countErr && typeof antes === "number") memoriasLeadRemovidas += antes;
 
-    await limparSessaoConversaExpirada(supabase, leadId);
+    await backfillMensagensIaCrm(supabase, leadId, { agenteSlug: slug }).catch((e) => {
+      console.warn("[limpar-memorias] backfill chat IA:", leadId, e instanceof Error ? e.message : e);
+    });
+
+    await limparSessaoConversaExpirada(supabase, leadId, { preservarConversaTurnos: true });
     leadsResetados += 1;
   }
 

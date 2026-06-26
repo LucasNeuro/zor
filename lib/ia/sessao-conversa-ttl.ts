@@ -77,9 +77,13 @@ const CHAVES_METADATA_SESSAO = [
 ] as const;
 
 /** Remove estado conversacional + playbook Maria + menu WhatsApp do metadata do lead. */
-export function limparMetadataConversacional(meta: Record<string, unknown>): Record<string, unknown> {
+export function limparMetadataConversacional(
+  meta: Record<string, unknown>,
+  opts?: { preservarConversaTurnos?: boolean }
+): Record<string, unknown> {
   const out = { ...meta };
   for (const k of CHAVES_METADATA_SESSAO) {
+    if (opts?.preservarConversaTurnos && k === "conversa_turnos") continue;
     delete out[k];
   }
   for (const key of Object.keys(out)) {
@@ -94,17 +98,21 @@ export function limparMetadataConversacional(meta: Record<string, unknown>): Rec
   return out;
 }
 
-function limparChavesSessaoMetadata(meta: Record<string, unknown>): Record<string, unknown> {
-  return limparMetadataConversacional(meta);
+function limparChavesSessaoMetadata(
+  meta: Record<string, unknown>,
+  opts?: { preservarConversaTurnos?: boolean }
+): Record<string, unknown> {
+  return limparMetadataConversacional(meta, opts);
 }
 
 /** Campos do lead que alimentam contexto da IA — limpos ao reiniciar sessão (mantém nome, telefone, estágio CRM). */
 function patchLeadCamposSessao(
-  metaBase: Record<string, unknown>
+  metaBase: Record<string, unknown>,
+  opts?: { preservarConversaTurnos?: boolean }
 ): Record<string, unknown> {
   return {
     metadata: {
-      ...limparChavesSessaoMetadata(metaBase),
+      ...limparChavesSessaoMetadata(metaBase, opts),
       sessao_reiniciada_em: new Date().toISOString(),
     },
     interesse_principal: null,
@@ -118,7 +126,8 @@ function patchLeadCamposSessao(
 /** Remove turnos, fluxo, interesse e memórias IA da sessão anterior (histórico em hub_mensagens permanece). */
 export async function limparSessaoConversaExpirada(
   supabase: SupabaseClient,
-  leadId: string
+  leadId: string,
+  opts?: { preservarConversaTurnos?: boolean }
 ): Promise<void> {
   const { data: atual } = await supabase
     .from("hub_leads_crm")
@@ -131,7 +140,7 @@ export async function limparSessaoConversaExpirada(
       ? (atual.metadata as Record<string, unknown>)
       : {};
 
-  const patch = patchLeadCamposSessao(metaBase);
+  const patch = patchLeadCamposSessao(metaBase, opts);
   if (atual && "preferencias" in atual) {
     patch.preferencias = null;
   }

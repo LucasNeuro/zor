@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { persistirMensagemSaidaIaCrm } from "@/lib/crm/backfill-mensagens-ia-crm";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
 import {
   enviarMenuUazapi,
@@ -564,8 +565,28 @@ function mensagemPareceEmail(mensagem: string): boolean {
 }
 
 async function enviarTexto(telefone: string, texto: string, instanceToken: string) {
-  await whatsappSendText(telefone, texto, { instanceToken });
+  const out = await whatsappSendText(telefone, texto, { instanceToken });
+  const ctx = playbookPersistenciaCrm;
+  if (out.ok && ctx && texto.trim()) {
+    await persistirMensagemSaidaIaCrm(ctx.supabase, {
+      leadId: ctx.leadId,
+      agenteSlug: ctx.agenteSlug,
+      conteudo: texto,
+      tenantId: ctx.tenantId,
+      motor: "playbook_flow",
+    }).catch(() => undefined);
+  }
+  return out;
 }
+
+type PlaybookPersistenciaCrm = {
+  supabase: SupabaseClient;
+  leadId: string;
+  agenteSlug: string;
+  tenantId?: string | null;
+};
+
+let playbookPersistenciaCrm: PlaybookPersistenciaCrm | null = null;
 
 async function enviarMedia(
   telefone: string,
@@ -1934,6 +1955,17 @@ export async function processarPlaybookInbound(params: {
     return { handled: false, motivo: "sem_instance_token" };
   }
 
+  playbookPersistenciaCrm = {
+    supabase: params.supabase,
+    leadId: params.leadId,
+    agenteSlug: params.agenteSlug,
+    tenantId:
+      params.metadata && typeof params.metadata === "object" && !Array.isArray(params.metadata)
+        ? (params.metadata as Record<string, unknown>).tenant_id
+        : null,
+  };
+
+  try {
   const ident =
     (await carregarIdentidadeAgentePlaybook(params.supabase, params.agenteSlug)) ?? {
       cargo: null,
@@ -2029,6 +2061,9 @@ export async function processarPlaybookInbound(params: {
     lead_id: params.leadId,
   });
   return processarPlaybookInboundHardcoded(params);
+  } finally {
+    playbookPersistenciaCrm = null;
+  }
 }
 
 /** @deprecated Use processarPlaybookInbound */

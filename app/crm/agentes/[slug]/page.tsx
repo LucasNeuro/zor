@@ -28,6 +28,7 @@ import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import { AgenteAvatar } from "@/components/crm/AgenteAvatar";
 import { AgenteCiclosOperacaoList } from "@/components/crm/AgenteCiclosOperacaoList";
+import { AgenteFollowupTimeline } from "@/components/crm/AgenteFollowupTimeline";
 import { AgentePerformancePanel } from "@/components/crm/AgentePerformancePanel";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import { CRM_ACCENT, crmBtnPrimary, crmInfoBox } from "@/lib/crm/crm-button-styles";
@@ -43,6 +44,7 @@ import {
 } from "@/components/crm/AgenteFerramentasIaBlock";
 import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-externas";
 import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
+import type { FollowupOperacaoSnapshot } from "@/lib/hub/followup-operacao";
 import {
   AgenteEmailConnectBlock,
   type AgenteResendSnapshot,
@@ -198,9 +200,11 @@ export default function AgentePage() {
     execucoes_ciclo: Record<string, unknown>[];
     acoes: Record<string, unknown>[];
     ultimo_prompt_em: string | null;
+    followup?: FollowupOperacaoSnapshot | null;
   };
   const [operacao, setOperacao] = useState<OperacaoPayload | null>(null);
   const [operacaoLoading, setOperacaoLoading] = useState(false);
+  const [operacaoAtualizadoEm, setOperacaoAtualizadoEm] = useState<number | null>(null);
 
   type AbaFichaAgente = "geral" | "personalidade" | "integracoes" | "operacao";
   const [abaFicha, setAbaFicha] = useState<AbaFichaAgente>("geral");
@@ -301,28 +305,38 @@ export default function AgentePage() {
     carregar();
   }, [carregar]);
 
-  useEffect(() => {
-    if (!slug) return;
-    let cancelled = false;
-    setOperacaoLoading(true);
-    void (async () => {
+  const carregarOperacao = useCallback(
+    async (silent = false) => {
+      if (!slug) return;
+      if (!silent) setOperacaoLoading(true);
       try {
         const res = await fetch(`/api/hub/agentes/${encodeURIComponent(slug)}/operacao`, {
           headers: await hubApiHeaders(),
         });
-        if (!res.ok || cancelled) return;
+        if (!res.ok) return;
         const data = (await res.json()) as OperacaoPayload;
-        if (!cancelled) setOperacao(data);
+        setOperacao(data);
+        setOperacaoAtualizadoEm(Date.now());
       } catch {
         /* métricas opcionais */
       } finally {
-        if (!cancelled) setOperacaoLoading(false);
+        if (!silent) setOperacaoLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+    },
+    [slug]
+  );
+
+  useEffect(() => {
+    void carregarOperacao();
+  }, [carregarOperacao]);
+
+  useEffect(() => {
+    if (abaFicha !== "operacao" || !slug) return;
+    const id = window.setInterval(() => {
+      void carregarOperacao(true);
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, [abaFicha, slug, carregarOperacao]);
 
   useEffect(() => {
     const oauth = searchParams.get("google_oauth");
@@ -1238,6 +1252,11 @@ export default function AgentePage() {
                   arquivado={!!agente.arquivado_em}
                   operacao={operacao}
                   operacaoLoading={operacaoLoading}
+                />
+                <AgenteFollowupTimeline
+                  followup={operacao?.followup}
+                  loading={operacaoLoading}
+                  atualizadoEm={operacaoAtualizadoEm}
                 />
               </div>
             ) : null}

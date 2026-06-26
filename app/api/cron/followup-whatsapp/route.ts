@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
+import { followupCronShouldRun, followupDispatchMode } from "@/lib/hub/followup-dispatch";
 import { executarFollowupTodosAgentesAtivos } from "@/lib/hub/followup-runner";
 
 function db() {
@@ -11,12 +12,20 @@ function db() {
 }
 
 /**
- * Cron: follow-up automático WhatsApp por agente (config ativa em hub_agente_followup_config).
- * Agendar a cada 5–15 min com CRON_SECRET (Render ou Vercel).
+ * Cron: follow-up automático WhatsApp (ledger + proximo_followup + janela por agente).
+ * Render: schedule */5 * * * * com DISPATCH_FOLLOWUP_ENABLED=1 e FOLLOWUP_DISPATCH_MODE=cron.
  */
 export async function GET(request: NextRequest) {
   if (!cronRequestAuthorized(request)) {
     return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  }
+  if (!followupCronShouldRun()) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      motivo: `FOLLOWUP_DISPATCH_MODE=${followupDispatchMode()} — cron não dispara follow-up`,
+      tick: new Date().toISOString(),
+    });
   }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ erro: "Serviço indisponível" }, { status: 503 });
@@ -32,13 +41,23 @@ export async function GET(request: NextRequest) {
     (acc, r) => {
       acc.enviados += r.enviados;
       acc.arquivados += r.arquivados;
+      acc.leads_elegiveis += r.leads_elegiveis;
+      for (const [k, v] of Object.entries(r.resumo_skip ?? {})) {
+        acc.resumo_skip[k] = (acc.resumo_skip[k] ?? 0) + (v ?? 0);
+      }
       return acc;
     },
-    { enviados: 0, arquivados: 0 }
+    {
+      enviados: 0,
+      arquivados: 0,
+      leads_elegiveis: 0,
+      resumo_skip: {} as Record<string, number>,
+    }
   );
 
   return NextResponse.json({
     ok: true,
+    dispatch_mode: followupDispatchMode(),
     tick: new Date().toISOString(),
     agentes_processados: resultados.length,
     ...totais,

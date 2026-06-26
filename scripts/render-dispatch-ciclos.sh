@@ -6,6 +6,11 @@ set -eu
 #   CRON_SECRET — required in production on the API; cron must send the same value.
 #   DISPATCH_CICLOS_URL — optional full URL to GET .../api/cron/dispatch-ciclos
 #   NEXT_PUBLIC_APP_URL — if DISPATCH_CICLOS_URL is empty, URL base (see .env.example)
+#   DISPATCH_FOLLOWUP_ENABLED — 1 (default) | 0 para não chamar followup-whatsapp
+#   FOLLOWUP_DISPATCH_MODE — cron (default) | worker | both
+#     cron   = só este cron dispara follow-up (worker não)
+#     worker = só worker dispara (este cron ignora follow-up)
+#     both   = cron + worker (ledger impede reenvio do mesmo passo)
 
 url="${DISPATCH_CICLOS_URL:-}"
 if [ -z "$url" ]; then
@@ -57,18 +62,27 @@ if [ -z "$followup_url" ]; then
 fi
 
 if [ -n "$followup_url" ]; then
-      skip_followup="${DISPATCH_FOLLOWUP_ENABLED:-1}"
+  skip_followup="${DISPATCH_FOLLOWUP_ENABLED:-1}"
+  dispatch_mode="${FOLLOWUP_DISPATCH_MODE:-cron}"
+
   case "$skip_followup" in
     0|false|FALSE|off|OFF|no|NO)
       echo "render-dispatch-ciclos: followup-whatsapp skipped (DISPATCH_FOLLOWUP_ENABLED=$skip_followup)"
       ;;
     *)
-      echo "render-dispatch-ciclos: followup-whatsapp → ${followup_url}"
-      curl -fsS -X GET \
-        -H "Authorization: Bearer ${secret}" \
-        -H "Accept: application/json" \
-        --max-time 300 \
-        "$followup_url" || echo "render-dispatch-ciclos: followup-whatsapp failed (non-fatal)" >&2
+      case "$dispatch_mode" in
+        worker)
+          echo "render-dispatch-ciclos: followup-whatsapp skipped (FOLLOWUP_DISPATCH_MODE=worker — só o worker dispara)"
+          ;;
+        *)
+          echo "render-dispatch-ciclos: followup-whatsapp → ${followup_url} (mode=${dispatch_mode})"
+          curl -fsS -X GET \
+            -H "Authorization: Bearer ${secret}" \
+            -H "Accept: application/json" \
+            --max-time 300 \
+            "$followup_url" || echo "render-dispatch-ciclos: followup-whatsapp failed (non-fatal)" >&2
+          ;;
+      esac
       ;;
   esac
 fi

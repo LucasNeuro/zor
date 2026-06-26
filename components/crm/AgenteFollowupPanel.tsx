@@ -206,7 +206,7 @@ export function AgenteFollowupPanel({
   const envios24h = followup?.envios_24h ?? 0;
   const pendentes = (followup?.timeline ?? []).filter((e) => e.status === "aguardando").length;
   const janela = followup?.execucao_janela;
-  const foraDaJanela = janela?.modo === "janela_horaria" && janela.ativa === false;
+  const foraDaJanela = janela && janela.ativa === false && janela.modo !== "continuo";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -247,10 +247,14 @@ export function AgenteFollowupPanel({
                   maxWidth: 560,
                 }}
               >
-                Fora da janela horária
+                {janela?.modo === "faixa" && janela.faixa
+                  ? `Fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim}`
+                  : "Fora da janela horária"}
                 {janela?.proximo_slot ? ` — próximo envio ~${janela.proximo_slot}` : ""}
-                {janela?.horarios?.length ? ` (slots: ${janela.horarios.join(", ")})` : ""}. A cadência só dispara
-                dentro desses horários.
+                {janela?.modo === "slots" && janela.horarios?.length
+                  ? ` (slots: ${janela.horarios.join(", ")})`
+                  : null}
+                . Leads com proximo_followup agendado aparecem como &quot;Aguardando espera&quot; na simulação.
               </p>
             ) : janela?.modo === "continuo" ? (
               <p style={{ margin: "8px 0 0", fontSize: 12, fontWeight: 600, color: "#15803d", lineHeight: 1.45 }}>

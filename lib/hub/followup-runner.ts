@@ -12,8 +12,18 @@ import {
   type HubAgenteFollowupConfig,
   type HubAgenteFollowupPasso,
 } from "@/lib/hub/followup-types";
-import { followupPermitidoNaJanela, horariosDisparoFollowup } from "@/lib/hub/followup-janela";
+import { followupPermitidoNaJanela, horariosDisparoFollowup, janelaModoFollowup } from "@/lib/hub/followup-janela";
 import { avaliarDisparoPasso, type MotivoFollowupSkip } from "@/lib/hub/followup-schedule";
+import {
+  calcularProximoFollowupEm,
+  followupAgendadoParaAgora,
+  formatarProximoFollowup,
+} from "@/lib/hub/followup-agenda";
+import {
+  contarEnviosFollowupHoje,
+  followupPassoJaEnviado,
+  registrarFollowupEnvio,
+} from "@/lib/hub/followup-ledger";
 import {
   clienteRespondeuAposUltimoFollowup,
   followupLeadBloqueadoPorEnvioRecente,
@@ -35,6 +45,7 @@ type LeadFollowupRow = {
   ultima_msg_cliente_em: string | null;
   ultimo_contato: string | null;
   ultimo_followup: string | null;
+  proximo_followup: string | null;
   criado_em: string | null;
   atualizado_em: string | null;
   metadata: Record<string, unknown> | null;
@@ -207,10 +218,15 @@ export async function executarFollowupParaAgente(
 
   const janela = followupPermitidoNaJanela(config);
   if (!janela.ativa && !options?.simular) {
-    const horarios = horariosDisparoFollowup(config).join(", ");
-    const detalhe = janela.proximo
-      ? `fora da janela — próximo slot ${janela.proximo} (${horarios})`
-      : `fora da janela horária (${horarios})`;
+    const modo = janelaModoFollowup(config);
+    const detalhe =
+      modo === "faixa" && janela.faixa
+        ? janela.proximo
+          ? `fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim} — próximo ~${janela.proximo}`
+          : `fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim}`
+        : janela.proximo
+          ? `fora da janela — próximo slot ${janela.proximo} (${horariosDisparoFollowup(config).join(", ")})`
+          : `fora da janela horária (${horariosDisparoFollowup(config).join(", ")})`;
     if (coletarDiagnostico) {
       result.diagnosticos!.push({
         lead_id: "_config",
@@ -228,10 +244,15 @@ export async function executarFollowupParaAgente(
   }
 
   const foraDaJanela = !janela.ativa;
+  const modoJanela = janelaModoFollowup(config);
   const detalheJanelaFechada = foraDaJanela
-    ? janela.proximo
-      ? `fora da janela — próximo slot ${janela.proximo} (${horariosDisparoFollowup(config).join(", ")})`
-      : `fora da janela horária (${horariosDisparoFollowup(config).join(", ")})`
+    ? modoJanela === "faixa" && janela.faixa
+      ? janela.proximo
+        ? `fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim} — próximo ~${janela.proximo}`
+        : `fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim}`
+      : janela.proximo
+        ? `fora da janela — próximo slot ${janela.proximo} (${horariosDisparoFollowup(config).join(", ")})`
+        : `fora da janela horária (${horariosDisparoFollowup(config).join(", ")})`
     : null;
 
   const { token: instanceToken } = await resolverTokenInstanciaWhatsapp(supabase, slug);
@@ -252,7 +273,7 @@ export async function executarFollowupParaAgente(
   const { data: leads, error } = await supabase
     .from("hub_leads_crm")
     .select(
-      "id, nome, telefone, tenant_id, estagio, followup_passo, followup_pausado, ultima_msg_cliente_em, ultimo_contato, ultimo_followup, criado_em, atualizado_em, metadata, agente_responsavel, humano_responsavel"
+      "id, nome, telefone, tenant_id, estagio, followup_passo, followup_pausado, ultima_msg_cliente_em, ultimo_contato, ultimo_followup, proximo_followup, criado_em, atualizado_em, metadata, agente_responsavel, humano_responsavel"
     )
     .eq("agente_responsavel", slug)
     .eq("followup_pausado", false)
@@ -394,6 +415,62 @@ export async function executarFollowupParaAgente(
       continue;
     }
 
+    // Ledger: avança se o passo actual já foi enviado (anti-duplicata forte).
+    if (!options?.simular) {
+      let guard = 0;
+      while (passo && guard < passosAtivos.length) {
+        const jaEnviado = await followupPassoJaEnviado(supabase, lead.id, passo.id);
+        if (!jaEnviado) break;
+        enviadosCount += 1;
+        indicePasso = enviadosCount;
+        passo = passosAtivos[indicePasso];
+        guard += 1;
+      }
+      if (!passo) {
+        if (coletarDiagnostico) {
+          registrarSkip(result, {
+            lead_id: lead.id,
+            lead_nome: lead.nome,
+            motivo: "cadencia_concluida",
+            detalhe: "todos os passos já constam no ledger",
+          });
+        }
+        continue;
+      }
+    }
+
+    const agoraDate = new Date(agora);
+    if (!followupAgendadoParaAgora(lead.proximo_followup, agoraDate)) {
+      const fmt = formatarProximoFollowup(lead.proximo_followup);
+      if (coletarDiagnostico) {
+        registrarSkip(result, {
+          lead_id: lead.id,
+          lead_nome: lead.nome,
+          motivo: "aguardando_espera",
+          detalhe: fmt ? `próximo envio agendado: ${fmt}` : "aguardando proximo_followup",
+          proximo_passo: indicePasso + 1,
+        });
+      }
+      continue;
+    }
+
+    const maxPorDia = Math.max(1, config.max_envios_por_dia ?? 1);
+    if (!options?.simular) {
+      const enviosHoje = await contarEnviosFollowupHoje(supabase, lead.id, slug, config.timezone);
+      if (enviosHoje >= maxPorDia) {
+        if (coletarDiagnostico) {
+          registrarSkip(result, {
+            lead_id: lead.id,
+            lead_nome: lead.nome,
+            motivo: "aguardando_espera",
+            detalhe: `limite diário (${maxPorDia}) atingido — ${enviosHoje} envio(s) hoje`,
+            proximo_passo: indicePasso + 1,
+          });
+        }
+        continue;
+      }
+    }
+
     const posicaoPasso = indicePasso + 1;
     const avaliacao = avaliarDisparoPasso({
       indicePasso,
@@ -419,6 +496,20 @@ export async function executarFollowupParaAgente(
     }
 
     if (!options?.simular) {
+      const jaNoLedger = await followupPassoJaEnviado(supabase, lead.id, passo.id);
+      if (jaNoLedger) {
+        if (coletarDiagnostico) {
+          registrarSkip(result, {
+            lead_id: lead.id,
+            lead_nome: lead.nome,
+            motivo: "passo_ja_enviado",
+            detalhe: `passo ${posicaoPasso} já registrado no ledger`,
+            proximo_passo: posicaoPasso,
+          });
+        }
+        continue;
+      }
+
       const esperaPasso = esperaMinutosDoPasso(passo, config, indicePasso);
       const janelaDuplicata = janelaAntiduplicataMinutos(esperaPasso, indicePasso);
 
@@ -490,13 +581,35 @@ export async function executarFollowupParaAgente(
 
     const agoraIso = new Date().toISOString();
     const novoEnviadosCount = enviadosCount + 1;
+    const proximoPasso = passosAtivos[novoEnviadosCount];
+    const proximoFollowup = proximoPasso
+      ? calcularProximoFollowupEm(
+          new Date(agoraIso),
+          esperaMinutosDoPasso(proximoPasso, config, novoEnviadosCount),
+          config
+        )
+      : null;
+
+    const ledger = await registrarFollowupEnvio(supabase, {
+      lead_id: lead.id,
+      passo_id: passo.id,
+      agente_slug: slug,
+      passo_ordem: passo.ordem,
+      tenant_id: lead.tenant_id ?? config.tenant_id,
+      enviado_em: agoraIso,
+    });
+
+    if (!ledger.ok) {
+      result.erros.push(`${lead.nome}: falha ao gravar ledger (${ledger.erro})`);
+      continue;
+    }
 
     const { error: leadErr } = await supabase
       .from("hub_leads_crm")
       .update({
         followup_passo: novoEnviadosCount,
         ultimo_followup: agoraIso,
-        proximo_followup: null,
+        proximo_followup: proximoFollowup,
       })
       .eq("id", lead.id);
 

@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHubLogger } from "@/lib/observability/hub-log";
 import { executarFollowupTodosAgentesAtivos } from "@/lib/hub/followup-runner";
+import { followupDispatchMode } from "@/lib/hub/followup-dispatch";
+
+export { followupWorkerEnabledFlag as followupWorkerEnabled, followupWorkerShouldRun } from "@/lib/hub/followup-dispatch";
 
 export function followupPollMs(): number {
   const raw = Number.parseInt(String(process.env.FOLLOWUP_POLL_MS || ""), 10);
@@ -8,20 +11,19 @@ export function followupPollMs(): number {
   return Math.max(30_000, Math.min(600_000, raw));
 }
 
-export function followupWorkerEnabled(): boolean {
-  const v = (process.env.FOLLOWUP_WORKER_ENABLED ?? "1").trim().toLowerCase();
-  return v !== "0" && v !== "false" && v !== "off";
-}
-
-/** Tick de follow-up (worker ou cron interno). */
+/** Tick de follow-up (worker). Respeita FOLLOWUP_DISPATCH_MODE. */
 export async function runFollowupTick(supabase: SupabaseClient): Promise<{
   ok: boolean;
   enviados: number;
   arquivados: number;
   agentes: number;
   erros: string[];
+  skipped?: boolean;
 }> {
-  const log = createHubLogger("followup_worker", { mode: "tick" });
+  const log = createHubLogger("followup_worker", {
+    mode: "tick",
+    dispatch_mode: followupDispatchMode(),
+  });
   try {
     const { resultados, erros } = await executarFollowupTodosAgentesAtivos(supabase, {
       registrarTick: true,
@@ -29,11 +31,19 @@ export async function runFollowupTick(supabase: SupabaseClient): Promise<{
     });
     const enviados = resultados.reduce((n, r) => n + r.enviados, 0);
     const arquivados = resultados.reduce((n, r) => n + r.arquivados, 0);
+    const resumoSkip = resultados.reduce<Record<string, number>>((acc, r) => {
+      for (const [k, v] of Object.entries(r.resumo_skip ?? {})) {
+        acc[k] = (acc[k] ?? 0) + (v ?? 0);
+      }
+      return acc;
+    }, {});
+
     if (enviados > 0 || arquivados > 0 || erros.length > 0) {
       log.info("followup.tick", {
         agentes: resultados.length,
         enviados,
         arquivados,
+        resumo_skip: resumoSkip,
         erros: erros.slice(0, 5),
       });
     }

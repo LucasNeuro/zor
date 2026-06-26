@@ -32,9 +32,10 @@
 #
 # --- Cron Job (`dispatch-ciclos-cron`) ---
 # Minimal Docker image (`curl`) runs `scripts/render-dispatch-ciclos.sh` every schedule tick (UTC).
-# O script chama: dispatch-ciclos, process-whatsapp-jobs e followup-whatsapp (backup ao worker).
-# Follow-up: cron a cada 15 min (só envia dentro das janelas HH:MM no CRM).
-# Worker WhatsApp não roda follow-up (FOLLOWUP_WORKER_ENABLED=0).
+# O script chama: dispatch-ciclos, process-whatsapp-jobs e followup-whatsapp.
+# Follow-up Fase 1: ledger + proximo_followup + janela_modo (faixa | slots | continuo).
+# Produção recomendada: FOLLOWUP_DISPATCH_MODE=cron, cron */5, worker FOLLOWUP_WORKER_ENABLED=0.
+# Testes cadência curta: FOLLOWUP_DISPATCH_MODE=worker, FOLLOWUP_POLL_MS=60000, DISPATCH_FOLLOWUP_ENABLED=0.
 # Inherits CRON_SECRET + NEXT_PUBLIC_APP_URL from the web service via `fromService`.
 # Optional override on the cron service (Dashboard): DISPATCH_CICLOS_URL — full URL including
 # `/api/cron/dispatch-ciclos` (otherwise NEXT_PUBLIC_APP_URL from the web service is enough).
@@ -86,6 +87,10 @@ services:
         value: "60000"
       - key: FOLLOWUP_WORKER_ENABLED
         value: "0"
+      - key: FOLLOWUP_DISPATCH_MODE
+        value: "cron"
+      - key: DISPATCH_FOLLOWUP_ENABLED
+        value: "1"
       - key: WHATSAPP_JOB_PROCESSOR
         value: worker_only
       - key: MISTRAL_CHAT_TIMEOUT_MS
@@ -140,6 +145,8 @@ services:
         value: "60000"
       - key: FOLLOWUP_WORKER_ENABLED
         value: "0"
+      - key: FOLLOWUP_DISPATCH_MODE
+        value: "cron"
       - key: MISTRAL_CHAT_TIMEOUT_MS
         value: "30000"
       - key: MISTRAL_CHAT_RETRIES
@@ -149,7 +156,7 @@ services:
     name: dispatch-ciclos-cron
     runtime: docker
     plan: starter
-    schedule: "*/15 * * * *"
+    schedule: "*/5 * * * *"
     dockerfilePath: ./scripts/Dockerfile.dispatch-ciclos-cron
     dockerContext: ./scripts
     dockerCommand: /bin/sh /app/render-dispatch-ciclos.sh
@@ -166,3 +173,5 @@ services:
           envVarKey: NEXT_PUBLIC_APP_URL
       - key: DISPATCH_FOLLOWUP_ENABLED
         value: "1"
+      - key: FOLLOWUP_DISPATCH_MODE
+        value: "cron"

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
 import { reativarFollowupLeadsAgente } from "@/lib/hub/followup-lead-state";
-import { normalizarHorariosDisparoInput } from "@/lib/hub/followup-janela";
+import { normalizarHorariosDisparoInput, normalizarHoraInput, normalizarJanelaModoInput } from "@/lib/hub/followup-janela";
 import { validarAtrasoPasso, validarHoraDia } from "@/lib/hub/followup-types";
 import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 import { WA_LIVE_STATUSES } from "@/lib/whatsapp/resolver-linha-whatsapp";
@@ -103,6 +103,11 @@ export async function PATCH(
     gatilho_hora_dia?: string | null;
     execucao_modo?: string;
     horarios_disparo?: string[];
+    janela_modo?: string;
+    timezone?: string;
+    horario_inicio?: string;
+    horario_fim?: string;
+    max_envios_por_dia?: number;
   };
   try {
     body = await request.json();
@@ -169,6 +174,44 @@ export async function PATCH(
       return NextResponse.json({ error: "execucao_modo inválido." }, { status: 400 });
     }
     patch.execucao_modo = m;
+    if (m === "continuo") patch.janela_modo = "continuo";
+    else if (!body.janela_modo) patch.janela_modo = "slots";
+  }
+  if (body.janela_modo != null) {
+    const jm = normalizarJanelaModoInput(body.janela_modo);
+    if (!jm) {
+      return NextResponse.json({ error: "janela_modo inválido (faixa, slots, continuo)." }, { status: 400 });
+    }
+    patch.janela_modo = jm;
+    patch.execucao_modo = jm === "continuo" ? "continuo" : "janela_horaria";
+  }
+  if (body.timezone != null) {
+    const tz = String(body.timezone).trim();
+    if (tz.length < 3 || tz.length > 64) {
+      return NextResponse.json({ error: "timezone inválido." }, { status: 400 });
+    }
+    patch.timezone = tz;
+  }
+  if (body.horario_inicio != null) {
+    const h = normalizarHoraInput(body.horario_inicio);
+    if (!h) {
+      return NextResponse.json({ error: "horario_inicio inválido (HH:MM)." }, { status: 400 });
+    }
+    patch.horario_inicio = h;
+  }
+  if (body.horario_fim != null) {
+    const h = normalizarHoraInput(body.horario_fim);
+    if (!h) {
+      return NextResponse.json({ error: "horario_fim inválido (HH:MM)." }, { status: 400 });
+    }
+    patch.horario_fim = h;
+  }
+  if (body.max_envios_por_dia != null) {
+    const n = Number.parseInt(String(body.max_envios_por_dia), 10);
+    if (!Number.isFinite(n) || n < 1 || n > 10) {
+      return NextResponse.json({ error: "max_envios_por_dia inválido (1–10)." }, { status: 400 });
+    }
+    patch.max_envios_por_dia = n;
   }
   if (body.horarios_disparo !== undefined) {
     const horarios = normalizarHorariosDisparoInput(body.horarios_disparo);

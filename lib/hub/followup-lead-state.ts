@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseFollowupTimestamp } from "@/lib/hub/followup-relogio";
+import { limparLedgerCadenciaLead } from "@/lib/hub/followup-ledger";
 
-/** Reinicia cadência quando o cliente envia mensagem (relógio + passo). */
+/** Reinicia cadência quando o cliente envia mensagem (relógio + passo + ledger). */
 export async function resetFollowupAoReceberMensagemCliente(
   supabase: SupabaseClient,
   leadId: string,
-  options?: { pausado?: boolean },
+  options?: { pausado?: boolean; agente_slug?: string },
   quando: Date | string = new Date()
 ): Promise<void> {
   const d = parseFollowupTimestamp(quando) ?? new Date();
@@ -19,6 +20,7 @@ export async function resetFollowupAoReceberMensagemCliente(
     patch.followup_pausado = false;
     patch.ultimo_followup = null;
     patch.proximo_followup = null;
+    await limparLedgerCadenciaLead(supabase, leadId, options?.agente_slug);
   }
   try {
     await supabase.from("hub_leads_crm").update(patch).eq("id", leadId);

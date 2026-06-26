@@ -263,6 +263,8 @@ export async function processarMensagemInboundWhatsapp(params: {
       lead.id,
       {
         pausado: humanoResponsavelAtivo || isGroupTransfer,
+        agente_slug:
+          agente && typeof agente.agente_slug === "string" ? agente.agente_slug.trim() : undefined,
       },
       quandoCliente
     );

@@ -3,9 +3,10 @@ import { createHubLogger, type HubLogger } from "@/lib/observability/hub-log";
 import { defaultTenantId } from "@/lib/tenant-default";
 import {
   followupPollMs,
-  followupWorkerEnabled,
+  followupWorkerShouldRun,
   runFollowupTick,
 } from "@/lib/hub/followup-worker-tick";
+import { followupDispatchMode } from "@/lib/hub/followup-dispatch";
 import { avaliarJobDuplicado } from "@/lib/whatsapp/anti-duplicata-resposta";
 import { processarMensagemInboundWhatsapp } from "@/lib/whatsapp/inbound-message-processor";
 import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
@@ -580,7 +581,7 @@ export async function runWhatsappWorker(): Promise<never> {
   const pollMs = workerPollMs();
   const jitterMax = workerMaxJitterMs();
   const followupMs = followupPollMs();
-  const followupOn = followupWorkerEnabled();
+  const followupOn = followupWorkerShouldRun();
   let lastFollowupAt = 0;
   const log = createHubLogger("whatsapp_worker", {
     poll_ms: pollMs,
@@ -588,6 +589,7 @@ export async function runWhatsappWorker(): Promise<never> {
     concurrency: workerConcurrency(),
     followup_poll_ms: followupMs,
     followup_enabled: followupOn,
+    followup_dispatch_mode: followupDispatchMode(),
     mode: "loop",
   });
 

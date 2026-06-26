@@ -25,9 +25,16 @@ import {
   rfInputStyle,
   rfLabelStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
-import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import type { FollowupJanelaModo, HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
-import { HORARIOS_DISPARO_PADRAO, followupPermitidoNaJanela } from "@/lib/hub/followup-janela";
+import {
+  HORARIOS_DISPARO_PADRAO,
+  HORARIO_FIM_PADRAO,
+  HORARIO_INICIO_PADRAO,
+  TZ_FOLLOWUP_PADRAO,
+  followupPermitidoNaJanela,
+  janelaModoFollowup,
+} from "@/lib/hub/followup-janela";
 import {
   configGatilhoPadrao,
   esperaMinutosDoPasso,
@@ -66,9 +73,20 @@ function normalizarConfig(c: HubAgenteFollowupConfig): HubAgenteFollowupConfig {
     Array.isArray(c.horarios_disparo) && c.horarios_disparo.length > 0
       ? c.horarios_disparo
       : [...HORARIOS_DISPARO_PADRAO];
+  const janela_modo: FollowupJanelaModo =
+    c.janela_modo === "faixa" || c.janela_modo === "slots" || c.janela_modo === "continuo"
+      ? c.janela_modo
+      : c.execucao_modo === "continuo"
+        ? "continuo"
+        : "slots";
   return {
     ...c,
-    execucao_modo: c.execucao_modo === "continuo" ? "continuo" : "janela_horaria",
+    janela_modo,
+    execucao_modo: janela_modo === "continuo" ? "continuo" : "janela_horaria",
+    timezone: c.timezone?.trim() || TZ_FOLLOWUP_PADRAO,
+    horario_inicio: c.horario_inicio?.trim() || HORARIO_INICIO_PADRAO,
+    horario_fim: c.horario_fim?.trim() || HORARIO_FIM_PADRAO,
+    max_envios_por_dia: Number.isFinite(c.max_envios_por_dia) ? Math.max(1, c.max_envios_por_dia!) : 1,
     horarios_disparo: horarios,
     gatilho_tipo: c.gatilho_tipo ?? padrao.gatilho_tipo,
     gatilho_dias: c.gatilho_dias ?? padrao.gatilho_dias,
@@ -179,6 +197,11 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       gatilho_hora_dia: string | null;
       execucao_modo: HubAgenteFollowupConfig["execucao_modo"];
       horarios_disparo: string[];
+      janela_modo: FollowupJanelaModo;
+      timezone: string;
+      horario_inicio: string;
+      horario_fim: string;
+      max_envios_por_dia: number;
     }>
   ) {
     setSaving(true);
@@ -581,11 +604,17 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
 
   const janelaStatus = useMemo(() => {
     if (!config) return null;
-    if (config.execucao_modo === "continuo") {
-      return { modo: "continuo" as const, ativa: true, proximo: null as string | null };
+    const modo = janelaModoFollowup(config);
+    if (modo === "continuo") {
+      return { modo: "continuo" as const, ativa: true, proximo: null as string | null, faixa: null };
     }
     const j = followupPermitidoNaJanela(config);
-    return { modo: "janela_horaria" as const, ativa: j.ativa, proximo: j.proximo ?? null };
+    return {
+      modo,
+      ativa: j.ativa,
+      proximo: j.proximo ?? null,
+      faixa: j.faixa ?? null,
+    };
   }, [config]);
 
   const whatsappRotuloInstancia =
@@ -746,27 +775,36 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
           {(
             [
               {
-                id: "janela_horaria" as const,
-                titulo: "Janela horária (recomendado)",
-                desc: "Só envia nos horários abaixo (~20 min cada). Fora disso aguarda o próximo slot — evita spam de madrugada.",
+                id: "faixa" as const,
+                titulo: "Faixa horária (recomendado)",
+                desc: "Envia entre início e fim do dia (ex. 08:00–22:00). Respeita a cadência dentro dessa faixa.",
+              },
+              {
+                id: "slots" as const,
+                titulo: "Slots fixos",
+                desc: "Só envia nos horários abaixo (~20 min cada). Útil para 09h, 14h e 18h.",
               },
               {
                 id: "continuo" as const,
                 titulo: "Contínuo (testes / urgente)",
-                desc: "Respeita a cadência a qualquer hora. Use para testar passos curtos (3–5 min) ou atendimento 24/7.",
+                desc: "Respeita a cadência a qualquer hora. Use para testar passos curtos (3–5 min).",
               },
             ] as const
           ).map((opcao) => {
-            const selected = (config?.execucao_modo ?? "janela_horaria") === opcao.id;
+            const selected = janelaModoFollowup(config ?? { execucao_modo: "janela_horaria" }) === opcao.id;
             return (
               <button
                 key={opcao.id}
                 type="button"
                 disabled={loading || saving || !config}
                 onClick={() => {
-                  if (!config || config.execucao_modo === opcao.id) return;
-                  atualizarConfigLocal({ execucao_modo: opcao.id });
-                  void salvarConfig({ execucao_modo: opcao.id });
+                  if (!config || janelaModoFollowup(config) === opcao.id) return;
+                  const patch = {
+                    janela_modo: opcao.id,
+                    execucao_modo: opcao.id === "continuo" ? ("continuo" as const) : ("janela_horaria" as const),
+                  };
+                  atualizarConfigLocal(patch);
+                  void salvarConfig(patch);
                 }}
                 style={{
                   textAlign: "left",
@@ -788,7 +826,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
             );
           })}
         </div>
-        {janelaStatus?.modo === "janela_horaria" ? (
+        {janelaStatus?.modo === "faixa" ? (
           <p
             style={{
               margin: "10px 0 0",
@@ -799,8 +837,22 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
             }}
           >
             {janelaStatus.ativa
-              ? "Agora: dentro da janela — envios permitidos neste momento."
-              : `Agora: fora da janela${janelaStatus.proximo ? ` — próximo slot ~${janelaStatus.proximo}` : ""}. A cadência só dispara no horário configurado.`}
+              ? `Dentro da faixa ${config?.horario_inicio}–${config?.horario_fim} — envios permitidos.`
+              : `Fora da faixa${janelaStatus.proximo ? ` — próximo ~${janelaStatus.proximo}` : ""}.`}
+          </p>
+        ) : janelaStatus?.modo === "slots" ? (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontSize: 11,
+              fontWeight: 600,
+              color: janelaStatus.ativa ? "#3fb950" : "#fbbf24",
+              lineHeight: 1.45,
+            }}
+          >
+            {janelaStatus.ativa
+              ? "Dentro do slot — envios permitidos neste momento."
+              : `Fora do slot${janelaStatus.proximo ? ` — próximo ~${janelaStatus.proximo}` : ""}.`}
           </p>
         ) : janelaStatus?.modo === "continuo" ? (
           <p style={{ margin: "10px 0 0", fontSize: 11, fontWeight: 600, color: "#3fb950", lineHeight: 1.45 }}>
@@ -809,7 +861,75 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         ) : null}
       </div>
 
-      {config?.execucao_modo !== "continuo" ? (
+      {janelaModoFollowup(config ?? { execucao_modo: "janela_horaria" }) === "faixa" ? (
+      <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
+        <span style={rfLabelStyle()}>Faixa horária</span>
+        <p style={{ margin: "4px 0 8px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+          Follow-ups só disparam entre estes horários ({config?.timezone ?? TZ_FOLLOWUP_PADRAO}).
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <label>
+            <span style={{ ...rfLabelStyle(), fontSize: 10 }}>Início</span>
+            <input
+              type="text"
+              placeholder="08:00"
+              value={config?.horario_inicio ?? HORARIO_INICIO_PADRAO}
+              disabled={loading || saving || !config}
+              onChange={(e) => atualizarConfigLocal({ horario_inicio: e.target.value.trim() })}
+              onBlur={() => {
+                if (!config) return;
+                void salvarConfig({
+                  janela_modo: "faixa",
+                  horario_inicio: config.horario_inicio,
+                  horario_fim: config.horario_fim,
+                });
+              }}
+              style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
+            />
+          </label>
+          <label>
+            <span style={{ ...rfLabelStyle(), fontSize: 10 }}>Fim</span>
+            <input
+              type="text"
+              placeholder="22:00"
+              value={config?.horario_fim ?? HORARIO_FIM_PADRAO}
+              disabled={loading || saving || !config}
+              onChange={(e) => atualizarConfigLocal({ horario_fim: e.target.value.trim() })}
+              onBlur={() => {
+                if (!config) return;
+                void salvarConfig({
+                  janela_modo: "faixa",
+                  horario_inicio: config.horario_inicio,
+                  horario_fim: config.horario_fim,
+                });
+              }}
+              style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
+            />
+          </label>
+        </div>
+        <label style={{ display: "block", marginTop: 10 }}>
+          <span style={{ ...rfLabelStyle(), fontSize: 10 }}>Máx. automáticos por lead / dia</span>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={config?.max_envios_por_dia ?? 1}
+            disabled={loading || saving || !config}
+            onChange={(e) => {
+              const n = Math.min(10, Math.max(1, Number.parseInt(e.target.value, 10) || 1));
+              atualizarConfigLocal({ max_envios_por_dia: n });
+            }}
+            onBlur={() => {
+              if (!config) return;
+              void salvarConfig({ max_envios_por_dia: config.max_envios_por_dia ?? 1 });
+            }}
+            style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
+          />
+        </label>
+      </div>
+      ) : null}
+
+      {janelaModoFollowup(config ?? { execucao_modo: "janela_horaria" }) === "slots" ? (
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
         <span style={rfLabelStyle()}>Horários de envio (Brasil)</span>
         <p style={{ margin: "4px 0 8px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
@@ -836,7 +956,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
               .filter(Boolean);
             if (parts.length === 0) return;
             void salvarConfig({
-              execucao_modo: "janela_horaria",
+              janela_modo: "slots",
               horarios_disparo: parts,
             });
           }}

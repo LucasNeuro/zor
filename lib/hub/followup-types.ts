@@ -4,14 +4,22 @@ export type FollowupGatilhoTipo = "silencio" | "horario";
 
 export type FollowupExecucaoModo = "continuo" | "janela_horaria";
 
+export type FollowupJanelaModo = "faixa" | "slots" | "continuo";
+
 export type HubAgenteFollowupConfig = {
   id: string;
   tenant_id: string | null;
   agente_slug: string;
   ativo: boolean;
   arquivar_apos_dias: number;
-  /** continuo = poll 24/7; janela_horaria = só nos horários de horarios_disparo (recomendado). */
+  /** Legado — preferir janela_modo. */
   execucao_modo?: FollowupExecucaoModo;
+  /** faixa = horario_inicio–fim; slots = horarios_disparo; continuo = 24/7. */
+  janela_modo?: FollowupJanelaModo;
+  timezone?: string;
+  horario_inicio?: string;
+  horario_fim?: string;
+  max_envios_por_dia?: number;
   /** HH:MM America/Sao_Paulo — ex. ["09:00","14:00","18:00"]. */
   horarios_disparo?: string[] | null;
   gatilho_tipo?: FollowupGatilhoTipo;

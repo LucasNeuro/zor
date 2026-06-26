@@ -5,10 +5,13 @@ import {
   type FollowupRunResult,
 } from "@/lib/hub/followup-runner";
 import {
-  execucaoModoFollowup,
   followupPermitidoNaJanela,
   horariosDisparoFollowup,
+  janelaModoFollowup,
+  horarioInicioFollowup,
+  horarioFimFollowup,
 } from "@/lib/hub/followup-janela";
+import { resumoJanelaFollowup } from "@/lib/hub/followup-agenda";
 import { formatarResumoCadencia } from "@/lib/hub/followup-types";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 
@@ -25,16 +28,19 @@ export type FollowupTimelineEvento = {
 };
 
 export type FollowupExecucaoJanela = {
-  modo: "continuo" | "janela_horaria";
+  modo: "continuo" | "janela_horaria" | "faixa" | "slots";
   ativa: boolean;
   proximo_slot: string | null;
   horarios: string[];
+  janela_resumo?: string;
+  faixa?: { inicio: string; fim: string };
 };
 
 export type FollowupOperacaoSnapshot = {
   ativo: boolean;
   resumo_cadencia: string | null;
   execucao_janela: FollowupExecucaoJanela | null;
+  janela_resumo: string | null;
   estado_atual: Pick<
     FollowupRunResult,
     "leads_elegiveis" | "enviados" | "arquivados" | "diagnosticos" | "resumo_skip" | "erros"
@@ -156,6 +162,7 @@ export async function buildFollowupOperacaoSnapshot(
     ativo: false,
     resumo_cadencia: null,
     execucao_janela: null,
+    janela_resumo: null,
     estado_atual: null,
     timeline: [],
     ultimo_tick_em: null,
@@ -180,12 +187,19 @@ export async function buildFollowupOperacaoSnapshot(
   const passos = (passosRows || []) as HubAgenteFollowupPasso[];
   const resumo_cadencia = config.ativo ? formatarResumoCadencia(passos, config) : null;
   const janelaAgora = followupPermitidoNaJanela(config);
+  const modoJanela = janelaModoFollowup(config);
   const execucao_janela: FollowupExecucaoJanela = {
-    modo: execucaoModoFollowup(config),
+    modo: modoJanela === "faixa" ? "faixa" : modoJanela === "slots" ? "slots" : "continuo",
     ativa: janelaAgora.ativa,
     proximo_slot: janelaAgora.proximo ?? null,
     horarios: horariosDisparoFollowup(config),
+    janela_resumo: resumoJanelaFollowup(config),
+    faixa:
+      modoJanela === "faixa"
+        ? { inicio: horarioInicioFollowup(config), fim: horarioFimFollowup(config) }
+        : undefined,
   };
+  const janela_resumo = resumoJanelaFollowup(config);
 
   let estado_atual: FollowupOperacaoSnapshot["estado_atual"] = null;
   if (config.ativo && passos.some((p) => p.ativo !== false)) {
@@ -275,6 +289,7 @@ export async function buildFollowupOperacaoSnapshot(
     ativo: config.ativo === true,
     resumo_cadencia,
     execucao_janela,
+    janela_resumo,
     estado_atual,
     timeline: [...aguardando, ...timeline],
     ultimo_tick_em,

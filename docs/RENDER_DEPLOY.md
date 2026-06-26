@@ -77,13 +77,32 @@ Ver `docs/env-redis.example`. Mínimo em produção:
 
 Repetir: Supabase, `UAZAPI_BASE_URL`, `UAZAPI_INSTANCE_TOKEN`, `MISTRAL_API_KEY`, `DEFAULT_TENANT_ID`.
 
-Follow-up automático corre no **Cron Job** a cada 15 min (`DISPATCH_FOLLOWUP_ENABLED=1`). Só envia dentro das **janelas horárias** configuradas no CRM (`execucao_modo=janela_horaria`, default). O worker WhatsApp **não** dispara follow-up (`FOLLOWUP_WORKER_ENABLED=0`).
+#### Follow-up automático (Fase 1)
+
+| Variável | Produção (recomendado) | Testes cadência curta |
+|----------|------------------------|------------------------|
+| `FOLLOWUP_DISPATCH_MODE` | `cron` | `worker` |
+| `FOLLOWUP_WORKER_ENABLED` | `0` | `1` |
+| `FOLLOWUP_POLL_MS` | — | `60000` |
+| `DISPATCH_FOLLOWUP_ENABLED` | `1` (no cron) | `0` (no cron) |
+
+- **Ledger** (`hub_followup_envio`) impede reenvio do mesmo passo mesmo com cron + worker em `both`.
+- **`proximo_followup`** no lead bloqueia envio até a hora agendada.
+- **Janela por agente** (`janela_modo`): `faixa` (08–22h), `slots` (09/14/18) ou `continuo`.
+
+Produção: follow-up só no **Cron** a cada **5 min** (`*/5 * * * *`). Worker WhatsApp **não** dispara follow-up.
 
 ### Cron Job `dispatch-ciclos-cron`
 
-Criar via Blueprint (`render.yaml`) ou manualmente: Docker + `scripts/render-dispatch-ciclos.sh`, schedule `*/5 * * * *`, env `CRON_SECRET` + `NEXT_PUBLIC_APP_URL` (herdados do web service).
+Criar via Blueprint (`render.yaml`) ou manualmente: Docker + `scripts/render-dispatch-ciclos.sh`, schedule **`*/5 * * * *`**, env:
 
-Aplicar migrações Supabase de follow-up (incl. `20260725140000_hub_followup_espera_minutos.sql` e `20260726090000_hub_followup_janela_horaria.sql`) antes de testar cadências.
+- `CRON_SECRET` + `NEXT_PUBLIC_APP_URL` (herdados do web service)
+- `DISPATCH_FOLLOWUP_ENABLED=1`
+- `FOLLOWUP_DISPATCH_MODE=cron`
+
+O script chama, em sequência: `dispatch-ciclos` → `process-whatsapp-jobs` → `followup-whatsapp`.
+
+Aplicar migrações Supabase de follow-up (incl. `20260727120000_hub_followup_ledger_faixa.sql`) antes de testar cadências.
 
 ---
 

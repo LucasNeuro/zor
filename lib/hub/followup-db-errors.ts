@@ -4,16 +4,15 @@ export function mensagemErroFollowupDb(error: { message?: string; code?: string 
   const code = String(error?.code ?? "");
 
   const colunaGatilho =
-    /gatilho_|atraso_dias|disparo_hora_dia|execucao_modo|horarios_disparo/i.test(msg) ||
+    /gatilho_|atraso_dias|disparo_hora_dia|execucao_modo|horarios_disparo|janela_modo|horario_inicio|horario_fim|max_envios_por_dia|hub_followup_envio/i.test(msg) ||
     code === "42703" ||
     code === "PGRST204";
 
   if (colunaGatilho) {
     return (
-      "O banco ainda não tem as colunas de gatilho do follow-up. " +
-      "No Supabase → SQL Editor, execute o ficheiro " +
-      "`supabase/migrations/20260721120000_hub_followup_gatilho.sql` e " +
-      "`supabase/migrations/20260726090000_hub_followup_janela_horaria.sql`, depois tente guardar de novo."
+      "O banco ainda não tem as colunas/tabelas de follow-up. " +
+      "No Supabase → SQL Editor, execute os ficheiros em `supabase/migrations/`, " +
+      "incluindo `20260727120000_hub_followup_ledger_faixa.sql`, depois tente guardar de novo."
     );
   }
 

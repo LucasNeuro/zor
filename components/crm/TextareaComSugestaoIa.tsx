@@ -75,6 +75,7 @@ export type TextareaComSugestaoIaProps = {
   placeholder?: string;
   disabled?: boolean;
   meta?: Record<string, unknown>;
+  hintText?: string;
   theme?: "light" | "dark";
   inputStyle?: CSSProperties;
   labelStyle?: CSSProperties;
@@ -90,6 +91,7 @@ export function TextareaComSugestaoIa({
   placeholder,
   disabled,
   meta,
+  hintText,
   theme = "dark",
   inputStyle,
   labelStyle,
@@ -176,7 +178,8 @@ export function TextareaComSugestaoIa({
         <p style={{ margin: 0, fontSize: 10, color: "#f85149", lineHeight: 1.35 }}>{erro}</p>
       ) : (
         <p style={{ margin: 0, fontSize: 9, color: isLight ? "#5d7a67" : "#6e7681", lineHeight: 1.35 }}>
-          Use {"{nome}"} para personalizar. A IA segue o tom do agente.
+          {hintText ??
+            `Use {"{nome}"} para personalizar. A IA segue o tom do agente.`}
         </p>
       )}
     </div>

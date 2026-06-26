@@ -34,6 +34,7 @@ import {
   janelaAntiduplicataMinutos,
   minutosSilencioDesdeUltimaMsgCliente,
 } from "@/lib/hub/followup-relogio";
+import { criarContextoTemplateFollowup } from "@/lib/hub/followup-template-vars";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
@@ -272,6 +273,14 @@ export async function executarFollowupParaAgente(
   }
 
   const arquivarHoras = config.arquivar_apos_dias * 24;
+
+  const tenantDefault =
+    config.tenant_id?.trim() || defaultTenantId() || null;
+  const ctxTemplate = await criarContextoTemplateFollowup(
+    supabase,
+    slug,
+    tenantDefault
+  );
 
   const { data: leads, error } = await supabase
     .from("hub_leads_crm")
@@ -600,9 +609,12 @@ export async function executarFollowupParaAgente(
       (lead.metadata && typeof lead.metadata.mercado === "string"
         ? lead.metadata.mercado
         : "geral") || "geral";
+    const empresa = await ctxTemplate.empresaParaTenant(lead.tenant_id);
     const texto = interpolarTemplateFollowup(corpoTemplateFollowupPasso(passo), {
       nome: lead.nome,
       mercado,
+      empresa,
+      agente: ctxTemplate.agente,
     });
 
     if (options?.simular) {

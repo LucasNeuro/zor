@@ -408,8 +408,14 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
           ordem: proximaOrdem,
           espera_minutos: esperaNovo,
           tipo_conteudo: tipo,
-          texto_template: tipo === "texto" ? "Olá {nome}, ainda posso ajudar?" : null,
-          legenda_imagem: tipo === "texto_imagem" ? "Olá {nome}, ainda posso ajudar?" : null,
+          texto_template:
+            tipo === "texto"
+              ? "Olá {nome}, aqui é {agente} da {empresa}. Ainda posso ajudar?"
+              : null,
+          legenda_imagem:
+            tipo === "texto_imagem"
+              ? "Olá {nome}, aqui é {agente} da {empresa}. Ainda posso ajudar?"
+              : null,
         }),
       });
       const data = (await res.json()) as { error?: string; passo?: HubAgenteFollowupPasso };
@@ -986,7 +992,10 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
         <p style={{ margin: "0 0 8px", fontSize: 11, color: RF_TEXT_SECONDARY, lineHeight: 1.5 }}>
           Configure o <strong style={{ color: RF_TEXT_PRIMARY }}>gatilho de disparo</strong> e os passos da cadência
-          no editor visual. Use <code style={{ color: RF_ACCENT }}>{"{nome}"}</code> nas mensagens.
+          no editor visual. Use{" "}
+          <code style={{ color: RF_ACCENT }}>{"{nome}"}</code>,{" "}
+          <code style={{ color: RF_ACCENT }}>{"{empresa}"}</code> e{" "}
+          <code style={{ color: RF_ACCENT }}>{"{agente}"}</code> nas mensagens.
         </p>
         <button
           type="button"

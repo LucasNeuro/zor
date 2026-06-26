@@ -295,16 +295,34 @@ export const FOLLOWUP_PASSOS_DEFAULT: Array<{
 /** Atalhos rápidos na UI (minutos). */
 export const FOLLOWUP_ESPERA_PRESETS = [5, 30, 60, 720, 1440, 2880] as const;
 
+export type FollowupTemplateVars = {
+  nome?: string;
+  mercado?: string;
+  empresa?: string;
+  agente?: string;
+};
+
+export const FOLLOWUP_PLACEHOLDER_EMPRESA_FALLBACK = "nossa equipe";
+export const FOLLOWUP_PLACEHOLDER_AGENTE_FALLBACK = "nossa assistente";
+
 export function interpolarTemplateFollowup(
   template: string,
-  vars: { nome?: string; mercado?: string }
+  vars: FollowupTemplateVars
 ): string {
   const nome = (vars.nome || "tudo bem").split(" ")[0] || "tudo bem";
   const mercado = vars.mercado || "geral";
-  return template.replace(/\{nome\}/gi, nome).replace(/\{mercado\}/gi, mercado);
+  const empresa =
+    (vars.empresa || "").trim() || FOLLOWUP_PLACEHOLDER_EMPRESA_FALLBACK;
+  const agente =
+    (vars.agente || "").trim() || FOLLOWUP_PLACEHOLDER_AGENTE_FALLBACK;
+  return template
+    .replace(/\{nome\}/gi, nome)
+    .replace(/\{mercado\}/gi, mercado)
+    .replace(/\{empresa\}/gi, empresa)
+    .replace(/\{agente\}/gi, agente);
 }
 
-/** Template bruto antes de interpolar {nome} — por tipo de conteúdo. */
+/** Template bruto antes de interpolar placeholders — por tipo de conteúdo. */
 export function corpoTemplateFollowupPasso(passo: Pick<
   HubAgenteFollowupPasso,
   "tipo_conteudo" | "texto_template" | "legenda_imagem"

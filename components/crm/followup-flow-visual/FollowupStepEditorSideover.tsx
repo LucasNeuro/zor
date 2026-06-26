@@ -281,7 +281,8 @@ export function FollowupStepEditorSideover({
             value={draft.texto_template || ""}
             onChange={(t) => update({ texto_template: t })}
             rows={3}
-            placeholder="Olá {nome}, ainda posso ajudar?"
+            placeholder="Olá {nome}, aqui é {agente} da {empresa}. Ainda posso ajudar?"
+            hintText='Use {nome}, {empresa} e {agente} para personalizar. A IA segue o tom do agente.'
             disabled={saving}
             theme={theme}
             inputStyle={inputStyle}
@@ -298,7 +299,8 @@ export function FollowupStepEditorSideover({
             value={draft.legenda_imagem || ""}
             onChange={(t) => update({ legenda_imagem: t })}
             rows={3}
-            placeholder="Texto que acompanha a imagem"
+            placeholder="Olá {nome}, aqui é {agente} da {empresa}."
+            hintText='Use {nome}, {empresa} e {agente} para personalizar. A IA segue o tom do agente.'
             disabled={saving}
             theme={theme}
             inputStyle={inputStyle}
@@ -315,6 +317,7 @@ export function FollowupStepEditorSideover({
             value={draft.legenda_imagem || ""}
             onChange={(t) => update({ legenda_imagem: t })}
             rows={2}
+            hintText='Use {nome}, {empresa} e {agente} para personalizar. A IA segue o tom do agente.'
             disabled={saving}
             theme={theme}
             inputStyle={inputStyle}

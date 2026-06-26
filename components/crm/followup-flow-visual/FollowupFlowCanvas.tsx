@@ -14,7 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { formatarEsperaPasso } from "@/lib/hub/followup-types";
+import { formatarEsperaPasso, textoExibicaoFollowupPasso } from "@/lib/hub/followup-types";
 import {
   FOLLOWUP_NODE_TYPES,
   FollowupNodeCallbacksContext,
@@ -173,8 +173,8 @@ function FollowupFlowCanvasInner({
   const passosAnterioresTexto = useMemo(() => {
     if (!selectedPasso || selectedIndex <= 0) return [];
     return passosOrdenados.slice(0, selectedIndex).map((p, i) => {
-      const t = (p.texto_template || p.legenda_imagem || "").trim();
-      return t || `(passo ${i + 1} sem texto)`;
+      const t = textoExibicaoFollowupPasso(p);
+      return t === "Sem mensagem" || t === "Imagem sem legenda" ? `(passo ${i + 1} sem texto)` : t;
     });
   }, [passosOrdenados, selectedPasso, selectedIndex]);
 

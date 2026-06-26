@@ -4,7 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Trash2, Upload, X } from "lucide-react";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import type { HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { esperaMinutosDoPasso, formatarEsperaMinutos } from "@/lib/hub/followup-types";
+import {
+  esperaMinutosDoPasso,
+  formatarEsperaMinutos,
+  normalizarCorpoPassoFollowupParaGravar,
+  patchTipoConteudoFollowupPasso,
+} from "@/lib/hub/followup-types";
 import { FollowupEsperaMinutosField, patchEsperaMinutos } from "./FollowupEsperaMinutosField";
 import { passoPersistenciaIgual } from "./types";
 import { TextareaComSugestaoIa } from "@/components/crm/TextareaComSugestaoIa";
@@ -93,13 +98,13 @@ export function FollowupStepEditorSideover({
 
   async function flushDraftIfDirty() {
     if (!passoPersistenciaIgual(draft, passo) && esperaAtual(draft) >= 1) {
-      await onSave(draft);
+      await onSave({ ...draft, ...normalizarCorpoPassoFollowupParaGravar(draft) });
     }
   }
 
   const flushDraft = useCallback(async () => {
     if (!passoPersistenciaIgual(draft, passo) && esperaAtual(draft) >= 1) {
-      await onSave(draft);
+      await onSave({ ...draft, ...normalizarCorpoPassoFollowupParaGravar(draft) });
     }
   }, [draft, passo, onSave]);
 
@@ -119,6 +124,18 @@ export function FollowupStepEditorSideover({
     const next = { ...draft, ...patch };
     setDraft(next);
     onPatch(patch);
+  }
+
+  function updateTipoConteudo(novo: HubAgenteFollowupPasso["tipo_conteudo"]) {
+    const migrado = patchTipoConteudoFollowupPasso(draft, novo);
+    const next = { ...draft, ...migrado };
+    setDraft(next);
+    onPatch(migrado);
+  }
+
+  function guardarDraftNormalizado() {
+    const normalizado = { ...draft, ...normalizarCorpoPassoFollowupParaGravar(draft) };
+    void onSave(normalizado);
   }
 
   function updateEsperaMinutos(raw: number) {
@@ -212,7 +229,7 @@ export function FollowupStepEditorSideover({
           <select
             value={draft.tipo_conteudo}
             onChange={(e) =>
-              update({ tipo_conteudo: e.target.value as HubAgenteFollowupPasso["tipo_conteudo"] })
+              updateTipoConteudo(e.target.value as HubAgenteFollowupPasso["tipo_conteudo"])
             }
             style={inputStyle}
           >
@@ -387,7 +404,7 @@ export function FollowupStepEditorSideover({
         <button
           type="button"
           disabled={saving || espera < 1}
-          onClick={() => onSave(draft)}
+          onClick={guardarDraftNormalizado}
           style={{
             width: "100%",
             padding: "9px 12px",

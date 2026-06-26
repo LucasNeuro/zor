@@ -6,7 +6,7 @@ import {
   reconciliarFollowupPassoLeadsAgente,
 } from "@/lib/hub/followup-db";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
-import { validarAtrasoPasso, validarHoraDia, minutosToLegacyAtraso } from "@/lib/hub/followup-types";
+import { validarAtrasoPasso, validarHoraDia, minutosToLegacyAtraso, normalizarCorpoPassoFollowupParaGravar } from "@/lib/hub/followup-types";
 import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 
 function db() {
@@ -48,7 +48,7 @@ export async function PATCH(
   const supabase = db();
   const { data: existente, error: loadErr } = await supabase
     .from("hub_agente_followup_passo")
-    .select("id, agente_slug, atraso_horas, atraso_minutos")
+    .select("id, agente_slug, atraso_horas, atraso_minutos, tipo_conteudo, texto_template, legenda_imagem")
     .eq("id", passoId)
     .eq("agente_slug", slug)
     .maybeSingle();
@@ -129,6 +129,23 @@ export async function PATCH(
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "Nada para atualizar" }, { status: 400 });
+  }
+
+  if (
+    patch.tipo_conteudo != null ||
+    patch.texto_template !== undefined ||
+    patch.legenda_imagem !== undefined
+  ) {
+    const merged = {
+      tipo_conteudo: (patch.tipo_conteudo ?? existente.tipo_conteudo) as FollowupTipoConteudo,
+      texto_template:
+        patch.texto_template !== undefined ? patch.texto_template : existente.texto_template,
+      legenda_imagem:
+        patch.legenda_imagem !== undefined ? patch.legenda_imagem : existente.legenda_imagem,
+    };
+    const corpo = normalizarCorpoPassoFollowupParaGravar(merged);
+    patch.texto_template = corpo.texto_template;
+    patch.legenda_imagem = corpo.legenda_imagem;
   }
 
   const { data, error } = await supabase

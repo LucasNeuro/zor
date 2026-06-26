@@ -31,6 +31,7 @@ import {
   configGatilhoPadrao,
   esperaMinutosDoPasso,
   formatarResumoCadencia,
+  normalizarCorpoPassoFollowupParaGravar,
 } from "@/lib/hub/followup-types";
 
 type FollowupCanalWhatsapp = {
@@ -49,8 +50,10 @@ type Props = {
 };
 
 function normalizarPasso(p: HubAgenteFollowupPasso): HubAgenteFollowupPasso {
+  const corpo = normalizarCorpoPassoFollowupParaGravar(p);
   return {
     ...p,
+    ...corpo,
     atraso_dias: Number.isFinite(p.atraso_dias) ? p.atraso_dias : 0,
     atraso_minutos: Number.isFinite(p.atraso_minutos) ? p.atraso_minutos : 0,
   };
@@ -201,6 +204,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }
 
   async function salvarPassoInner(passo: HubAgenteFollowupPasso): Promise<HubAgenteFollowupPasso> {
+    const corpo = normalizarCorpoPassoFollowupParaGravar(passo);
     const res = await fetch(`${base}/passos/${encodeURIComponent(passo.id)}`, {
       method: "PATCH",
       headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
@@ -211,9 +215,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
           atraso_horas: passo.atraso_horas,
           atraso_minutos: passo.atraso_minutos ?? 0,
           tipo_conteudo: passo.tipo_conteudo,
-          texto_template: passo.texto_template,
+          texto_template: corpo.texto_template,
           imagem_url: passo.imagem_url,
-          legenda_imagem: passo.legenda_imagem,
+          legenda_imagem: corpo.legenda_imagem,
           disparo_hora_dia: passo.disparo_hora_dia ?? null,
           ativo: passo.ativo,
         }),

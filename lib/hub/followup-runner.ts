@@ -3,6 +3,8 @@ import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsap
 import {
   indiceProximoPasso,
   interpolarTemplateFollowup,
+  corpoTemplateFollowupPasso,
+  textoExibicaoFollowupPasso,
   passosAtivosOrdenados,
   passosEnviadosCount,
   type HubAgenteFollowupConfig,
@@ -141,10 +143,7 @@ async function enviarPassoFollowup(params: {
   const opts = { instanceToken };
 
   if ((tipo === "imagem" || tipo === "texto_imagem") && img) {
-    const caption =
-      tipo === "texto_imagem"
-        ? texto || (passo.legenda_imagem || "").trim() || undefined
-        : (passo.legenda_imagem || texto || "").trim() || undefined;
+    const caption = (texto || (passo.legenda_imagem || "").trim() || undefined)?.trim() || undefined;
     const r = await whatsappSendMedia(telefone, {
       type: "image",
       file: img,
@@ -152,10 +151,6 @@ async function enviarPassoFollowup(params: {
       instanceToken,
     });
     if (!r.ok) return { ok: false, erro: r.error };
-    if (tipo === "texto_imagem" && texto && caption !== texto) {
-      const r2 = await whatsappSendText(telefone, texto, opts);
-      if (!r2.ok) return { ok: false, erro: r2.error };
-    }
     return { ok: true };
   }
 
@@ -329,7 +324,7 @@ export async function executarFollowupParaAgente(
       (lead.metadata && typeof lead.metadata.mercado === "string"
         ? lead.metadata.mercado
         : "geral") || "geral";
-    const texto = interpolarTemplateFollowup(passo.texto_template || "", {
+    const texto = interpolarTemplateFollowup(corpoTemplateFollowupPasso(passo), {
       nome: lead.nome,
       mercado,
     });
@@ -360,7 +355,7 @@ export async function executarFollowupParaAgente(
       agente_id: slug,
       canal: "whatsapp",
       direcao: "saida",
-      conteudo: texto || passo.legenda_imagem || "[imagem follow-up]",
+      conteudo: texto || textoExibicaoFollowupPasso(passo) || "[imagem follow-up]",
       status: "enviado",
       metadata: {
         tipo: "followup_automatico",

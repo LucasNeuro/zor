@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
-import { validarAtrasoPasso, minutosToLegacyAtraso } from "@/lib/hub/followup-types";
+import { validarAtrasoPasso, minutosToLegacyAtraso, normalizarCorpoPassoFollowupParaGravar } from "@/lib/hub/followup-types";
 import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 
 function db() {
@@ -72,6 +72,12 @@ export async function POST(
   const tipo = parseTipo(body.tipo_conteudo);
   if (!tipo) return NextResponse.json({ error: "tipo_conteudo inválido." }, { status: 400 });
 
+  const corpo = normalizarCorpoPassoFollowupParaGravar({
+    tipo_conteudo: tipo,
+    texto_template: body.texto_template != null ? String(body.texto_template) : null,
+    legenda_imagem: body.legenda_imagem != null ? String(body.legenda_imagem) : null,
+  });
+
   const row = {
     config_id: pack.config.id,
     tenant_id: tenantResolved.tenantId,
@@ -82,9 +88,9 @@ export async function POST(
     atraso_horas: leg.atraso_horas,
     atraso_minutos: leg.atraso_minutos,
     tipo_conteudo: tipo,
-    texto_template: body.texto_template != null ? String(body.texto_template) : null,
+    texto_template: corpo.texto_template,
     imagem_url: body.imagem_url != null ? String(body.imagem_url).trim() || null : null,
-    legenda_imagem: body.legenda_imagem != null ? String(body.legenda_imagem) : null,
+    legenda_imagem: corpo.legenda_imagem,
     ativo: body.ativo !== false,
   };
 

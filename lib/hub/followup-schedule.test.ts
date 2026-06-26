@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { avaliarDisparoPasso } from "@/lib/hub/followup-schedule";
 import { minutosSilencioDesdeUltimaMsgCliente, parseFollowupTimestamp } from "@/lib/hub/followup-relogio";
 import type { HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import {
+  corpoTemplateFollowupPasso,
+  normalizarCorpoPassoFollowupParaGravar,
+  textoExibicaoFollowupPasso,
+} from "@/lib/hub/followup-types";
 
 const passoBase: HubAgenteFollowupPasso = {
   id: "p1",
@@ -85,5 +90,35 @@ describe("avaliarDisparoPasso — legado sem espera_minutos", () => {
     });
     expect(r.permitido).toBe(false);
     expect(r.motivo).toBe("aguardando_espera");
+  });
+});
+
+describe("corpo follow-up por tipo", () => {
+  it("imagem+legenda usa legenda_imagem e ignora texto_template fantasma", () => {
+    const passo: HubAgenteFollowupPasso = {
+      ...passoBase,
+      tipo_conteudo: "texto_imagem",
+      texto_template: "texto antigo no campo errado",
+      legenda_imagem: "Legenda nova {nome}",
+    };
+    expect(corpoTemplateFollowupPasso(passo)).toBe("Legenda nova {nome}");
+    expect(textoExibicaoFollowupPasso(passo)).toBe("Legenda nova {nome}");
+    expect(normalizarCorpoPassoFollowupParaGravar(passo)).toEqual({
+      texto_template: null,
+      legenda_imagem: "Legenda nova {nome}",
+    });
+  });
+
+  it("só texto grava em texto_template", () => {
+    const passo: HubAgenteFollowupPasso = {
+      ...passoBase,
+      tipo_conteudo: "texto",
+      texto_template: "Oi {nome}",
+      legenda_imagem: "legenda residual",
+    };
+    expect(normalizarCorpoPassoFollowupParaGravar(passo)).toEqual({
+      texto_template: "Oi {nome}",
+      legenda_imagem: null,
+    });
   });
 });

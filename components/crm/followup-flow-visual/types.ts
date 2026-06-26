@@ -1,7 +1,7 @@
 "use client";
 
 import type { FollowupTipoConteudo, HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { configGatilhoPadrao, esperaMinutosDoPasso, formatarEsperaMinutos, formatarEsperaPasso } from "@/lib/hub/followup-types";
+import { configGatilhoPadrao, esperaMinutosDoPasso, formatarEsperaMinutos, formatarEsperaPasso, textoExibicaoFollowupPasso } from "@/lib/hub/followup-types";
 
 export const FOLLOWUP_START_NODE_ID = "__followup_start__";
 
@@ -36,10 +36,7 @@ export function passoToNodeData(
   posicao?: number,
   config?: HubAgenteFollowupConfig | null
 ): FollowupFlowNodeData {
-  const texto =
-    passo.tipo_conteudo === "imagem"
-      ? passo.legenda_imagem || "Imagem sem legenda"
-      : passo.texto_template || "Sem mensagem";
+  const texto = textoExibicaoFollowupPasso(passo);
   const idx = (posicao ?? passo.ordem) - 1;
   const cfg = config ?? configGatilhoPadrao();
 

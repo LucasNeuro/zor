@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { configGatilhoPadrao, esperaMinutosDoPasso } from "@/lib/hub/followup-types";
+import { configGatilhoPadrao, esperaMinutosDoPasso, textoExibicaoFollowupPasso } from "@/lib/hub/followup-types";
 import { FollowupEsperaMinutosField, patchEsperaMinutos } from "./FollowupEsperaMinutosField";
 import { passoPersistenciaIgual } from "./types";
 import {
@@ -201,9 +201,7 @@ export function FollowupTriggerEditorSideover({
           passosDraft.map((passo, index) => {
             const posicao = index + 1;
             const espera = esperaMinutosDoPasso(passo, config, index);
-            const resumo =
-              (passo.texto_template || passo.legenda_imagem || "").trim().slice(0, 48) ||
-              `Passo ${posicao}`;
+            const resumo = textoExibicaoFollowupPasso(passo).slice(0, 48) || `Passo ${posicao}`;
             return (
               <div
                 key={passo.id}

@@ -290,6 +290,55 @@ export function interpolarTemplateFollowup(
   return template.replace(/\{nome\}/gi, nome).replace(/\{mercado\}/gi, mercado);
 }
 
+/** Template bruto antes de interpolar {nome} — por tipo de conteúdo. */
+export function corpoTemplateFollowupPasso(passo: Pick<
+  HubAgenteFollowupPasso,
+  "tipo_conteudo" | "texto_template" | "legenda_imagem"
+>): string {
+  if (passo.tipo_conteudo === "texto") {
+    return (passo.texto_template || "").trim();
+  }
+  return (passo.legenda_imagem || "").trim();
+}
+
+/** Texto para preview no canvas / listagens. */
+export function textoExibicaoFollowupPasso(
+  passo: Pick<HubAgenteFollowupPasso, "tipo_conteudo" | "texto_template" | "legenda_imagem">
+): string {
+  const corpo = corpoTemplateFollowupPasso(passo);
+  if (corpo) return corpo;
+  if (passo.tipo_conteudo === "imagem" || passo.tipo_conteudo === "texto_imagem") {
+    return "Imagem sem legenda";
+  }
+  return "Sem mensagem";
+}
+
+/** Garante que imagem+legenda grava só em legenda_imagem (texto_template não interfere). */
+export function normalizarCorpoPassoFollowupParaGravar(
+  passo: Pick<HubAgenteFollowupPasso, "tipo_conteudo" | "texto_template" | "legenda_imagem">
+): { texto_template: string | null; legenda_imagem: string | null } {
+  const tipo = passo.tipo_conteudo;
+  if (tipo === "texto") {
+    const t = (passo.texto_template ?? "").trim();
+    return { texto_template: t || null, legenda_imagem: null };
+  }
+  const leg = (passo.legenda_imagem ?? (tipo === "texto_imagem" ? passo.texto_template : null) ?? "")
+    .trim();
+  return { texto_template: null, legenda_imagem: leg || null };
+}
+
+export function patchTipoConteudoFollowupPasso(
+  atual: Pick<HubAgenteFollowupPasso, "tipo_conteudo" | "texto_template" | "legenda_imagem">,
+  novoTipo: FollowupTipoConteudo
+): Pick<HubAgenteFollowupPasso, "tipo_conteudo" | "texto_template" | "legenda_imagem"> {
+  if (novoTipo === atual.tipo_conteudo) return atual;
+  const textoAtual = corpoTemplateFollowupPasso(atual) || (atual.texto_template || atual.legenda_imagem || "").trim();
+  if (novoTipo === "texto") {
+    return { tipo_conteudo: novoTipo, texto_template: textoAtual || null, legenda_imagem: null };
+  }
+  return { tipo_conteudo: novoTipo, texto_template: null, legenda_imagem: textoAtual || null };
+}
+
 export function configGatilhoPadrao(): Pick<
   HubAgenteFollowupConfig,
   "gatilho_tipo" | "gatilho_dias" | "gatilho_horas" | "gatilho_minutos" | "gatilho_hora_dia" | "arquivar_apos_dias"

@@ -1,150 +1,163 @@
 -- =============================================================================
--- Reset de LEADS para recomeçar testes (WhatsApp / follow-up / CRM)
+-- APAGAR TODOS OS LEADS — recomeçar testes (Kanban vazio)
 --
--- Onde executar: Supabase Dashboard → SQL Editor (role postgres)
---
--- MANTÉM: tenants, users, agentes, hub_agente_followup_config/passos,
---         pipelines, catálogos, integrações.
--- APAGA: todos os leads e histórico ligado (mensagens, ledger follow-up, etc.)
---
--- Produção Obra10+/Synkron: pode exigir autorização de DELETE:
---   SET LOCAL app.delete_authorized = true;
---
--- Antes de apagar tudo, descomente o bloco "PRÉVIA" no final.
+-- Supabase Dashboard → SQL Editor → colar e RUN
+-- Ignora tabelas que não existem no seu projeto (ex.: hub_propostas).
 -- =============================================================================
+
+-- PRÉVIA:
+-- SELECT id, codigo, nome, agente_responsavel FROM public.hub_leads_crm;
 
 BEGIN;
 
 SET LOCAL app.delete_authorized = true;
 
--- ─── Opcional: limitar a um tenant ─────────────────────────────────────────
--- Descomente e ajuste o UUID se quiser só um tenant piloto:
--- \set tenant_id '00000000-0000-4000-8000-000000000001'
+CREATE TEMP TABLE _reset_pessoas ON COMMIT DROP AS
+SELECT DISTINCT pessoa_id AS id
+FROM public.hub_leads_crm
+WHERE pessoa_id IS NOT NULL;
 
--- ─── Opcional: limitar a um agente (ex. dany) ───────────────────────────────
--- Comente a linha abaixo para apagar TODOS os leads do tenant.
--- Para todos os agentes, use: AND TRUE
-DO $$
-DECLARE
-  v_agente text := NULL;  -- ex: 'dany' — ou NULL para todos
+DO $clean$
 BEGIN
-  CREATE TEMP TABLE _leads_reset ON COMMIT DROP AS
-  SELECT l.id, l.pessoa_id
-  FROM public.hub_leads_crm l
-  WHERE (v_agente IS NULL OR l.agente_responsavel = v_agente);
-
-  IF NOT EXISTS (SELECT 1 FROM _leads_reset) THEN
-    RAISE NOTICE 'Nenhum lead encontrado para reset.';
+  -- Financeiro / negócios
+  IF to_regclass('public.hub_contas_receber') IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'hub_contas_receber' AND column_name = 'lead_id'
+    ) THEN
+      IF to_regclass('public.hub_negocios') IS NOT NULL THEN
+        DELETE FROM public.hub_contas_receber
+        WHERE lead_id IS NOT NULL
+           OR negocio_id IN (SELECT id FROM public.hub_negocios WHERE lead_id IS NOT NULL);
+      ELSE
+        DELETE FROM public.hub_contas_receber WHERE lead_id IS NOT NULL;
+      END IF;
+    END IF;
   END IF;
 
-  -- Negócios / financeiro (FK hub_negocios → lead bloqueia DELETE no lead)
-  DELETE FROM public.hub_contas_receber cr
-  WHERE cr.lead_id IN (SELECT id FROM _leads_reset)
-     OR cr.negocio_id IN (
-       SELECT n.id FROM public.hub_negocios n
-       WHERE n.lead_id IN (SELECT id FROM _leads_reset)
-     );
+  IF to_regclass('public.hub_propostas') IS NOT NULL THEN
+    IF to_regclass('public.hub_negocios') IS NOT NULL THEN
+      DELETE FROM public.hub_propostas
+      WHERE lead_id IS NOT NULL
+         OR negocio_id IN (SELECT id FROM public.hub_negocios WHERE lead_id IS NOT NULL);
+    ELSE
+      DELETE FROM public.hub_propostas WHERE lead_id IS NOT NULL;
+    END IF;
+  END IF;
 
-  DELETE FROM public.hub_propostas pr
-  WHERE pr.lead_id IN (SELECT id FROM _leads_reset)
-     OR pr.negocio_id IN (
-       SELECT n.id FROM public.hub_negocios n
-       WHERE n.lead_id IN (SELECT id FROM _leads_reset)
-     );
+  IF to_regclass('public.hub_atividades') IS NOT NULL THEN
+    IF to_regclass('public.hub_negocios') IS NOT NULL THEN
+      DELETE FROM public.hub_atividades
+      WHERE lead_id IS NOT NULL
+         OR negocio_id IN (SELECT id FROM public.hub_negocios WHERE lead_id IS NOT NULL);
+    ELSE
+      DELETE FROM public.hub_atividades WHERE lead_id IS NOT NULL;
+    END IF;
+  END IF;
 
-  DELETE FROM public.hub_atividades a
-  WHERE a.lead_id IN (SELECT id FROM _leads_reset)
-     OR a.negocio_id IN (
-       SELECT n.id FROM public.hub_negocios n
-       WHERE n.lead_id IN (SELECT id FROM _leads_reset)
-     );
+  IF to_regclass('public.hub_notas') IS NOT NULL THEN
+    IF to_regclass('public.hub_negocios') IS NOT NULL THEN
+      DELETE FROM public.hub_notas
+      WHERE lead_id IS NOT NULL
+         OR negocio_id IN (SELECT id FROM public.hub_negocios WHERE lead_id IS NOT NULL);
+    ELSE
+      DELETE FROM public.hub_notas WHERE lead_id IS NOT NULL;
+    END IF;
+  END IF;
 
-  DELETE FROM public.hub_notas no
-  WHERE no.lead_id IN (SELECT id FROM _leads_reset)
-     OR no.negocio_id IN (
-       SELECT n.id FROM public.hub_negocios n
-       WHERE n.lead_id IN (SELECT id FROM _leads_reset)
-     );
+  IF to_regclass('public.hub_negocios') IS NOT NULL THEN
+    DELETE FROM public.hub_negocios WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_negocios n
-  WHERE n.lead_id IN (SELECT id FROM _leads_reset);
+  -- Follow-up
+  IF to_regclass('public.hub_followup_envio') IS NOT NULL THEN
+    DELETE FROM public.hub_followup_envio;
+  END IF;
 
-  -- Follow-up: ledger impede reenvio duplicado nos testes
-  DELETE FROM public.hub_followup_envio fe
-  WHERE fe.lead_id IN (SELECT id FROM _leads_reset);
+  -- WhatsApp / conversas
+  IF to_regclass('public.hub_mensagens') IS NOT NULL THEN
+    DELETE FROM public.hub_mensagens;
+  END IF;
 
-  -- Conversas WhatsApp / fila CRM
-  DELETE FROM public.hub_mensagens m
-  WHERE m.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_fila_mensagens') IS NOT NULL THEN
+    DELETE FROM public.hub_fila_mensagens WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_fila_mensagens fm
-  WHERE fm.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_conversas') IS NOT NULL THEN
+    DELETE FROM public.hub_conversas;
+  END IF;
 
-  DELETE FROM public.hub_conversas c
-  WHERE c.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_memorias_lead') IS NOT NULL THEN
+    DELETE FROM public.hub_memorias_lead;
+  END IF;
 
-  -- Memória IA por lead
-  DELETE FROM public.hub_memorias_lead ml
-  WHERE ml.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_msg_jobs') IS NOT NULL THEN
+    DELETE FROM public.hub_msg_jobs WHERE lead_id IS NOT NULL;
+  END IF;
 
-  -- Jobs / logs / aprovações
-  DELETE FROM public.hub_msg_jobs j
-  WHERE j.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_prompt_logs') IS NOT NULL THEN
+    DELETE FROM public.hub_prompt_logs WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_prompt_logs pl
-  WHERE pl.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_acoes_ia') IS NOT NULL THEN
+    DELETE FROM public.hub_acoes_ia WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_acoes_ia ai
-  WHERE ai.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_aprovacoes') IS NOT NULL THEN
+    DELETE FROM public.hub_aprovacoes WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_aprovacoes ap
-  WHERE ap.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_alertas') IS NOT NULL THEN
+    DELETE FROM public.hub_alertas WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_alertas al
-  WHERE al.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_arquivos') IS NOT NULL THEN
+    DELETE FROM public.hub_arquivos WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_arquivos ar
-  WHERE ar.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_conversas_log') IS NOT NULL THEN
+    DELETE FROM public.hub_conversas_log WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_conversas_log cl
-  WHERE cl.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_briefings') IS NOT NULL THEN
+    DELETE FROM public.hub_briefings WHERE lead_id IS NOT NULL;
+  END IF;
 
-  DELETE FROM public.hub_briefings bf
-  WHERE bf.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_encaminhamentos') IS NOT NULL THEN
+    DELETE FROM public.hub_encaminhamentos WHERE lead_id IS NOT NULL;
+  END IF;
 
-  -- Tabelas legadas / sem CASCADE garantido
-  DELETE FROM public.hub_encaminhamentos enc
-  WHERE enc.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_email_sync_state') IS NOT NULL THEN
+    UPDATE public.hub_email_sync_state SET lead_id = NULL WHERE lead_id IS NOT NULL;
+  END IF;
 
-  UPDATE public.hub_email_sync_state es
-  SET lead_id = NULL
-  WHERE es.lead_id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_logs') IS NOT NULL THEN
+    DELETE FROM public.hub_logs
+    WHERE entidade IN ('lead', 'hub_leads_crm', 'hub_lead')
+       OR entidade_id IN (SELECT id FROM public.hub_leads_crm);
+  END IF;
 
-  -- Ruído nos ticks de follow-up (aba Operação do agente)
-  DELETE FROM public.hub_ciclos_log lg
-  WHERE lg.acoes_tomadas->>'acao' IN ('followup_automatico', 'followup_tick')
-    AND (
-      v_agente IS NULL
-      OR lg.agente_slug = v_agente
-      OR lg.acoes_tomadas->>'lead_id' IN (SELECT id::text FROM _leads_reset)
-    );
+  IF to_regclass('public.hub_ciclos_log') IS NOT NULL THEN
+    DELETE FROM public.hub_ciclos_log
+    WHERE acoes_tomadas->>'acao' IN ('followup_automatico', 'followup_tick');
+  END IF;
 
-  -- Leads
-  DELETE FROM public.hub_leads_crm l
-  WHERE l.id IN (SELECT id FROM _leads_reset);
+  IF to_regclass('public.hub_decision_logs') IS NOT NULL THEN
+    DELETE FROM public.hub_decision_logs WHERE lead_id IS NOT NULL;
+  END IF;
+END $clean$;
 
-  -- Pessoas ligadas a esses leads (cadastro CRM)
-  DELETE FROM public.hub_pessoas p
-  WHERE p.id IN (SELECT pessoa_id FROM _leads_reset WHERE pessoa_id IS NOT NULL);
+-- Leads (obrigatório)
+DELETE FROM public.hub_leads_crm;
 
-  RAISE NOTICE 'Reset concluído. Leads removidos: %', (SELECT COUNT(*) FROM _leads_reset);
-END $$;
+-- Pessoas dos leads apagados
+DELETE FROM public.hub_pessoas p
+WHERE p.id IN (SELECT id FROM _reset_pessoas)
+   OR (p.tipo = 'lead' AND NOT EXISTS (
+     SELECT 1 FROM public.hub_leads_crm l WHERE l.pessoa_id = p.id
+   ));
 
 COMMIT;
 
--- ─── PRÉVIA (rode separado ANTES do reset) ─────────────────────────────────
--- SELECT COUNT(*) AS leads FROM public.hub_leads_crm;
--- SELECT COUNT(*) AS ledger FROM public.hub_followup_envio;
--- SELECT COUNT(*) AS fila_followup FROM public.hub_fila_mensagens
---   WHERE metadata->>'tipo' = 'followup_automatico';
--- SELECT agente_responsavel, COUNT(*) FROM public.hub_leads_crm GROUP BY 1;
+-- CONFIRME:
+-- SELECT COUNT(*) AS leads_restantes FROM public.hub_leads_crm;

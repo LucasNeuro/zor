@@ -185,9 +185,20 @@ async function executarGoogleCalendar(
     if (!res.ok) {
       return JSON.stringify({ erro: "google_calendar_api", status: res.status, detalhe: res.body });
     }
-    const resumo = resumirEventoGoogleCalendar(res.body);
-    const linkWhatsapp = linkEventoParaWhatsapp(resumo);
+    let resumo = resumirEventoGoogleCalendar(res.body);
+    let linkWhatsapp = linkEventoParaWhatsapp(resumo);
     const eventId = resumo?.id != null ? String(resumo.id) : "";
+
+    if (comGoogleMeet && eventId && !linkWhatsapp) {
+      const getRes = await fetchJson(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}?conferenceDataVersion=1`,
+        { method: "GET", headers }
+      );
+      if (getRes.ok) {
+        resumo = resumirEventoGoogleCalendar(getRes.body);
+        linkWhatsapp = linkEventoParaWhatsapp(resumo);
+      }
+    }
 
     if (leadId && eventId) {
       await gravarReservaGcalNoLead(supabase, leadId, {
@@ -210,7 +221,7 @@ async function executarGoogleCalendar(
       aviso_horario: norm.aviso,
       link_para_whatsapp: linkWhatsapp,
       instrucao_agente: linkWhatsapp
-        ? `Obrigatório incluir na resposta ao cliente: ${linkWhatsapp}`
+        ? `Obrigatório enviar ao cliente EXATAMENTE este link (sem markdown, URL nua): ${linkWhatsapp}`
         : "Confirme data/hora ao cliente.",
     });
   }

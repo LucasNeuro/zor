@@ -14,6 +14,7 @@ import {
 } from "@/lib/whatsapp/menu-triagem-uazapi";
 import { deveAnexarMenuTriagemAutomatico } from "@/lib/whatsapp/menu-triagem-policy";
 import { whatsappSendText, whatsappSendMedia } from "@/lib/whatsapp/whatsapp-send";
+import { formatarTextoRespostaWhatsapp } from "@/lib/whatsapp/formatar-texto-whatsapp";
 import {
   executeFlowEngine,
   type FlowEngineDefinition,
@@ -565,13 +566,14 @@ function mensagemPareceEmail(mensagem: string): boolean {
 }
 
 async function enviarTexto(telefone: string, texto: string, instanceToken: string) {
-  const out = await whatsappSendText(telefone, texto, { instanceToken });
+  const textoWhatsapp = formatarTextoRespostaWhatsapp(texto);
+  const out = await whatsappSendText(telefone, textoWhatsapp, { instanceToken });
   const ctx = playbookPersistenciaCrm;
-  if (out.ok && ctx && texto.trim()) {
+  if (out.ok && ctx && textoWhatsapp.trim()) {
     await persistirMensagemSaidaIaCrm(ctx.supabase, {
       leadId: ctx.leadId,
       agenteSlug: ctx.agenteSlug,
-      conteudo: texto,
+      conteudo: textoWhatsapp,
       tenantId: ctx.tenantId,
       motor: "playbook_flow",
     }).catch(() => undefined);

@@ -4,6 +4,7 @@ import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
 import { resetFollowupAoReceberMensagemCliente } from "@/lib/hub/followup-lead-state";
 import { parseFollowupTimestamp } from "@/lib/hub/followup-relogio";
 import { respostaIaJaEnviadaRecente } from "@/lib/whatsapp/anti-duplicata-resposta";
+import { prepararTextoIaParaWhatsapp } from "@/lib/whatsapp/formatar-texto-whatsapp";
 import {
   humanoSlugFromLead,
   mapGroupMessageSender,
@@ -567,6 +568,11 @@ export async function processarMensagemInboundWhatsapp(params: {
         : [],
     });
 
+    const respostaParaWhatsapp = prepararTextoIaParaWhatsapp(
+      resultado.resposta,
+      resultado.toolCallsExecutadas
+    );
+
     if (resultado.agenteSlug && agenteResponsavelLead !== resultado.agenteSlug) {
       await supabase.from("hub_leads_crm").update({ agente_responsavel: resultado.agenteSlug }).eq("id", lead.id);
       agenteResponsavelLead = resultado.agenteSlug;
@@ -618,14 +624,14 @@ export async function processarMensagemInboundWhatsapp(params: {
     }
 
     if (!menuJaEnviado) {
-      const jaEnviou = await respostaIaJaEnviadaRecente(supabase, lead.id, resultado.resposta);
+      const jaEnviou = await respostaIaJaEnviadaRecente(supabase, lead.id, respostaParaWhatsapp);
       if (jaEnviou) {
         log.info("wa.processor.send_text_skip", {
           reason: "resposta_ia_duplicada_recente",
           telefone: trace.maskTelefone(params.telefone),
         });
       } else {
-      const sendOut = await enviarMensagemWhatsApp(params.telefone, resultado.resposta, params.waSendOpts);
+      const sendOut = await enviarMensagemWhatsApp(params.telefone, respostaParaWhatsapp, params.waSendOpts);
       const sendBodyPreview =
         sendOut.body && typeof sendOut.body === "object"
           ? JSON.stringify(sendOut.body).slice(0, 240)
@@ -708,7 +714,7 @@ export async function processarMensagemInboundWhatsapp(params: {
     if (!resultado.precisaAprovacao) {
       const slugEfetivo = resultado.agenteSlug || agenteSlug;
       const modeloUsado = resultado.modelo || "mistral-small-latest";
-      const respostaTexto = resultado.resposta;
+      const respostaTexto = respostaParaWhatsapp;
       const tokens = (resultado.tokens?.entrada ?? 0) + (resultado.tokens?.saida ?? 0);
       const custo =
         resultado.custo?.brl ??

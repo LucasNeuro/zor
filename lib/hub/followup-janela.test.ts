@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   avaliarFaixaHorariaFollowup,
   avaliarJanelaDisparoFollowup,
+  faixaHorariaEfetiva,
   followupPermitidoNaJanela,
   horariosDisparoFollowup,
   janelaModoFollowup,
@@ -50,6 +51,23 @@ describe("followup janela horária", () => {
     expect(janelaModoFollowup({ execucao_modo: "janela_horaria" })).toBe("faixa");
     expect(janelaModoFollowup({ janela_modo: "faixa" })).toBe("faixa");
     expect(janelaModoFollowup({ janela_modo: "slots" })).toBe("slots");
+  });
+
+  it("faixaHorariaEfetiva slots legado respeita horario_inicio/fim customizado", () => {
+    const faixa = faixaHorariaEfetiva({
+      janela_modo: "slots",
+      horarios_disparo: ["09:00", "14:00", "18:00"],
+      horario_inicio: "08:00",
+      horario_fim: "22:00",
+    });
+    expect(faixa).toEqual({ inicio: "08:00", fim: "22:00" });
+  });
+
+  it("followupPermitidoNaJanela slots legado usa faixa 08–22 quando configurada", () => {
+    const meioDia = avaliarFaixaHorariaFollowup("08:00", "22:00", {
+      agora: new Date("2026-06-25T15:00:00.000Z"), // 12:00 BRT
+    });
+    expect(meioDia.ativa).toBe(true);
   });
 
   it("usa horários padrão quando config vazia", () => {

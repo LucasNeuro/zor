@@ -1,11 +1,9 @@
 import type { HubAgenteFollowupConfig } from "@/lib/hub/followup-types";
 import {
-  avaliarJanelaDisparoFollowup,
   avaliarFaixaHorariaFollowup,
+  faixaHorariaEfetiva,
   janelaModoFollowup,
   timezoneFollowup,
-  horarioInicioFollowup,
-  horarioFimFollowup,
   horariosDisparoFollowup,
 } from "@/lib/hub/followup-janela";
 import { horaLocalDeDate } from "@/lib/hub/followup-schedule";
@@ -35,7 +33,7 @@ export function followupAgendadoParaAgora(
 
 /**
  * Calcula quando o próximo passo pode ser enviado:
- * agora + esperaMinutos, ajustado à faixa/slots do agente.
+ * agora + esperaMinutos, ajustado só se cair fora da faixa permitida (anti-madrugada).
  */
 export function calcularProximoFollowupEm(
   agora: Date,
@@ -61,31 +59,8 @@ export function calcularProximoFollowupEm(
   }
 
   const tz = timezoneFollowup(config);
-  return ajustarDataParaJanela(alvo, config, tz).toISOString();
-}
-
-function ajustarDataParaJanela(
-  date: Date,
-  config: Pick<
-    HubAgenteFollowupConfig,
-    | "janela_modo"
-    | "execucao_modo"
-    | "horario_inicio"
-    | "horario_fim"
-    | "horarios_disparo"
-    | "gatilho_tipo"
-    | "gatilho_hora_dia"
-  >,
-  tz: string
-): Date {
-  const modo = janelaModoFollowup(config);
-  if (modo === "continuo") return date;
-
-  if (modo === "faixa") {
-    return ajustarParaFaixa(date, horarioInicioFollowup(config), horarioFimFollowup(config), tz);
-  }
-
-  return ajustarParaSlots(date, horariosDisparoFollowup(config), tz);
+  const faixa = faixaHorariaEfetiva(config);
+  return ajustarParaFaixa(alvo, faixa.inicio, faixa.fim, tz).toISOString();
 }
 
 function ajustarParaFaixa(
@@ -112,29 +87,6 @@ function ajustarParaFaixa(
     const minutosAteMeiaNoite = 24 * 60 - agoraMin;
     const minutosAteInicio = minutosAteMeiaNoite + inicioMin;
     date = new Date(date.getTime() + minutosAteInicio * 60_000);
-  }
-
-  return date;
-}
-
-function ajustarParaSlots(date: Date, horarios: string[], tz: string): Date {
-  for (let tentativa = 0; tentativa < 5; tentativa++) {
-    const janela = avaliarJanelaDisparoFollowup(horarios, { timeZone: tz, agora: date, toleranciaMinutos: 20 });
-    if (janela.ativa) return date;
-
-    const proximo = janela.proximo;
-    if (!proximo) return date;
-
-    const proxMin = parseHorarioMinutos(proximo);
-    if (proxMin == null) return date;
-
-    const local = horaLocalDeDate(date, tz);
-    const agoraMin = minutosDesdeMeiaNoite(local.horas, local.minutos);
-
-    const delta =
-      proxMin > agoraMin ? proxMin - agoraMin : 24 * 60 - agoraMin + proxMin;
-
-    date = new Date(date.getTime() + delta * 60_000);
   }
 
   return date;
@@ -167,8 +119,11 @@ export function resumoJanelaFollowup(
 ): string {
   const modo = janelaModoFollowup(config);
   if (modo === "continuo") return "Contínuo (24/7)";
-  if (modo === "faixa") {
-    return `Faixa ${horarioInicioFollowup(config)}–${horarioFimFollowup(config)} (${timezoneFollowup(config)})`;
+  const faixa = faixaHorariaEfetiva(config);
+  if (modo === "faixa" || modo === "slots") {
+    const legado =
+      modo === "slots" ? ` (legado slots ${horariosDisparoFollowup(config).join(", ")})` : "";
+    return `Faixa ${faixa.inicio}–${faixa.fim} (${timezoneFollowup(config)})${legado}`;
   }
-  return `Slots ${horariosDisparoFollowup(config).join(", ")}`;
+  return `Faixa ${faixa.inicio}–${faixa.fim} (${timezoneFollowup(config)})`;
 }

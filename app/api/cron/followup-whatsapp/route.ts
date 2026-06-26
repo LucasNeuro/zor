@@ -11,10 +11,7 @@ function db() {
   );
 }
 
-/**
- * Cron: follow-up automático WhatsApp (ledger + proximo_followup + janela por agente).
- * Render: schedule */5 * * * * com DISPATCH_FOLLOWUP_ENABLED=1 e FOLLOWUP_DISPATCH_MODE=cron.
- */
+/** Cron follow-up WhatsApp (ledger + proximo_followup + faixa horária por agente). Render: a cada 5 min. */
 export async function GET(request: NextRequest) {
   if (!cronRequestAuthorized(request)) {
     return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });

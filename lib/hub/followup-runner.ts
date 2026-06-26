@@ -12,7 +12,7 @@ import {
   type HubAgenteFollowupConfig,
   type HubAgenteFollowupPasso,
 } from "@/lib/hub/followup-types";
-import { followupPermitidoNaJanela, horariosDisparoFollowup, janelaModoFollowup } from "@/lib/hub/followup-janela";
+import { followupPermitidoNaJanela, janelaModoFollowup, faixaHorariaEfetiva } from "@/lib/hub/followup-janela";
 import { avaliarDisparoPasso, type MotivoFollowupSkip } from "@/lib/hub/followup-schedule";
 import {
   calcularProximoFollowupEm,
@@ -220,16 +220,17 @@ export async function executarFollowupParaAgente(
   }
 
   const janela = followupPermitidoNaJanela(config);
+  const faixaEfetiva = faixaHorariaEfetiva(config);
   if (!janela.ativa && !options?.simular) {
     const modo = janelaModoFollowup(config);
     const detalhe =
-      modo === "faixa" && janela.faixa
+      modo !== "continuo"
         ? janela.proximo
-          ? `fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim} — próximo ~${janela.proximo}`
-          : `fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim}`
+          ? `fora da faixa ${faixaEfetiva.inicio}–${faixaEfetiva.fim} — próximo ~${janela.proximo}`
+          : `fora da faixa ${faixaEfetiva.inicio}–${faixaEfetiva.fim}`
         : janela.proximo
-          ? `fora da janela — próximo slot ${janela.proximo} (${horariosDisparoFollowup(config).join(", ")})`
-          : `fora da janela horária (${horariosDisparoFollowup(config).join(", ")})`;
+          ? `fora da janela — próximo ~${janela.proximo}`
+          : `fora da janela horária`;
     if (coletarDiagnostico) {
       result.diagnosticos!.push({
         lead_id: "_config",
@@ -247,15 +248,14 @@ export async function executarFollowupParaAgente(
   }
 
   const foraDaJanela = !janela.ativa;
-  const modoJanela = janelaModoFollowup(config);
   const detalheJanelaFechada = foraDaJanela
-    ? modoJanela === "faixa" && janela.faixa
+    ? janelaModoFollowup(config) !== "continuo"
       ? janela.proximo
-        ? `fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim} — próximo ~${janela.proximo}`
-        : `fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim}`
+        ? `fora da faixa ${faixaEfetiva.inicio}–${faixaEfetiva.fim} — próximo ~${janela.proximo}`
+        : `fora da faixa ${faixaEfetiva.inicio}–${faixaEfetiva.fim}`
       : janela.proximo
-        ? `fora da janela — próximo slot ${janela.proximo} (${horariosDisparoFollowup(config).join(", ")})`
-        : `fora da janela horária (${horariosDisparoFollowup(config).join(", ")})`
+        ? `fora da janela — próximo ~${janela.proximo}`
+        : `fora da janela horária`
     : null;
 
   const { token: instanceToken } = await resolverTokenInstanciaWhatsapp(supabase, slug);

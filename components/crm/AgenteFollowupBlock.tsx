@@ -772,9 +772,9 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         <span style={rfLabelStyle()}>Quando enviar follow-ups</span>
         <p style={{ margin: "4px 0 10px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
           A <strong style={{ color: RF_TEXT_SECONDARY }}>cadência</strong> (no fluxo) define quanto tempo esperar após
-          o silêncio. A <strong style={{ color: RF_TEXT_SECONDARY }}>faixa horária</strong> limita em que horas do dia
-          pode enviar. Cada passo só dispara <strong style={{ color: RF_TEXT_SECONDARY }}>uma vez</strong> por lead
-          (ledger).
+          o silêncio. A <strong style={{ color: RF_TEXT_SECONDARY }}>faixa horária</strong> só evita envio de
+          madrugada — dentro dela a cadência manda (ex. 3 min + 4 min). Cada passo dispara{" "}
+          <strong style={{ color: RF_TEXT_SECONDARY }}>uma vez</strong> por lead.
         </p>
         <div style={{ display: "grid", gap: 8 }}>
           {(
@@ -786,8 +786,8 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
               },
               {
                 id: "slots" as const,
-                titulo: "Slots fixos",
-                desc: "Só envia nos horários abaixo (~20 min cada). Útil para 09h, 14h e 18h.",
+                titulo: "Slots fixos (legado)",
+                desc: "Mantém horários de referência, mas envia na cadência dentro da faixa início/fim abaixo.",
               },
               {
                 id: "continuo" as const,

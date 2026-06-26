@@ -85,6 +85,68 @@ function parseHorarioMinutos(horaDia: string): number | null {
   );
 }
 
+function formatMinutosAsHora(min: number): string {
+  const clamped = Math.max(0, Math.min(min, 23 * 60 + 59));
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
+ * Faixa real usada na cadência: início/fim do dia permitido (evita madrugada).
+ * Modo slots legado vira faixa contínua — a cadência (3 min, 4 min…) não espera slot fixo.
+ */
+export function faixaHorariaEfetiva(
+  config: Pick<
+    HubAgenteFollowupConfig,
+    | "janela_modo"
+    | "execucao_modo"
+    | "horario_inicio"
+    | "horario_fim"
+    | "horarios_disparo"
+    | "gatilho_tipo"
+    | "gatilho_hora_dia"
+  >
+): { inicio: string; fim: string } {
+  const modo = janelaModoFollowup(config);
+
+  if (modo === "faixa" || modo === "slots") {
+    const inicioCfg = config.horario_inicio?.trim();
+    const fimCfg = config.horario_fim?.trim();
+    if (
+      inicioCfg &&
+      fimCfg &&
+      !validarHoraDia(inicioCfg) &&
+      !validarHoraDia(fimCfg)
+    ) {
+      return { inicio: inicioCfg, fim: fimCfg };
+    }
+
+    if (modo === "faixa") {
+      return {
+        inicio: horarioInicioFollowup(config),
+        fim: horarioFimFollowup(config),
+      };
+    }
+
+    const mins = horariosDisparoFollowup(config)
+      .map((h) => parseHorarioMinutos(h))
+      .filter((m): m is number => m != null)
+      .sort((a, b) => a - b);
+
+    if (mins.length === 0) {
+      return { inicio: HORARIO_INICIO_PADRAO, fim: HORARIO_FIM_PADRAO };
+    }
+
+    return {
+      inicio: formatMinutosAsHora(mins[0]!),
+      fim: formatMinutosAsHora(Math.min(mins[mins.length - 1]! + 60, 23 * 60 + 59)),
+    };
+  }
+
+  return { inicio: HORARIO_INICIO_PADRAO, fim: HORARIO_FIM_PADRAO };
+}
+
 export type JanelaDisparoFollowup = {
   ativa: boolean;
   slot?: string;
@@ -185,15 +247,9 @@ export function followupPermitidoNaJanela(
     return { ativa: true, modo: "continuo" };
   }
 
-  if (modo === "faixa") {
-    return avaliarFaixaHorariaFollowup(
-      horarioInicioFollowup(config),
-      horarioFimFollowup(config),
-      { timeZone: tz }
-    );
-  }
-
-  return avaliarJanelaDisparoFollowup(horariosDisparoFollowup(config), { timeZone: tz });
+  const faixa = faixaHorariaEfetiva(config);
+  const resultado = avaliarFaixaHorariaFollowup(faixa.inicio, faixa.fim, { timeZone: tz });
+  return { ...resultado, modo: modo === "slots" ? "faixa" : modo };
 }
 
 export function normalizarHorariosDisparoInput(raw: unknown): string[] | null {

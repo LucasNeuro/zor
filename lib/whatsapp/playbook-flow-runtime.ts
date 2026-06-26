@@ -1955,14 +1955,18 @@ export async function processarPlaybookInbound(params: {
     return { handled: false, motivo: "sem_instance_token" };
   }
 
+  const metaTenantId =
+    params.metadata && typeof params.metadata === "object" && !Array.isArray(params.metadata)
+      ? (params.metadata as Record<string, unknown>).tenant_id
+      : null;
+  const tenantId =
+    typeof metaTenantId === "string" && metaTenantId.trim() ? metaTenantId.trim() : null;
+
   playbookPersistenciaCrm = {
     supabase: params.supabase,
     leadId: params.leadId,
     agenteSlug: params.agenteSlug,
-    tenantId:
-      params.metadata && typeof params.metadata === "object" && !Array.isArray(params.metadata)
-        ? (params.metadata as Record<string, unknown>).tenant_id
-        : null,
+    tenantId,
   };
 
   try {

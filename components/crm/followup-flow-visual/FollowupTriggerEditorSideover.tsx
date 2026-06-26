@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import type { HubAgenteFollowupConfig } from "@/lib/hub/followup-types";
-import { configGatilhoPadrao } from "@/lib/hub/followup-types";
+import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import { configGatilhoPadrao, esperaMinutosDoPasso } from "@/lib/hub/followup-types";
+import { FollowupEsperaMinutosField, patchEsperaMinutos } from "./FollowupEsperaMinutosField";
+import { passoPersistenciaIgual } from "./types";
 import {
   RF_LIGHT_BORDER,
   RF_LIGHT_BORDER_STRONG,
@@ -18,10 +20,14 @@ type GatilhoDraft = Pick<HubAgenteFollowupConfig, "arquivar_apos_dias">;
 
 type Props = {
   config: HubAgenteFollowupConfig;
+  passos?: HubAgenteFollowupPasso[];
   saving: boolean;
   onClose: () => void;
   onSave: (patch: GatilhoDraft) => void | Promise<void>;
   onPatch: (patch: Partial<GatilhoDraft>) => void;
+  onSalvarPasso?: (passo: HubAgenteFollowupPasso) => void | Promise<void>;
+  onAtualizarPassoLocal?: (id: string, patch: Partial<HubAgenteFollowupPasso>) => void;
+  onSelectPasso?: (passoId: string) => void;
   onRegisterFlush?: (flush: () => Promise<void>) => void;
 };
 
@@ -38,17 +44,30 @@ function draftIgual(a: GatilhoDraft, b: GatilhoDraft): boolean {
 
 export function FollowupTriggerEditorSideover({
   config,
+  passos = [],
   saving,
   onClose,
   onSave,
   onPatch,
+  onSalvarPasso,
+  onAtualizarPassoLocal,
+  onSelectPasso,
   onRegisterFlush,
 }: Props) {
   const [draft, setDraft] = useState<GatilhoDraft>(() => draftFromConfig(config));
+  const passosOrdenados = useMemo(
+    () => [...passos].sort((a, b) => a.ordem - b.ordem),
+    [passos]
+  );
+  const [passosDraft, setPassosDraft] = useState<HubAgenteFollowupPasso[]>(passosOrdenados);
 
   useEffect(() => {
     setDraft(draftFromConfig(config));
   }, [config]);
+
+  useEffect(() => {
+    setPassosDraft(passosOrdenados);
+  }, [passosOrdenados]);
 
   const baseline = draftFromConfig(config);
 
@@ -58,11 +77,33 @@ export function FollowupTriggerEditorSideover({
     onPatch(patch);
   }
 
+  function updatePassoEspera(passoId: string, minutos: number, index: number) {
+    setPassosDraft((prev) =>
+      prev.map((p) => {
+        if (p.id !== passoId) return p;
+        const patch = patchEsperaMinutos(minutos);
+        const next = { ...p, ...patch };
+        onAtualizarPassoLocal?.(passoId, patch);
+        return next;
+      })
+    );
+    void index;
+  }
+
   const flushDraft = useCallback(async () => {
     if (!draftIgual(draft, baseline)) {
       await onSave(draft);
     }
-  }, [draft, baseline, onSave]);
+    if (onSalvarPasso) {
+      for (let i = 0; i < passosOrdenados.length; i++) {
+        const original = passosOrdenados[i]!;
+        const edited = passosDraft.find((p) => p.id === original.id);
+        if (edited && !passoPersistenciaIgual(edited, original)) {
+          await onSalvarPasso(edited);
+        }
+      }
+    }
+  }, [draft, baseline, onSave, onSalvarPasso, passosOrdenados, passosDraft]);
 
   useEffect(() => {
     onRegisterFlush?.(flushDraft);
@@ -106,10 +147,10 @@ export function FollowupTriggerEditorSideover({
       >
         <div>
           <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: RF_LIGHT_TEXT_PRIMARY }}>
-            Arquivamento e cadência
+            Cadência e arquivamento
           </p>
           <p style={{ margin: "2px 0 0", fontSize: 10, color: RF_LIGHT_TEXT_MUTED }}>
-            Tempos de cada passo no fluxo visual
+            Quando enviar cada follow-up
           </p>
         </div>
         <button
@@ -128,27 +169,97 @@ export function FollowupTriggerEditorSideover({
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "12px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
         <p style={{ margin: 0, fontSize: 10, color: RF_LIGHT_TEXT_MUTED, lineHeight: 1.45 }}>
-          Configure <strong>minutos sem resposta</strong> em cada passo no fluxo visual. Respostas do bot{" "}
-          <strong>não</strong> reiniciam o relógio — só mensagens do cliente. Quando o cliente voltar a falar,
-          a cadência recomeça do passo 1.
+          Defina o tempo de espera de cada passo. Só mensagens do cliente reiniciam o relógio — respostas
+          automáticas do bot <strong>não</strong> contam.
         </p>
 
-        <div
-          style={{
-            padding: 10,
-            borderRadius: 8,
-            border: `1px solid ${RF_LIGHT_BORDER}`,
-            background: "#f4faf2",
-            fontSize: 11,
-            color: RF_LIGHT_TEXT_SECONDARY,
-            lineHeight: 1.45,
-          }}
-        >
-          <strong style={{ color: "#2e7d32" }}>Dica:</strong> passo 1 = ex. 5 min · passo 2 = ex. 12 h ·
-          passo 3 = ex. 2 dias.
-        </div>
+        {passosDraft.length === 0 ? (
+          <div
+            style={{
+              padding: 10,
+              borderRadius: 8,
+              border: `1px dashed ${RF_LIGHT_BORDER}`,
+              fontSize: 11,
+              color: RF_LIGHT_TEXT_SECONDARY,
+              lineHeight: 1.45,
+            }}
+          >
+            Adicione um passo (Mensagem, Imagem…) na barra superior para configurar o primeiro envio.
+          </div>
+        ) : (
+          passosDraft.map((passo, index) => {
+            const posicao = index + 1;
+            const espera = esperaMinutosDoPasso(passo, config, index);
+            const resumo =
+              (passo.texto_template || passo.legenda_imagem || "").trim().slice(0, 48) ||
+              `Passo ${posicao}`;
+            return (
+              <div
+                key={passo.id}
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  border: `1px solid ${RF_LIGHT_BORDER}`,
+                  background: "#fafdfa",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: RF_LIGHT_TEXT_PRIMARY }}>
+                      Passo {posicao}
+                    </p>
+                    <p style={{ margin: "2px 0 0", fontSize: 10, color: RF_LIGHT_TEXT_MUTED }} title={resumo}>
+                      {resumo}
+                    </p>
+                  </div>
+                  {onSelectPasso ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectPasso(passo.id)}
+                      style={{
+                        border: `1px solid ${RF_LIGHT_BORDER}`,
+                        background: "#fff",
+                        borderRadius: 6,
+                        padding: "4px 8px",
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: "#2e7d32",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Editar mensagem
+                    </button>
+                  ) : null}
+                </div>
+                <FollowupEsperaMinutosField
+                  posicao={posicao}
+                  esperaMinutos={espera}
+                  disabled={saving}
+                  theme="light"
+                  compact
+                  onChange={(m) => updatePassoEspera(passo.id, m, index)}
+                />
+              </div>
+            );
+          })
+        )}
+
+        <div style={{ height: 1, background: RF_LIGHT_BORDER }} />
 
         <label>
           <span style={RF_LIGHT_LABEL_STYLE}>Arquivar lead após (dias sem resposta)</span>
@@ -165,16 +276,23 @@ export function FollowupTriggerEditorSideover({
             style={RF_LIGHT_INPUT_STYLE}
           />
           <span style={{ display: "block", marginTop: 4, fontSize: 10, color: RF_LIGHT_TEXT_MUTED }}>
-            Após esgotar todos os passos, o lead é arquivado se continuar sem responder.
+            Depois de todos os passos, se o cliente continuar em silêncio.
           </span>
         </label>
+
+        {passosDraft.length > 0 ? (
+          <p style={{ margin: 0, fontSize: 10, color: RF_LIGHT_TEXT_MUTED, lineHeight: 1.45 }}>
+            Para texto, imagem e legenda, clique no cartão do passo no fluxo ou em{" "}
+            <strong>Editar mensagem</strong>.
+          </p>
+        ) : null}
       </div>
 
       <div style={{ padding: "12px 14px", borderTop: `1px solid ${RF_LIGHT_BORDER}` }}>
         <button
           type="button"
           disabled={saving}
-          onClick={() => void onSave(draft)}
+          onClick={() => void flushDraft()}
           style={{
             width: "100%",
             padding: "9px 12px",
@@ -188,7 +306,7 @@ export function FollowupTriggerEditorSideover({
             opacity: saving ? 0.65 : 1,
           }}
         >
-          Guardar
+          Guardar cadência
         </button>
       </div>
     </div>

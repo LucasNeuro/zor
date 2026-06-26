@@ -278,12 +278,19 @@ function FollowupFlowCanvasInner({
           {triggerOpen && config ? (
             <FollowupTriggerEditorSideover
               config={config}
+              passos={passosOrdenados}
               saving={saving}
               onClose={() => setTriggerOpen(false)}
               onSave={async (patch) => {
                 await onSalvarConfig(patch);
               }}
               onPatch={(patch) => onAtualizarConfigLocal(patch)}
+              onSalvarPasso={(p) => onSalvarPasso(p)}
+              onAtualizarPassoLocal={(id, patch) => onAtualizarLocal(id, patch)}
+              onSelectPasso={(passoId) => {
+                setTriggerOpen(false);
+                setSelectedId(passoId);
+              }}
               onRegisterFlush={(flush) => {
                 flushPendingRef.current = flush;
               }}

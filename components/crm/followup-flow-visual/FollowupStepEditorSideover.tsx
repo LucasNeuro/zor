@@ -4,12 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Trash2, Upload, X } from "lucide-react";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import type { HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import {
-  esperaMinutosDoPasso,
-  FOLLOWUP_ESPERA_PRESETS,
-  formatarEsperaMinutos,
-  minutosToLegacyAtraso,
-} from "@/lib/hub/followup-types";
+import { esperaMinutosDoPasso, formatarEsperaMinutos } from "@/lib/hub/followup-types";
+import { FollowupEsperaMinutosField, patchEsperaMinutos } from "./FollowupEsperaMinutosField";
 import { passoPersistenciaIgual } from "./types";
 import { TextareaComSugestaoIa } from "@/components/crm/TextareaComSugestaoIa";
 import {
@@ -49,11 +45,6 @@ type Props = {
   onUploadImagem: (file: File) => void;
   onRegisterFlush?: (flush: () => Promise<void>) => void;
 };
-
-function clampEspera(v: number): number {
-  if (!Number.isFinite(v)) return 5;
-  return Math.min(525_600, Math.max(1, Math.floor(v)));
-}
 
 function esperaAtual(p: HubAgenteFollowupPasso): number {
   return esperaMinutosDoPasso(p, {}, Math.max(0, (p.ordem ?? 1) - 1));
@@ -131,22 +122,10 @@ export function FollowupStepEditorSideover({
   }
 
   function updateEsperaMinutos(raw: number) {
-    const m = clampEspera(raw);
-    const leg = minutosToLegacyAtraso(m);
-    const next = {
-      ...draft,
-      espera_minutos: m,
-      atraso_dias: leg.atraso_dias,
-      atraso_horas: leg.atraso_horas,
-      atraso_minutos: leg.atraso_minutos,
-    };
+    const patch = patchEsperaMinutos(raw);
+    const next = { ...draft, ...patch };
     setDraft(next);
-    onPatch({
-      espera_minutos: m,
-      atraso_dias: leg.atraso_dias,
-      atraso_horas: leg.atraso_horas,
-      atraso_minutos: leg.atraso_minutos,
-    });
+    onPatch(patch);
   }
 
   const espera = esperaAtual(draft);
@@ -243,40 +222,14 @@ export function FollowupStepEditorSideover({
           </select>
         </label>
 
-        <label>
-          <span style={labelStyle}>
-            {posicao === 1 ? "Minutos sem resposta do cliente" : "Minutos após o passo anterior"}
-          </span>
-          <input
-            type="number"
-            min={1}
-            max={525600}
-            value={espera}
-            onChange={(e) => updateEsperaMinutos(Number.parseInt(e.target.value, 10) || 1)}
-            style={inputStyle}
-          />
-        </label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {FOLLOWUP_ESPERA_PRESETS.map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => updateEsperaMinutos(preset)}
-              style={{
-                padding: "4px 8px",
-                borderRadius: 6,
-                border: `1px solid ${colors.border}`,
-                background: espera === preset ? colors.accent : colors.miniBtnBg,
-                color: espera === preset ? colors.accentText : colors.textSecondary,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              {formatarEsperaMinutos(preset, posicao - 1)}
-            </button>
-          ))}
-        </div>
+        <FollowupEsperaMinutosField
+          posicao={posicao}
+          esperaMinutos={espera}
+          disabled={saving}
+          theme={theme}
+          onChange={updateEsperaMinutos}
+        />
+
         <label>
           <span style={labelStyle}>Hora mínima do dia (opcional)</span>
           <input
@@ -286,19 +239,6 @@ export function FollowupStepEditorSideover({
             style={inputStyle}
           />
         </label>
-        <p style={{ margin: 0, fontSize: 10, color: colors.textSecondary, lineHeight: 1.4 }}>
-          {posicao === 1 ? (
-            <>
-              Envia após <strong style={{ color: colors.accent }}>{formatarEsperaMinutos(espera, 0)}</strong>{" "}
-              sem mensagem do cliente (respostas do bot não reiniciam o relógio).
-            </>
-          ) : (
-            <>
-              Envia <strong style={{ color: colors.accent }}>{formatarEsperaMinutos(espera, posicao - 1)}</strong>{" "}
-              depois do passo anterior enviado.
-            </>
-          )}
-        </p>
 
         {draft.tipo_conteudo === "texto" ? (
           <TextareaComSugestaoIa

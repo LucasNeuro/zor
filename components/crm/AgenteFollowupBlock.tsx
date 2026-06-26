@@ -27,6 +27,7 @@ import {
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
+import { HORARIOS_DISPARO_PADRAO } from "@/lib/hub/followup-janela";
 import {
   configGatilhoPadrao,
   esperaMinutosDoPasso,
@@ -61,8 +62,14 @@ function normalizarPasso(p: HubAgenteFollowupPasso): HubAgenteFollowupPasso {
 
 function normalizarConfig(c: HubAgenteFollowupConfig): HubAgenteFollowupConfig {
   const padrao = configGatilhoPadrao();
+  const horarios =
+    Array.isArray(c.horarios_disparo) && c.horarios_disparo.length > 0
+      ? c.horarios_disparo
+      : [...HORARIOS_DISPARO_PADRAO];
   return {
     ...c,
+    execucao_modo: c.execucao_modo === "continuo" ? "continuo" : "janela_horaria",
+    horarios_disparo: horarios,
     gatilho_tipo: c.gatilho_tipo ?? padrao.gatilho_tipo,
     gatilho_dias: c.gatilho_dias ?? padrao.gatilho_dias,
     gatilho_horas: c.gatilho_horas ?? padrao.gatilho_horas,
@@ -170,6 +177,8 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       gatilho_horas: number;
       gatilho_minutos: number;
       gatilho_hora_dia: string | null;
+      execucao_modo: HubAgenteFollowupConfig["execucao_modo"];
+      horarios_disparo: string[];
     }>
   ) {
     setSaving(true);
@@ -714,6 +723,46 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         </label>
         <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
           Depois de todos os passos, o lead é arquivado se continuar sem responder neste prazo (padrão: 7 dias).
+        </p>
+      </div>
+
+      <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
+        <span style={rfLabelStyle()}>Horários de envio (Brasil)</span>
+        <p style={{ margin: "4px 0 8px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+          O follow-up só dispara nestes horários (janela de ~20 min cada). Fora disso, nenhuma mensagem automática —
+          reduz risco de spam e reclamações.
+        </p>
+        <input
+          id="followup-horarios-disparo"
+          type="text"
+          placeholder="09:00, 14:00, 18:00"
+          value={(config?.horarios_disparo ?? HORARIOS_DISPARO_PADRAO).join(", ")}
+          disabled={loading || saving || !config}
+          onChange={(e) => {
+            const parts = e.target.value
+              .split(/[,;]+/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            atualizarConfigLocal({ horarios_disparo: parts.length > 0 ? parts : [...HORARIOS_DISPARO_PADRAO] });
+          }}
+          onBlur={(e) => {
+            const parts = e.target.value
+              .split(/[,;]+/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (parts.length === 0) return;
+            void salvarConfig({
+              execucao_modo: "janela_horaria",
+              horarios_disparo: parts,
+            });
+          }}
+          style={{ ...rfInputStyle(), width: "100%" }}
+        />
+        <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_TEXT_MUTED }}>
+          Modo:{" "}
+          <strong style={{ color: RF_TEXT_SECONDARY }}>
+            {config?.execucao_modo === "continuo" ? "contínuo (avançado)" : "janela horária (recomendado)"}
+          </strong>
         </p>
       </div>
 

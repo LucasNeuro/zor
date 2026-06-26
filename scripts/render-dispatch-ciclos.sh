@@ -57,7 +57,7 @@ if [ -z "$followup_url" ]; then
 fi
 
 if [ -n "$followup_url" ]; then
-      skip_followup="${DISPATCH_FOLLOWUP_ENABLED:-0}"
+      skip_followup="${DISPATCH_FOLLOWUP_ENABLED:-1}"
   case "$skip_followup" in
     0|false|FALSE|off|OFF|no|NO)
       echo "render-dispatch-ciclos: followup-whatsapp skipped (DISPATCH_FOLLOWUP_ENABLED=$skip_followup)"

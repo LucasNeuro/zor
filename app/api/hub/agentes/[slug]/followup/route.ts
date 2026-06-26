@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
 import { reativarFollowupLeadsAgente } from "@/lib/hub/followup-lead-state";
+import { normalizarHorariosDisparoInput } from "@/lib/hub/followup-janela";
 import { validarAtrasoPasso, validarHoraDia } from "@/lib/hub/followup-types";
 import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 import { WA_LIVE_STATUSES } from "@/lib/whatsapp/resolver-linha-whatsapp";
@@ -100,6 +101,8 @@ export async function PATCH(
     gatilho_horas?: number;
     gatilho_minutos?: number;
     gatilho_hora_dia?: string | null;
+    execucao_modo?: string;
+    horarios_disparo?: string[];
   };
   try {
     body = await request.json();
@@ -159,6 +162,23 @@ export async function PATCH(
     } else {
       patch.gatilho_hora_dia = null;
     }
+  }
+  if (body.execucao_modo != null) {
+    const m = String(body.execucao_modo);
+    if (m !== "continuo" && m !== "janela_horaria") {
+      return NextResponse.json({ error: "execucao_modo inválido." }, { status: 400 });
+    }
+    patch.execucao_modo = m;
+  }
+  if (body.horarios_disparo !== undefined) {
+    const horarios = normalizarHorariosDisparoInput(body.horarios_disparo);
+    if (!horarios) {
+      return NextResponse.json(
+        { error: "horarios_disparo inválido — use lista HH:MM (ex. 09:00, 14:00)." },
+        { status: 400 }
+      );
+    }
+    patch.horarios_disparo = horarios;
   }
 
   if (

@@ -33,8 +33,8 @@
 # --- Cron Job (`dispatch-ciclos-cron`) ---
 # Minimal Docker image (`curl`) runs `scripts/render-dispatch-ciclos.sh` every schedule tick (UTC).
 # O script chama: dispatch-ciclos, process-whatsapp-jobs e followup-whatsapp (backup ao worker).
-# Follow-up: só o worker `whatsapp-job-worker` (FOLLOWUP_POLL_MS, default 60s).
-# Cron não chama followup-whatsapp por padrão (DISPATCH_FOLLOWUP_ENABLED=0).
+# Follow-up: cron a cada 15 min (só envia dentro das janelas HH:MM no CRM).
+# Worker WhatsApp não roda follow-up (FOLLOWUP_WORKER_ENABLED=0).
 # Inherits CRON_SECRET + NEXT_PUBLIC_APP_URL from the web service via `fromService`.
 # Optional override on the cron service (Dashboard): DISPATCH_CICLOS_URL — full URL including
 # `/api/cron/dispatch-ciclos` (otherwise NEXT_PUBLIC_APP_URL from the web service is enough).
@@ -85,7 +85,7 @@ services:
       - key: FOLLOWUP_POLL_MS
         value: "60000"
       - key: FOLLOWUP_WORKER_ENABLED
-        value: "1"
+        value: "0"
       - key: WHATSAPP_JOB_PROCESSOR
         value: worker_only
       - key: MISTRAL_CHAT_TIMEOUT_MS
@@ -139,7 +139,7 @@ services:
       - key: FOLLOWUP_POLL_MS
         value: "60000"
       - key: FOLLOWUP_WORKER_ENABLED
-        value: "1"
+        value: "0"
       - key: MISTRAL_CHAT_TIMEOUT_MS
         value: "30000"
       - key: MISTRAL_CHAT_RETRIES
@@ -149,7 +149,7 @@ services:
     name: dispatch-ciclos-cron
     runtime: docker
     plan: starter
-    schedule: "*/5 * * * *"
+    schedule: "*/15 * * * *"
     dockerfilePath: ./scripts/Dockerfile.dispatch-ciclos-cron
     dockerContext: ./scripts
     dockerCommand: /bin/sh /app/render-dispatch-ciclos.sh
@@ -165,4 +165,4 @@ services:
           name: escritorio-virtual
           envVarKey: NEXT_PUBLIC_APP_URL
       - key: DISPATCH_FOLLOWUP_ENABLED
-        value: "0"
+        value: "1"

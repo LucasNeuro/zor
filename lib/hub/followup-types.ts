@@ -2,12 +2,18 @@ export type FollowupTipoConteudo = "texto" | "imagem" | "texto_imagem";
 
 export type FollowupGatilhoTipo = "silencio" | "horario";
 
+export type FollowupExecucaoModo = "continuo" | "janela_horaria";
+
 export type HubAgenteFollowupConfig = {
   id: string;
   tenant_id: string | null;
   agente_slug: string;
   ativo: boolean;
   arquivar_apos_dias: number;
+  /** continuo = poll 24/7; janela_horaria = só nos horários de horarios_disparo (recomendado). */
+  execucao_modo?: FollowupExecucaoModo;
+  /** HH:MM America/Sao_Paulo — ex. ["09:00","14:00","18:00"]. */
+  horarios_disparo?: string[] | null;
   gatilho_tipo?: FollowupGatilhoTipo;
   gatilho_dias?: number;
   gatilho_horas?: number;

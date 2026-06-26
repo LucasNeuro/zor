@@ -15,16 +15,23 @@ export type MotivoFollowupSkip =
 
 const TZ_PADRAO = "America/Sao_Paulo";
 
-export function horaLocalAtual(timeZone = TZ_PADRAO): { horas: number; minutos: number } {
+export function horaLocalDeDate(
+  date: Date,
+  timeZone = TZ_PADRAO
+): { horas: number; minutos: number } {
   const parts = new Intl.DateTimeFormat("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
     timeZone,
-  }).formatToParts(new Date());
+  }).formatToParts(date);
   const horas = Number.parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
   const minutos = Number.parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
   return { horas, minutos };
+}
+
+export function horaLocalAtual(timeZone = TZ_PADRAO): { horas: number; minutos: number } {
+  return horaLocalDeDate(new Date(), timeZone);
 }
 
 export function parseHoraDia(horaDia: string | null | undefined): { horas: number; minutos: number } | null {
@@ -90,12 +97,14 @@ export function avaliarDisparoPasso(params: {
   const espera = esperaMinutosDoPasso(passo, config, indicePasso);
   const esperaLabel = formatarEsperaMinutos(espera, indicePasso);
 
-  if (params.clienteRespondeuAposUltimoFollowup && enviadosCount > 0) {
-    return {
-      permitido: false,
-      motivo: "cliente_respondeu",
-      detalhe: "cliente respondeu após o último follow-up — cadência reinicia no passo 1",
-    };
+  if (params.clienteRespondeuAposUltimoFollowup) {
+    if (indicePasso > 0 || enviadosCount > 0) {
+      return {
+        permitido: false,
+        motivo: "cliente_respondeu",
+        detalhe: "cliente respondeu após o último follow-up — cadência reinicia no passo 1",
+      };
+    }
   }
 
   if (indicePasso === 0) {

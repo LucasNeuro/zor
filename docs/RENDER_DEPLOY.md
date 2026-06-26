@@ -77,13 +77,13 @@ Ver `docs/env-redis.example`. Mínimo em produção:
 
 Repetir: Supabase, `UAZAPI_BASE_URL`, `UAZAPI_INSTANCE_TOKEN`, `MISTRAL_API_KEY`, `DEFAULT_TENANT_ID`.
 
-Follow-up automático corre **só** neste worker (`FOLLOWUP_POLL_MS=60000`, default 1 min). O Cron Job **não** chama follow-up por padrão (`DISPATCH_FOLLOWUP_ENABLED=0` no `render-dispatch-ciclos.sh`).
+Follow-up automático corre no **Cron Job** a cada 15 min (`DISPATCH_FOLLOWUP_ENABLED=1`). Só envia dentro das **janelas horárias** configuradas no CRM (`execucao_modo=janela_horaria`, default). O worker WhatsApp **não** dispara follow-up (`FOLLOWUP_WORKER_ENABLED=0`).
 
 ### Cron Job `dispatch-ciclos-cron`
 
 Criar via Blueprint (`render.yaml`) ou manualmente: Docker + `scripts/render-dispatch-ciclos.sh`, schedule `*/5 * * * *`, env `CRON_SECRET` + `NEXT_PUBLIC_APP_URL` (herdados do web service).
 
-Aplicar migrações Supabase de follow-up (incl. `20260725140000_hub_followup_espera_minutos.sql`) antes de testar cadências.
+Aplicar migrações Supabase de follow-up (incl. `20260725140000_hub_followup_espera_minutos.sql` e `20260726090000_hub_followup_janela_horaria.sql`) antes de testar cadências.
 
 ---
 

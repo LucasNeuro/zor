@@ -12,9 +12,9 @@ import {
   type HubAgenteFollowupConfig,
   type HubAgenteFollowupPasso,
 } from "@/lib/hub/followup-types";
+import { followupPermitidoNaJanela, horariosDisparoFollowup } from "@/lib/hub/followup-janela";
 import { avaliarDisparoPasso, type MotivoFollowupSkip } from "@/lib/hub/followup-schedule";
 import {
-  backfillUltimaMsgClienteEm,
   clienteRespondeuAposUltimoFollowup,
   followupLeadBloqueadoPorEnvioRecente,
   followupPassoEnviadoRecentemente,
@@ -205,6 +205,28 @@ export async function executarFollowupParaAgente(
     return result;
   }
 
+  const janela = followupPermitidoNaJanela(config);
+  if (!janela.ativa && !options?.simular) {
+    const horarios = horariosDisparoFollowup(config).join(", ");
+    const detalhe = janela.proximo
+      ? `fora da janela — próximo slot ${janela.proximo} (${horarios})`
+      : `fora da janela horária (${horarios})`;
+    if (coletarDiagnostico) {
+      result.diagnosticos!.push({
+        lead_id: "_config",
+        lead_nome: "(agente)",
+        motivo: "aguardando_hora_disparo",
+        detalhe,
+      });
+      result.resumo_skip!.aguardando_hora_disparo =
+        (result.resumo_skip!.aguardando_hora_disparo ?? 0) + 1;
+    }
+    if (options?.registrarTick) {
+      await registrarTickFollowup(supabase, slug, result, options.fonteTick ?? "manual");
+    }
+    return result;
+  }
+
   const { token: instanceToken } = await resolverTokenInstanciaWhatsapp(supabase, slug);
   if (!whatsappConfigured({ instanceToken })) {
     result.erros.push(
@@ -260,11 +282,8 @@ export async function executarFollowupParaAgente(
     let indicePasso = indiceProximoPasso(lead.followup_passo, passosAtivos);
     let passo = passosAtivos[indicePasso];
 
-    let ultimaMsgClienteEm = lead.ultima_msg_cliente_em?.trim() || null;
-    if (!ultimaMsgClienteEm && !options?.simular) {
-      ultimaMsgClienteEm = await backfillUltimaMsgClienteEm(supabase, lead.id);
-      if (ultimaMsgClienteEm) lead.ultima_msg_cliente_em = ultimaMsgClienteEm;
-    }
+    // Só mensagem inbound registrada pelo webhook — sem backfill (evita msg antiga na fila).
+    const ultimaMsgClienteEm = lead.ultima_msg_cliente_em?.trim() || null;
 
     const minutosSilencio = minutosSilencioDesdeUltimaMsgCliente(ultimaMsgClienteEm, agora);
     const horasSilencio = minutosSilencio != null ? minutosSilencio / 60 : null;

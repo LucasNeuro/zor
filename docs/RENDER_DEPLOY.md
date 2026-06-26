@@ -77,7 +77,7 @@ Ver `docs/env-redis.example`. Mínimo em produção:
 
 Repetir: Supabase, `UAZAPI_BASE_URL`, `UAZAPI_INSTANCE_TOKEN`, `MISTRAL_API_KEY`, `DEFAULT_TENANT_ID`.
 
-Follow-up automático corre neste worker (`FOLLOWUP_POLL_MS=60000`, default 1 min). O Cron Job `dispatch-ciclos-cron` também chama `/api/cron/followup-whatsapp` a cada 5 min como backup.
+Follow-up automático corre **só** neste worker (`FOLLOWUP_POLL_MS=60000`, default 1 min). O Cron Job **não** chama follow-up por padrão (`DISPATCH_FOLLOWUP_ENABLED=0` no `render-dispatch-ciclos.sh`).
 
 ### Cron Job `dispatch-ciclos-cron`
 

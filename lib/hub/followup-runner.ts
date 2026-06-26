@@ -16,9 +16,12 @@ import { avaliarDisparoPasso, type MotivoFollowupSkip } from "@/lib/hub/followup
 import {
   backfillUltimaMsgClienteEm,
   clienteRespondeuAposUltimoFollowup,
+  followupLeadBloqueadoPorEnvioRecente,
   followupPassoEnviadoRecentemente,
+  janelaAntiduplicataMinutos,
   minutosSilencioDesdeUltimaMsgCliente,
 } from "@/lib/hub/followup-relogio";
+import { defaultTenantId } from "@/lib/tenant-default";
 import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
 type LeadFollowupRow = {
@@ -288,15 +291,32 @@ export async function executarFollowupParaAgente(
     }
 
     if (!options?.simular && enviadosCount === 0 && lead.ultimo_followup?.trim()) {
-      const { error: repErr } = await supabase
-        .from("hub_leads_crm")
-        .update({ followup_passo: 1 })
-        .eq("id", lead.id);
-      if (!repErr) {
-        enviadosCount = 1;
-        indicePasso = indiceProximoPasso(1, passosAtivos);
-        passo = passosAtivos[indicePasso];
-        lead.followup_passo = 1;
+      const esperaP1 = esperaMinutosDoPasso(passosAtivos[0]!, config, 0);
+      const janelaP1 = janelaAntiduplicataMinutos(esperaP1, 0);
+      const minsFu = minutosDesdeUltimoFollowup;
+
+      if (minsFu != null && minsFu < janelaP1) {
+        const { error: syncErr } = await supabase
+          .from("hub_leads_crm")
+          .update({ followup_passo: 1 })
+          .eq("id", lead.id);
+        if (!syncErr) {
+          enviadosCount = 1;
+          indicePasso = indiceProximoPasso(1, passosAtivos);
+          passo = passosAtivos[indicePasso];
+          lead.followup_passo = 1;
+        }
+      } else {
+        const { error: repErr } = await supabase
+          .from("hub_leads_crm")
+          .update({ followup_passo: 1 })
+          .eq("id", lead.id);
+        if (!repErr) {
+          enviadosCount = 1;
+          indicePasso = indiceProximoPasso(1, passosAtivos);
+          passo = passosAtivos[indicePasso];
+          lead.followup_passo = 1;
+        }
       }
     }
 
@@ -362,38 +382,40 @@ export async function executarFollowupParaAgente(
 
     if (!options?.simular) {
       const esperaPasso = esperaMinutosDoPasso(passo, config, indicePasso);
-      const janelaDuplicata =
-        indicePasso === 0 ? Math.max(esperaPasso, 10) : Math.max(esperaPasso - 1, 2);
-      if (
-        indicePasso === 0 &&
-        enviadosCount === 0 &&
-        minutosDesdeUltimoFollowup != null &&
-        minutosDesdeUltimoFollowup < janelaDuplicata
-      ) {
+      const janelaDuplicata = janelaAntiduplicataMinutos(esperaPasso, indicePasso);
+
+      const bloqueioLead = followupLeadBloqueadoPorEnvioRecente({
+        minutosDesdeUltimoFollowup,
+        enviadosCount,
+        indicePasso,
+        esperaPasso,
+      });
+      if (bloqueioLead.bloqueado) {
         if (coletarDiagnostico) {
           registrarSkip(result, {
             lead_id: lead.id,
             lead_nome: lead.nome,
             motivo: "passo_ja_enviado",
-            detalhe: `passo 1 enviado há ${Math.floor(minutosDesdeUltimoFollowup)} min`,
+            detalhe: bloqueioLead.detalhe,
             proximo_passo: posicaoPasso,
           });
         }
         continue;
       }
-      const duplicado = await followupPassoEnviadoRecentemente(
+
+      const duplicadoFila = await followupPassoEnviadoRecentemente(
         supabase,
         lead.id,
         passo.id,
         janelaDuplicata
       );
-      if (duplicado) {
+      if (duplicadoFila) {
         if (coletarDiagnostico) {
           registrarSkip(result, {
             lead_id: lead.id,
             lead_nome: lead.nome,
             motivo: "passo_ja_enviado",
-            detalhe: `passo ${posicaoPasso} já enviado recentemente`,
+            detalhe: `passo ${posicaoPasso} já enviado recentemente (fila CRM)`,
             proximo_passo: posicaoPasso,
           });
         }
@@ -450,7 +472,7 @@ export async function executarFollowupParaAgente(
     const tenantId =
       lead.tenant_id?.trim() ||
       config.tenant_id?.trim() ||
-      null;
+      defaultTenantId();
 
     const { error: filaErr } = await insertFilaMensagemCompat(supabase, {
       lead_id: lead.id,

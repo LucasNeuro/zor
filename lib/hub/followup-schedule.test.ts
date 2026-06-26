@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { avaliarDisparoPasso } from "@/lib/hub/followup-schedule";
-import { minutosSilencioDesdeUltimaMsgCliente, parseFollowupTimestamp } from "@/lib/hub/followup-relogio";
+import { minutosSilencioDesdeUltimaMsgCliente, parseFollowupTimestamp, followupLeadBloqueadoPorEnvioRecente, janelaAntiduplicataMinutos } from "@/lib/hub/followup-relogio";
 import type { HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import {
   corpoTemplateFollowupPasso,
@@ -24,6 +24,33 @@ const passoBase: HubAgenteFollowupPasso = {
   legenda_imagem: null,
   ativo: true,
 };
+
+describe("followup anti-duplicata no lead", () => {
+  it("bloqueia passo 1 quando ultimo_followup recente e contador zerado", () => {
+    const r = followupLeadBloqueadoPorEnvioRecente({
+      minutosDesdeUltimoFollowup: 3,
+      enviadosCount: 0,
+      indicePasso: 0,
+      esperaPasso: 5,
+    });
+    expect(r.bloqueado).toBe(true);
+  });
+
+  it("libera passo 2 após espera_minutos cumprida", () => {
+    const r = followupLeadBloqueadoPorEnvioRecente({
+      minutosDesdeUltimoFollowup: 120,
+      enviadosCount: 1,
+      indicePasso: 1,
+      esperaPasso: 120,
+    });
+    expect(r.bloqueado).toBe(false);
+  });
+
+  it("janela passo 1 mínimo 10 min", () => {
+    expect(janelaAntiduplicataMinutos(2, 0)).toBe(10);
+    expect(janelaAntiduplicataMinutos(30, 0)).toBe(30);
+  });
+});
 
 describe("followup relógio do cliente", () => {
   it("calcula minutos desde ultima_msg_cliente_em", () => {

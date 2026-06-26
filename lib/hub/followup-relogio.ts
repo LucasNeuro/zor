@@ -65,6 +65,49 @@ export function clienteRespondeuAposUltimoFollowup(
   return msg.getTime() > fu.getTime();
 }
 
+/** Janela mínima anti-duplicata por passo (independente da fila CRM). */
+export function janelaAntiduplicataMinutos(esperaPasso: number, indicePasso: number): number {
+  const espera = Math.max(1, Math.floor(esperaPasso));
+  if (indicePasso === 0) return Math.max(espera, 10);
+  return Math.max(espera, 5);
+}
+
+/**
+ * Bloqueia reenvio usando `ultimo_followup` no lead — funciona mesmo quando
+ * `hub_fila_mensagens` falha (ex.: tenant_id ausente).
+ */
+export function followupLeadBloqueadoPorEnvioRecente(params: {
+  minutosDesdeUltimoFollowup: number | null;
+  enviadosCount: number;
+  indicePasso: number;
+  esperaPasso: number;
+}): { bloqueado: boolean; detalhe?: string } {
+  const { minutosDesdeUltimoFollowup, enviadosCount, indicePasso, esperaPasso } = params;
+  if (minutosDesdeUltimoFollowup == null) return { bloqueado: false };
+
+  const janela = janelaAntiduplicataMinutos(esperaPasso, indicePasso);
+  const mins = Math.floor(minutosDesdeUltimoFollowup);
+
+  if (minutosDesdeUltimoFollowup >= janela) return { bloqueado: false };
+
+  if (indicePasso === 0 && enviadosCount === 0) {
+    return { bloqueado: true, detalhe: `passo 1 enviado há ${mins} min` };
+  }
+
+  if (enviadosCount > indicePasso) {
+    return { bloqueado: true, detalhe: `follow-up recente há ${mins} min` };
+  }
+
+  if (enviadosCount === indicePasso + 1 && minutosDesdeUltimoFollowup < esperaPasso) {
+    return {
+      bloqueado: true,
+      detalhe: `passo ${indicePasso + 1}: ${mins}/${esperaPasso} min desde o anterior`,
+    };
+  }
+
+  return { bloqueado: false };
+}
+
 /** Evita reenvio do mesmo passo (cron + worker ou falha ao gravar contador). */
 export async function followupPassoEnviadoRecentemente(
   supabase: SupabaseClient,
@@ -72,7 +115,7 @@ export async function followupPassoEnviadoRecentemente(
   passoId: string,
   janelaMinutos: number
 ): Promise<boolean> {
-  const janela = Math.max(2, Math.floor(janelaMinutos));
+  const janela = Math.max(5, Math.floor(janelaMinutos));
   const limite = new Date(Date.now() - janela * 60_000).toISOString();
   const { data, error } = await supabase
     .from("hub_fila_mensagens")

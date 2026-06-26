@@ -54,7 +54,7 @@ export function resolverRoteamentoPlaybookAgente(ctx: AgentePlaybookRoutingConte
       playbookOnly: false,
       cargoComPlaybook: true,
       proibirFallbackLegado: true,
-      bloquearIa: true,
+      bloquearIa: false,
       motivo: "cargo_com_playbook_fluxo_ativo",
     };
   }
@@ -65,7 +65,7 @@ export function resolverRoteamentoPlaybookAgente(ctx: AgentePlaybookRoutingConte
       playbookOnly: false,
       cargoComPlaybook: true,
       proibirFallbackLegado: true,
-      bloquearIa: true,
+      bloquearIa: false,
       motivo: "cargo_com_playbook_aguardando_fluxo",
     };
   }

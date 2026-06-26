@@ -5,6 +5,7 @@ import { resetFollowupAoReceberMensagemCliente } from "@/lib/hub/followup-lead-s
 import { parseFollowupTimestamp } from "@/lib/hub/followup-relogio";
 import { respostaIaJaEnviadaRecente } from "@/lib/whatsapp/anti-duplicata-resposta";
 import { prepararTextoIaParaWhatsapp } from "@/lib/whatsapp/formatar-texto-whatsapp";
+import { mensagemFallbackOperacionalAoLead } from "@/lib/whatsapp/fallback-ia-policy";
 import {
   humanoSlugFromLead,
   mapGroupMessageSender,
@@ -70,24 +71,29 @@ async function enviarFallbackIA(params: {
   waSendOpts?: { instanceToken?: string | null };
   tenantId?: string;
 }) {
-  const mensagem = "Recebi sua mensagem e já encaminhei para revisão do time. Retornaremos em breve por aqui.";
+  const mensagem = mensagemFallbackOperacionalAoLead({
+    motivo: params.motivo,
+    mensagemOriginal: params.mensagemOriginal,
+  });
   const tenantId = params.tenantId?.trim() || defaultTenantId();
 
   try {
-    const filaRow = {
-      lead_id: params.leadId,
-      agente_id: params.agenteSlug || "sdr",
-      canal: "whatsapp",
-      direcao: "saida",
-      conteudo: mensagem,
-      status: "enviado",
-      tenant_id: tenantId,
-      metadata: { feito_por: "fallback_ia", motivo: params.motivo },
-    };
-    let filaIns = await params.supabase.from("hub_fila_mensagens").insert(filaRow);
-    if (filaIns.error && isMissingPgColumn(filaIns.error, "tenant_id")) {
-      const { tenant_id: _t, ...semTenant } = filaRow;
-      filaIns = await params.supabase.from("hub_fila_mensagens").insert(semTenant);
+    if (mensagem) {
+      const filaRow = {
+        lead_id: params.leadId,
+        agente_id: params.agenteSlug || "sdr",
+        canal: "whatsapp",
+        direcao: "saida",
+        conteudo: mensagem,
+        status: "enviado",
+        tenant_id: tenantId,
+        metadata: { feito_por: "fallback_ia", motivo: params.motivo },
+      };
+      let filaIns = await params.supabase.from("hub_fila_mensagens").insert(filaRow);
+      if (filaIns.error && isMissingPgColumn(filaIns.error, "tenant_id")) {
+        const { tenant_id: _t, ...semTenant } = filaRow;
+        filaIns = await params.supabase.from("hub_fila_mensagens").insert(semTenant);
+      }
     }
   } catch (e) {
     console.error("[WHATSAPP][PROCESSOR][FALLBACK] Erro ao gravar fila:", e);
@@ -98,7 +104,7 @@ async function enviarFallbackIA(params: {
       agente_slug: params.agenteSlug || "diretor_geral_ia",
       tipo: "importante",
       titulo: "Fallback IA acionado",
-      mensagem: `Lead ${params.telefone} recebeu resposta de fallback. Motivo: ${params.motivo}`,
+      mensagem: `Lead ${params.telefone} — motivo: ${params.motivo}${mensagem ? " (mensagem enviada ao lead)" : " (sem mensagem ao lead)"}`,
       lead_id: params.leadId,
       dados: { mensagem_original: params.mensagemOriginal.slice(0, 200) },
     });
@@ -106,7 +112,9 @@ async function enviarFallbackIA(params: {
     console.error("[WHATSAPP][PROCESSOR][FALLBACK] Erro ao registrar alerta:", e);
   }
 
-  await enviarMensagemWhatsApp(params.telefone, mensagem, params.waSendOpts);
+  if (mensagem) {
+    await enviarMensagemWhatsApp(params.telefone, mensagem, params.waSendOpts);
+  }
 }
 
 async function gravarMensagemInboundSemIa(params: {

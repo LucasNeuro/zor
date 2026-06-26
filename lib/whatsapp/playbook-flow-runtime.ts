@@ -2041,6 +2041,9 @@ export async function processarPlaybookInbound(params: {
   }
 
   if (temPlaybookPublicado) {
+    if (!routing.bloquearIa) {
+      return { handled: false, motivo: "fluxo_json_ausente_permitir_ia" };
+    }
     console.warn("[playbook-flow] published playbook without executable flow", {
       agente: params.agenteSlug,
       lead_id: params.leadId,

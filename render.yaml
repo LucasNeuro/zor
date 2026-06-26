@@ -32,6 +32,8 @@
 #
 # --- Cron Job (`dispatch-ciclos-cron`) ---
 # Minimal Docker image (`curl`) runs `scripts/render-dispatch-ciclos.sh` every schedule tick (UTC).
+# O script chama: dispatch-ciclos, process-whatsapp-jobs e followup-whatsapp (backup ao worker).
+# Follow-up principal: worker `whatsapp-job-worker` com FOLLOWUP_POLL_MS (default 60s).
 # Inherits CRON_SECRET + NEXT_PUBLIC_APP_URL from the web service via `fromService`.
 # Optional override on the cron service (Dashboard): DISPATCH_CICLOS_URL — full URL including
 # `/api/cron/dispatch-ciclos` (otherwise NEXT_PUBLIC_APP_URL from the web service is enough).
@@ -78,6 +80,10 @@ services:
       - key: WORKER_BATCH_SIZE
         value: "10"
       - key: WORKER_CONCURRENCY
+        value: "1"
+      - key: FOLLOWUP_POLL_MS
+        value: "60000"
+      - key: FOLLOWUP_WORKER_ENABLED
         value: "1"
       - key: WHATSAPP_JOB_PROCESSOR
         value: worker_only
@@ -128,6 +134,10 @@ services:
       - key: WORKER_BATCH_SIZE
         value: "10"
       - key: WORKER_CONCURRENCY
+        value: "1"
+      - key: FOLLOWUP_POLL_MS
+        value: "60000"
+      - key: FOLLOWUP_WORKER_ENABLED
         value: "1"
       - key: MISTRAL_CHAT_TIMEOUT_MS
         value: "30000"

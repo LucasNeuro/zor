@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireHubTenantId } from "@/lib/crm/hub-tenant-api";
 import { obterOuCriarFollowupConfig } from "@/lib/hub/followup-db";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
-import { validarAtrasoPasso } from "@/lib/hub/followup-types";
+import { validarAtrasoPasso, minutosToLegacyAtraso } from "@/lib/hub/followup-types";
 import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 
 function db() {
@@ -47,15 +47,26 @@ export async function POST(
   }
 
   const ordem = Number.parseInt(String(body.ordem ?? ""), 10);
-  const atraso_dias = Number.parseInt(String(body.atraso_dias ?? "0"), 10);
-  const atraso_horas = Number.parseInt(String(body.atraso_horas ?? "0"), 10);
-  const atraso_minutos = Number.parseInt(String(body.atraso_minutos ?? "0"), 10);
+  let espera_minutos: number;
+  if (body.espera_minutos != null) {
+    espera_minutos = Number.parseInt(String(body.espera_minutos), 10);
+    if (!Number.isFinite(espera_minutos) || espera_minutos < 1 || espera_minutos > 525_600) {
+      return NextResponse.json({ error: "espera_minutos inválido (1–525600)." }, { status: 400 });
+    }
+  } else {
+    const atraso_dias = Number.parseInt(String(body.atraso_dias ?? "0"), 10);
+    const atraso_horas = Number.parseInt(String(body.atraso_horas ?? "0"), 10);
+    const atraso_minutos = Number.parseInt(String(body.atraso_minutos ?? "0"), 10);
+    const atrasoErr = validarAtrasoPasso(atraso_horas, atraso_minutos, atraso_dias);
+    if (atrasoErr) {
+      return NextResponse.json({ error: atrasoErr }, { status: 400 });
+    }
+    espera_minutos = atraso_dias * 1440 + atraso_horas * 60 + atraso_minutos;
+    if (espera_minutos < 1) espera_minutos = 1;
+  }
+  const leg = minutosToLegacyAtraso(espera_minutos);
   if (!Number.isFinite(ordem) || ordem < 1 || ordem > 24) {
     return NextResponse.json({ error: "ordem inválida (1–24)." }, { status: 400 });
-  }
-  const atrasoErr = validarAtrasoPasso(atraso_horas, atraso_minutos, atraso_dias);
-  if (atrasoErr) {
-    return NextResponse.json({ error: atrasoErr }, { status: 400 });
   }
 
   const tipo = parseTipo(body.tipo_conteudo);
@@ -66,9 +77,10 @@ export async function POST(
     tenant_id: tenantResolved.tenantId,
     agente_slug: slug,
     ordem,
-    atraso_dias,
-    atraso_horas,
-    atraso_minutos,
+    espera_minutos,
+    atraso_dias: leg.atraso_dias,
+    atraso_horas: leg.atraso_horas,
+    atraso_minutos: leg.atraso_minutos,
     tipo_conteudo: tipo,
     texto_template: body.texto_template != null ? String(body.texto_template) : null,
     imagem_url: body.imagem_url != null ? String(body.imagem_url).trim() || null : null,

@@ -1,6 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHubLogger, type HubLogger } from "@/lib/observability/hub-log";
 import { defaultTenantId } from "@/lib/tenant-default";
+import {
+  followupPollMs,
+  followupWorkerEnabled,
+  runFollowupTick,
+} from "@/lib/hub/followup-worker-tick";
 import { avaliarJobDuplicado } from "@/lib/whatsapp/anti-duplicata-resposta";
 import { processarMensagemInboundWhatsapp } from "@/lib/whatsapp/inbound-message-processor";
 import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
@@ -574,10 +579,15 @@ export async function runWhatsappWorkerTick(): Promise<{
 export async function runWhatsappWorker(): Promise<never> {
   const pollMs = workerPollMs();
   const jitterMax = workerMaxJitterMs();
+  const followupMs = followupPollMs();
+  const followupOn = followupWorkerEnabled();
+  let lastFollowupAt = 0;
   const log = createHubLogger("whatsapp_worker", {
     poll_ms: pollMs,
     batch_size: workerBatchSize(),
     concurrency: workerConcurrency(),
+    followup_poll_ms: followupMs,
+    followup_enabled: followupOn,
     mode: "loop",
   });
 
@@ -587,8 +597,16 @@ export async function runWhatsappWorker(): Promise<never> {
     mistral_retries: process.env.MISTRAL_CHAT_RETRIES || null,
   });
 
+  const supabase = followupOn ? supabaseAdmin() : null;
+
   while (true) {
     const result = await runWhatsappWorkerTick();
+
+    if (followupOn && supabase && Date.now() - lastFollowupAt >= followupMs) {
+      lastFollowupAt = Date.now();
+      await runFollowupTick(supabase);
+    }
+
     if (result.claimed === 0 && !result.error) {
       const jitter = jitterMax > 0 ? Math.floor(Math.random() * jitterMax) : 0;
       await sleep(pollMs + jitter);

@@ -1,10 +1,12 @@
-import type { FollowupGatilhoTipo, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import type { FollowupGatilhoTipo, HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import { esperaMinutosDoPasso, formatarEsperaMinutos } from "@/lib/hub/followup-types";
 import { atrasoTotalMinutos, validarHoraDia } from "@/lib/hub/followup-types";
 
 export type MotivoFollowupSkip =
   | "cadencia_concluida"
   | "aguardando_gatilho"
   | "aguardando_atraso_passo"
+  | "aguardando_espera"
   | "aguardando_hora_disparo"
   | "sem_ultimo_followup"
   | "sem_ultima_msg_cliente";
@@ -56,79 +58,47 @@ export function gatilhoSilencioMinutos(config: {
   });
 }
 
-export function gatilhoDisparoPermitido(params: {
-  gatilho_tipo?: FollowupGatilhoTipo | null;
-  gatilho_dias?: number | null;
-  gatilho_horas?: number | null;
-  gatilho_minutos?: number | null;
-  gatilho_hora_dia?: string | null;
-  minutosSilencio: number;
-  disparo_hora_dia?: string | null;
-}): boolean {
-  const minGatilho = gatilhoSilencioMinutos(params);
-  if (minGatilho > 0 && params.minutosSilencio < minGatilho) return false;
-
-  if (params.gatilho_tipo === "horario" && params.gatilho_hora_dia?.trim()) {
-    if (!horaDiaAtingida(params.gatilho_hora_dia)) return false;
-  }
-
-  if (params.disparo_hora_dia?.trim() && !horaDiaAtingida(params.disparo_hora_dia)) {
-    return false;
-  }
-
-  return true;
-}
-
 export type AvaliacaoDisparoPasso = {
   permitido: boolean;
   motivo?: MotivoFollowupSkip;
   detalhe?: string;
 };
 
-/** Primeiro passo: silêncio ≥ gatilho (+ atraso opcional). Demais: tempo desde o passo anterior enviado. */
+/**
+ * Passo 1: espera_minutos = silêncio do cliente (desde ultima_msg_cliente_em).
+ * Passo 2+: espera_minutos = tempo desde ultimo_followup enviado.
+ */
 export function avaliarDisparoPasso(params: {
   indicePasso: number;
   passo: HubAgenteFollowupPasso;
-  gatilho_tipo?: FollowupGatilhoTipo | null;
-  gatilho_dias?: number | null;
-  gatilho_horas?: number | null;
-  gatilho_minutos?: number | null;
-  gatilho_hora_dia?: string | null;
+  config?: Pick<
+    HubAgenteFollowupConfig,
+    "gatilho_tipo" | "gatilho_dias" | "gatilho_horas" | "gatilho_minutos" | "gatilho_hora_dia"
+  >;
   minutosSilencio: number;
   minutosDesdeUltimoFollowup: number | null;
 }): AvaliacaoDisparoPasso {
   const { indicePasso, passo, minutosSilencio, minutosDesdeUltimoFollowup } = params;
-  const atrasoPasso = atrasoTotalMinutos(passo);
-  const gatilhoMin = gatilhoSilencioMinutos(params);
+  const config = params.config ?? {};
+  const espera = esperaMinutosDoPasso(passo, config, indicePasso);
+  const esperaLabel = formatarEsperaMinutos(espera, indicePasso);
 
   if (indicePasso === 0) {
-    if (gatilhoMin > 0 && minutosSilencio < gatilhoMin) {
-      const falta = Math.ceil(gatilhoMin - minutosSilencio);
+    if (minutosSilencio < espera) {
+      const falta = Math.ceil(espera - minutosSilencio);
       return {
         permitido: false,
-        motivo: "aguardando_gatilho",
-        detalhe: `faltam ${falta} min desde a última msg do cliente`,
+        motivo: "aguardando_espera",
+        detalhe: `passo 1: faltam ${falta} min (${esperaLabel} sem resposta do cliente)`,
       };
     }
 
-    if (params.gatilho_tipo === "horario" && params.gatilho_hora_dia?.trim()) {
-      if (!horaDiaAtingida(params.gatilho_hora_dia)) {
+    if (config.gatilho_tipo === "horario" && config.gatilho_hora_dia?.trim()) {
+      if (!horaDiaAtingida(config.gatilho_hora_dia)) {
         return {
           permitido: false,
           motivo: "aguardando_hora_disparo",
-          detalhe: `gatilho às ${params.gatilho_hora_dia.trim()}`,
-        };
-      }
-    }
-
-    if (atrasoPasso > 0) {
-      const totalSilencio = gatilhoMin + atrasoPasso;
-      if (minutosSilencio < totalSilencio) {
-        const falta = Math.ceil(totalSilencio - minutosSilencio);
-        return {
-          permitido: false,
-          motivo: "aguardando_atraso_passo",
-          detalhe: `passo 1: faltam ${falta} min (total ${totalSilencio} min desde a última msg do cliente)`,
+          detalhe: `gatilho às ${config.gatilho_hora_dia.trim()}`,
         };
       }
     }
@@ -148,12 +118,12 @@ export function avaliarDisparoPasso(params: {
     return { permitido: false, motivo: "sem_ultimo_followup" };
   }
 
-  if (atrasoPasso > 0 && minutosDesdeUltimoFollowup < atrasoPasso) {
-    const falta = Math.ceil(atrasoPasso - minutosDesdeUltimoFollowup);
+  if (minutosDesdeUltimoFollowup < espera) {
+    const falta = Math.ceil(espera - minutosDesdeUltimoFollowup);
     return {
       permitido: false,
-      motivo: "aguardando_atraso_passo",
-      detalhe: `faltam ${falta} min após o passo anterior`,
+      motivo: "aguardando_espera",
+      detalhe: `passo ${indicePasso + 1}: faltam ${falta} min (${esperaLabel} após o passo anterior)`,
     };
   }
 

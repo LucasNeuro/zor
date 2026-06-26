@@ -23,6 +23,8 @@ export type HubAgenteFollowupPasso = {
   tenant_id: string | null;
   agente_slug: string;
   ordem: number;
+  /** Minutos de espera: passo 1 = silêncio do cliente; passo 2+ = após passo anterior. */
+  espera_minutos?: number | null;
   atraso_dias?: number;
   atraso_horas: number;
   atraso_minutos: number;
@@ -143,6 +145,81 @@ export function formatarAtrasoPasso(p: AtrasoCampos): string {
   return parts.join(" ");
 }
 
+export function minutosToLegacyAtraso(totalMinutos: number): {
+  atraso_dias: number;
+  atraso_horas: number;
+  atraso_minutos: number;
+} {
+  const m = Math.max(1, Math.min(525_600, Math.floor(totalMinutos)));
+  const atraso_dias = Math.floor(m / 1440);
+  const rest = m % 1440;
+  const atraso_horas = Math.floor(rest / 60);
+  const atraso_minutos = rest % 60;
+  return { atraso_dias, atraso_horas, atraso_minutos };
+}
+
+export function legacyAtrasoToMinutos(p: AtrasoCampos): number {
+  return Math.max(0, atrasoTotalMinutos(p));
+}
+
+export function esperaMinutosDoPasso(
+  passo: HubAgenteFollowupPasso,
+  config: Pick<
+    HubAgenteFollowupConfig,
+    "gatilho_dias" | "gatilho_horas" | "gatilho_minutos"
+  >,
+  indicePasso: number
+): number {
+  if (passo.espera_minutos != null && passo.espera_minutos >= 1) {
+    return passo.espera_minutos;
+  }
+  const atraso = legacyAtrasoToMinutos(passo);
+  if (indicePasso === 0) {
+    const gatilho =
+      (config.gatilho_dias ?? 0) * 1440 +
+      (config.gatilho_horas ?? 0) * 60 +
+      (config.gatilho_minutos ?? 0);
+    return Math.max(1, gatilho + atraso);
+  }
+  return Math.max(1, atraso);
+}
+
+export function formatarEsperaMinutos(minutos: number, indicePasso = 0): string {
+  const m = Math.max(1, Math.floor(minutos));
+  if (m < 60) return `${m} min`;
+  if (m % 1440 === 0) {
+    const d = m / 1440;
+    return d === 1 ? "1 dia" : `${d} dias`;
+  }
+  if (m % 60 === 0) {
+    const h = m / 60;
+    return h === 1 ? "1 h" : `${h} h`;
+  }
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${r} min`;
+  return r > 0 ? `${h} h ${r} min` : `${h} h`;
+}
+
+export function formatarEsperaPasso(
+  passo: HubAgenteFollowupPasso,
+  config: Pick<
+    HubAgenteFollowupConfig,
+    "gatilho_dias" | "gatilho_horas" | "gatilho_minutos"
+  >,
+  indicePasso: number
+): string {
+  return formatarEsperaMinutos(esperaMinutosDoPasso(passo, config, indicePasso), indicePasso);
+}
+
+export function validarEsperaMinutos(minutos: number): string | null {
+  if (!Number.isFinite(minutos)) return "Minutos inválidos.";
+  const m = Math.floor(minutos);
+  if (m < 1) return "Mínimo 1 minuto.";
+  if (m > 525_600) return "Máximo 525600 minutos (~1 ano).";
+  return null;
+}
+
 export function formatarGatilhoConfig(config: Pick<
   HubAgenteFollowupConfig,
   "gatilho_tipo" | "gatilho_dias" | "gatilho_horas" | "gatilho_minutos" | "gatilho_hora_dia"
@@ -170,32 +247,39 @@ export function formatarGatilhoConfig(config: Pick<
 
 export const FOLLOWUP_PASSOS_DEFAULT: Array<{
   ordem: number;
+  espera_minutos: number;
   atraso_horas: number;
   tipo_conteudo: FollowupTipoConteudo;
   texto_template: string;
 }> = [
   {
     ordem: 1,
-    atraso_horas: 2,
+    espera_minutos: 5,
+    atraso_horas: 0,
     tipo_conteudo: "texto",
     texto_template:
       "Olá {nome}, passando para saber se ainda posso ajudar com o seu pedido. Estou à disposição!",
   },
   {
     ordem: 2,
-    atraso_horas: 24,
+    espera_minutos: 720,
+    atraso_horas: 12,
     tipo_conteudo: "texto",
     texto_template:
       "Oi {nome}, não tive retorno desde a nossa última conversa. Posso esclarecer alguma dúvida?",
   },
   {
     ordem: 3,
+    espera_minutos: 2880,
     atraso_horas: 48,
     tipo_conteudo: "texto",
     texto_template:
       "{nome}, este é um último lembrete. Se preferir, responda quando for melhor para você.",
   },
 ];
+
+/** Atalhos rápidos na UI (minutos). */
+export const FOLLOWUP_ESPERA_PRESETS = [5, 30, 60, 720, 1440, 2880] as const;
 
 export function interpolarTemplateFollowup(
   template: string,
@@ -213,9 +297,28 @@ export function configGatilhoPadrao(): Pick<
   return {
     gatilho_tipo: "silencio",
     gatilho_dias: 0,
-    gatilho_horas: 2,
+    gatilho_horas: 0,
     gatilho_minutos: 0,
     gatilho_hora_dia: null,
     arquivar_apos_dias: 7,
   };
+}
+
+/** Resumo da cadência para a modal (passo 1 define o primeiro disparo). */
+export function formatarResumoCadencia(
+  passos: HubAgenteFollowupPasso[],
+  config: Pick<
+    HubAgenteFollowupConfig,
+    "gatilho_dias" | "gatilho_horas" | "gatilho_minutos" | "arquivar_apos_dias"
+  >
+): string {
+  const ativos = passosAtivosOrdenados(passos);
+  if (ativos.length === 0) return "sem passos activos";
+  const p1 = formatarEsperaPasso(ativos[0]!, config, 0);
+  const parts = [`1.º passo: ${p1} sem resposta`];
+  if (ativos.length > 1) {
+    parts.push(`${ativos.length} passos`);
+  }
+  parts.push(`arquivar ${config.arquivar_apos_dias ?? 7}d`);
+  return parts.join(" · ");
 }

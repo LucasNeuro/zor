@@ -1,7 +1,7 @@
 "use client";
 
 import type { FollowupTipoConteudo, HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { configGatilhoPadrao, formatarAtrasoPasso, formatarGatilhoConfig } from "@/lib/hub/followup-types";
+import { configGatilhoPadrao, esperaMinutosDoPasso, formatarEsperaMinutos, formatarEsperaPasso } from "@/lib/hub/followup-types";
 
 export const FOLLOWUP_START_NODE_ID = "__followup_start__";
 
@@ -26,26 +26,29 @@ export function configToStartNodeData(config: HubAgenteFollowupConfig | null | u
   const c = config ?? padrao;
   return {
     kind: "start",
-    gatilhoLabel: formatarGatilhoConfig(c),
-    textoPreview: `Arquivar em ${c.arquivar_apos_dias ?? padrao.arquivar_apos_dias} dia(s)`,
+    gatilhoLabel: "Início da cadência",
+    textoPreview: `Arquivar lead após ${c.arquivar_apos_dias ?? padrao.arquivar_apos_dias} dia(s) sem resposta`,
   };
 }
 
 export function passoToNodeData(
   passo: HubAgenteFollowupPasso,
-  posicao?: number
+  posicao?: number,
+  config?: HubAgenteFollowupConfig | null
 ): FollowupFlowNodeData {
   const texto =
     passo.tipo_conteudo === "imagem"
       ? passo.legenda_imagem || "Imagem sem legenda"
       : passo.texto_template || "Sem mensagem";
+  const idx = (posicao ?? passo.ordem) - 1;
+  const cfg = config ?? configGatilhoPadrao();
 
   return {
     kind: passo.tipo_conteudo,
     passoId: passo.id,
     ordem: passo.ordem,
     posicao: posicao ?? passo.ordem,
-    atrasoLabel: formatarAtrasoPasso(passo),
+    atrasoLabel: formatarEsperaPasso(passo, cfg, Math.max(0, idx)),
     textoPreview: texto,
     imagemUrl: passo.imagem_url,
     ativo: passo.ativo,
@@ -64,6 +67,7 @@ export function passoPersistenciaSnapshot(p: HubAgenteFollowupPasso) {
   return {
     id: p.id,
     ordem: p.ordem,
+    espera_minutos: p.espera_minutos ?? null,
     atraso_dias: p.atraso_dias ?? 0,
     atraso_horas: p.atraso_horas,
     atraso_minutos: p.atraso_minutos ?? 0,

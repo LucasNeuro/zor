@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   FOLLOWUP_PASSOS_DEFAULT,
+  minutosToLegacyAtraso,
   passosAtivosOrdenados,
   passosEnviadosCount,
   type HubAgenteFollowupConfig,
@@ -46,17 +47,22 @@ export async function obterOuCriarFollowupConfig(
   if (error || !criado) return null;
 
   const config = criado as HubAgenteFollowupConfig;
-  const passosInsert = FOLLOWUP_PASSOS_DEFAULT.map((p) => ({
-    config_id: config.id,
-    tenant_id: tenantId,
-    agente_slug: agenteSlug,
-    ordem: p.ordem,
-    atraso_horas: p.atraso_horas,
-    atraso_minutos: 0,
-    tipo_conteudo: p.tipo_conteudo,
-    texto_template: p.texto_template,
-    ativo: true,
-  }));
+  const passosInsert = FOLLOWUP_PASSOS_DEFAULT.map((p) => {
+    const leg = minutosToLegacyAtraso(p.espera_minutos);
+    return {
+      config_id: config.id,
+      tenant_id: tenantId,
+      agente_slug: agenteSlug,
+      ordem: p.ordem,
+      espera_minutos: p.espera_minutos,
+      atraso_dias: leg.atraso_dias,
+      atraso_horas: leg.atraso_horas,
+      atraso_minutos: leg.atraso_minutos,
+      tipo_conteudo: p.tipo_conteudo,
+      texto_template: p.texto_template,
+      ativo: true,
+    };
+  });
 
   const { data: passos } = await supabase
     .from("hub_agente_followup_passo")

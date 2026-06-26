@@ -231,11 +231,7 @@ export async function executarFollowupParaAgente(
     const avaliacao = avaliarDisparoPasso({
       indicePasso,
       passo,
-      gatilho_tipo: config.gatilho_tipo ?? "silencio",
-      gatilho_dias: config.gatilho_dias,
-      gatilho_horas: config.gatilho_horas,
-      gatilho_minutos: config.gatilho_minutos,
-      gatilho_hora_dia: config.gatilho_hora_dia,
+      config,
       minutosSilencio,
       minutosDesdeUltimoFollowup,
     });

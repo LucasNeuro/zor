@@ -9,6 +9,7 @@ const passoBase: HubAgenteFollowupPasso = {
   tenant_id: null,
   agente_slug: "teste",
   ordem: 1,
+  espera_minutos: 5,
   atraso_dias: 0,
   atraso_horas: 0,
   atraso_minutos: 0,
@@ -37,53 +38,52 @@ describe("followup relógio do cliente", () => {
   });
 });
 
-describe("avaliarDisparoPasso — passo 1", () => {
-  it("dispara após gatilho 5 min com atraso extra 0", () => {
+describe("avaliarDisparoPasso — passo 1 (espera_minutos)", () => {
+  it("dispara após 5 min de silêncio", () => {
     const r = avaliarDisparoPasso({
       indicePasso: 0,
       passo: passoBase,
-      gatilho_minutos: 5,
       minutosSilencio: 5,
       minutosDesdeUltimoFollowup: null,
     });
     expect(r.permitido).toBe(true);
   });
 
-  it("aguarda gatilho antes dos 5 min", () => {
+  it("aguarda antes dos 5 min", () => {
     const r = avaliarDisparoPasso({
       indicePasso: 0,
       passo: passoBase,
-      gatilho_minutos: 5,
       minutosSilencio: 2,
       minutosDesdeUltimoFollowup: null,
     });
     expect(r.permitido).toBe(false);
-    expect(r.motivo).toBe("aguardando_gatilho");
-  });
-
-  it("soma gatilho + atraso extra no passo 1", () => {
-    const r = avaliarDisparoPasso({
-      indicePasso: 0,
-      passo: { ...passoBase, atraso_minutos: 5 },
-      gatilho_minutos: 5,
-      minutosSilencio: 8,
-      minutosDesdeUltimoFollowup: null,
-    });
-    expect(r.permitido).toBe(false);
-    expect(r.motivo).toBe("aguardando_atraso_passo");
-    expect(r.detalhe).toContain("total 10 min");
+    expect(r.motivo).toBe("aguardando_espera");
+    expect(r.detalhe).toContain("faltam 3 min");
   });
 
   it("passo 2 usa tempo desde ultimo follow-up", () => {
     const r = avaliarDisparoPasso({
       indicePasso: 1,
-      passo: { ...passoBase, ordem: 2, atraso_horas: 12 },
-      gatilho_minutos: 5,
+      passo: { ...passoBase, ordem: 2, espera_minutos: 720 },
       minutosSilencio: 999,
       minutosDesdeUltimoFollowup: 60,
     });
     expect(r.permitido).toBe(false);
-    expect(r.motivo).toBe("aguardando_atraso_passo");
+    expect(r.motivo).toBe("aguardando_espera");
     expect(r.detalhe).toContain("passo anterior");
+  });
+});
+
+describe("avaliarDisparoPasso — legado sem espera_minutos", () => {
+  it("usa gatilho + atraso legado no passo 1", () => {
+    const r = avaliarDisparoPasso({
+      indicePasso: 0,
+      passo: { ...passoBase, espera_minutos: null, atraso_minutos: 5 },
+      config: { gatilho_minutos: 5 },
+      minutosSilencio: 8,
+      minutosDesdeUltimoFollowup: null,
+    });
+    expect(r.permitido).toBe(false);
+    expect(r.motivo).toBe("aguardando_espera");
   });
 });

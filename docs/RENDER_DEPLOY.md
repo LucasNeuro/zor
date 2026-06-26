@@ -77,9 +77,15 @@ Ver `docs/env-redis.example`. Mínimo em produção:
 
 Repetir: Supabase, `UAZAPI_BASE_URL`, `UAZAPI_INSTANCE_TOKEN`, `MISTRAL_API_KEY`, `DEFAULT_TENANT_ID`.
 
----
+Follow-up automático corre neste worker (`FOLLOWUP_POLL_MS=60000`, default 1 min). O Cron Job `dispatch-ciclos-cron` também chama `/api/cron/followup-whatsapp` a cada 5 min como backup.
 
-## 3. Deploy
+### Cron Job `dispatch-ciclos-cron`
+
+Criar via Blueprint (`render.yaml`) ou manualmente: Docker + `scripts/render-dispatch-ciclos.sh`, schedule `*/5 * * * *`, env `CRON_SECRET` + `NEXT_PUBLIC_APP_URL` (herdados do web service).
+
+Aplicar migrações Supabase de follow-up (incl. `20260725140000_hub_followup_espera_minutos.sql`) antes de testar cadências.
+
+---
 
 1. **Save** nas variáveis
 2. **Manual Deploy** ou push no Git

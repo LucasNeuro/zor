@@ -4,7 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Trash2, Upload, X } from "lucide-react";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import type { HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { atrasoTotalMinutos, formatarAtrasoPasso } from "@/lib/hub/followup-types";
+import {
+  esperaMinutosDoPasso,
+  FOLLOWUP_ESPERA_PRESETS,
+  formatarEsperaMinutos,
+  minutosToLegacyAtraso,
+} from "@/lib/hub/followup-types";
 import { passoPersistenciaIgual } from "./types";
 import { TextareaComSugestaoIa } from "@/components/crm/TextareaComSugestaoIa";
 import {
@@ -45,19 +50,13 @@ type Props = {
   onRegisterFlush?: (flush: () => Promise<void>) => void;
 };
 
-function clampDias(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.min(365, Math.max(0, v));
+function clampEspera(v: number): number {
+  if (!Number.isFinite(v)) return 5;
+  return Math.min(525_600, Math.max(1, Math.floor(v)));
 }
 
-function clampMinutos(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.min(59, Math.max(0, v));
-}
-
-function clampHoras(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.min(8760, Math.max(0, v));
+function esperaAtual(p: HubAgenteFollowupPasso): number {
+  return esperaMinutosDoPasso(p, {}, Math.max(0, (p.ordem ?? 1) - 1));
 }
 
 export function FollowupStepEditorSideover({
@@ -102,13 +101,13 @@ export function FollowupStepEditorSideover({
   }, [passo]);
 
   async function flushDraftIfDirty() {
-    if (!passoPersistenciaIgual(draft, passo) && atrasoTotalMinutos(draft) >= 1) {
+    if (!passoPersistenciaIgual(draft, passo) && esperaAtual(draft) >= 1) {
       await onSave(draft);
     }
   }
 
   const flushDraft = useCallback(async () => {
-    if (!passoPersistenciaIgual(draft, passo) && atrasoTotalMinutos(draft) >= 1) {
+    if (!passoPersistenciaIgual(draft, passo) && esperaAtual(draft) >= 1) {
       await onSave(draft);
     }
   }, [draft, passo, onSave]);
@@ -131,13 +130,34 @@ export function FollowupStepEditorSideover({
     onPatch(patch);
   }
 
+  function updateEsperaMinutos(raw: number) {
+    const m = clampEspera(raw);
+    const leg = minutosToLegacyAtraso(m);
+    const next = {
+      ...draft,
+      espera_minutos: m,
+      atraso_dias: leg.atraso_dias,
+      atraso_horas: leg.atraso_horas,
+      atraso_minutos: leg.atraso_minutos,
+    };
+    setDraft(next);
+    onPatch({
+      espera_minutos: m,
+      atraso_dias: leg.atraso_dias,
+      atraso_horas: leg.atraso_horas,
+      atraso_minutos: leg.atraso_minutos,
+    });
+  }
+
+  const espera = esperaAtual(draft);
+
   const showImagem = draft.tipo_conteudo === "imagem" || draft.tipo_conteudo === "texto_imagem";
   const posicao = posicaoVisual ?? draft.ordem;
 
   const metaFollowup = {
     passo_ordem: posicao,
     tipo_conteudo: draft.tipo_conteudo,
-    atraso_label: formatarAtrasoPasso(draft),
+    atraso_label: formatarEsperaMinutos(espera, posicao - 1),
     passos_anteriores: passosAnteriores,
   };
 
@@ -174,7 +194,8 @@ export function FollowupStepEditorSideover({
             Passo {posicao}
           </p>
           <p style={{ margin: "2px 0 0", fontSize: 10, color: colors.textMuted }}>
-            {posicao === 1 ? "Após o gatilho" : "Após o passo anterior"} · +{formatarAtrasoPasso(draft)}
+            {posicao === 1 ? "Sem resposta do cliente" : "Após passo anterior"} ·{" "}
+            {formatarEsperaMinutos(espera, posicao - 1)}
           </p>
         </div>
         <button
@@ -222,46 +243,39 @@ export function FollowupStepEditorSideover({
           </select>
         </label>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-          <label>
-            <span style={labelStyle}>Dias</span>
-            <input
-              type="number"
-              min={0}
-              max={365}
-              value={draft.atraso_dias ?? 0}
-              onChange={(e) =>
-                update({ atraso_dias: clampDias(Number.parseInt(e.target.value, 10) || 0) })
-              }
-              style={inputStyle}
-            />
-          </label>
-          <label>
-            <span style={labelStyle}>Horas</span>
-            <input
-              type="number"
-              min={0}
-              max={8760}
-              value={draft.atraso_horas}
-              onChange={(e) =>
-                update({ atraso_horas: clampHoras(Number.parseInt(e.target.value, 10) || 0) })
-              }
-              style={inputStyle}
-            />
-          </label>
-          <label>
-            <span style={labelStyle}>Minutos</span>
-            <input
-              type="number"
-              min={0}
-              max={59}
-              value={draft.atraso_minutos ?? 0}
-              onChange={(e) =>
-                update({ atraso_minutos: clampMinutos(Number.parseInt(e.target.value, 10) || 0) })
-              }
-              style={inputStyle}
-            />
-          </label>
+        <label>
+          <span style={labelStyle}>
+            {posicao === 1 ? "Minutos sem resposta do cliente" : "Minutos após o passo anterior"}
+          </span>
+          <input
+            type="number"
+            min={1}
+            max={525600}
+            value={espera}
+            onChange={(e) => updateEsperaMinutos(Number.parseInt(e.target.value, 10) || 1)}
+            style={inputStyle}
+          />
+        </label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {FOLLOWUP_ESPERA_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => updateEsperaMinutos(preset)}
+              style={{
+                padding: "4px 8px",
+                borderRadius: 6,
+                border: `1px solid ${colors.border}`,
+                background: espera === preset ? colors.accent : colors.miniBtnBg,
+                color: espera === preset ? colors.accentText : colors.textSecondary,
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {formatarEsperaMinutos(preset, posicao - 1)}
+            </button>
+          ))}
         </div>
         <label>
           <span style={labelStyle}>Hora mínima do dia (opcional)</span>
@@ -273,18 +287,15 @@ export function FollowupStepEditorSideover({
           />
         </label>
         <p style={{ margin: 0, fontSize: 10, color: colors.textSecondary, lineHeight: 1.4 }}>
-          {posicaoVisual === 1 ? (
+          {posicao === 1 ? (
             <>
-              Tempo <strong style={{ color: colors.accent }}>extra</strong> após o gatilho (use{" "}
-              <strong style={{ color: colors.accent }}>0</strong> para enviar assim que o gatilho
-              disparar). Total do passo 1 = gatilho +{" "}
-              <strong style={{ color: colors.accent }}>{formatarAtrasoPasso(draft)}</strong>.
+              Envia após <strong style={{ color: colors.accent }}>{formatarEsperaMinutos(espera, 0)}</strong>{" "}
+              sem mensagem do cliente (respostas do bot não reiniciam o relógio).
             </>
           ) : (
             <>
-              Envia <strong style={{ color: colors.accent }}>{formatarAtrasoPasso(draft)}</strong>{" "}
-              após o <strong style={{ color: colors.accent }}>passo anterior enviado</strong> (não
-              depende de nova mensagem do cliente).
+              Envia <strong style={{ color: colors.accent }}>{formatarEsperaMinutos(espera, posicao - 1)}</strong>{" "}
+              depois do passo anterior enviado.
             </>
           )}
         </p>
@@ -435,7 +446,7 @@ export function FollowupStepEditorSideover({
       >
         <button
           type="button"
-          disabled={saving || atrasoTotalMinutos(draft) < 1}
+          disabled={saving || espera < 1}
           onClick={() => onSave(draft)}
           style={{
             width: "100%",

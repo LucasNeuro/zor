@@ -6,7 +6,7 @@ import {
   reconciliarFollowupPassoLeadsAgente,
 } from "@/lib/hub/followup-db";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
-import { validarAtrasoPasso, validarHoraDia } from "@/lib/hub/followup-types";
+import { validarAtrasoPasso, validarHoraDia, minutosToLegacyAtraso } from "@/lib/hub/followup-types";
 import { mensagemErroFollowupDb } from "@/lib/hub/followup-db-errors";
 
 function db() {
@@ -70,24 +70,36 @@ export async function PATCH(
     }
     patch.ordem = ordem;
   }
-  if (body.atraso_horas != null || body.atraso_minutos != null || body.atraso_dias != null) {
-    const d =
-      body.atraso_dias != null
-        ? Number.parseInt(String(body.atraso_dias), 10)
-        : 0;
-    const h =
-      body.atraso_horas != null
-        ? Number.parseInt(String(body.atraso_horas), 10)
-        : (existente.atraso_horas ?? 0);
-    const m =
-      body.atraso_minutos != null
-        ? Number.parseInt(String(body.atraso_minutos), 10)
-        : (existente.atraso_minutos ?? 0);
-    const atrasoErr = validarAtrasoPasso(h, m, d);
-    if (atrasoErr) return NextResponse.json({ error: atrasoErr }, { status: 400 });
-    patch.atraso_dias = d;
-    patch.atraso_horas = h;
-    patch.atraso_minutos = m;
+  if (body.atraso_horas != null || body.atraso_minutos != null || body.atraso_dias != null || body.espera_minutos != null) {
+    let espera: number;
+    if (body.espera_minutos != null) {
+      espera = Number.parseInt(String(body.espera_minutos), 10);
+      if (!Number.isFinite(espera) || espera < 1 || espera > 525_600) {
+        return NextResponse.json({ error: "espera_minutos inválido (1–525600)." }, { status: 400 });
+      }
+    } else {
+      const d =
+        body.atraso_dias != null
+          ? Number.parseInt(String(body.atraso_dias), 10)
+          : 0;
+      const h =
+        body.atraso_horas != null
+          ? Number.parseInt(String(body.atraso_horas), 10)
+          : (existente.atraso_horas ?? 0);
+      const m =
+        body.atraso_minutos != null
+          ? Number.parseInt(String(body.atraso_minutos), 10)
+          : (existente.atraso_minutos ?? 0);
+      const atrasoErr = validarAtrasoPasso(h, m, d);
+      if (atrasoErr) return NextResponse.json({ error: atrasoErr }, { status: 400 });
+      espera = d * 1440 + h * 60 + m;
+      if (espera < 1) espera = 1;
+    }
+    const leg = minutosToLegacyAtraso(espera);
+    patch.espera_minutos = espera;
+    patch.atraso_dias = leg.atraso_dias;
+    patch.atraso_horas = leg.atraso_horas;
+    patch.atraso_minutos = leg.atraso_minutos;
   }
   if (body.tipo_conteudo != null) {
     const tipo = parseTipo(body.tipo_conteudo);

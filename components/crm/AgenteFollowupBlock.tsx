@@ -28,9 +28,9 @@ import {
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
 import {
-  atrasoTotalMinutos,
   configGatilhoPadrao,
-  formatarGatilhoConfig,
+  esperaMinutosDoPasso,
+  formatarResumoCadencia,
 } from "@/lib/hub/followup-types";
 
 type FollowupCanalWhatsapp = {
@@ -206,6 +206,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           ordem: passo.ordem,
+          espera_minutos: passo.espera_minutos ?? undefined,
           atraso_dias: passo.atraso_dias ?? 0,
           atraso_horas: passo.atraso_horas,
           atraso_minutos: passo.atraso_minutos ?? 0,
@@ -266,11 +267,6 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       }
       const cfg = await salvarConfigInner({
         arquivar_apos_dias: config.arquivar_apos_dias,
-        gatilho_tipo: config.gatilho_tipo,
-        gatilho_dias: config.gatilho_dias,
-        gatilho_horas: config.gatilho_horas,
-        gatilho_minutos: config.gatilho_minutos,
-        gatilho_hora_dia: config.gatilho_hora_dia ?? null,
       });
       await carregar();
       setOkMsg("Fluxo guardado.");
@@ -357,7 +353,11 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   async function adicionarPasso(tipo: FollowupTipoConteudo = "texto") {
     const proximaOrdem = passosOrdenados.length + 1;
     const ultimo = passosOrdenados[passosOrdenados.length - 1];
-    const totalMin = ultimo ? Math.max(atrasoTotalMinutos(ultimo) * 2, 120) : 0;
+    const esperaUltimo = ultimo
+      ? esperaMinutosDoPasso(ultimo, config ?? configGatilhoPadrao(), passosOrdenados.length - 1)
+      : 0;
+    const esperaNovo =
+      proximaOrdem === 1 ? 5 : Math.min(525_600, Math.max(60, esperaUltimo * 2 || 720));
     setSaving(true);
     try {
       const res = await fetch(`${base}/passos`, {
@@ -365,9 +365,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
         headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           ordem: proximaOrdem,
-          atraso_dias: 0,
-          atraso_horas: proximaOrdem === 1 ? 0 : Math.min(8760, Math.floor(totalMin / 60)),
-          atraso_minutos: proximaOrdem === 1 ? 0 : totalMin % 60,
+          espera_minutos: esperaNovo,
           tipo_conteudo: tipo,
           texto_template: tipo === "texto" ? "Olá {nome}, ainda posso ajudar?" : null,
           legenda_imagem: tipo === "texto_imagem" ? "Olá {nome}, ainda posso ajudar?" : null,
@@ -510,6 +508,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       const skipLabels: Record<string, string> = {
         aguardando_gatilho: "aguardando gatilho",
         aguardando_atraso_passo: "aguardando atraso do passo",
+        aguardando_espera: "aguardando tempo configurado",
         aguardando_hora_disparo: "aguardando horário",
         cadencia_concluida: "cadência concluída",
         sem_ultimo_followup: "sem follow-up anterior",
@@ -563,7 +562,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     ? { rotulo: "ACTIVO", bg: "rgba(63,185,80,0.14)", fg: "#3fb950" }
     : { rotulo: "INACTIVO", bg: "#eef0f2", fg: "#64748b" };
 
-  const gatilhoResumo = config ? formatarGatilhoConfig(config) : "—";
+  const cadenciaResumo = config ? formatarResumoCadencia(passos, config) : "—";
 
   const whatsappRotuloInstancia =
     canalWhatsapp?.instance_name?.trim() ||
@@ -666,7 +665,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
                 Follow-up automático WhatsApp
               </span>
               <p style={{ margin: "4px 0 0", fontSize: 11, lineHeight: 1.45, color: RF_TEXT_SECONDARY }}>
-                {passos.length} passo{passos.length === 1 ? "" : "s"} · Gatilho: {gatilhoResumo}
+                {cadenciaResumo}
                 {config ? ` · Arquivar: ${config.arquivar_apos_dias ?? 7}d` : ""}
               </p>
             </div>

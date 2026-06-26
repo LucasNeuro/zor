@@ -12,6 +12,7 @@ import {
   type TipoMidiaChat,
 } from "@/lib/crm/chat-mensagem-midia";
 import { MAX_ANEXO_CHAT_BYTES } from "@/lib/crm/atendimento-midia-envio";
+import { inferFeitoPorTipoFila } from "@/lib/crm/infer-feito-por-tipo-fila";
 import { textoExibicaoMensagemHumano } from "@/lib/crm/mensagem-consultor-whatsapp";
 import {
   effectiveHumanoResponsavel,
@@ -138,16 +139,15 @@ function autorFromMensagem(row: Record<string, unknown>): {
   if (direcao === "entrada") return { autor: "cliente", label: "Lead" };
 
   const agenteId = String(row.agente_id ?? row.agente_responsavel ?? "").trim();
-  const agenteLower = agenteId.toLowerCase();
   const meta =
     row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
       ? (row.metadata as Record<string, unknown>)
       : {};
   const remetente = String(row.remetente ?? "").toLowerCase();
-  const feitoPorTipo = String(row.feito_por_tipo ?? meta.feito_por_tipo ?? "").toLowerCase();
+  const feitoPorTipo = inferFeitoPorTipoFila(meta, direcao, row.feito_por_tipo);
   const feitoPor = String(meta.feito_por ?? "").trim();
 
-  if (feitoPorTipo === "humano" || remetente === "humano" || agenteLower.includes("humano")) {
+  if (feitoPorTipo === "humano" || remetente === "humano") {
     return {
       autor: "humano",
       label: feitoPor ? formatHumanoDisplayName(feitoPor) : "Humano",

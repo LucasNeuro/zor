@@ -503,6 +503,8 @@ export async function executarFollowupParaAgente(
       status: "enviado",
       metadata: {
         tipo: "followup_automatico",
+        feito_por_tipo: "ia",
+        feito_por: slug,
         passo: posicaoPasso,
         passo_id: passo.id,
         passo_ordem: passo.ordem,

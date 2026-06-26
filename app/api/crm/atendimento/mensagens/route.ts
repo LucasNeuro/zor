@@ -2,6 +2,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { backfillMensagensIaCrm } from "@/lib/crm/backfill-mensagens-ia-crm";
 import { mensagemTemCorpo, parseMidiaFromRow } from "@/lib/crm/chat-mensagem-midia";
+import {
+  inferFeitoPorTipoFila,
+  remetenteFilaFromFeitoPor,
+} from "@/lib/crm/infer-feito-por-tipo-fila";
 
 function db() {
   return createClient(
@@ -49,8 +53,8 @@ function mapHubMensagem(row: Record<string, unknown>) {
 function mapFilaMensagem(row: Record<string, unknown>) {
   const meta = metaRecord(row);
   const direcao = String(row.direcao ?? "saida");
-  const remetente =
-    direcao === "entrada" ? "lead" : meta.feito_por_tipo === "humano" ? "humano" : "ia";
+  const feitoPorTipo = inferFeitoPorTipoFila(meta, direcao, row.feito_por_tipo);
+  const remetente = remetenteFilaFromFeitoPor(direcao, feitoPorTipo);
   const midia = parseMidiaFromRow(row);
   return {
     id: row.id,
@@ -58,7 +62,7 @@ function mapFilaMensagem(row: Record<string, unknown>) {
     direcao,
     remetente,
     agente_id: row.agente_id ?? null,
-    feito_por_tipo: meta.feito_por_tipo ?? (direcao === "saida" ? "humano" : null),
+    feito_por_tipo: feitoPorTipo,
     criado_em: row.enviada_em ?? row.criado_em ?? row.recebida_em,
     tipo_conteudo: midia.tipo,
     url_midia: midia.urlMidia,

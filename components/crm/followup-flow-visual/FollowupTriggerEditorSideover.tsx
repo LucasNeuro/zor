@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import { configGatilhoPadrao, esperaMinutosDoPasso, textoExibicaoFollowupPasso } from "@/lib/hub/followup-types";
@@ -118,7 +118,9 @@ export function FollowupTriggerEditorSideover({
   }, [draft, onSave, onSalvarPasso, passosDraft]);
 
   useEffect(() => {
-    onRegisterFlush?.(flushDraft);
+    onRegisterFlush?.(async () => {
+      await flushDraft();
+    });
     return () => {
       onRegisterFlush?.(async () => undefined);
     };

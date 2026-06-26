@@ -57,10 +57,18 @@ if [ -z "$followup_url" ]; then
 fi
 
 if [ -n "$followup_url" ]; then
-  echo "render-dispatch-ciclos: followup-whatsapp → ${followup_url}"
-  curl -fsS -X GET \
-    -H "Authorization: Bearer ${secret}" \
-    -H "Accept: application/json" \
-    --max-time 300 \
-    "$followup_url" || echo "render-dispatch-ciclos: followup-whatsapp failed (non-fatal)" >&2
+  skip_followup="${DISPATCH_FOLLOWUP_ENABLED:-1}"
+  case "$skip_followup" in
+    0|false|FALSE|off|OFF|no|NO)
+      echo "render-dispatch-ciclos: followup-whatsapp skipped (DISPATCH_FOLLOWUP_ENABLED=$skip_followup)"
+      ;;
+    *)
+      echo "render-dispatch-ciclos: followup-whatsapp → ${followup_url}"
+      curl -fsS -X GET \
+        -H "Authorization: Bearer ${secret}" \
+        -H "Accept: application/json" \
+        --max-time 300 \
+        "$followup_url" || echo "render-dispatch-ciclos: followup-whatsapp failed (non-fatal)" >&2
+      ;;
+  esac
 fi

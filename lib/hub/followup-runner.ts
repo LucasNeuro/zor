@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { insertFilaMensagemCompat } from "@/lib/crm/insert-fila-mensagem-compat";
 import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsapp";
 import {
   indiceProximoPasso,
@@ -24,6 +25,7 @@ type LeadFollowupRow = {
   id: string;
   nome: string;
   telefone: string | null;
+  tenant_id: string | null;
   estagio: string | null;
   followup_passo: number | null;
   followup_pausado: boolean | null;
@@ -218,7 +220,7 @@ export async function executarFollowupParaAgente(
   const { data: leads, error } = await supabase
     .from("hub_leads_crm")
     .select(
-      "id, nome, telefone, estagio, followup_passo, followup_pausado, ultima_msg_cliente_em, ultimo_contato, ultimo_followup, criado_em, atualizado_em, metadata, agente_responsavel, humano_responsavel"
+      "id, nome, telefone, tenant_id, estagio, followup_passo, followup_pausado, ultima_msg_cliente_em, ultimo_contato, ultimo_followup, criado_em, atualizado_em, metadata, agente_responsavel, humano_responsavel"
     )
     .eq("agente_responsavel", slug)
     .eq("followup_pausado", false)
@@ -359,11 +361,31 @@ export async function executarFollowupParaAgente(
     }
 
     if (!options?.simular) {
+      const esperaPasso = esperaMinutosDoPasso(passo, config, indicePasso);
+      const janelaDuplicata =
+        indicePasso === 0 ? Math.max(esperaPasso, 10) : Math.max(esperaPasso - 1, 2);
+      if (
+        indicePasso === 0 &&
+        enviadosCount === 0 &&
+        minutosDesdeUltimoFollowup != null &&
+        minutosDesdeUltimoFollowup < janelaDuplicata
+      ) {
+        if (coletarDiagnostico) {
+          registrarSkip(result, {
+            lead_id: lead.id,
+            lead_nome: lead.nome,
+            motivo: "passo_ja_enviado",
+            detalhe: `passo 1 enviado há ${Math.floor(minutosDesdeUltimoFollowup)} min`,
+            proximo_passo: posicaoPasso,
+          });
+        }
+        continue;
+      }
       const duplicado = await followupPassoEnviadoRecentemente(
         supabase,
         lead.id,
         passo.id,
-        15
+        janelaDuplicata
       );
       if (duplicado) {
         if (coletarDiagnostico) {
@@ -409,8 +431,30 @@ export async function executarFollowupParaAgente(
     const agoraIso = new Date().toISOString();
     const novoEnviadosCount = enviadosCount + 1;
 
-    const { error: filaErr } = await supabase.from("hub_fila_mensagens").insert({
+    const { error: leadErr } = await supabase
+      .from("hub_leads_crm")
+      .update({
+        followup_passo: novoEnviadosCount,
+        ultimo_followup: agoraIso,
+        proximo_followup: null,
+      })
+      .eq("id", lead.id);
+
+    if (leadErr) {
+      result.erros.push(
+        `${lead.nome}: mensagem enviada mas falha ao gravar estado (${leadErr.message})`
+      );
+      continue;
+    }
+
+    const tenantId =
+      lead.tenant_id?.trim() ||
+      config.tenant_id?.trim() ||
+      null;
+
+    const { error: filaErr } = await insertFilaMensagemCompat(supabase, {
       lead_id: lead.id,
+      tenant_id: tenantId,
       agente_id: slug,
       canal: "whatsapp",
       direcao: "saida",
@@ -427,24 +471,9 @@ export async function executarFollowupParaAgente(
     });
 
     if (filaErr) {
-      result.erros.push(`${lead.nome}: falha ao registrar follow-up na fila (${filaErr.message})`);
-      continue;
-    }
-
-    const { error: leadErr } = await supabase
-      .from("hub_leads_crm")
-      .update({
-        followup_passo: novoEnviadosCount,
-        ultimo_followup: agoraIso,
-        proximo_followup: null,
-      })
-      .eq("id", lead.id);
-
-    if (leadErr) {
       result.erros.push(
-        `${lead.nome}: mensagem enviada mas falha ao gravar estado (${leadErr.message})`
+        `${lead.nome}: follow-up enviado; falha ao registrar na fila CRM (${filaErr.message})`
       );
-      continue;
     }
 
     try {

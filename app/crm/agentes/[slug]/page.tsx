@@ -19,6 +19,7 @@ import {
   BookOpen,
   Plug,
   Settings2,
+  Send,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -28,7 +29,7 @@ import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import { AgenteAvatar } from "@/components/crm/AgenteAvatar";
 import { AgenteCiclosOperacaoList } from "@/components/crm/AgenteCiclosOperacaoList";
-import { AgenteFollowupTimeline } from "@/components/crm/AgenteFollowupTimeline";
+import { AgenteFollowupPanel } from "@/components/crm/AgenteFollowupPanel";
 import { AgentePerformancePanel } from "@/components/crm/AgentePerformancePanel";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import { CRM_ACCENT, crmBtnPrimary, crmInfoBox } from "@/lib/crm/crm-button-styles";
@@ -206,7 +207,7 @@ export default function AgentePage() {
   const [operacaoLoading, setOperacaoLoading] = useState(false);
   const [operacaoAtualizadoEm, setOperacaoAtualizadoEm] = useState<number | null>(null);
 
-  type AbaFichaAgente = "geral" | "personalidade" | "integracoes" | "operacao";
+  type AbaFichaAgente = "geral" | "personalidade" | "integracoes" | "followups" | "operacao";
   const [abaFicha, setAbaFicha] = useState<AbaFichaAgente>("geral");
 
   const carregar = useCallback(async () => {
@@ -331,7 +332,7 @@ export default function AgentePage() {
   }, [carregarOperacao]);
 
   useEffect(() => {
-    if (abaFicha !== "operacao" || !slug) return;
+    if ((abaFicha !== "followups" && abaFicha !== "operacao") || !slug) return;
     const id = window.setInterval(() => {
       void carregarOperacao(true);
     }, 15_000);
@@ -344,7 +345,13 @@ export default function AgentePage() {
       setAbaFicha("integracoes");
     }
     const aba = searchParams.get("aba");
-    if (aba === "integracoes" || aba === "geral" || aba === "personalidade" || aba === "operacao") {
+    if (
+      aba === "integracoes" ||
+      aba === "geral" ||
+      aba === "personalidade" ||
+      aba === "followups" ||
+      aba === "operacao"
+    ) {
       setAbaFicha(aba);
     }
   }, [searchParams]);
@@ -652,6 +659,7 @@ export default function AgentePage() {
   );
 
   const cicloCount = operacao?.ciclos?.length ?? 0;
+  const followupCount = operacao?.followup?.envios_24h ?? 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ background: "#f8fcf6" }}>
@@ -832,6 +840,7 @@ export default function AgentePage() {
             { id: "geral", label: "Geral", icon: Settings2 },
             { id: "personalidade", label: "Personalidade", icon: SlidersHorizontal },
             { id: "integracoes", label: "Integrações", icon: Plug },
+            { id: "followups", label: `Follow-ups (${followupCount})`, icon: Send },
             { id: "operacao", label: `Operação (${cicloCount})`, icon: Activity },
           ]}
         />
@@ -1196,6 +1205,15 @@ export default function AgentePage() {
               </div>
             ) : null}
 
+            {abaFicha === "followups" ? (
+              <AgenteFollowupPanel
+                followup={operacao?.followup}
+                loading={operacaoLoading}
+                atualizadoEm={operacaoAtualizadoEm}
+                onRefresh={() => void carregarOperacao()}
+              />
+            ) : null}
+
             {abaFicha === "operacao" ? (
               <div
                 style={{
@@ -1252,11 +1270,6 @@ export default function AgentePage() {
                   arquivado={!!agente.arquivado_em}
                   operacao={operacao}
                   operacaoLoading={operacaoLoading}
-                />
-                <AgenteFollowupTimeline
-                  followup={operacao?.followup}
-                  loading={operacaoLoading}
-                  atualizadoEm={operacaoAtualizadoEm}
                 />
               </div>
             ) : null}

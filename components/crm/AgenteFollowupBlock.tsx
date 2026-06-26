@@ -27,7 +27,7 @@ import {
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import type { FollowupTipoConteudo } from "@/lib/hub/followup-types";
-import { HORARIOS_DISPARO_PADRAO } from "@/lib/hub/followup-janela";
+import { HORARIOS_DISPARO_PADRAO, followupPermitidoNaJanela } from "@/lib/hub/followup-janela";
 import {
   configGatilhoPadrao,
   esperaMinutosDoPasso,
@@ -579,6 +579,15 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
 
   const cadenciaResumo = config ? formatarResumoCadencia(passos, config) : "—";
 
+  const janelaStatus = useMemo(() => {
+    if (!config) return null;
+    if (config.execucao_modo === "continuo") {
+      return { modo: "continuo" as const, ativa: true, proximo: null as string | null };
+    }
+    const j = followupPermitidoNaJanela(config);
+    return { modo: "janela_horaria" as const, ativa: j.ativa, proximo: j.proximo ?? null };
+  }, [config]);
+
   const whatsappRotuloInstancia =
     canalWhatsapp?.instance_name?.trim() ||
     canalWhatsapp?.instance_id?.trim() ||
@@ -727,10 +736,85 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       </div>
 
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
+        <span style={rfLabelStyle()}>Quando enviar follow-ups</span>
+        <p style={{ margin: "4px 0 10px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+          A <strong style={{ color: RF_TEXT_SECONDARY }}>cadência</strong> (ex.: 3 min) define quanto tempo esperar
+          após o silêncio do cliente. O <strong style={{ color: RF_TEXT_SECONDARY }}>modo de envio</strong> define em
+          que horas do dia o sistema pode disparar.
+        </p>
+        <div style={{ display: "grid", gap: 8 }}>
+          {(
+            [
+              {
+                id: "janela_horaria" as const,
+                titulo: "Janela horária (recomendado)",
+                desc: "Só envia nos horários abaixo (~20 min cada). Fora disso aguarda o próximo slot — evita spam de madrugada.",
+              },
+              {
+                id: "continuo" as const,
+                titulo: "Contínuo (testes / urgente)",
+                desc: "Respeita a cadência a qualquer hora. Use para testar passos curtos (3–5 min) ou atendimento 24/7.",
+              },
+            ] as const
+          ).map((opcao) => {
+            const selected = (config?.execucao_modo ?? "janela_horaria") === opcao.id;
+            return (
+              <button
+                key={opcao.id}
+                type="button"
+                disabled={loading || saving || !config}
+                onClick={() => {
+                  if (!config || config.execucao_modo === opcao.id) return;
+                  atualizarConfigLocal({ execucao_modo: opcao.id });
+                  void salvarConfig({ execucao_modo: opcao.id });
+                }}
+                style={{
+                  textAlign: "left",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: `1px solid ${selected ? RF_ACCENT : RF_BORDER_STRONG}`,
+                  background: selected ? "rgba(63, 185, 80, 0.08)" : "rgba(6, 13, 8, 0.35)",
+                  cursor: loading || saving || !config ? "not-allowed" : "pointer",
+                  opacity: loading || saving || !config ? 0.65 : 1,
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: 700, color: selected ? RF_ACCENT : RF_TEXT_PRIMARY }}>
+                  {opcao.titulo}
+                </span>
+                <p style={{ margin: "4px 0 0", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+                  {opcao.desc}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+        {janelaStatus?.modo === "janela_horaria" ? (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontSize: 11,
+              fontWeight: 600,
+              color: janelaStatus.ativa ? "#3fb950" : "#fbbf24",
+              lineHeight: 1.45,
+            }}
+          >
+            {janelaStatus.ativa
+              ? "Agora: dentro da janela — envios permitidos neste momento."
+              : `Agora: fora da janela${janelaStatus.proximo ? ` — próximo slot ~${janelaStatus.proximo}` : ""}. A cadência só dispara no horário configurado.`}
+          </p>
+        ) : janelaStatus?.modo === "continuo" ? (
+          <p style={{ margin: "10px 0 0", fontSize: 11, fontWeight: 600, color: "#3fb950", lineHeight: 1.45 }}>
+            Modo contínuo: a cadência vale a qualquer hora (incluindo madrugada).
+          </p>
+        ) : null}
+      </div>
+
+      {config?.execucao_modo !== "continuo" ? (
+      <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
         <span style={rfLabelStyle()}>Horários de envio (Brasil)</span>
         <p style={{ margin: "4px 0 8px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
-          O follow-up só dispara nestes horários (janela de ~20 min cada). Fora disso, nenhuma mensagem automática —
-          reduz risco de spam e reclamações.
+          O follow-up só dispara nestes horários (janela de ~20 min cada). Mesmo com cadência de 3 min, fora destes
+          horários o envio aguarda o próximo slot.
         </p>
         <input
           id="followup-horarios-disparo"
@@ -758,13 +842,8 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
           }}
           style={{ ...rfInputStyle(), width: "100%" }}
         />
-        <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_TEXT_MUTED }}>
-          Modo:{" "}
-          <strong style={{ color: RF_TEXT_SECONDARY }}>
-            {config?.execucao_modo === "continuo" ? "contínuo (avançado)" : "janela horária (recomendado)"}
-          </strong>
-        </p>
       </div>
+      ) : null}
 
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
         <p style={{ margin: "0 0 8px", fontSize: 11, color: RF_TEXT_SECONDARY, lineHeight: 1.5 }}>

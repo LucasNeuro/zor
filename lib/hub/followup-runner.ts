@@ -227,6 +227,13 @@ export async function executarFollowupParaAgente(
     return result;
   }
 
+  const foraDaJanela = !janela.ativa;
+  const detalheJanelaFechada = foraDaJanela
+    ? janela.proximo
+      ? `fora da janela — próximo slot ${janela.proximo} (${horariosDisparoFollowup(config).join(", ")})`
+      : `fora da janela horária (${horariosDisparoFollowup(config).join(", ")})`
+    : null;
+
   const { token: instanceToken } = await resolverTokenInstanciaWhatsapp(supabase, slug);
   if (!whatsappConfigured({ instanceToken })) {
     result.erros.push(
@@ -273,6 +280,18 @@ export async function executarFollowupParaAgente(
           lead_id: lead.id,
           lead_nome: lead.nome,
           motivo: "sem_telefone",
+        });
+      }
+      continue;
+    }
+
+    if (foraDaJanela) {
+      if (coletarDiagnostico) {
+        registrarSkip(result, {
+          lead_id: lead.id,
+          lead_nome: lead.nome,
+          motivo: "aguardando_hora_disparo",
+          detalhe: detalheJanelaFechada ?? undefined,
         });
       }
       continue;

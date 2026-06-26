@@ -205,6 +205,8 @@ export function AgenteFollowupPanel({
   const elegiveis = followup?.estado_atual?.leads_elegiveis ?? 0;
   const envios24h = followup?.envios_24h ?? 0;
   const pendentes = (followup?.timeline ?? []).filter((e) => e.status === "aguardando").length;
+  const janela = followup?.execucao_janela;
+  const foraDaJanela = janela?.modo === "janela_horaria" && janela.ativa === false;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -234,6 +236,27 @@ export function AgenteFollowupPanel({
                 ? followup.resumo_cadencia ?? "Follow-up activo"
                 : "Follow-up inactivo — active em Integrações para ver envios automáticos."}
             </p>
+            {foraDaJanela ? (
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#a16207",
+                  lineHeight: 1.45,
+                  maxWidth: 560,
+                }}
+              >
+                Fora da janela horária
+                {janela?.proximo_slot ? ` — próximo envio ~${janela.proximo_slot}` : ""}
+                {janela?.horarios?.length ? ` (slots: ${janela.horarios.join(", ")})` : ""}. A cadência só dispara
+                dentro desses horários.
+              </p>
+            ) : janela?.modo === "continuo" ? (
+              <p style={{ margin: "8px 0 0", fontSize: 12, fontWeight: 600, color: "#15803d", lineHeight: 1.45 }}>
+                Modo contínuo — cadência activa a qualquer hora.
+              </p>
+            ) : null}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {atualizadoEm ? (

@@ -191,8 +191,10 @@ export function FollowupTriggerEditorSideover({
           </select>
         </label>
 
-        <p style={{ margin: 0, fontSize: 10, color: RF_LIGHT_TEXT_SECONDARY, lineHeight: 1.45 }}>
-          Tempo desde a <strong>última mensagem do cliente</strong> no WhatsApp.
+        <p style={{ margin: "8px 0 0", fontSize: 10, color: RF_LIGHT_TEXT_MUTED, lineHeight: 1.45 }}>
+          Respostas do bot <strong>não</strong> reiniciam este relógio. Quando o cliente voltar a falar, a
+          cadência recomeça do passo 1. No passo 1, use atraso <strong>0</strong> para enviar logo após o
+          gatilho.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>

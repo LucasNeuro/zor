@@ -14,7 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { formatarGatilhoConfig } from "@/lib/hub/followup-types";
+import { formatarGatilhoConfig, formatarAtrasoPasso, atrasoTotalMinutos } from "@/lib/hub/followup-types";
 import {
   FOLLOWUP_NODE_TYPES,
   FollowupNodeCallbacksContext,
@@ -91,7 +91,13 @@ function buildGraph(
 
     const source = index === 0 ? FOLLOWUP_START_NODE_ID : sorted[index - 1]!.id;
     const active = passo.ativo;
-    const edgeLabel = index === 0 ? gatilhoLabel : `+${passoToNodeData(passo).atrasoLabel}`;
+    const atrasoPasso = passoToNodeData(passo).atrasoLabel ?? "imediato";
+    const edgeLabel =
+      index === 0
+        ? atrasoTotalMinutos(passo) > 0
+          ? `${gatilhoLabel} + ${atrasoPasso}`
+          : gatilhoLabel
+        : `+${atrasoPasso}`;
     edges.push({
       id: `e-${source}-${passo.id}`,
       source,

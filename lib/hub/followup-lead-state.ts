@@ -1,13 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseFollowupTimestamp } from "@/lib/hub/followup-relogio";
 
 /** Reinicia cadência quando o cliente envia mensagem (relógio + passo). */
 export async function resetFollowupAoReceberMensagemCliente(
   supabase: SupabaseClient,
   leadId: string,
   options?: { pausado?: boolean },
-  quando: Date = new Date()
+  quando: Date | string = new Date()
 ): Promise<void> {
-  const iso = quando.toISOString();
+  const d = parseFollowupTimestamp(quando) ?? new Date();
+  const iso = d.toISOString();
   const patch: Record<string, unknown> = {
     ultima_msg_cliente_em: iso,
     ultimo_contato: iso,

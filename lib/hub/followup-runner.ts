@@ -9,6 +9,10 @@ import {
   type HubAgenteFollowupPasso,
 } from "@/lib/hub/followup-types";
 import { avaliarDisparoPasso, type MotivoFollowupSkip } from "@/lib/hub/followup-schedule";
+import {
+  backfillUltimaMsgClienteEm,
+  minutosSilencioDesdeUltimaMsgCliente,
+} from "@/lib/hub/followup-relogio";
 import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
 type LeadFollowupRow = {
@@ -51,18 +55,6 @@ export type FollowupRunOptions = {
   /** Inclui motivos de skip por lead (útil no botão "Testar envio"). */
   diagnostico?: boolean;
 };
-
-function relogioCliente(lead: LeadFollowupRow): Date {
-  const raw =
-    lead.ultima_msg_cliente_em ||
-    lead.ultimo_contato ||
-    lead.ultimo_followup ||
-    lead.atualizado_em ||
-    lead.criado_em;
-  if (!raw) return new Date(0);
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? new Date(0) : d;
-}
 
 function minutosDesde(iso: string | null | undefined, agoraMs: number): number | null {
   if (!iso) return null;
@@ -190,12 +182,30 @@ export async function executarFollowupParaAgente(
     const enviadosCount = passosEnviadosCount(lead.followup_passo, passosAtivos);
     const indicePasso = indiceProximoPasso(lead.followup_passo, passosAtivos);
     const passo = passosAtivos[indicePasso];
-    const inicioSilencio = relogioCliente(lead);
-    const minutosSilencio = (agora - inicioSilencio.getTime()) / 60_000;
-    const horasSilencio = minutosSilencio / 60;
+
+    let ultimaMsgClienteEm = lead.ultima_msg_cliente_em?.trim() || null;
+    if (!ultimaMsgClienteEm) {
+      ultimaMsgClienteEm = await backfillUltimaMsgClienteEm(supabase, lead.id);
+      if (ultimaMsgClienteEm) lead.ultima_msg_cliente_em = ultimaMsgClienteEm;
+    }
+
+    const minutosSilencio = minutosSilencioDesdeUltimaMsgCliente(ultimaMsgClienteEm, agora);
+    const horasSilencio = minutosSilencio != null ? minutosSilencio / 60 : null;
     const minutosDesdeUltimoFollowup = minutosDesde(lead.ultimo_followup, agora);
 
-    if (!passo && enviadosCount >= passosAtivos.length && horasSilencio >= arquivarHoras) {
+    if (minutosSilencio == null) {
+      if (options?.diagnostico) {
+        registrarSkip(result, {
+          lead_id: lead.id,
+          lead_nome: lead.nome,
+          motivo: "sem_ultima_msg_cliente",
+          detalhe: "sem última msg do cliente — aguardando primeira mensagem inbound",
+        });
+      }
+      continue;
+    }
+
+    if (!passo && enviadosCount >= passosAtivos.length && horasSilencio != null && horasSilencio >= arquivarHoras) {
       await supabase
         .from("hub_leads_crm")
         .update({ estagio: "arquivado", followup_pausado: true })

@@ -6,7 +6,8 @@ export type MotivoFollowupSkip =
   | "aguardando_gatilho"
   | "aguardando_atraso_passo"
   | "aguardando_hora_disparo"
-  | "sem_ultimo_followup";
+  | "sem_ultimo_followup"
+  | "sem_ultima_msg_cliente";
 
 const TZ_PADRAO = "America/Sao_Paulo";
 
@@ -106,7 +107,7 @@ export function avaliarDisparoPasso(params: {
       return {
         permitido: false,
         motivo: "aguardando_gatilho",
-        detalhe: `faltam ${falta} min de silêncio do cliente`,
+        detalhe: `faltam ${falta} min desde a última msg do cliente`,
       };
     }
 
@@ -127,7 +128,7 @@ export function avaliarDisparoPasso(params: {
         return {
           permitido: false,
           motivo: "aguardando_atraso_passo",
-          detalhe: `passo 1: faltam ${falta} min após o gatilho`,
+          detalhe: `passo 1: faltam ${falta} min (total ${totalSilencio} min desde a última msg do cliente)`,
         };
       }
     }

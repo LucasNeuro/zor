@@ -273,8 +273,20 @@ export function FollowupStepEditorSideover({
           />
         </label>
         <p style={{ margin: 0, fontSize: 10, color: colors.textSecondary, lineHeight: 1.4 }}>
-          Envia após <strong style={{ color: colors.accent }}>{formatarAtrasoPasso(draft)}</strong> sem resposta do
-          cliente.
+          {posicaoVisual === 1 ? (
+            <>
+              Tempo <strong style={{ color: colors.accent }}>extra</strong> após o gatilho (use{" "}
+              <strong style={{ color: colors.accent }}>0</strong> para enviar assim que o gatilho
+              disparar). Total do passo 1 = gatilho +{" "}
+              <strong style={{ color: colors.accent }}>{formatarAtrasoPasso(draft)}</strong>.
+            </>
+          ) : (
+            <>
+              Envia <strong style={{ color: colors.accent }}>{formatarAtrasoPasso(draft)}</strong>{" "}
+              após o <strong style={{ color: colors.accent }}>passo anterior enviado</strong> (não
+              depende de nova mensagem do cliente).
+            </>
+          )}
         </p>
 
         {draft.tipo_conteudo === "texto" ? (

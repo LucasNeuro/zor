@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
 import { configGatilhoPadrao, esperaMinutosDoPasso, textoExibicaoFollowupPasso } from "@/lib/hub/followup-types";
@@ -42,6 +42,10 @@ function draftIgual(a: GatilhoDraft, b: GatilhoDraft): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function clonePasso(p: HubAgenteFollowupPasso): HubAgenteFollowupPasso {
+  return JSON.parse(JSON.stringify(p)) as HubAgenteFollowupPasso;
+}
+
 export function FollowupTriggerEditorSideover({
   config,
   passos = [],
@@ -59,17 +63,19 @@ export function FollowupTriggerEditorSideover({
     () => [...passos].sort((a, b) => a.ordem - b.ordem),
     [passos]
   );
-  const [passosDraft, setPassosDraft] = useState<HubAgenteFollowupPasso[]>(passosOrdenados);
+  const [passosDraft, setPassosDraft] = useState<HubAgenteFollowupPasso[]>(() =>
+    passosOrdenados.map(clonePasso)
+  );
+  const [saveOk, setSaveOk] = useState(false);
+  const baselineConfigRef = useRef<GatilhoDraft>(draftFromConfig(config));
+  const baselinePassosRef = useRef<HubAgenteFollowupPasso[]>(
+    passosOrdenados.map(clonePasso)
+  );
 
-  useEffect(() => {
-    setDraft(draftFromConfig(config));
-  }, [config]);
-
-  useEffect(() => {
-    setPassosDraft(passosOrdenados);
-  }, [passosOrdenados]);
-
-  const baseline = draftFromConfig(config);
+  function markSaved() {
+    setSaveOk(true);
+    window.setTimeout(() => setSaveOk(false), 2200);
+  }
 
   function update(patch: Partial<GatilhoDraft>) {
     const next = { ...draft, ...patch };
@@ -91,19 +97,25 @@ export function FollowupTriggerEditorSideover({
   }
 
   const flushDraft = useCallback(async () => {
-    if (!draftIgual(draft, baseline)) {
+    let gravou = false;
+    if (!draftIgual(draft, baselineConfigRef.current)) {
       await onSave(draft);
+      baselineConfigRef.current = { ...draft };
+      gravou = true;
     }
     if (onSalvarPasso) {
-      for (let i = 0; i < passosOrdenados.length; i++) {
-        const original = passosOrdenados[i]!;
-        const edited = passosDraft.find((p) => p.id === original.id);
-        if (edited && !passoPersistenciaIgual(edited, original)) {
+      for (const edited of passosDraft) {
+        const original = baselinePassosRef.current.find((p) => p.id === edited.id);
+        if (original && !passoPersistenciaIgual(edited, original)) {
           await onSalvarPasso(edited);
+          gravou = true;
         }
       }
+      baselinePassosRef.current = passosDraft.map(clonePasso);
     }
-  }, [draft, baseline, onSave, onSalvarPasso, passosOrdenados, passosDraft]);
+    if (gravou) markSaved();
+    return gravou;
+  }, [draft, onSave, onSalvarPasso, passosDraft]);
 
   useEffect(() => {
     onRegisterFlush?.(flushDraft);
@@ -287,6 +299,11 @@ export function FollowupTriggerEditorSideover({
       </div>
 
       <div style={{ padding: "12px 14px", borderTop: `1px solid ${RF_LIGHT_BORDER}` }}>
+        {saveOk ? (
+          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#2e7d32", textAlign: "center" }}>
+            Cadência guardada.
+          </p>
+        ) : null}
         <button
           type="button"
           disabled={saving}

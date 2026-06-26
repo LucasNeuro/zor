@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Trash2, Upload, X } from "lucide-react";
 import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import type { HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
@@ -55,6 +55,10 @@ function esperaAtual(p: HubAgenteFollowupPasso): number {
   return esperaMinutosDoPasso(p, {}, Math.max(0, (p.ordem ?? 1) - 1));
 }
 
+function clonePasso(p: HubAgenteFollowupPasso): HubAgenteFollowupPasso {
+  return JSON.parse(JSON.stringify(p)) as HubAgenteFollowupPasso;
+}
+
 export function FollowupStepEditorSideover({
   agenteSlug,
   passosAnteriores = [],
@@ -91,22 +95,31 @@ export function FollowupStepEditorSideover({
   const labelStyle = isLight ? RF_LIGHT_LABEL_STYLE : rfLabelStyle();
 
   const [draft, setDraft] = useState(passo);
+  const [saveOk, setSaveOk] = useState(false);
+  const baselinePassoRef = useRef(clonePasso(passo));
 
   useEffect(() => {
-    setDraft(passo);
-  }, [passo]);
+    baselinePassoRef.current = clonePasso(passo);
+    setDraft(clonePasso(passo));
+  }, [passo.id]);
 
-  async function flushDraftIfDirty() {
-    if (!passoPersistenciaIgual(draft, passo) && esperaAtual(draft) >= 1) {
-      await onSave({ ...draft, ...normalizarCorpoPassoFollowupParaGravar(draft) });
-    }
+  function markSaved() {
+    setSaveOk(true);
+    window.setTimeout(() => setSaveOk(false), 2200);
   }
 
   const flushDraft = useCallback(async () => {
-    if (!passoPersistenciaIgual(draft, passo) && esperaAtual(draft) >= 1) {
-      await onSave({ ...draft, ...normalizarCorpoPassoFollowupParaGravar(draft) });
+    const normalized = { ...draft, ...normalizarCorpoPassoFollowupParaGravar(draft) };
+    if (!passoPersistenciaIgual(normalized, baselinePassoRef.current) && esperaAtual(normalized) >= 1) {
+      await onSave(normalized);
+      baselinePassoRef.current = clonePasso(normalized);
+      markSaved();
     }
-  }, [draft, passo, onSave]);
+  }, [draft, onSave]);
+
+  async function flushDraftIfDirty() {
+    await flushDraft();
+  }
 
   useEffect(() => {
     onRegisterFlush?.(flushDraft);
@@ -133,9 +146,12 @@ export function FollowupStepEditorSideover({
     onPatch(migrado);
   }
 
-  function guardarDraftNormalizado() {
+  async function guardarDraftNormalizado() {
     const normalizado = { ...draft, ...normalizarCorpoPassoFollowupParaGravar(draft) };
-    void onSave(normalizado);
+    if (esperaAtual(normalizado) < 1) return;
+    await onSave(normalizado);
+    baselinePassoRef.current = clonePasso(normalizado);
+    markSaved();
   }
 
   function updateEsperaMinutos(raw: number) {
@@ -401,10 +417,15 @@ export function FollowupStepEditorSideover({
           gap: 8,
         }}
       >
+        {saveOk ? (
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: colors.accent, textAlign: "center" }}>
+            Passo guardado.
+          </p>
+        ) : null}
         <button
           type="button"
           disabled={saving || espera < 1}
-          onClick={guardarDraftNormalizado}
+          onClick={() => void guardarDraftNormalizado()}
           style={{
             width: "100%",
             padding: "9px 12px",

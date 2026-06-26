@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import {
+  Clock,
   Bell,
   CheckCircle2,
   Image as ImageIcon,
@@ -15,8 +16,9 @@ import {
 } from "lucide-react";
 import { formatarGatilhoConfig } from "@/lib/hub/followup-types";
 import type { FollowupTipoConteudo, HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
-import { resumoJanelaFollowup } from "@/lib/hub/followup-agenda";
-import { janelaModoFollowup, followupPermitidoNaJanela } from "@/lib/hub/followup-janela";
+import { resumoJanelaFollowup, resumoJanelaFollowupCompact, statusJanelaFollowupAgora } from "@/lib/hub/followup-agenda";
+import { timezoneFollowup } from "@/lib/hub/followup-janela";
+import { janelaModoFollowup } from "@/lib/hub/followup-janela";
 import { buildFollowupPanelStyles, followupToolbarGroup } from "./followup-flow-panel-styles";
 import type { FollowupFlowCanvasApi } from "./FollowupFlowCanvas";
 
@@ -89,8 +91,8 @@ export function FollowupFlowReactFlowPanel({
   const passosAtivos = passos.filter((p) => p.ativo).length;
   const cadenciaOk = passos.length > 0 && passosAtivos > 0;
   const canSave = hasUnsavedChanges;
-  const janelaResumo = resumoJanelaFollowup(config);
-  const janelaAgora = followupPermitidoNaJanela(config);
+  const janelaCompact = resumoJanelaFollowupCompact(config);
+  const janelaStatus = statusJanelaFollowupAgora(config);
   const modoJanela = janelaModoFollowup(config);
 
   async function flushAndSave(action?: () => void | Promise<void>) {
@@ -107,54 +109,60 @@ export function FollowupFlowReactFlowPanel({
       }}
     >
       <div style={toolbarStyles.toolbarStyle}>
-        <div style={followupToolbarGroup}>
-          <span style={toolbarStyles.metaItem}>
-            <Workflow size={12} />
-            {passos.length} passo{passos.length === 1 ? "" : "s"}
-          </span>
-          <span style={toolbarStyles.metaDivider} />
-          <span style={toolbarStyles.metaItem}>
-            Gatilho: <strong style={toolbarStyles.metaStrong}>{formatarGatilhoConfig(config)}</strong>
-          </span>
-          <span style={toolbarStyles.metaDivider} />
-          <span style={toolbarStyles.metaItem} title="Dias sem resposta até arquivar o lead">
-            Arquivar: <strong style={toolbarStyles.metaStrong}>{config.arquivar_apos_dias ?? 7}d</strong>
-          </span>
-          <span style={toolbarStyles.metaDivider} />
-          <span
-            style={toolbarStyles.metaItem}
-            title={
-              janelaAgora.ativa
-                ? "Dentro da janela — envios permitidos agora"
-                : `Fora da janela${janelaAgora.proximo ? ` — próximo ~${janelaAgora.proximo}` : ""}`
-            }
-          >
-            {modoJanela === "continuo" ? (
-              <>Envio: <strong style={toolbarStyles.metaStrong}>24/7</strong></>
-            ) : (
+        <div style={toolbarStyles.metaColumn}>
+          <div style={followupToolbarGroup}>
+            <span style={toolbarStyles.metaItem}>
+              <Workflow size={12} />
+              {passos.length} passo{passos.length === 1 ? "" : "s"}
+            </span>
+            <span style={toolbarStyles.metaDivider} />
+            <span style={toolbarStyles.metaItem}>
+              Gatilho: <strong style={toolbarStyles.metaStrong}>{formatarGatilhoConfig(config)}</strong>
+            </span>
+            <span style={toolbarStyles.metaDivider} />
+            <span style={toolbarStyles.metaItem} title="Dias sem resposta até arquivar o lead">
+              Arquivar: <strong style={toolbarStyles.metaStrong}>{config.arquivar_apos_dias ?? 7}d</strong>
+            </span>
+            {passosAtivos > 0 ? (
               <>
-                Janela:{" "}
-                <strong
-                  style={{
-                    ...toolbarStyles.metaStrong,
-                    color: janelaAgora.ativa ? "#15803d" : "#a16207",
-                  }}
-                >
-                  {janelaResumo}
-                  {janelaAgora.ativa ? " · agora OK" : " · aguardando"}
-                </strong>
+                <span style={toolbarStyles.metaDivider} />
+                <span style={toolbarStyles.metaItem}>
+                  <Bell size={12} />
+                  {passosAtivos} activo{passosAtivos === 1 ? "" : "s"}
+                </span>
               </>
-            )}
-          </span>
-          {passosAtivos > 0 ? (
-            <>
-              <span style={toolbarStyles.metaDivider} />
-              <span style={toolbarStyles.metaItem}>
-                <Bell size={12} />
-                {passosAtivos} activo{passosAtivos === 1 ? "" : "s"}
-              </span>
-            </>
-          ) : null}
+            ) : null}
+          </div>
+
+          <div style={toolbarStyles.janelaRow}>
+            <Clock size={12} style={{ flexShrink: 0, opacity: 0.75 }} aria-hidden />
+            <span style={toolbarStyles.metaItem}>
+              {modoJanela === "continuo" ? (
+                <>
+                  Envio: <strong style={toolbarStyles.metaStrong}>24/7</strong>
+                </>
+              ) : (
+                <>
+                  Anti-madrugada:{" "}
+                  <strong style={toolbarStyles.metaStrong}>{janelaCompact}</strong>
+                </>
+              )}
+            </span>
+            <span
+              style={{
+                ...toolbarStyles.statusPill,
+                color: janelaStatus.ativa ? "#86efac" : "#fcd34d",
+                borderColor: janelaStatus.ativa ? "rgba(134, 239, 172, 0.45)" : "rgba(252, 211, 77, 0.45)",
+                background: janelaStatus.ativa ? "rgba(34, 197, 94, 0.12)" : "rgba(234, 179, 8, 0.1)",
+              }}
+              title={janelaStatus.detalhe}
+            >
+              {janelaStatus.rotulo}
+            </span>
+            <span style={toolbarStyles.metaHint} title={`Fuso: ${timezoneFollowup(config)}`}>
+              1× por passo · cadência concluída = sem reenvio
+            </span>
+          </div>
         </div>
 
         <div style={followupToolbarGroup}>

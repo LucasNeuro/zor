@@ -5,11 +5,10 @@ import {
   type FollowupRunResult,
 } from "@/lib/hub/followup-runner";
 import {
+  faixaHorariaEfetiva,
   followupPermitidoNaJanela,
   horariosDisparoFollowup,
   janelaModoFollowup,
-  horarioInicioFollowup,
-  horarioFimFollowup,
 } from "@/lib/hub/followup-janela";
 import { resumoJanelaFollowup } from "@/lib/hub/followup-agenda";
 import { formatarResumoCadencia } from "@/lib/hub/followup-types";
@@ -188,15 +187,16 @@ export async function buildFollowupOperacaoSnapshot(
   const resumo_cadencia = config.ativo ? formatarResumoCadencia(passos, config) : null;
   const janelaAgora = followupPermitidoNaJanela(config);
   const modoJanela = janelaModoFollowup(config);
+  const faixaEfetiva = faixaHorariaEfetiva(config);
   const execucao_janela: FollowupExecucaoJanela = {
-    modo: modoJanela === "faixa" ? "faixa" : modoJanela === "slots" ? "slots" : "continuo",
+    modo: modoJanela === "faixa" ? "faixa" : modoJanela === "slots" ? "faixa" : "continuo",
     ativa: janelaAgora.ativa,
     proximo_slot: janelaAgora.proximo ?? null,
     horarios: horariosDisparoFollowup(config),
     janela_resumo: resumoJanelaFollowup(config),
     faixa:
-      modoJanela === "faixa"
-        ? { inicio: horarioInicioFollowup(config), fim: horarioFimFollowup(config) }
+      modoJanela !== "continuo"
+        ? { inicio: faixaEfetiva.inicio, fim: faixaEfetiva.fim }
         : undefined,
   };
   const janela_resumo = resumoJanelaFollowup(config);

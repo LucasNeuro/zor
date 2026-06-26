@@ -207,6 +207,8 @@ export function AgenteFollowupPanel({
   const pendentes = (followup?.timeline ?? []).filter((e) => e.status === "aguardando").length;
   const janela = followup?.execucao_janela;
   const foraDaJanela = janela && janela.ativa === false && janela.modo !== "continuo";
+  const faixaCompact =
+    janela?.faixa != null ? `${janela.faixa.inicio}–${janela.faixa.fim}` : followup?.janela_resumo ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -236,6 +238,12 @@ export function AgenteFollowupPanel({
                 ? followup.resumo_cadencia ?? "Follow-up activo"
                 : "Follow-up inactivo — active em Integrações para ver envios automáticos."}
             </p>
+            {followup?.ativo ? (
+              <p style={{ margin: "8px 0 0", fontSize: 12, color: "#5d7a67", lineHeight: 1.5, maxWidth: 620 }}>
+                <strong style={{ color: "#1e4a24" }}>1 envio por passo</strong> — após todos os passos sem resposta,
+                nenhum follow-up automático (até o cliente voltar a falar ou arquivamento).
+              </p>
+            ) : null}
             {foraDaJanela ? (
               <p
                 style={{
@@ -244,21 +252,19 @@ export function AgenteFollowupPanel({
                   fontWeight: 700,
                   color: "#a16207",
                   lineHeight: 1.45,
-                  maxWidth: 560,
+                  maxWidth: 620,
                 }}
               >
-                {janela?.modo === "faixa" && janela.faixa
-                  ? `Fora da faixa ${janela.faixa.inicio}–${janela.faixa.fim}`
-                  : "Fora da janela horária"}
-                {janela?.proximo_slot ? ` — próximo envio ~${janela.proximo_slot}` : ""}
-                {janela?.modo === "slots" && janela.horarios?.length
-                  ? ` (slots: ${janela.horarios.join(", ")})`
-                  : null}
-                . Leads com proximo_followup agendado aparecem como &quot;Aguardando espera&quot; na simulação.
+                Anti-madrugada: fora da faixa {faixaCompact ?? "horária"}
+                {janela?.proximo_slot ? ` — retoma ~${janela.proximo_slot}` : ""}. Não repete passos já enviados.
               </p>
-            ) : janela?.modo === "continuo" ? (
+            ) : followup?.ativo && janela?.modo !== "continuo" ? (
               <p style={{ margin: "8px 0 0", fontSize: 12, fontWeight: 600, color: "#15803d", lineHeight: 1.45 }}>
-                Modo contínuo — cadência activa a qualquer hora.
+                Anti-madrugada {faixaCompact ? `(${faixaCompact})` : ""} — dentro da faixa, cadência activa agora.
+              </p>
+            ) : followup?.ativo && janela?.modo === "continuo" ? (
+              <p style={{ margin: "8px 0 0", fontSize: 12, fontWeight: 600, color: "#15803d", lineHeight: 1.45 }}>
+                Modo contínuo — cadência activa a qualquer hora (ideal para testes).
               </p>
             ) : null}
           </div>

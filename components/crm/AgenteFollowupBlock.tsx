@@ -32,9 +32,10 @@ import {
   HORARIO_FIM_PADRAO,
   HORARIO_INICIO_PADRAO,
   TZ_FOLLOWUP_PADRAO,
-  followupPermitidoNaJanela,
+  faixaHorariaEfetiva,
   janelaModoFollowup,
 } from "@/lib/hub/followup-janela";
+import { statusJanelaFollowupAgora } from "@/lib/hub/followup-agenda";
 import {
   FOLLOWUP_TIMEZONE_PRESETS,
   timezoneFollowupLabel,
@@ -610,14 +611,16 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     if (!config) return null;
     const modo = janelaModoFollowup(config);
     if (modo === "continuo") {
-      return { modo: "continuo" as const, ativa: true, proximo: null as string | null, faixa: null };
+      return { modo: "continuo" as const, ativa: true, rotulo: "Contínuo", faixa: null as string | null };
     }
-    const j = followupPermitidoNaJanela(config);
+    const faixa = faixaHorariaEfetiva(config);
+    const st = statusJanelaFollowupAgora(config);
     return {
       modo,
-      ativa: j.ativa,
-      proximo: j.proximo ?? null,
-      faixa: j.faixa ?? null,
+      ativa: st.ativa,
+      rotulo: st.rotulo,
+      detalhe: st.detalhe,
+      faixa: `${faixa.inicio}–${faixa.fim}`,
     };
   }, [config]);
 
@@ -771,10 +774,10 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
         <span style={rfLabelStyle()}>Quando enviar follow-ups</span>
         <p style={{ margin: "4px 0 10px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
-          A <strong style={{ color: RF_TEXT_SECONDARY }}>cadência</strong> (no fluxo) define quanto tempo esperar após
-          o silêncio. A <strong style={{ color: RF_TEXT_SECONDARY }}>faixa horária</strong> só evita envio de
-          madrugada — dentro dela a cadência manda (ex. 3 min + 4 min). Cada passo dispara{" "}
-          <strong style={{ color: RF_TEXT_SECONDARY }}>uma vez</strong> por lead.
+          A <strong style={{ color: RF_TEXT_SECONDARY }}>cadência</strong> (no fluxo) define os minutos entre passos.
+          A <strong style={{ color: RF_TEXT_SECONDARY }}>faixa horária</strong> só impede envio de madrugada — não
+          repete mensagens. Cada passo dispara <strong style={{ color: RF_TEXT_SECONDARY }}>uma única vez</strong> por
+          lead; ao concluir a cadência ou encerrar atendimento, o automático para.
         </p>
         <div style={{ display: "grid", gap: 8 }}>
           {(
@@ -782,7 +785,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
               {
                 id: "faixa" as const,
                 titulo: "Faixa horária (recomendado)",
-                desc: "Envia entre início e fim do dia (ex. 08:00–22:00). Respeita a cadência dentro dessa faixa.",
+                desc: "Só bloqueia madrugada (ex. 22h–08h). Dentro da faixa, a cadência manda — 3 min, 4 min, etc.",
               },
               {
                 id: "slots" as const,
@@ -831,7 +834,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
             );
           })}
         </div>
-        {janelaStatus?.modo === "faixa" ? (
+        {janelaStatus && janelaStatus.modo !== "continuo" ? (
           <p
             style={{
               margin: "10px 0 0",
@@ -840,28 +843,13 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
               color: janelaStatus.ativa ? "#3fb950" : "#fbbf24",
               lineHeight: 1.45,
             }}
+            title={janelaStatus.detalhe}
           >
-            {janelaStatus.ativa
-              ? `Dentro da faixa ${config?.horario_inicio}–${config?.horario_fim} — envios permitidos.`
-              : `Fora da faixa${janelaStatus.proximo ? ` — próximo ~${janelaStatus.proximo}` : ""}.`}
-          </p>
-        ) : janelaStatus?.modo === "slots" ? (
-          <p
-            style={{
-              margin: "10px 0 0",
-              fontSize: 11,
-              fontWeight: 600,
-              color: janelaStatus.ativa ? "#3fb950" : "#fbbf24",
-              lineHeight: 1.45,
-            }}
-          >
-            {janelaStatus.ativa
-              ? "Dentro do slot — envios permitidos neste momento."
-              : `Fora do slot${janelaStatus.proximo ? ` — próximo ~${janelaStatus.proximo}` : ""}.`}
+            Faixa {janelaStatus.faixa} — {janelaStatus.rotulo}. Não reenvia passos já concluídos.
           </p>
         ) : janelaStatus?.modo === "continuo" ? (
           <p style={{ margin: "10px 0 0", fontSize: 11, fontWeight: 600, color: "#3fb950", lineHeight: 1.45 }}>
-            Modo contínuo: a cadência vale a qualquer hora (incluindo madrugada).
+            Modo contínuo: cadência a qualquer hora (testes). Mesmo assim, 1 envio por passo.
           </p>
         ) : null}
       </div>

@@ -2,9 +2,12 @@ import type { HubAgenteFollowupConfig } from "@/lib/hub/followup-types";
 import {
   avaliarFaixaHorariaFollowup,
   faixaHorariaEfetiva,
+  followupPermitidoNaJanela,
+  horarioInicioFollowup,
+  horarioFimFollowup,
+  horariosDisparoFollowup,
   janelaModoFollowup,
   timezoneFollowup,
-  horariosDisparoFollowup,
 } from "@/lib/hub/followup-janela";
 import { horaLocalDeDate } from "@/lib/hub/followup-schedule";
 import { validarHoraDia } from "@/lib/hub/followup-types";
@@ -126,4 +129,61 @@ export function resumoJanelaFollowup(
     return `Faixa ${faixa.inicio}–${faixa.fim} (${timezoneFollowup(config)})${legado}`;
   }
   return `Faixa ${faixa.inicio}–${faixa.fim} (${timezoneFollowup(config)})`;
+}
+
+/** Texto curto para toolbar / badges (sem timezone longo). */
+export function resumoJanelaFollowupCompact(
+  config: Pick<
+    HubAgenteFollowupConfig,
+    | "janela_modo"
+    | "execucao_modo"
+    | "horario_inicio"
+    | "horario_fim"
+    | "horarios_disparo"
+    | "gatilho_tipo"
+    | "gatilho_hora_dia"
+  >
+): string {
+  const modo = janelaModoFollowup(config);
+  if (modo === "continuo") return "24/7";
+  const faixa = faixaHorariaEfetiva(config);
+  return `${faixa.inicio}–${faixa.fim}`;
+}
+
+export function statusJanelaFollowupAgora(
+  config: Pick<
+    HubAgenteFollowupConfig,
+    | "janela_modo"
+    | "execucao_modo"
+    | "timezone"
+    | "horario_inicio"
+    | "horario_fim"
+    | "horarios_disparo"
+    | "gatilho_tipo"
+    | "gatilho_hora_dia"
+  >
+): { ativa: boolean; rotulo: string; detalhe: string } {
+  const modo = janelaModoFollowup(config);
+  if (modo === "continuo") {
+    return {
+      ativa: true,
+      rotulo: "Contínuo",
+      detalhe: "Cadência activa a qualquer hora — ideal para testes.",
+    };
+  }
+  const faixa = faixaHorariaEfetiva(config);
+  const j = followupPermitidoNaJanela(config);
+  const tz = timezoneFollowup(config);
+  if (j.ativa) {
+    return {
+      ativa: true,
+      rotulo: "Dentro da faixa",
+      detalhe: `Envios permitidos entre ${faixa.inicio} e ${faixa.fim} (${tz}). A cadência do fluxo manda dentro desse horário.`,
+    };
+  }
+  return {
+    ativa: false,
+    rotulo: j.proximo ? `Retoma ~${j.proximo}` : "Fora da faixa",
+    detalhe: `Fora de ${faixa.inicio}–${faixa.fim} (${tz}). Não reenvia passos já enviados — só espera o próximo horário permitido.`,
+  };
 }

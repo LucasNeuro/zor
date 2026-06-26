@@ -35,6 +35,12 @@ export async function obterOuCriarFollowupConfig(
     agente_slug: agenteSlug,
     ativo: false,
     arquivar_apos_dias: 7,
+    execucao_modo: "janela_horaria",
+    janela_modo: "faixa",
+    horario_inicio: "08:00",
+    horario_fim: "22:00",
+    timezone: "America/Sao_Paulo",
+    max_envios_por_dia: 1,
   };
   if (tenantId) row.tenant_id = tenantId;
 

@@ -22,6 +22,7 @@ import {
 import {
   contarEnviosFollowupHoje,
   followupPassoJaEnviado,
+  limparLedgerCadenciaLead,
   registrarFollowupEnvio,
 } from "@/lib/hub/followup-ledger";
 import {
@@ -334,6 +335,7 @@ export async function executarFollowupParaAgente(
     );
 
     if (!options?.simular && clienteRespondeuDepois && enviadosCount > 0) {
+      await limparLedgerCadenciaLead(supabase, lead.id, slug);
       await supabase
         .from("hub_leads_crm")
         .update({

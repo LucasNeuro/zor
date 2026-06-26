@@ -21,7 +21,7 @@ export function janelaModoFollowup(
     return config.janela_modo;
   }
   if (config.execucao_modo === "continuo") return "continuo";
-  return "slots";
+  return "faixa";
 }
 
 export function execucaoModoFollowup(

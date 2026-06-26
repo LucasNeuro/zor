@@ -36,6 +36,10 @@ import {
   janelaModoFollowup,
 } from "@/lib/hub/followup-janela";
 import {
+  FOLLOWUP_TIMEZONE_PRESETS,
+  timezoneFollowupLabel,
+} from "@/lib/hub/followup-timezone-presets";
+import {
   configGatilhoPadrao,
   esperaMinutosDoPasso,
   formatarResumoCadencia,
@@ -78,7 +82,7 @@ function normalizarConfig(c: HubAgenteFollowupConfig): HubAgenteFollowupConfig {
       ? c.janela_modo
       : c.execucao_modo === "continuo"
         ? "continuo"
-        : "slots";
+        : "faixa";
   return {
     ...c,
     janela_modo,
@@ -767,9 +771,10 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
         <span style={rfLabelStyle()}>Quando enviar follow-ups</span>
         <p style={{ margin: "4px 0 10px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
-          A <strong style={{ color: RF_TEXT_SECONDARY }}>cadência</strong> (ex.: 3 min) define quanto tempo esperar
-          após o silêncio do cliente. O <strong style={{ color: RF_TEXT_SECONDARY }}>modo de envio</strong> define em
-          que horas do dia o sistema pode disparar.
+          A <strong style={{ color: RF_TEXT_SECONDARY }}>cadência</strong> (no fluxo) define quanto tempo esperar após
+          o silêncio. A <strong style={{ color: RF_TEXT_SECONDARY }}>faixa horária</strong> limita em que horas do dia
+          pode enviar. Cada passo só dispara <strong style={{ color: RF_TEXT_SECONDARY }}>uma vez</strong> por lead
+          (ledger).
         </p>
         <div style={{ display: "grid", gap: 8 }}>
           {(
@@ -863,10 +868,35 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
 
       {janelaModoFollowup(config ?? { execucao_modo: "janela_horaria" }) === "faixa" ? (
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
-        <span style={rfLabelStyle()}>Faixa horária</span>
+        <span style={rfLabelStyle()}>Faixa de funcionamento</span>
         <p style={{ margin: "4px 0 8px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
-          Follow-ups só disparam entre estes horários ({config?.timezone ?? TZ_FOLLOWUP_PADRAO}).
+          Envios automáticos só entre início e fim (fuso abaixo). Fora disso aguarda a próxima janela — sem repetir o
+          mesmo passo.
         </p>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <span style={{ ...rfLabelStyle(), fontSize: 10 }}>Fuso horário</span>
+          <select
+            value={config?.timezone ?? TZ_FOLLOWUP_PADRAO}
+            disabled={loading || saving || !config}
+            onChange={(e) => {
+              const timezone = e.target.value;
+              atualizarConfigLocal({ timezone });
+              void salvarConfig({ janela_modo: "faixa", timezone });
+            }}
+            style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
+          >
+            {FOLLOWUP_TIMEZONE_PRESETS.some((p) => p.value === (config?.timezone ?? TZ_FOLLOWUP_PADRAO)) ? null : (
+              <option value={config?.timezone ?? TZ_FOLLOWUP_PADRAO}>
+                {timezoneFollowupLabel(config?.timezone ?? TZ_FOLLOWUP_PADRAO)}
+              </option>
+            )}
+            {FOLLOWUP_TIMEZONE_PRESETS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <label>
             <span style={{ ...rfLabelStyle(), fontSize: 10 }}>Início</span>
@@ -931,10 +961,10 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
 
       {janelaModoFollowup(config ?? { execucao_modo: "janela_horaria" }) === "slots" ? (
       <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
-        <span style={rfLabelStyle()}>Horários de envio (Brasil)</span>
+        <span style={rfLabelStyle()}>Slots fixos (legado)</span>
         <p style={{ margin: "4px 0 8px", fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
-          O follow-up só dispara nestes horários (janela de ~20 min cada). Mesmo com cadência de 3 min, fora destes
-          horários o envio aguarda o próximo slot.
+          Só dispara ~20 min em cada horário. Prefira <strong style={{ color: RF_TEXT_SECONDARY }}>Faixa horária</strong>{" "}
+          para flexibilidade (ex. 08:00–22:00).
         </p>
         <input
           id="followup-horarios-disparo"

@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { formatarGatilhoConfig } from "@/lib/hub/followup-types";
 import type { FollowupTipoConteudo, HubAgenteFollowupConfig, HubAgenteFollowupPasso } from "@/lib/hub/followup-types";
+import { resumoJanelaFollowup } from "@/lib/hub/followup-agenda";
+import { janelaModoFollowup, followupPermitidoNaJanela } from "@/lib/hub/followup-janela";
 import { buildFollowupPanelStyles, followupToolbarGroup } from "./followup-flow-panel-styles";
 import type { FollowupFlowCanvasApi } from "./FollowupFlowCanvas";
 
@@ -87,6 +89,9 @@ export function FollowupFlowReactFlowPanel({
   const passosAtivos = passos.filter((p) => p.ativo).length;
   const cadenciaOk = passos.length > 0 && passosAtivos > 0;
   const canSave = hasUnsavedChanges;
+  const janelaResumo = resumoJanelaFollowup(config);
+  const janelaAgora = followupPermitidoNaJanela(config);
+  const modoJanela = janelaModoFollowup(config);
 
   async function flushAndSave(action?: () => void | Promise<void>) {
     await canvasApiRef.current?.flushPendingEdit();
@@ -114,6 +119,32 @@ export function FollowupFlowReactFlowPanel({
           <span style={toolbarStyles.metaDivider} />
           <span style={toolbarStyles.metaItem} title="Dias sem resposta até arquivar o lead">
             Arquivar: <strong style={toolbarStyles.metaStrong}>{config.arquivar_apos_dias ?? 7}d</strong>
+          </span>
+          <span style={toolbarStyles.metaDivider} />
+          <span
+            style={toolbarStyles.metaItem}
+            title={
+              janelaAgora.ativa
+                ? "Dentro da janela — envios permitidos agora"
+                : `Fora da janela${janelaAgora.proximo ? ` — próximo ~${janelaAgora.proximo}` : ""}`
+            }
+          >
+            {modoJanela === "continuo" ? (
+              <>Envio: <strong style={toolbarStyles.metaStrong}>24/7</strong></>
+            ) : (
+              <>
+                Janela:{" "}
+                <strong
+                  style={{
+                    ...toolbarStyles.metaStrong,
+                    color: janelaAgora.ativa ? "#15803d" : "#a16207",
+                  }}
+                >
+                  {janelaResumo}
+                  {janelaAgora.ativa ? " · agora OK" : " · aguardando"}
+                </strong>
+              </>
+            )}
           </span>
           {passosAtivos > 0 ? (
             <>

@@ -12,7 +12,7 @@ export function mensagemErroFollowupDb(error: { message?: string; code?: string 
     return (
       "O banco ainda não tem as colunas/tabelas de follow-up. " +
       "No Supabase → SQL Editor, execute os ficheiros em `supabase/migrations/`, " +
-      "incluindo `20260727120000_hub_followup_ledger_faixa.sql`, depois tente guardar de novo."
+      "incluindo `20260727120000_hub_followup_ledger_faixa.sql` e `20260728100000_hub_followup_default_faixa.sql`, depois tente guardar de novo."
     );
   }
 

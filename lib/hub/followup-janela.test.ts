@@ -47,8 +47,9 @@ describe("followup janela horária", () => {
 
   it("janelaModoFollowup mapeia legado", () => {
     expect(janelaModoFollowup({ execucao_modo: "continuo" })).toBe("continuo");
-    expect(janelaModoFollowup({ execucao_modo: "janela_horaria" })).toBe("slots");
+    expect(janelaModoFollowup({ execucao_modo: "janela_horaria" })).toBe("faixa");
     expect(janelaModoFollowup({ janela_modo: "faixa" })).toBe("faixa");
+    expect(janelaModoFollowup({ janela_modo: "slots" })).toBe("slots");
   });
 
   it("usa horários padrão quando config vazia", () => {

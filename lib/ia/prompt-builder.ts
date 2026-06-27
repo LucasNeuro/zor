@@ -17,6 +17,7 @@ import {
 } from "@/lib/hub/tenant-empresa-cadastral";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
+import { listarMemoriasLeadParaPrompt } from "@/lib/ia/memoria-lead";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
 import { blocoRegrasFluxoSequencialPlaybook } from "@/lib/ia/playbook-mari-runtime";
 import { agenteUsaPlaybookLegadoMari } from "@/lib/whatsapp/playbook-flow-runtime";
@@ -155,16 +156,14 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
   // 3. Busca memórias do lead (top 5) e do agente (top 6)
   let memorias: Array<{ chave: string; valor: string }> = [];
   let memoriasAgenteTexto = "";
-  if (params.leadId && !params.sessaoReiniciada) {
-    const cutoffIso = new Date(cutoffSessaoConversaMs()).toISOString();
-    const { data: mems } = await supabase
-      .from("hub_memorias_lead")
-      .select("chave, valor, confianca")
-      .eq("lead_id", params.leadId)
-      .gte("criado_em", cutoffIso)
-      .order("confianca", { ascending: false })
-      .limit(5);
-    if (mems) memorias = mems;
+  if (params.leadId) {
+    const cutoffIso = params.sessaoReiniciada
+      ? undefined
+      : new Date(cutoffSessaoConversaMs()).toISOString();
+    memorias = await listarMemoriasLeadParaPrompt(supabase, params.leadId, {
+      cutoffIso,
+      limit: 5,
+    });
   }
   try {
     const memAgente = await listarMemoriasAgente(supabase, params.agenteSlug, 6);
@@ -174,7 +173,7 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
   }
 
   let contextoLeadCrm: Awaited<ReturnType<typeof carregarContextoLeadCrmParaPrompt>> = null;
-  if (params.leadId && !params.sessaoReiniciada) {
+  if (params.leadId) {
     try {
       contextoLeadCrm = await carregarContextoLeadCrmParaPrompt(supabase, params.leadId);
     } catch {
@@ -226,7 +225,7 @@ ${playbookPublicado.prompt}`);
 - Siga o playbook: apresente-se como **${nomeAgente}**, acolha e pergunte o nome quando o playbook exigir, antes de personalizar.
 - Só use nome na saudação se vier confirmado em «DADOS DO CANAL (WhatsApp → CRM)» para este número ou se o cliente tiver dito o nome nesta sessão.`);
 
-    if (!conversaEmAndamento) {
+    if (!conversaEmAndamento && !(params.sessaoReiniciada && contextoLeadCrm?.nome)) {
       const empresaLabel = nomeEmpresaComercial || "nossa empresa";
       secoes.push(`═══ APRESENTAÇÃO NA 1ª MENSAGEM (obrigatório) ═══
 - Você é **${nomeAgente}**, representando **${empresaLabel}**.

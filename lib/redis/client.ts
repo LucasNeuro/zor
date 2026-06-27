@@ -171,7 +171,21 @@ let redisUnavailableReason: string | null = null;
 const memorySingleton = new MemoryRedisClient();
 
 function isRedisAuthOrConnError(message: string): boolean {
-  return /WRONGPASS|NOAUTH|invalid username-password|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i.test(message);
+  return /WRONGPASS|NOAUTH|invalid username-password|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPROTO|SSL routines|wrong version number|Stream isn't writeable|enableOfflineQueue|ECONNRESET/i.test(
+    message
+  );
+}
+
+function redisHostMisconfigured(host: string): string | null {
+  const h = host.trim().toLowerCase();
+  if (!h) return "REDIS_HOST vazio";
+  if (h.startsWith("http://") || h.startsWith("https://")) {
+    return "REDIS_HOST não pode ser URL HTTP — use o hostname TCP do Redis Database no painel Redis Cloud.";
+  }
+  if (h.includes("memory.redis.io")) {
+    return "REDIS_HOST aponta para Agent Memory (HTTP). Use o host do «Redis Database» (ex.: redis-13107….redislabs.com), não memory.redis.io.";
+  }
+  return null;
 }
 
 function markRedisUnavailable(reason: string): void {
@@ -319,7 +333,11 @@ function redisTlsEnabled(): boolean {
   const host = process.env.REDIS_HOST?.trim().toLowerCase() ?? "";
   const port = Number.parseInt(process.env.REDIS_PORT || "6379", 10);
   if (host.endsWith(".render.com")) return true;
+<<<<<<< HEAD
   // Redis Cloud: portas custom (ex. 15295, 13107) são plain TCP; TLS só na 6379 ou REDIS_TLS=true.
+=======
+  // Redis Cloud: portas custom (ex. 13107) são plain TCP; TLS só na 6379 ou com REDIS_TLS=true.
+>>>>>>> 7b07445936348a14859d17bc60f8965a88da2553
   if (
     (host.includes("redislabs.com") || host.includes("redis-cloud.com")) &&
     port === 6379
@@ -329,7 +347,7 @@ function redisTlsEnabled(): boolean {
   return false;
 }
 
-function buildIoredisClient(): IoredisLike | null {
+function buildIoredisClient(useTls: boolean): IoredisLike | null {
   const RedisCtor = loadIoredisConstructor();
   if (!RedisCtor) {
     console.warn("[redis] ioredis não instalado; usando cache em memória.");
@@ -337,18 +355,22 @@ function buildIoredisClient(): IoredisLike | null {
   }
 
   const host = process.env.REDIS_HOST!.trim();
+  const hostErr = redisHostMisconfigured(host);
+  if (hostErr) {
+    console.warn(`[redis] ${hostErr}`);
+    return null;
+  }
+
   const port = Number.parseInt(process.env.REDIS_PORT || "6379", 10);
   const username = process.env.REDIS_USERNAME?.trim();
   const password = process.env.REDIS_PASSWORD?.trim();
-
-  const useTls = redisTlsEnabled();
 
   const client = new RedisCtor({
     host,
     port: Number.isFinite(port) ? port : 6379,
     username: username || undefined,
     password: password || undefined,
-    ...(useTls ? { tls: {} } : {}),
+    ...(useTls ? { tls: { servername: host } } : {}),
     maxRetriesPerRequest: 1,
     enableReadyCheck: false,
     lazyConnect: true,
@@ -375,7 +397,7 @@ export function getRedisClient(): RedisCommandClient {
   if (singleton) return singleton;
 
   if (isRedisConfigured() && !redisUnavailableReason) {
-    ioredisInstance = buildIoredisClient();
+    ioredisInstance = buildIoredisClient(redisTlsEnabled());
     if (ioredisInstance) {
       const primary = new IoredisCommandClient(ioredisInstance);
       singleton = new ResilientRedisClient(primary, memorySingleton);

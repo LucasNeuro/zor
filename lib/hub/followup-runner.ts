@@ -649,8 +649,9 @@ export async function executarFollowupParaAgente(
         ? lead.metadata.mercado
         : "geral") || "geral";
     const empresa = await ctxTemplate.empresaParaTenant(lead.tenant_id);
+    const nomeFollowup = lead.nome || "tudo bem";
     const texto = interpolarTemplateFollowup(corpoTemplateFollowupPasso(passo), {
-      nome: lead.nome,
+      nome: nomeFollowup,
       mercado,
       empresa,
       agente: ctxTemplate.agente,

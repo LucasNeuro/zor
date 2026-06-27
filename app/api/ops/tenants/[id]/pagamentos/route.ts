@@ -4,7 +4,7 @@ import {
   MAX_MENSALIDADES_POR_TENANT,
   contarMensalidadesTenant,
   MENSALIDADE_SELECT,
-} from "@/lib/ops/cora-mensalidade";
+} from "@/lib/ops/mensalidade";
 import { excluirMensalidadesSemEmissaoTenant } from "@/lib/ops/excluir-mensalidade";
 import { requireOpsApiAccess, getOpsActor } from "@/lib/ops/ops-api-auth";
 

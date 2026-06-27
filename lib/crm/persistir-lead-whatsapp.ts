@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
+import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
 import { nomeLeadEhPlaceholder, pushNameParaNomeExibicao } from "@/lib/crm/sincronizar-contato-whatsapp";
 import { extrairESalvarMemoriasLead } from "@/lib/ia/memoria-lead";
 import { cutoffSessaoConversaMs } from "@/lib/ia/sessao-conversa-ttl";
@@ -11,15 +12,6 @@ function parseValorBrl(texto: string): number | undefined {
   const raw = m[1].replace(/\./g, "").replace(",", ".");
   const n = Number.parseFloat(raw);
   return Number.isFinite(n) && n >= 0 ? n : undefined;
-}
-
-function extrairNomeDaMensagem(mensagem: string): string | undefined {
-  const m = mensagem.match(
-    /(?:me chamo|meu nome é|meu nome e|sou o|sou a|aqui é)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s.'-]{1,48})/i
-  );
-  if (!m?.[1]) return undefined;
-  const nome = m[1].trim().split(/\s+/).slice(0, 4).join(" ");
-  return nomeParecePlaceholder(nome) ? undefined : nome.slice(0, 240);
 }
 
 function nomeParecePlaceholder(nome: string): boolean {
@@ -104,7 +96,7 @@ export async function persistirDadosLeadWhatsapp(
 
   await extrairESalvarMemoriasLead(supabase, leadId, mensagemUsuario, respostaIA);
 
-  const nomeMsg = extrairNomeDaMensagem(mensagemUsuario);
+  const nomeMsg = extrairNomeClienteDaMensagem(mensagemUsuario, { respostaCurtaPermitida: true });
   if (nomeMsg) {
     await supabase.from("hub_memorias_lead").insert({
       lead_id: leadId,

@@ -57,32 +57,12 @@ function loadDotEnvOnly() {
 loadDotEnvOnly();
 mergeDevAllowedOrigins();
 
-const resendKey = (process.env.RESEND_API_KEY || "").replace(/\r/g, "").trim();
-if (resendKey) {
-  const fp = `${resendKey.slice(0, 4)}…${resendKey.slice(-4)}`;
-  console.warn(`[dev] Resend OK — RESEND_API_KEY carregada (${fp}).\n`);
-} else {
+const googleOAuthId = (process.env.GOOGLE_OAUTH_CLIENT_ID || "").replace(/\r/g, "").trim();
+if (googleOAuthId) {
+  console.warn("[dev] Gmail OAuth OK — GOOGLE_OAUTH_CLIENT_ID carregado.\n");
+} else if (process.env.ENABLE_EMAIL_CHANNEL === "true") {
   console.warn(
-    "[dev] AVISO: RESEND_API_KEY ausente no .env — canal e-mail / «Enviar teste» falhará até definir e reiniciar.\n"
-  );
-}
-
-function coraEmissorDigits() {
-  const raw = (process.env.CORA_EMISSOR_CNPJ || "").replace(/\r/g, "").trim();
-  return raw.replace(/\D/g, "");
-}
-
-const coraEmissor = coraEmissorDigits();
-if (coraEmissor.length >= 14) {
-  console.warn(`[dev] Cora emissor OK — CORA_EMISSOR_CNPJ carregado (${coraEmissor.slice(0, 2)}…${coraEmissor.slice(-4)}).\n`);
-} else if (process.env.CORA_EMISSOR_CNPJ?.trim()) {
-  console.warn(
-    "[dev] AVISO: CORA_EMISSOR_CNPJ no .env tem menos de 14 dígitos — emissão de boletos falhará.\n"
-  );
-} else {
-  console.warn(
-    "[dev] AVISO: CORA_EMISSOR_CNPJ ausente no .env — boletos Cora falham em localhost. " +
-      "Defina (ex.: 62.449.971/0001-70) e reinicie. Render não aplica aqui.\n"
+    "[dev] AVISO: GOOGLE_OAUTH_CLIENT_ID ausente — canal e-mail / «Enviar teste» falhará até definir e reiniciar.\n"
   );
 }
 

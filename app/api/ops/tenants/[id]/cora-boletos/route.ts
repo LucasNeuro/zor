@@ -1,37 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { coraConfigurado } from "@/lib/cora/cora-config";
-import { getCoraEmissorCnpj, mensagemCoraEmissorAusente } from "@/lib/cora/cora-emissor";
-import type { CoraFormaPagamento } from "@/lib/cora/cora-cobranca";
-import { gerarBoletosParcelados } from "@/lib/ops/cora-mensalidade";
-import { diagnosticarCoraTenant } from "@/lib/cora/cora-diagnostico";
+import { criarMensalidadesParceladas } from "@/lib/ops/mensalidade";
 import { requireOpsApiAccess, getOpsActor } from "@/lib/ops/ops-api-auth";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
+/** Cria mensalidades parceladas no CRM (sem emissão bancária — rota legada cora-boletos). */
 export async function POST(request: NextRequest, ctx: RouteCtx) {
   const denied = await requireOpsApiAccess(request);
   if (denied) return denied;
-
-  if (!coraConfigurado()) {
-    return NextResponse.json(
-      {
-        error:
-          "Cora não configurada. Defina CORA_CLIENT_ID, CORA_CERT_PEM e CORA_PRIVATE_KEY_PEM no servidor.",
-        configured: false,
-      },
-      { status: 503 },
-    );
-  }
-
-  if (!getCoraEmissorCnpj()) {
-    return NextResponse.json(
-      {
-        error: mensagemCoraEmissorAusente(),
-        configured: false,
-      },
-      { status: 503 },
-    );
-  }
 
   const { id } = await ctx.params;
   const tenantId = id?.trim();
@@ -43,7 +19,6 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
     valor_centavos?: number;
     parcelas?: number;
     primeiro_vencimento?: string;
-    forma?: CoraFormaPagamento;
   };
   try {
     body = await request.json();
@@ -69,44 +44,32 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
   }
 
   try {
-    const resultado = await gerarBoletosParcelados(tenantId, {
+    const resultado = await criarMensalidadesParceladas(tenantId, {
       valor_centavos,
       parcelas,
       primeiro_vencimento,
-      forma: body.forma,
     });
 
     const actor = await getOpsActor(request);
     if (actor?.email) {
-      const ids = resultado.criadas
-        .map((r) => (r as { cora_invoice_id?: string }).cora_invoice_id)
-        .filter(Boolean);
       console.info(
-        "[ops/cora-boletos] tenant",
+        "[ops/mensalidades-parceladas] tenant",
         tenantId,
         "por",
         actor.email,
         `${resultado.criadas.length}/${parcelas} ok`,
-        ids.length ? `invoice_ids=${ids.join(",")}` : "",
       );
     }
     if (resultado.erros.length) {
       console.error(
-        "[ops/cora-boletos] falhas:",
+        "[ops/mensalidades-parceladas] falhas:",
         resultado.erros.map((e) => `parcela ${e.parcela}: ${e.error}`).join(" | "),
       );
     }
 
     const status = resultado.criadas.length === 0 ? 502 : resultado.erros.length ? 207 : 201;
     const primeiroErro = resultado.erros[0]?.error;
-    let diagnostico: Awaited<ReturnType<typeof diagnosticarCoraTenant>> | undefined;
-    if (resultado.criadas.length === 0 && primeiroErro) {
-      try {
-        diagnostico = await diagnosticarCoraTenant(tenantId);
-      } catch {
-        /* ignore */
-      }
-    }
+
     return NextResponse.json(
       {
         data: resultado.criadas,
@@ -115,17 +78,19 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
           resultado.criadas.length === 0 && primeiroErro
             ? primeiroErro
             : undefined,
-        diagnostico,
+        aviso:
+          "Mensalidades criadas no CRM. Emissão bancária (Cora) descontinuada — nova integração em breve.",
         resumo: {
-          emitidas: resultado.criadas.length,
+          criadas: resultado.criadas.length,
           falhas: resultado.erros.length,
           total_solicitado: parcelas,
+          emitidas: resultado.criadas.length,
         },
       },
       { status },
     );
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha ao gerar boletos.";
+    const msg = e instanceof Error ? e.message : "Falha ao criar mensalidades.";
     return NextResponse.json({ error: msg }, { status: 422 });
   }
 }

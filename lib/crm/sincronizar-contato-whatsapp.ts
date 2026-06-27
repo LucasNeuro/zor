@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
+import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
 
 /** Nome genérico de lead — deve ser substituído por pushName ou nome dito pelo cliente. */
 export function nomeLeadEhPlaceholder(nome: string | null | undefined): boolean {
@@ -169,7 +170,9 @@ export async function reforcarCrmAposTurnoWhatsapp(
   );
 
   const args: Record<string, unknown> = {};
-  const nomeMsg = extrairNomeDaMensagemCliente(params.mensagemUsuario);
+  const nomeMsg = extrairNomeClienteDaMensagem(params.mensagemUsuario, {
+    respostaCurtaPermitida: true,
+  });
   if (nomeMsg) args.nome = nomeMsg;
   else if (params.pushName) {
     const n = pushNameParaNomeExibicao(params.pushName);
@@ -201,15 +204,6 @@ export async function reforcarCrmAposTurnoWhatsapp(
   const built = buildHubLeadsCrmPatch(args, leadAtual as Record<string, unknown>);
   if (!built.ok) return;
   await supabase.from("hub_leads_crm").update(built.patch).eq("id", params.leadId);
-}
-
-function extrairNomeDaMensagemCliente(mensagem: string): string | undefined {
-  const m = mensagem.match(
-    /(?:me chamo|meu nome é|meu nome e|sou o|sou a|aqui é|pode me chamar de)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s.'-]{1,48})/i
-  );
-  if (!m?.[1]) return undefined;
-  const nome = m[1].trim().split(/\s+/).slice(0, 4).join(" ");
-  return nomeLeadEhPlaceholder(nome) ? undefined : nome.slice(0, 240);
 }
 
 function extrairInteresseHeuristico(mensagem: string): string | undefined {

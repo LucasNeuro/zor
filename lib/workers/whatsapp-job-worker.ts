@@ -4,6 +4,7 @@ import { defaultTenantId } from "@/lib/tenant-default";
 import {
   followupPollMs,
   followupWorkerShouldRun,
+  runAgendaLembreteTick,
   runFollowupTick,
 } from "@/lib/hub/followup-worker-tick";
 import { followupDispatchMode } from "@/lib/hub/followup-dispatch";
@@ -607,6 +608,7 @@ export async function runWhatsappWorker(): Promise<never> {
     if (followupOn && supabase && Date.now() - lastFollowupAt >= followupMs) {
       lastFollowupAt = Date.now();
       await runFollowupTick(supabase);
+      await runAgendaLembreteTick(supabase);
     }
 
     if (result.claimed === 0 && !result.error) {

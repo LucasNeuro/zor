@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
+import { executarAgendaLembreteTodosAgentesAtivos } from "@/lib/hub/agenda-lembrete-runner";
 import { followupCronShouldRun, followupDispatchMode } from "@/lib/hub/followup-dispatch";
 import { executarFollowupTodosAgentesAtivos } from "@/lib/hub/followup-runner";
 
@@ -34,6 +35,9 @@ export async function GET(request: NextRequest) {
     fonteTick: "cron",
   });
 
+  const agenda = await executarAgendaLembreteTodosAgentesAtivos(supabase);
+  const agendaEnviados = agenda.resultados.reduce((n, r) => n + r.enviados, 0);
+
   const totais = resultados.reduce(
     (acc, r) => {
       acc.enviados += r.enviados;
@@ -57,9 +61,12 @@ export async function GET(request: NextRequest) {
     dispatch_mode: followupDispatchMode(),
     tick: new Date().toISOString(),
     agentes_processados: resultados.length,
+    agenda_lembrete_enviados: agendaEnviados,
+    agenda_lembrete_agentes: agenda.resultados.length,
+    agenda_lembrete_erros: agenda.erros,
     ...totais,
     resultados,
-    erros,
+    erros: [...erros, ...agenda.erros],
   });
 }
 

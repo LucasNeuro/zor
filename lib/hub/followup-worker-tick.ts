@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { executarAgendaLembreteTodosAgentesAtivos } from "@/lib/hub/agenda-lembrete-runner";
 import { createHubLogger } from "@/lib/observability/hub-log";
 import { executarFollowupTodosAgentesAtivos } from "@/lib/hub/followup-runner";
 import { followupDispatchMode } from "@/lib/hub/followup-dispatch";
@@ -58,5 +59,31 @@ export async function runFollowupTick(supabase: SupabaseClient): Promise<{
     const msg = e instanceof Error ? e.message : String(e);
     log.error("followup.tick_error", { error: msg.slice(0, 260) });
     return { ok: false, enviados: 0, arquivados: 0, agentes: 0, erros: [msg] };
+  }
+}
+
+/** Tick de lembretes de agenda (mesmo worker que follow-up). */
+export async function runAgendaLembreteTick(supabase: SupabaseClient): Promise<{
+  ok: boolean;
+  enviados: number;
+  agentes: number;
+  erros: string[];
+}> {
+  const log = createHubLogger("agenda_lembrete_worker", { mode: "tick" });
+  try {
+    const { resultados, erros } = await executarAgendaLembreteTodosAgentesAtivos(supabase);
+    const enviados = resultados.reduce((n, r) => n + r.enviados, 0);
+    if (enviados > 0 || erros.length > 0) {
+      log.info("agenda_lembrete.tick", {
+        agentes: resultados.length,
+        enviados,
+        erros: erros.slice(0, 5),
+      });
+    }
+    return { ok: true, enviados, agentes: resultados.length, erros };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error("agenda_lembrete.tick_error", { error: msg.slice(0, 260) });
+    return { ok: false, enviados: 0, agentes: 0, erros: [msg] };
   }
 }

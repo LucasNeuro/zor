@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Bell,
+  CalendarClock,
   ChevronRight,
   Loader2,
   MessageCircle,
@@ -46,6 +47,12 @@ import {
   formatarResumoCadencia,
   normalizarCorpoPassoFollowupParaGravar,
 } from "@/lib/hub/followup-types";
+import {
+  AGENDA_LEMBRETE_MINUTOS_PADRAO,
+  AGENDA_LEMBRETE_TEMPLATE_PADRAO,
+  normalizarAgendaLembreteConfig,
+  type HubAgenteAgendaLembreteConfig,
+} from "@/lib/hub/agenda-lembrete-types";
 
 type FollowupCanalWhatsapp = {
   modo_whatsapp: boolean;
@@ -125,9 +132,11 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   const [editorFullscreenOpen, setEditorFullscreenOpen] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [canalWhatsapp, setCanalWhatsapp] = useState<FollowupCanalWhatsapp | null>(null);
+  const [agendaLembrete, setAgendaLembrete] = useState<HubAgenteAgendaLembreteConfig | null>(null);
   const passosRef = useRef<HubAgenteFollowupPasso[]>([]);
 
   const base = `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/followup`;
+  const baseAgendaLembrete = `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/agenda-lembrete`;
 
   const passosOrdenados = useMemo(
     () => [...passos].sort((a, b) => a.ordem - b.ordem),
@@ -164,16 +173,27 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     setLoading(true);
     setErro("");
     try {
-      const res = await fetch(base, { headers: await hubApiHeaders() });
+      const headers = await hubApiHeaders();
+      const [res, resAgenda] = await Promise.all([
+        fetch(base, { headers }),
+        fetch(baseAgendaLembrete, { headers }),
+      ]);
       const data = (await res.json()) as {
         error?: string;
         config?: HubAgenteFollowupConfig;
         passos?: HubAgenteFollowupPasso[];
         canal_whatsapp?: FollowupCanalWhatsapp;
       };
+      const dataAgenda = (await resAgenda.json()) as {
+        error?: string;
+        config?: HubAgenteAgendaLembreteConfig;
+      };
       if (!res.ok) throw new Error(data.error || "Falha ao carregar");
       setConfig((prev) => (data.config ? normalizarConfig(data.config) : prev));
       setCanalWhatsapp(data.canal_whatsapp ?? null);
+      if (resAgenda.ok && dataAgenda.config) {
+        setAgendaLembrete(normalizarAgendaLembreteConfig(dataAgenda.config));
+      }
       const normalizados = Array.isArray(data.passos)
         ? data.passos.map((p) => normalizarPasso(p as HubAgenteFollowupPasso))
         : [];
@@ -184,7 +204,43 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
     } finally {
       setLoading(false);
     }
-  }, [base, agenteSlug]);
+  }, [base, baseAgendaLembrete, agenteSlug]);
+
+  async function salvarAgendaLembrete(
+    patch: Partial<{
+      ativo: boolean;
+      minutos_antes: number;
+      texto_template: string;
+    }>
+  ) {
+    setSaving(true);
+    setErro("");
+    setOkMsg("");
+    try {
+      const res = await fetch(baseAgendaLembrete, {
+        method: "PATCH",
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        config?: HubAgenteAgendaLembreteConfig;
+      };
+      if (!res.ok || !data.config) throw new Error(data.error || "Falha ao guardar lembrete de agenda");
+      setAgendaLembrete(normalizarAgendaLembreteConfig(data.config));
+      setOkMsg("Lembrete de agenda guardado.");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao guardar lembrete de agenda");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function atualizarAgendaLembreteLocal(patch: Partial<HubAgenteAgendaLembreteConfig>) {
+    setAgendaLembrete((c) =>
+      c ? normalizarAgendaLembreteConfig({ ...c, ...patch }) : c
+    );
+  }
 
   useEffect(() => {
     void carregar();
@@ -608,6 +664,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
   }
 
   const ativo = config?.ativo === true;
+  const agendaLembreteAtivo = agendaLembrete?.ativo === true;
   const passosAtivos = passos.filter((p) => p.ativo).length;
   const nomeAgente = agenteNome?.trim() || agenteSlug;
 
@@ -752,6 +809,105 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
               onCheckedChange={(v) => void salvarConfig({ ativo: v })}
             />
           </div>
+        </div>
+      </div>
+
+      <div style={{ ...cardSurfaceDark, padding: "14px 16px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 10,
+                background: agendaLembreteAtivo ? "rgba(63, 185, 80, 0.16)" : "rgba(88, 166, 255, 0.12)",
+                border: `1px solid ${agendaLembreteAtivo ? "rgba(63, 185, 80, 0.35)" : "rgba(88, 166, 255, 0.35)"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <CalendarClock size={20} color={agendaLembreteAtivo ? "#86efac" : "#58a6ff"} aria-hidden />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <span id="agenda-lembrete-ativo-label" style={{ fontSize: 13, fontWeight: 700, color: RF_TEXT_PRIMARY }}>
+                Lembrete de agenda (Google Calendar)
+              </span>
+              <p style={{ margin: "4px 0 0", fontSize: 11, lineHeight: 1.45, color: RF_TEXT_SECONDARY }}>
+                WhatsApp automático antes da reunião marcada — independente da cadência de silêncio.
+                {agendaLembrete
+                  ? ` · ${agendaLembrete.minutos_antes ?? AGENDA_LEMBRETE_MINUTOS_PADRAO} min antes`
+                  : ""}
+              </p>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: agendaLembreteAtivo ? "#3fb950" : RF_TEXT_MUTED }}>
+              {agendaLembreteAtivo ? "ACTIVO" : "INACTIVO"}
+            </span>
+            <CrmToggleSwitch
+              checked={agendaLembreteAtivo}
+              disabled={loading || saving || !agendaLembrete}
+              variant="dark"
+              labelledBy="agenda-lembrete-ativo-label"
+              onCheckedChange={(v) => void salvarAgendaLembrete({ ativo: v })}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+          <label htmlFor="agenda-lembrete-minutos">
+            <span style={rfLabelStyle()}>Antecedência (minutos)</span>
+            <input
+              id="agenda-lembrete-minutos"
+              type="number"
+              min={1}
+              max={1440}
+              value={agendaLembrete?.minutos_antes ?? AGENDA_LEMBRETE_MINUTOS_PADRAO}
+              disabled={loading || saving || !agendaLembrete}
+              onChange={(e) => {
+                const n = Math.min(1440, Math.max(1, Number.parseInt(e.target.value, 10) || AGENDA_LEMBRETE_MINUTOS_PADRAO));
+                atualizarAgendaLembreteLocal({ minutos_antes: n });
+              }}
+              onBlur={(e) => {
+                const n = Math.min(1440, Math.max(1, Number.parseInt(e.target.value, 10) || AGENDA_LEMBRETE_MINUTOS_PADRAO));
+                void salvarAgendaLembrete({ minutos_antes: n });
+              }}
+              style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
+            />
+          </label>
+
+          <label htmlFor="agenda-lembrete-template">
+            <span style={rfLabelStyle()}>Mensagem</span>
+            <textarea
+              id="agenda-lembrete-template"
+              rows={4}
+              value={agendaLembrete?.texto_template ?? AGENDA_LEMBRETE_TEMPLATE_PADRAO}
+              disabled={loading || saving || !agendaLembrete}
+              onChange={(e) => atualizarAgendaLembreteLocal({ texto_template: e.target.value })}
+              onBlur={(e) => void salvarAgendaLembrete({ texto_template: e.target.value.trim() })}
+              style={{
+                ...rfInputStyle(),
+                width: "100%",
+                marginTop: 4,
+                resize: "vertical",
+                minHeight: 88,
+                fontFamily: "inherit",
+              }}
+            />
+          </label>
+          <p style={{ margin: 0, fontSize: 10, color: RF_TEXT_MUTED, lineHeight: 1.45 }}>
+            Placeholders: {"{nome}"}, {"{agente}"}, {"{empresa}"}, {"{hora}"}, {"{data}"}, {"{link_meet}"}.
+            Usa reservas gravadas ao agendar no Calendar (integração Google).
+          </p>
         </div>
       </div>
 

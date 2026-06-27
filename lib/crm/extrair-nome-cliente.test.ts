@@ -16,4 +16,9 @@ describe("extrairNomeClienteDaMensagem", () => {
     expect(extrairNomeClienteDaMensagem("Oi")).toBeUndefined();
     expect(extrairNomeClienteDaMensagem("Bom dia")).toBeUndefined();
   });
+
+  it("rejeita frases de conversa como nome", () => {
+    expect(extrairNomeClienteDaMensagem("Oi está aí")).toBeUndefined();
+    expect(extrairNomeClienteDaMensagem("Eu te perguntei antes sobre minha agenda")).toBeUndefined();
+  });
 });

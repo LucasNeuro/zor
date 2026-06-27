@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
 import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
+import { nomeLeadEhPlaceholder } from "@/lib/crm/sincronizar-contato-whatsapp";
 
 /** Nome genérico de lead — deve ser substituído por pushName ou nome dito pelo cliente. */
 export function nomeLeadEhPlaceholder(nome: string | null | undefined): boolean {
@@ -177,12 +178,18 @@ export async function reforcarCrmAposTurnoWhatsapp(
 
   const args: Record<string, unknown> = {};
   const nomeMsg = extrairNomeClienteDaMensagem(params.mensagemUsuario, {
-    respostaCurtaPermitida: true,
+    respostaCurtaPermitida: false,
   });
   if (nomeMsg) args.nome = nomeMsg;
   else if (params.pushName) {
     const n = pushNameParaNomeExibicao(params.pushName);
-    if (n) args.nome = n;
+    const { data: leadAtualNome } = await supabase
+      .from("hub_leads_crm")
+      .select("nome")
+      .eq("id", params.leadId)
+      .maybeSingle();
+    const atual = typeof leadAtualNome?.nome === "string" ? leadAtualNome.nome : "";
+    if (n && nomeLeadEhPlaceholder(atual)) args.nome = n;
   }
 
   const interesse = extrairInteresseHeuristico(params.mensagemUsuario);

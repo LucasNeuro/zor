@@ -17,6 +17,7 @@ import {
   montarPatchContatoWhatsapp,
   pushNameParaNomeExibicao,
 } from "@/lib/crm/sincronizar-contato-whatsapp";
+import { buscarLeadPorTelefoneWhatsapp } from "@/lib/crm/buscar-lead-por-telefone";
 import { telefoneConversaId } from "@/lib/crm/isolamento-conversa-lead";
 import { garantirCodigoLead, prepararRowHubLeadInsert } from "@/lib/crm/lead-cadastro";
 import { gerarCodigoPessoa } from "@/lib/crm/pessoa-cadastro";
@@ -308,14 +309,16 @@ async function encontrarOuCriarLead(
 
   const pessoa = await encontrarOuCriarPessoa(tel, nome, "whatsapp", tenantId);
 
-  let leadQuery = supabase.from("hub_leads_crm").select("*").eq("telefone", tel).eq("tenant_id", tenantId);
-  let { data: leadExistente, error: leadFindErr } = await leadQuery.maybeSingle();
-  if (leadFindErr && isMissingPgColumn(leadFindErr, "tenant_id")) {
-    ({ data: leadExistente } = await supabase
-      .from("hub_leads_crm")
-      .select("*")
-      .eq("telefone", tel)
-      .maybeSingle());
+  const { lead: leadExistente, duplicatas } = await buscarLeadPorTelefoneWhatsapp(
+    supabase,
+    tel,
+    tenantId
+  );
+  if (duplicatas > 1) {
+    console.warn("[WEBHOOK] leads duplicados para telefone — usando o mais recente", {
+      telefone: `***${tel.slice(-4)}`,
+      duplicatas,
+    });
   }
 
   if (leadExistente) {

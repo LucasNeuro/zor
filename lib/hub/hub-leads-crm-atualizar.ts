@@ -1,5 +1,8 @@
 /** Valores e patch seguro para `hub_atualizar_lead` (alinhado a CHECKs em hub_leads_crm). */
 
+import { nomeCandidatoEhValido } from "@/lib/crm/extrair-nome-cliente";
+import { nomeLeadEhPlaceholder } from "@/lib/crm/sincronizar-contato-whatsapp";
+
 export const HUB_LEADS_CRM_ESTAGIOS = [
   "novo",
   "em_atendimento",
@@ -124,7 +127,15 @@ export function buildHubLeadsCrmPatch(
   }
 
   const nome = normStr(args.nome, 240);
-  if (nome) patch.nome = nome;
+  if (nome && nomeCandidatoEhValido(nome)) {
+    const nomeAtual = typeof leadAtual?.nome === "string" ? leadAtual.nome.trim() : "";
+    if (nomeLeadEhPlaceholder(nomeAtual)) {
+      patch.nome = nome;
+    } else if (nomeAtual.toLowerCase() === nome.toLowerCase()) {
+      patch.nome = nome;
+    }
+    /** Nome real já confirmado no CRM — não substituir por texto solto de mensagem. */
+  }
 
   const email = normStr(args.email, 320);
   if (email) patch.email = email;

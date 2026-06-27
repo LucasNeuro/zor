@@ -87,6 +87,7 @@ function mergeMensagensWhatsapp(
 
   for (const row of filaRows) {
     if (!mensagemTemCorpo(row)) continue;
+    if (String(row.direcao ?? "") === "saida" && String(row.status ?? "") === "falha_envio") continue;
     mapped.push(mapFilaMensagem(row));
   }
 

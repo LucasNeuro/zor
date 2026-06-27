@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
-import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
+import { extrairNomeClienteDaMensagem, agentePerguntouNome } from "@/lib/crm/extrair-nome-cliente";
 import { nomeLeadEhPlaceholder, pushNameParaNomeExibicao } from "@/lib/crm/sincronizar-contato-whatsapp";
 import {
   carregarNomeMemoriaLead,
@@ -117,7 +117,9 @@ export async function persistirDadosLeadWhatsapp(
 
   await extrairESalvarMemoriasLead(supabase, leadId, mensagemUsuario, respostaIA);
 
-  const nomeMsg = extrairNomeClienteDaMensagem(mensagemUsuario, { respostaCurtaPermitida: true });
+  const nomeMsg = extrairNomeClienteDaMensagem(mensagemUsuario, {
+    respostaCurtaPermitida: agentePerguntouNome(respostaIA),
+  });
   if (nomeMsg) {
     await salvarMemoriaNomeLead(supabase, leadId, nomeMsg, "whatsapp", 0.95);
   }

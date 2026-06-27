@@ -5,6 +5,7 @@ import {
   type FerramentaIntegradorMistralDef,
   type HubIntegradorId,
 } from "@/lib/hub/integradores-catalogo";
+import { mem0PlataformaConfigurada } from "@/lib/hub/mem0-env";
 
 function credenciaisObj(credRow: unknown): Record<string, unknown> {
   const credObj =
@@ -57,6 +58,10 @@ function integracaoConfigurada(
     return Boolean(sub && key);
   }
 
+  if (integracaoId === "mem0") {
+    return mem0PlataformaConfigurada();
+  }
+
   return credenciaisIntegradorProntas(integracaoId, credObj);
 }
 
@@ -71,11 +76,19 @@ export async function ferramentasIntegradorAtivasParaTenant(
     .eq("tenant_id", tenantId)
     .eq("ativo", true);
 
-  if (error || !data?.length) return [];
+  const rows = data ?? [];
 
   const out: FerramentaIntegradorMistralDef[] = [];
   for (const entry of HUB_INTEGRADORES_CATALOGO) {
-    const row = data.find((r) => r.integracao_id === entry.id);
+    if (entry.id === "mem0") {
+      if (!mem0PlataformaConfigurada()) continue;
+      for (const f of entry.ferramentas) {
+        if (f.exportarMistral === false) continue;
+        out.push(ferramentaIntegradorParaMistral(entry.id, f));
+      }
+      continue;
+    }
+    const row = rows.find((r) => r.integracao_id === entry.id);
     if (!row || !integracaoConfigurada(entry.id, row)) continue;
     for (const f of entry.ferramentas) {
       out.push(ferramentaIntegradorParaMistral(entry.id, f));

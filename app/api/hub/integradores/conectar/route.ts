@@ -50,9 +50,10 @@ export async function POST(request: NextRequest) {
         }
       : {};
 
-  const tipoAuth = entry.authModo === "zendesk" ? "api_key" : "bearer";
+  const tipoAuth =
+    entry.authModo === "zendesk" || entry.authModo === "api_key" ? "api_key" : "bearer";
   const credenciais: Record<string, unknown> =
-    tipoAuth === "bearer" ? { bearer_token: principal } : { api_key: principal };
+    tipoAuth === "api_key" ? { api_key: principal } : { bearer_token: principal };
 
   const { data: existing } = await supabase
     .from("hub_integracoes")

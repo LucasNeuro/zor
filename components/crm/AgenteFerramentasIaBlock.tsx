@@ -837,7 +837,11 @@ export function AgenteFerramentasIaBlock({
                               padding: "2px 6px",
                             }}
                           >
-                            {tool.requerConexao ? "REQUER OAUTH" : tool.integrador_nome}
+                            {tool.requerConexao
+                              ? tool.ferramenta_key.startsWith("hub_int_mem0")
+                                ? "LIGAR MEM0"
+                                : "REQUER OAUTH"
+                              : tool.integrador_nome}
                           </span>
                         </div>
                         <code

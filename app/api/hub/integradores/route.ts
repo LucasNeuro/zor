@@ -4,6 +4,7 @@ import { crmConfigError } from "@/lib/crm/supabase-server";
 import { requireInternalApiKey } from "@/lib/crm/crm-api-auth";
 import { mistralApiKey, mistralKeyFingerprint, pingMistralApi } from "@/lib/ia/mistral-health";
 import { HUB_INTEGRADORES_CATALOGO } from "@/lib/hub/integradores-catalogo";
+import { mem0PlataformaConfigurada } from "@/lib/hub/mem0-env";
 import { tenantIdFromRequest } from "@/lib/tenant-default";
 
 export type IntegracaoAmbienteStatus = {
@@ -85,11 +86,28 @@ export async function GET(request: NextRequest) {
 
   const conexoes: Record<
     string,
-    { hub_id: string; configurado: boolean; ativo: boolean; oauth_email?: string | null }
+    {
+      hub_id: string;
+      configurado: boolean;
+      ativo: boolean;
+      oauth_email?: string | null;
+      plataforma_ok?: boolean;
+    }
   > = {};
   for (const entry of HUB_INTEGRADORES_CATALOGO) {
     if (entry.emBreve) {
       conexoes[entry.id] = { hub_id: "", configurado: false, ativo: false, oauth_email: null };
+      continue;
+    }
+    if (entry.id === "mem0") {
+      const plataformaOk = mem0PlataformaConfigurada();
+      conexoes[entry.id] = {
+        hub_id: "",
+        configurado: plataformaOk,
+        ativo: plataformaOk,
+        plataforma_ok: plataformaOk,
+        oauth_email: null,
+      };
       continue;
     }
     const row = (rows ?? []).find((r) => r.integracao_id === entry.id);

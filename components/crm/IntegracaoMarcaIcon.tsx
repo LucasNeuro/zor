@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
  * Google Calendar / Gmail: arte oficial (Google Workspace, 2020).
  * WhatsApp: logótipo oficial (Meta brand guidelines).
  */
-export type IntegracaoMarcaIconVariant = "whatsapp" | "google" | "google-calendar" | "gmail";
+export type IntegracaoMarcaIconVariant = "whatsapp" | "google" | "google-calendar" | "gmail" | "mem0";
 
 function SvgBrand({
   size,
@@ -49,7 +49,22 @@ export function IntegracaoMarcaIcon({
         ? "Gmail"
         : variant === "google-calendar"
           ? "Google Calendar"
-          : "Google");
+          : variant === "mem0"
+            ? "Mem0"
+            : "Google");
+
+  if (variant === "mem0") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- logótipo oficial Mem0 (PNG marca)
+      <img
+        src="/brands/mem0-logo.png"
+        alt={label}
+        width={size}
+        height={size}
+        style={{ display: "block", objectFit: "contain" }}
+      />
+    );
+  }
 
   if (variant === "whatsapp") {
     return (

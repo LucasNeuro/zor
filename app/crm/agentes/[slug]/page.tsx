@@ -53,6 +53,7 @@ import {
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
 import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
+import { AgenteMem0Block } from "@/components/crm/AgenteMem0Block";
 import { buildGoogleIntegradorCatalogLite } from "@/lib/hub/agente-wizard-google";
 import { agenteEhModoCanal, type ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { hubModeloExibicaoProduto } from "@/lib/ia/hub-model-defaults";
@@ -241,14 +242,41 @@ export default function AgentePage() {
     }
   }, [slug]);
 
+  const carregarIntegradoresCatalogo = useCallback(async () => {
+    try {
+      const headers = await hubApiHeaders();
+      const resInt = await fetch("/api/hub/integradores", { headers }).catch(() => null);
+      if (!resInt?.ok) return;
+      const j = (await resInt.json()) as {
+        catalogo?: IntegradorCatalogoEntry[];
+        conexoes?: Record<string, { configurado?: boolean; plataforma_ok?: boolean }>;
+      };
+      const lista: CatalogoFerramentaIntegradorLite[] = [];
+      for (const entry of j.catalogo ?? []) {
+        if (j.conexoes?.[entry.id]?.configurado !== true) continue;
+        for (const f of entry.ferramentas) {
+          lista.push({
+            ferramenta_key: f.ferramenta_key,
+            titulo: f.titulo,
+            integrador_nome: entry.nome,
+            politica: f.politica,
+            descricao_curta: f.descricao_curta ?? null,
+          });
+        }
+      }
+      setCatalogoIntegradorFerramentas(lista);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     void (async () => {
       try {
         const headers = await hubApiHeaders();
-        const [r, externas, resInt] = await Promise.all([
+        const [r, externas] = await Promise.all([
           fetch("/api/hub/ferramentas-custom?all=true", { headers }),
           fetchHubFerramentasExternas(headers, false).catch(() => []),
-          fetch("/api/hub/integradores", { headers }).catch(() => null),
         ]);
         const d: unknown = await r.json().catch(() => null);
         if (r.ok && Array.isArray(d)) {
@@ -276,31 +304,12 @@ export default function AgentePage() {
             descricao_curta: x.descricao_curta ?? null,
           }))
         );
-        if (resInt?.ok) {
-          const j = (await resInt.json()) as {
-            catalogo?: IntegradorCatalogoEntry[];
-            conexoes?: Record<string, { configurado?: boolean }>;
-          };
-          const lista: CatalogoFerramentaIntegradorLite[] = [];
-          for (const entry of j.catalogo ?? []) {
-            if (j.conexoes?.[entry.id]?.configurado !== true) continue;
-            for (const f of entry.ferramentas) {
-              lista.push({
-                ferramenta_key: f.ferramenta_key,
-                titulo: f.titulo,
-                integrador_nome: entry.nome,
-                politica: f.politica,
-                descricao_curta: f.descricao_curta ?? null,
-              });
-            }
-          }
-          setCatalogoIntegradorFerramentas(lista);
-        }
+        await carregarIntegradoresCatalogo();
       } catch {
         /* ignore */
       }
     })();
-  }, []);
+  }, [carregarIntegradoresCatalogo]);
 
   useEffect(() => {
     carregar();
@@ -363,10 +372,10 @@ export default function AgentePage() {
 
   const integradorCatalogFicha = useMemo(() => {
     const keys = new Set(catalogoIntegradorFerramentas.map((x) => x.ferramenta_key));
-    const pendentes = buildGoogleIntegradorCatalogLite({ requerConexao: true }).filter(
+    const pendentesGoogle = buildGoogleIntegradorCatalogLite({ requerConexao: true }).filter(
       (x) => !keys.has(x.ferramenta_key)
     );
-    return [...catalogoIntegradorFerramentas, ...pendentes];
+    return [...catalogoIntegradorFerramentas, ...pendentesGoogle];
   }, [catalogoIntegradorFerramentas]);
 
   const agenteModoCanal = agente
@@ -1157,6 +1166,14 @@ export default function AgentePage() {
                         ...patch,
                       }))
                     }
+                  />
+                ) : null}
+                {agenteModoCanal ? (
+                  <AgenteMem0Block
+                    agenteSlug={slug}
+                    agenteNome={agente.nome}
+                    layout="card"
+                    usoFerramentas={usoFerramentasIa}
                   />
                 ) : null}
                 <AgenteFerramentasIaBlock

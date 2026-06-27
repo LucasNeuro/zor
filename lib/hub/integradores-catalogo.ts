@@ -10,7 +10,8 @@ export type HubIntegradorId =
   | "zendesk"
   | "meta_ads"
   | "google_ads"
-  | "ga4";
+  | "ga4"
+  | "mem0";
 
 export type IntegradorAuthModo = "bearer" | "api_key" | "zendesk" | "none";
 
@@ -21,6 +22,8 @@ export type IntegradorFerramentaDef = {
   descricao_modelo: string;
   parametros_schema: Record<string, unknown>;
   politica: "leitura" | "escrita";
+  /** false = toggle no agente, mas não expõe function calling ao Mistral (ex.: Super Memória). */
+  exportarMistral?: boolean;
 };
 
 export type IntegradorCatalogoEntry = {
@@ -272,6 +275,49 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
       principalPlaceholder: "OAuth GA4",
     },
     ferramentas: [],
+  },
+  {
+    id: "mem0",
+    nome: "Mem0 — Super Memória",
+    descricao:
+      "Memória persistente entre sessões (credencial de plataforma: MEM0_API_KEY no Render). Recall semântico por agente.",
+    categoria: "agente",
+    authModo: "none",
+    authLabels: {
+      principal: "MEM0_API_KEY (ambiente)",
+      principalPlaceholder: "Definida no Render / .env — não na UI",
+    },
+    ferramentas: [
+      {
+        ferramenta_key: "hub_int_mem0_super_memoria",
+        titulo: "Super Memória (recall automático)",
+        descricao_curta: "Injeta memórias Mem0 no prompt a cada turno WhatsApp.",
+        descricao_modelo: "",
+        politica: "leitura",
+        exportarMistral: false,
+        parametros_schema: SCHEMA_VAZIO,
+      },
+      {
+        ferramenta_key: "hub_int_mem0_buscar",
+        titulo: "Buscar memórias do cliente (Mem0)",
+        descricao_curta: "Pesquisa semântica no histórico Mem0 deste lead.",
+        descricao_modelo:
+          "Usa quando precisar recordar preferências, nome, contexto de conversas anteriores ou factos não visíveis no CRM. Retorna memórias relevantes ao query.",
+        politica: "leitura",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Pergunta ou tema a pesquisar (ex.: nome do cliente, preferências, último pedido)",
+            },
+            limite: { type: "number", description: "Máximo de memórias (1–12, padrão 6)" },
+          },
+          required: ["query"],
+          additionalProperties: false,
+        },
+      },
+    ],
   },
 ];
 

@@ -273,6 +273,31 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         leadId: ctx.leadId,
       })}\n\n${blocoIsolamentoConversaWhatsapp(ctx.telefone)}`;
     }
+
+    try {
+      const tenantForMem0 = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      const { data: ferrMemRow } = await db
+        .from("hub_agente_identidade")
+        .select("uso_ferramentas_ia, modo_operacao")
+        .eq("agente_slug", agente.slug)
+        .maybeSingle();
+      const usoMem = mergeUsoFerramentasWhatsappCanal(
+        mergeUsoFerramentasComPadraoPreservandoCustom(ferrMemRow?.uso_ferramentas_ia ?? {}),
+        ferrMemRow?.modo_operacao ?? (ctx.canal === "whatsapp" ? "canal_whatsapp" : null)
+      );
+      const { buscarBlocoMem0SuperMemoriaParaPrompt } = await import("@/lib/hub/mem0-super-memoria");
+      const blocoMem0 = await buscarBlocoMem0SuperMemoriaParaPrompt(db, {
+        tenantId: tenantForMem0,
+        leadId: ctx.leadId,
+        agenteSlug: agente.slug,
+        mensagem: ctx.mensagem,
+        usoFerramentas: usoMem,
+      });
+      if (blocoMem0) systemPrompt = `${systemPrompt}\n\n${blocoMem0}`;
+    } catch (mem0Err) {
+      console.warn("[MEM0] bloco prompt:", mem0Err);
+    }
+
     const modelo = promptData.modelo;
 
     // ETAPA 6: Estima tokens antes de chamar
@@ -464,6 +489,31 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       telefone: ctx.telefone,
       pushName: ctx.nome,
     });
+
+    try {
+      const tenantForMem0 = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      const { data: ferrMemRow } = await db
+        .from("hub_agente_identidade")
+        .select("uso_ferramentas_ia, modo_operacao")
+        .eq("agente_slug", agente.slug)
+        .maybeSingle();
+      const usoMem = mergeUsoFerramentasWhatsappCanal(
+        mergeUsoFerramentasComPadraoPreservandoCustom(ferrMemRow?.uso_ferramentas_ia ?? {}),
+        ferrMemRow?.modo_operacao ?? (ctx.canal === "whatsapp" ? "canal_whatsapp" : null)
+      );
+      const { sincronizarTurnoMem0SuperMemoria } = await import("@/lib/hub/mem0-super-memoria");
+      await sincronizarTurnoMem0SuperMemoria(db, {
+        tenantId: tenantForMem0,
+        leadId: ctx.leadId,
+        agenteSlug: agente.slug,
+        mensagemUsuario: ctx.mensagem,
+        respostaIA: textoResposta,
+        telefone: ctx.telefone,
+        usoFerramentas: usoMem,
+      });
+    } catch (mem0SyncErr) {
+      console.warn("[MEM0] sync turno:", mem0SyncErr);
+    }
 
     if (ctx.canal === "whatsapp") {
       const { reforcarCrmAposTurnoWhatsapp } = await import("@/lib/crm/sincronizar-contato-whatsapp");

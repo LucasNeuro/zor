@@ -470,6 +470,60 @@ async function executarZendesk(
   return JSON.stringify({ erro: "ferramenta_integrador_desconhecida", tool: toolName });
 }
 
+async function executarMem0(
+  toolName: string,
+  args: Record<string, unknown>,
+  cred: HubIntegracaoCredenciaisRow | null,
+  supabase: SupabaseClient,
+  tenantId: string,
+  gcalCtx?: GcalFerramentaContexto
+): Promise<string> {
+  let token = apiKey(cred);
+  if (!token) {
+    const { resolverMem0ApiKey } = await import("@/lib/hub/mem0-api");
+    token = (await resolverMem0ApiKey(supabase, tenantId)) ?? "";
+  }
+  if (!token) {
+    return JSON.stringify({
+      erro: "mem0_sem_api_key",
+      detalhe: "Ligue Mem0 em Integrações (API Key) ou defina MEM0_API_KEY no ambiente.",
+    });
+  }
+
+  if (toolName === "hub_int_mem0_buscar") {
+    const query = String(args.query ?? "").trim();
+    if (!query) {
+      return JSON.stringify({ erro: "parametros_invalidos", campos: ["query"] });
+    }
+    const leadId = gcalCtx?.leadId?.trim();
+    if (!leadId) {
+      return JSON.stringify({ erro: "mem0_sem_lead", detalhe: "Só disponível com lead na sessão." });
+    }
+    const limite = typeof args.limite === "number" ? args.limite : 6;
+    const { mem0SearchMemories } = await import("@/lib/hub/mem0-api");
+    const res = await mem0SearchMemories({
+      apiKey: token,
+      query,
+      userId: leadId,
+      limit: limite,
+    });
+    if (!res.ok) {
+      return JSON.stringify({ erro: "mem0_api", detalhe: res.erro, status: res.status });
+    }
+    return JSON.stringify({
+      ok: true,
+      total: res.hits.length,
+      memorias: res.hits.map((h) => ({
+        id: h.id,
+        texto: h.memory ?? h.text,
+        score: h.score,
+      })),
+    });
+  }
+
+  return JSON.stringify({ erro: "ferramenta_integrador_desconhecida", tool: toolName });
+}
+
 export async function fetchIntegracaoTenantPorTipo(
   supabase: SupabaseClient,
   tenantId: string,
@@ -499,6 +553,17 @@ export async function executarFerramentaIntegrador(
   const ref = ferramentaIntegradorPorKey(toolName);
   if (!ref) {
     return JSON.stringify({ erro: "integrador_ferramenta_desconhecida", chave: toolName });
+  }
+
+  if (ref.integrador.id === "mem0") {
+    const { mem0PlataformaConfigurada } = await import("@/lib/hub/mem0-env");
+    if (!mem0PlataformaConfigurada()) {
+      return JSON.stringify({
+        erro: "mem0_sem_api_key",
+        detalhe: "Defina MEM0_API_KEY no ambiente (Render / .env local).",
+      });
+    }
+    return executarMem0(toolName, args, null, supabase, tenantId, gcalCtx);
   }
 
   const pack = await fetchIntegracaoTenantPorTipo(supabase, tenantId, ref.integrador.id);

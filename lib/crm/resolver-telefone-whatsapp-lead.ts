@@ -42,7 +42,8 @@ export function resolverTelefoneWhatsappLead(lead: {
 }
 
 /**
- * Destino para UAZAPI `number`: prefere wa_chatid (JID real da sessão), depois dígitos@s.whatsapp.net.
+ * Destino UAZAPI — alinhado ao worker de IA (dígitos).
+ * Só usa wa_chatid quando gravado no inbound; evita forçar @s.whatsapp.net (UAZAPI pode 500).
  */
 export function resolverDestinoWhatsappLead(lead: {
   telefone?: string | null;
@@ -51,10 +52,7 @@ export function resolverDestinoWhatsappLead(lead: {
   const meta = metadataRecord(lead.metadata);
   const chatid = typeof meta.wa_chatid === "string" ? meta.wa_chatid.trim() : "";
   if (chatid && jidWhatsappValido(chatid)) return chatid;
-
-  const digits = resolverTelefoneWhatsappLead(lead);
-  if (digits.length >= 10) return `${digits}@s.whatsapp.net`;
-  return digits;
+  return resolverTelefoneWhatsappLead(lead);
 }
 
 export { normalizarTelefoneWhatsapp };

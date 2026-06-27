@@ -38,9 +38,11 @@ describe("resolverDestinoWhatsappLead", () => {
   });
 
   it("formata dígitos com @s.whatsapp.net", () => {
-    expect(resolverDestinoWhatsappLead({ telefone: "5511985579097" })).toBe(
-      "5511985579097@s.whatsapp.net"
-    );
+    expect(resolverDestinoWhatsappLead({ telefone: "5511985579097" })).toBe("5511985579097");
+  });
+
+  it("sem wa_chatid usa dígitos como a IA", () => {
+    expect(resolverDestinoWhatsappLead({ telefone: "5524992082725" })).toBe("5524992082725");
   });
 });
 

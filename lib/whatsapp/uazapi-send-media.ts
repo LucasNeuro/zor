@@ -1,4 +1,5 @@
-import { uazapiBaseUrlNormalizado } from "@/lib/whatsapp/uazapi-http";
+import { extrairMensagemErroUazapi, uazapiBaseUrlNormalizado } from "@/lib/whatsapp/uazapi-http";
+import { variantesNumberUazapi } from "@/lib/whatsapp/uazapi-send";
 
 export type UazapiMediaType = "image" | "document" | "video" | "audio" | "ptt";
 
@@ -28,56 +29,63 @@ export async function uazapiSendMedia(
     };
   }
 
-  const raw = numero.trim();
-  const number =
-    raw.includes("@g.us") ||
-    raw.includes("@s.whatsapp.net") ||
-    raw.includes("@lid") ||
-    raw.includes("@newsletter")
-      ? raw
-      : raw.replace(/\D/g, "");
+  const candidates = variantesNumberUazapi(numero.trim());
+  let last: { status?: number; body?: unknown; error: string } | null = null;
 
-  const body: Record<string, unknown> = {
-    number,
-    type: opts.type,
-    file: opts.file,
-  };
-  if (opts.text?.trim()) body.text = opts.text.trim();
-  if (opts.docName?.trim()) body.docName = opts.docName.trim();
-  if (opts.mimetype?.trim()) body.mimetype = opts.mimetype.trim();
-
-  try {
-    const res = await fetch(`${base}/send/media`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        token,
-      },
-      body: JSON.stringify(body),
-    });
-
-    const ct = res.headers.get("content-type") || "";
-    let resBody: unknown;
-    try {
-      if (ct.includes("application/json")) {
-        resBody = await res.json();
-      } else {
-        const t = await res.text();
-        resBody = t || undefined;
-      }
-    } catch {
-      resBody = undefined;
-    }
-
-    if (!res.ok) {
-      return { ok: false, status: res.status, body: resBody, error: `HTTP ${res.status}` };
-    }
-
-    return { ok: true, status: res.status, body: resBody };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "Erro ao chamar UAZAPI /send/media",
+  for (const number of candidates) {
+    const body: Record<string, unknown> = {
+      number,
+      type: opts.type,
+      file: opts.file,
     };
+    if (opts.text?.trim()) body.text = opts.text.trim();
+    if (opts.docName?.trim()) body.docName = opts.docName.trim();
+    if (opts.mimetype?.trim()) body.mimetype = opts.mimetype.trim();
+
+    try {
+      const res = await fetch(`${base}/send/media`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          token,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const ct = res.headers.get("content-type") || "";
+      let resBody: unknown;
+      try {
+        if (ct.includes("application/json")) {
+          resBody = await res.json();
+        } else {
+          const t = await res.text();
+          resBody = t || undefined;
+        }
+      } catch {
+        resBody = undefined;
+      }
+
+      if (res.ok) {
+        return { ok: true, status: res.status, body: resBody };
+      }
+
+      last = {
+        status: res.status,
+        body: resBody,
+        error: extrairMensagemErroUazapi(resBody, res.status),
+      };
+      if (res.status === 401) break;
+    } catch (e) {
+      last = {
+        error: e instanceof Error ? e.message : "Erro ao chamar UAZAPI /send/media",
+      };
+      break;
+    }
   }
+
+  if (last) {
+    return { ok: false, status: last.status, body: last.body, error: last.error };
+  }
+
+  return { ok: false, error: "Nenhum destino válido para envio de mídia WhatsApp" };
 }

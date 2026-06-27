@@ -4,20 +4,8 @@ export type UazapiSendTextResult =
   | { ok: true; status: number; body?: unknown }
   | { ok: false; status?: number; body?: unknown; error: string };
 
-function normalizarNumberUazapi(raw: string): string {
-  const trimmed = raw.trim();
-  if (
-    trimmed.includes("@g.us") ||
-    trimmed.includes("@s.whatsapp.net") ||
-    trimmed.includes("@lid") ||
-    trimmed.includes("@newsletter")
-  ) {
-    return trimmed;
-  }
-  return trimmed.replace(/\D/g, "");
-}
-
-function variantesNumberUazapi(number: string): string[] {
+/** Variantes de `number` para POST /send/text — dígitos primeiro (como IA); JID como fallback. */
+export function variantesNumberUazapi(number: string): string[] {
   const n = number.trim();
   const out: string[] = [];
   const push = (v: string) => {
@@ -25,15 +13,13 @@ function variantesNumberUazapi(number: string): string[] {
   };
 
   push(n);
-  if (n.includes("@")) return out;
 
-  const digits = n.replace(/\D/g, "");
-  if (!digits) return out;
+  const digitsFromJid = n.includes("@") ? n.split("@")[0].replace(/\D/g, "") : "";
+  const digits = digitsFromJid || n.replace(/\D/g, "");
+  if (digits.length < 10) return out;
 
   push(digits);
-  if (!digits.includes("@")) {
-    push(`${digits}@s.whatsapp.net`);
-  }
+  push(`${digits}@s.whatsapp.net`);
 
   if (digits.startsWith("5555") && digits.length >= 12) {
     const fixed = `55${digits.slice(4)}`;
@@ -64,8 +50,12 @@ export async function uazapiSendText(
     };
   }
 
+  if (!text.trim()) {
+    return { ok: false, error: "Texto da mensagem vazio" };
+  }
+
   const url = `${base}/send/text`;
-  const candidates = variantesNumberUazapi(normalizarNumberUazapi(numero));
+  const candidates = variantesNumberUazapi(numero.trim());
   let last: { status?: number; body?: unknown; error: string } | null = null;
 
   for (const number of candidates) {

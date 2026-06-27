@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { ChevronRight, Loader2, Plug } from "lucide-react";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
+import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import { crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
@@ -20,6 +21,7 @@ export type AgenteMem0BlockProps = {
   agenteSlug: string;
   agenteNome?: string;
   usoFerramentas: Record<string, boolean>;
+  onUsoChange?: (ferramentaKey: string, ativo: boolean) => void;
   layout?: "card" | "painel";
 };
 
@@ -37,6 +39,7 @@ export function AgenteMem0Block({
   agenteSlug,
   agenteNome,
   usoFerramentas,
+  onUsoChange,
   layout = "card",
 }: AgenteMem0BlockProps) {
   const isCard = layout === "card";
@@ -56,7 +59,53 @@ export function AgenteMem0Block({
   const badge = mem0Badge(plataformaOk, algumaFerramentaOn);
 
   const tituloIntegracao = "Mem0 — Super Memória";
-  const subtituloCard = "Recall semântico entre sessões";
+  const subtituloCard = superOn
+    ? "Plus activo · recall semântico Mem0"
+    : "Memória Supabase (tradicional)";
+
+  const toggleRow = (
+    key: string,
+    titulo: string,
+    descricao: string,
+    checked: boolean,
+    disabled: boolean
+  ) => {
+    const labelId = `mem0-toggle-${key}`;
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 12,
+          padding: "12px 14px",
+          borderRadius: 12,
+          border: `1px solid ${checked ? "rgba(63, 185, 80, 0.35)" : RF_BORDER_STRONG}`,
+          background: checked ? "rgba(63, 185, 80, 0.08)" : "rgba(6, 13, 8, 0.72)",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p id={labelId} style={{ margin: 0, fontSize: 13, fontWeight: 700, color: RF_TEXT_PRIMARY }}>
+            {titulo}
+          </p>
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: RF_TEXT_SECONDARY, lineHeight: 1.5 }}>
+            {descricao}
+          </p>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: checked ? "#3fb950" : RF_TEXT_MUTED }}>
+            {checked ? "ACTIVO" : "INACTIVO"}
+          </span>
+          <CrmToggleSwitch
+            checked={checked}
+            onCheckedChange={(v) => onUsoChange?.(key, v)}
+            disabled={disabled || !onUsoChange}
+            labelledBy={labelId}
+            variant="dark"
+          />
+        </div>
+      </div>
+    );
+  };
 
   const refreshStatus = useCallback(async () => {
     setCarregando(true);
@@ -187,8 +236,9 @@ export function AgenteMem0Block({
             MEM0 · SUPER MEMÓRIA
           </p>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: RF_TEXT_SECONDARY, lineHeight: 1.5 }}>
-            Credencial de plataforma (<code style={{ fontSize: 11 }}>MEM0_API_KEY</code>). Este painel só confirma
-            a ligação — active cada ação em <strong>Integrações ligadas</strong> abaixo.
+            Plus opcional por agente. Com Super Memória <strong>desligada</strong>, o atendimento usa só a memória
+            tradicional do Supabase (<code style={{ fontSize: 11 }}>hub_memorias_lead</code> e ferramenta{" "}
+            <code style={{ fontSize: 11 }}>hub_lead_memorias</code>) — o fluxo WhatsApp não muda.
           </p>
         </div>
       </div>
@@ -234,8 +284,31 @@ export function AgenteMem0Block({
               lineHeight: 1.5,
             }}
           >
-            Integração disponível (<code style={{ fontSize: 11 }}>MEM0_API_KEY</code> detectada). Active Super
-            Memória e busca semântica em <strong>Integrações ligadas</strong> nesta página.
+            Integração disponível (<code style={{ fontSize: 11 }}>MEM0_API_KEY</code> detectada). Active abaixo o
+            plus Mem0 — ou deixe desligado para memória Supabase apenas.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {toggleRow(
+              MEM0_SUPER_MEMORIA_KEY,
+              "Super Memória (recall automático)",
+              "Injeta memórias Mem0 no prompt a cada turno. Desligado = sem chamadas à API Mem0.",
+              superOn,
+              !plataformaOk
+            )}
+            {toggleRow(
+              MEM0_BUSCAR_KEY,
+              "Buscar memórias (ferramenta IA)",
+              "Permite à IA pesquisar Mem0 sob demanda (function calling). Requer Super Memória ou uso manual.",
+              buscarOn,
+              !plataformaOk
+            )}
+          </div>
+          <p style={{ margin: 0, fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.5 }}>
+            Modo actual:{" "}
+            <strong style={{ color: superOn ? "#3fb950" : RF_TEXT_PRIMARY }}>
+              {superOn ? "Supabase + Mem0 (plus)" : "Supabase tradicional"}
+            </strong>
+            . Guarde a ficha do agente após alterar os toggles.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <button type="button" onClick={() => void confirmarLigacao()} disabled={busy} style={btnPrimaryDark(busy)}>
@@ -339,7 +412,7 @@ export function AgenteMem0Block({
                   </p>
                 ) : plataformaOk ? (
                   <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
-                    Chave OK · active as ações em Integrações ligadas
+                    Chave OK · {superOn ? "Plus Mem0 activo" : "Só memória Supabase — active o plus se quiser"}
                   </p>
                 ) : (
                   <p style={{ margin: "6px 0 0", color: "#c9a24a", fontSize: 11, fontWeight: 600 }}>

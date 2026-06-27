@@ -14,9 +14,19 @@ describe("mem0-api", () => {
 });
 
 describe("mem0-super-memoria", () => {
-  it("detecta toggle super memória", () => {
-    expect(mem0SuperMemoriaAtiva({ [MEM0_SUPER_MEMORIA_KEY]: true })).toBe(true);
-    expect(mem0SuperMemoriaAtiva({})).toBe(false);
+  it("detecta toggle super memória (exige MEM0_API_KEY)", () => {
+    const prev = process.env.MEM0_API_KEY;
+    process.env.MEM0_API_KEY = "test-key-mem0";
+    try {
+      expect(mem0SuperMemoriaAtiva({ [MEM0_SUPER_MEMORIA_KEY]: true })).toBe(true);
+      expect(mem0SuperMemoriaAtiva({})).toBe(false);
+      expect(mem0SuperMemoriaAtiva({ [MEM0_SUPER_MEMORIA_KEY]: true })).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.MEM0_API_KEY;
+      else process.env.MEM0_API_KEY = prev;
+    }
+    delete process.env.MEM0_API_KEY;
+    expect(mem0SuperMemoriaAtiva({ [MEM0_SUPER_MEMORIA_KEY]: true })).toBe(false);
   });
 
   it("formata bloco prompt", () => {

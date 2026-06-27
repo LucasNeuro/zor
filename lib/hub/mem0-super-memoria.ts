@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
+import { extrairNomeClienteDaMensagem, agentePerguntouNome } from "@/lib/crm/extrair-nome-cliente";
 import { salvarMemoriaNomeLead } from "@/lib/ia/memoria-lead";
 import {
   mem0AddConversation,
@@ -8,8 +8,11 @@ import {
   resolverMem0ApiKey,
 } from "@/lib/hub/mem0-api";
 import { MEM0_SUPER_MEMORIA_KEY } from "@/lib/hub/mem0-constants";
+import { mem0PlataformaConfigurada } from "@/lib/hub/mem0-env";
 
+/** Super Memória activa só com MEM0_API_KEY no ambiente + toggle do agente. */
 export function mem0SuperMemoriaAtiva(usoFerramentas: Record<string, boolean> | null | undefined): boolean {
+  if (!mem0PlataformaConfigurada()) return false;
   return usoFerramentas?.[MEM0_SUPER_MEMORIA_KEY] === true;
 }
 
@@ -96,7 +99,9 @@ export async function sincronizarTurnoMem0SuperMemoria(
     return { ok: false, motivo: add.erro };
   }
 
-  const nomeMsg = extrairNomeClienteDaMensagem(params.mensagemUsuario, { respostaCurtaPermitida: true });
+  const nomeMsg = extrairNomeClienteDaMensagem(params.mensagemUsuario, {
+    respostaCurtaPermitida: agentePerguntouNome(params.respostaIA),
+  });
   if (nomeMsg) {
     await salvarMemoriaNomeLead(supabase, params.leadId, nomeMsg, "mem0_turno", 0.92);
   }

@@ -54,6 +54,7 @@ import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/A
 import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
 import { AgenteMem0Block } from "@/components/crm/AgenteMem0Block";
+import { MEM0_FERRAMENTA_KEYS } from "@/lib/hub/mem0-constants";
 import { buildGoogleIntegradorCatalogLite } from "@/lib/hub/agente-wizard-google";
 import { agenteEhModoCanal, type ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { hubModeloExibicaoProduto } from "@/lib/ia/hub-model-defaults";
@@ -371,11 +372,14 @@ export default function AgentePage() {
   }, [agente?.avatar_url]);
 
   const integradorCatalogFicha = useMemo(() => {
+    const mem0Keys = new Set<string>(MEM0_FERRAMENTA_KEYS);
     const keys = new Set(catalogoIntegradorFerramentas.map((x) => x.ferramenta_key));
     const pendentesGoogle = buildGoogleIntegradorCatalogLite({ requerConexao: true }).filter(
       (x) => !keys.has(x.ferramenta_key)
     );
-    return [...catalogoIntegradorFerramentas, ...pendentesGoogle];
+    return [...catalogoIntegradorFerramentas, ...pendentesGoogle].filter(
+      (x) => !mem0Keys.has(x.ferramenta_key)
+    );
   }, [catalogoIntegradorFerramentas]);
 
   const agenteModoCanal = agente
@@ -1174,6 +1178,12 @@ export default function AgentePage() {
                     agenteNome={agente.nome}
                     layout="card"
                     usoFerramentas={usoFerramentasIa}
+                    onUsoChange={(id, ativo) =>
+                      setUsoFerramentasIa((prev) => ({
+                        ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                        [id]: ativo,
+                      }))
+                    }
                   />
                 ) : null}
                 <AgenteFerramentasIaBlock

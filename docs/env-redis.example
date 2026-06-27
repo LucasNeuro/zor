@@ -12,7 +12,7 @@ Quando `REDIS_HOST` **não** está definido, a app usa fallback **em memória** 
 | `REDIS_PORT` | Não | `6379` | Porta TCP (padrão `6379`) |
 | `REDIS_USERNAME` | Depende do provedor | `default` | Usuário ACL (Redis 6+). No **Redis Cloud**, use o username exibido no painel (muitas vezes `default`). |
 | `REDIS_PASSWORD` | Sim (prod) | `sua-chave-secreta` | Senha do serviço Redis — copie exatamente do painel (sem espaços). Erro `WRONGPASS` = credencial errada. |
-| `REDIS_TLS` | Não | `true` | **Redis Cloud:** TLS na maioria dos endpoints públicos. Auto-ligado se `REDIS_HOST` contém `redislabs.com`. Erro `wrong version number` → tente `REDIS_TLS=false` ou confirme a porta do painel. |
+| `REDIS_TLS` | Não | `false` | `true` só se o painel Redis Cloud exigir TLS na porta usada. Erro `wrong version number` = TLS ligado em porta plain (ex. 13107) → use `false`. |
 | `REDIS_KEY_PREFIX` | Não | `waje:` | Prefixo de todas as chaves (padrão `waje:`) |
 
 ## Rate limit de webhook (opcional)

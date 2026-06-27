@@ -637,15 +637,19 @@ export async function processarMensagemInboundWhatsapp(params: {
       }
     }
 
+    let iaEnviadaWhatsapp = menuJaEnviado;
+
     if (!menuJaEnviado) {
       const jaEnviou = await respostaIaJaEnviadaRecente(supabase, lead.id, respostaParaWhatsapp);
       if (jaEnviou) {
+        iaEnviadaWhatsapp = true;
         log.info("wa.processor.send_text_skip", {
           reason: "resposta_ia_duplicada_recente",
           telefone: trace.maskTelefone(params.telefone),
         });
       } else {
       const sendOut = await enviarMensagemWhatsApp(params.telefone, respostaParaWhatsapp, params.waSendOpts);
+      iaEnviadaWhatsapp = sendOut.ok;
       const sendBodyPreview =
         sendOut.body && typeof sendOut.body === "object"
           ? JSON.stringify(sendOut.body).slice(0, 240)
@@ -660,6 +664,26 @@ export async function processarMensagemInboundWhatsapp(params: {
         send_body_preview: sendBodyPreview,
         telefone: trace.maskTelefone(params.telefone),
       });
+      if (!sendOut.ok) {
+        try {
+          const { data: ultimaSaida } = await supabase
+            .from("hub_fila_mensagens")
+            .select("id")
+            .eq("lead_id", lead.id)
+            .eq("direcao", "saida")
+            .order("criado_em", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (ultimaSaida?.id) {
+            await supabase
+              .from("hub_fila_mensagens")
+              .update({ status: "falha_envio" })
+              .eq("id", ultimaSaida.id);
+          }
+        } catch {
+          /* opcional */
+        }
+      }
       }
 
       if (playbookPendingMenu && !menuJaEnviado) {
@@ -768,7 +792,7 @@ export async function processarMensagemInboundWhatsapp(params: {
       }
 
       try {
-        if (conversaId) {
+        if (conversaId && iaEnviadaWhatsapp) {
           await supabase.from("hub_mensagens").insert([
             {
               conversa_id: conversaId,

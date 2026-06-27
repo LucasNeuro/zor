@@ -19,6 +19,7 @@ import {
   formatHumanoDisplayName,
 } from "@/lib/crm/resolve-crm-actor";
 import { crmApiHeaders, crmApiHeadersWithActor, getCrmSessionActor } from "@/lib/internal-api-headers-client";
+import { mergeMensagensChatDeduped, normalizarConteudoMensagem } from "@/lib/crm/dedup-mensagens-chat";
 import { parseConversaTurnos } from "@/lib/crm/lead-timeline";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -214,43 +215,65 @@ function mergeMensagens(
   metadata: unknown,
   notas: CrmNota[] = []
 ): ChatMsg[] {
+  const rowsDedup = mergeMensagensChatDeduped(fila);
   const map = new Map<string, ChatMsg>();
 
-  for (const row of fila) {
+  for (const row of rowsDedup) {
     const msg = rowParaChatMsg(row);
     if (msg) map.set(msg.id, msg);
   }
 
-  for (const turno of parseConversaTurnos(metadata)) {
-    const id = `turno-${turno.at ?? turno.content.slice(0, 16)}`;
-    if (map.has(id)) continue;
-    const tipoInferido = inferirTipoMidiaDeConteudo(turno.content) ?? "texto";
-    const midiaTurno = parseMidiaFromRow({
-      conteudo: turno.content,
-      tipo_conteudo: tipoInferido,
-      metadata: turno.metadata,
-      whatsapp_message_id: turno.messageId,
-    });
-    map.set(id, {
-      id,
-      conteudo: turno.content,
-      autor: turno.role === "assistant" ? "ia" : "cliente",
-      autorLabel: turno.role === "assistant" ? "Funcionário IA" : "Lead",
-      criado_em: turno.at ?? new Date(0).toISOString(),
-      tipoMidia: midiaTurno.tipo,
-      urlMidia: midiaTurno.urlMidia,
-      nomeArquivo: midiaTurno.nomeArquivo,
-      whatsappMessageId: midiaTurno.whatsappMessageId,
-    });
+  /** Turnos em metadata são fallback legado — duplicam hub_mensagens/fila quando a API já devolve histórico. */
+  if (rowsDedup.length === 0) {
+    for (const turno of parseConversaTurnos(metadata)) {
+      const id = `turno-${turno.at ?? turno.content.slice(0, 16)}`;
+      if (map.has(id)) continue;
+      const tipoInferido = inferirTipoMidiaDeConteudo(turno.content) ?? "texto";
+      const midiaTurno = parseMidiaFromRow({
+        conteudo: turno.content,
+        tipo_conteudo: tipoInferido,
+        metadata: turno.metadata,
+        whatsapp_message_id: turno.messageId,
+      });
+      map.set(id, {
+        id,
+        conteudo: turno.content,
+        autor: turno.role === "assistant" ? "ia" : "cliente",
+        autorLabel: turno.role === "assistant" ? "Funcionário IA" : "Lead",
+        criado_em: turno.at ?? new Date(0).toISOString(),
+        tipoMidia: midiaTurno.tipo,
+        urlMidia: midiaTurno.urlMidia,
+        nomeArquivo: midiaTurno.nomeArquivo,
+        whatsappMessageId: midiaTurno.whatsappMessageId,
+      });
+    }
   }
 
   for (const msg of notasParaMensagens(notas)) {
     map.set(msg.id, msg);
   }
 
-  return [...map.values()].sort(
+  const sorted = [...map.values()].sort(
     (a, b) => new Date(a.criado_em).getTime() - new Date(b.criado_em).getTime()
   );
+
+  /** Segunda passagem: remove duplicatas visuais (conteúdo + autor + ±60s). */
+  const out: ChatMsg[] = [];
+  for (const msg of sorted) {
+    const dupIdx = out.findIndex(
+      (m) =>
+        m.autor === msg.autor &&
+        normalizarConteudoMensagem(m.conteudo) === normalizarConteudoMensagem(msg.conteudo) &&
+        Math.abs(new Date(m.criado_em).getTime() - new Date(msg.criado_em).getTime()) < 60_000
+    );
+    if (dupIdx >= 0) {
+      const prev = out[dupIdx];
+      if (!prev.agentSlug && msg.agentSlug) out[dupIdx] = msg;
+      continue;
+    }
+    out.push(msg);
+  }
+  return out;
 }
 
 function LeadChatAvatar({ autor, agentSlug }: { autor: AutorTipo; agentSlug?: string }) {

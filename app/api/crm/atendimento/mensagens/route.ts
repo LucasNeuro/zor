@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { backfillMensagensIaCrm } from "@/lib/crm/backfill-mensagens-ia-crm";
 import { mensagemTemCorpo, parseMidiaFromRow } from "@/lib/crm/chat-mensagem-midia";
+import { mergeMensagensChatDeduped } from "@/lib/crm/dedup-mensagens-chat";
 import {
   inferFeitoPorTipoFila,
   remetenteFilaFromFeitoPor,
@@ -77,40 +78,19 @@ function mergeMensagensWhatsapp(
   hubRows: Record<string, unknown>[],
   filaRows: Record<string, unknown>[]
 ): Record<string, unknown>[] {
-  const map = new Map<string, Record<string, unknown>>();
+  const mapped: Record<string, unknown>[] = [];
 
   for (const row of hubRows) {
     if (!mensagemTemCorpo(row)) continue;
-    const mapped = mapHubMensagem(row);
-    map.set(String(mapped.id), mapped);
+    mapped.push(mapHubMensagem(row));
   }
 
   for (const row of filaRows) {
     if (!mensagemTemCorpo(row)) continue;
-    const mapped = mapFilaMensagem(row);
-    const id = String(mapped.id);
-    if (map.has(id)) continue;
-
-    const criado = String(mapped.criado_em ?? "");
-    const conteudo = String(mapped.conteudo ?? "").trim();
-    const dup = [...map.values()].some(
-      (m) =>
-        String(m.conteudo ?? "").trim() === conteudo &&
-        String(m.direcao) === String(mapped.direcao) &&
-        Math.abs(
-          new Date(String(m.criado_em ?? 0)).getTime() - new Date(criado || 0).getTime()
-        ) < 5000
-    );
-    if (dup) continue;
-
-    map.set(id, mapped);
+    mapped.push(mapFilaMensagem(row));
   }
 
-  return [...map.values()].sort(
-    (a, b) =>
-      new Date(String(a.criado_em ?? 0)).getTime() -
-      new Date(String(b.criado_em ?? 0)).getTime()
-  );
+  return mergeMensagensChatDeduped(mapped);
 }
 
 async function mensagensEmail(supabase: ReturnType<typeof db>, leadId: string) {

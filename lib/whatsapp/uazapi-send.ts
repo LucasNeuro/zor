@@ -4,6 +4,32 @@ export type UazapiSendTextResult =
   | { ok: true; status: number; body?: unknown }
   | { ok: false; status?: number; body?: unknown; error: string };
 
+const UAZAPI_FETCH_TIMEOUT_MS = 30_000;
+const UAZAPI_FETCH_RETRIES = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchUazapiComRetry(url: string, init: RequestInit): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < UAZAPI_FETCH_RETRIES; attempt++) {
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(UAZAPI_FETCH_TIMEOUT_MS),
+      });
+    } catch (e) {
+      lastErr = e;
+      if (attempt < UAZAPI_FETCH_RETRIES - 1) {
+        await sleep(700 * (attempt + 1));
+        continue;
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("fetch failed");
+}
+
 /** Variantes de `number` para POST /send/text — dígitos primeiro (como IA); JID como fallback. */
 export function variantesNumberUazapi(number: string): string[] {
   const n = number.trim();
@@ -60,7 +86,7 @@ export async function uazapiSendText(
 
   for (const number of candidates) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchUazapiComRetry(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -92,10 +118,10 @@ export async function uazapiSendText(
       // Só tenta variantes de número em erros de entrega (4xx/5xx), não em 401 auth.
       if (res.status === 401) break;
     } catch (e) {
-      last = {
-        error: e instanceof Error ? e.message : "Erro ao chamar UAZAPI",
-      };
-      break;
+      const msg = e instanceof Error ? e.message : "Erro ao chamar UAZAPI";
+      last = { error: msg.includes("fetch failed") ? `Falha de rede ao contactar UAZAPI (${msg})` : msg };
+      // Tenta próxima variante de número; se esgotar, retry já ocorreu em fetchUazapiComRetry.
+      continue;
     }
   }
 

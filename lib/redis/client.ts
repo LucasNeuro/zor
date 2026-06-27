@@ -333,11 +333,7 @@ function redisTlsEnabled(): boolean {
   const host = process.env.REDIS_HOST?.trim().toLowerCase() ?? "";
   const port = Number.parseInt(process.env.REDIS_PORT || "6379", 10);
   if (host.endsWith(".render.com")) return true;
-<<<<<<< HEAD
   // Redis Cloud: portas custom (ex. 15295, 13107) são plain TCP; TLS só na 6379 ou REDIS_TLS=true.
-=======
-  // Redis Cloud: portas custom (ex. 13107) são plain TCP; TLS só na 6379 ou com REDIS_TLS=true.
->>>>>>> 7b07445936348a14859d17bc60f8965a88da2553
   if (
     (host.includes("redislabs.com") || host.includes("redis-cloud.com")) &&
     port === 6379

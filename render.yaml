@@ -49,7 +49,7 @@ services:
     runtime: node
     plan: starter
     buildCommand: NODE_OPTIONS=--max-old-space-size=2048 npm install && NODE_OPTIONS=--max-old-space-size=2048 npm run build
-    startCommand: NODE_OPTIONS=--max-old-space-size=460 npm run start
+    startCommand: NODE_OPTIONS=--max-old-space-size=460 node .next/standalone/server.js
     envVars:
       - key: NODE_VERSION
         value: "20"

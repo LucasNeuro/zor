@@ -590,6 +590,19 @@ async function despacharJobWhatsappAposEnqueue(
     }
     if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
       dispararProcessamentoJobsWhatsapp(log);
+      // Rede de segurança: processa pelo menos 1 job no web se worker/cron falhar
+      void runWhatsappWorkerTick()
+        .then((result) => {
+          log.info("wa.webhook.job_processor_inline_safety", {
+            claimed: result.claimed,
+            ok: !result.error,
+            error: result.error ?? null,
+          });
+        })
+        .catch((e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          log.warn("wa.webhook.job_processor_inline_safety_failed", { error: msg.slice(0, 200) });
+        });
     } else {
       void runWhatsappWorkerTick()
         .then(async (result) => {

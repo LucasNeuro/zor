@@ -12,7 +12,8 @@
     "dev:strict-tls": "next dev -p 3001",
     "dev:insecure-tls": "node scripts/dev-insecure-tls.cjs",
     "build": "next build",
-    "start": "next start",
+    "start": "node .next/standalone/server.js",
+    "start:next": "next start",
     "worker:whatsapp": "node scripts/worker-whatsapp.js",
     "test": "vitest run",
     "smoke:playbook": "node scripts/smoke-agent-playbook.cjs",
@@ -31,13 +32,11 @@
     "open:dev": "node scripts/open-dev-url.cjs",
     "verify:mistral": "node scripts/verify-mistral-key.cjs",
     "test:integracoes": "node scripts/test-integracoes-env.cjs",
+    "test:redis": "node scripts/test-redis-connection.cjs",
     "test:gmail": "node scripts/test-gmail-integracao.cjs",
     "test:gmail:api": "node scripts/test-gmail-integracao.cjs --api",
     "ensure:buckets": "node scripts/ensure-agent-storage-buckets.cjs",
-    "check:waje-schema": "node scripts/check-waje-schema.mjs",
-    "test:cora-boleto": "node scripts/test-cora-boleto.cjs",
-    "test:cora-token": "node scripts/test-cora-boleto.cjs --token-only",
-    "cora:pem-from-zip": "node scripts/cora-pem-from-zip.cjs"
+    "check:waje-schema": "node scripts/check-waje-schema.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

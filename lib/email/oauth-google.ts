@@ -525,7 +525,7 @@ export async function disconnectGoogleWorkspaceOAuthIntegracoes(
     await supabase
       .from("hub_agente_identidade")
       .update({
-        email_provider: "resend",
+        email_provider: null,
         email_integracao_id: null,
         email_from: null,
         email_inbound: null,

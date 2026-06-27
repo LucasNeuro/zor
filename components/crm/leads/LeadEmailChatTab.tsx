@@ -306,7 +306,7 @@ export function LeadEmailChatTab({
             </button>
           </div>
           <p className="m-0 text-[10px]" style={{ color: RF_TEXT_MUTED }}>
-            Enter envia · Shift+Enter nova linha · mensagens vão para o e-mail do lead via Resend
+            Enter envia · Shift+Enter nova linha · mensagens vão para o e-mail do lead via Gmail
           </p>
         </div>
       ) : interactive ? (

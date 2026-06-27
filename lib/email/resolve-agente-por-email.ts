@@ -123,7 +123,7 @@ export async function resolverAgenteParaInboundOAuth(
 ): Promise<{ agente: AgenteEmailRow; matchedAddress: string | null } | null> {
   const byTo = await resolverAgentePorDestinatariosInbound(supabase, toAddresses);
   if (byTo) {
-    const provider = byTo.agente.email_provider || "resend";
+    const provider = byTo.agente.email_provider || "oauth_google";
     if (provider === "oauth_google") {
       const link = (byTo.agente.email_integracao_id || "").trim();
       if (!link || link === integracaoRowId) {

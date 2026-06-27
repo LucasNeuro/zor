@@ -1,8 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getValidGoogleAccessToken } from "@/lib/email/oauth-google";
 import { sendGmailEmail } from "@/lib/email/gmail-send";
-import { sendEmail } from "@/lib/email/resend-send";
-import { resendConfigured } from "@/lib/email/resend-config";
 import {
   emailProviderAvailable,
   resolveEmailProviderForAgente,
@@ -33,7 +31,7 @@ type AgenteSendFields = Pick<
   | "email_integracao_id"
 >;
 
-/** Envia e-mail pelo provider configurado no agente (Gmail OAuth ou Resend). */
+/** Envia e-mail via Gmail OAuth ligado ao agente. */
 export async function sendEmailViaAgente(
   supabase: SupabaseClient,
   tenantId: string,
@@ -47,10 +45,7 @@ export async function sendEmailViaAgente(
     return {
       ok: false,
       provider,
-      error:
-        provider === "oauth_google"
-          ? "Gmail OAuth não configurado para este tenant."
-          : "Resend não configurado: defina RESEND_API_KEY",
+      error: "Gmail OAuth não configurado. Ligue a conta Google no agente.",
       status: 503,
     };
   }
@@ -62,53 +57,30 @@ export async function sendEmailViaAgente(
     null;
   const fromName = agente.email_from_name?.trim() || null;
 
-  if (provider === "oauth_google") {
-    const integracaoId =
-      typeof agente.email_integracao_id === "string" ? agente.email_integracao_id.trim() : "";
-    if (!integracaoId) {
-      return { ok: false, provider, error: "Agente OAuth sem email_integracao_id.", status: 409 };
-    }
-
-    const { data: credRow } = await supabase
-      .from("hub_integracao_credenciais")
-      .select("*")
-      .eq("integracao_id", integracaoId)
-      .maybeSingle();
-
-    const token = await getValidGoogleAccessToken(supabase, tenantId, credRow, integracaoId);
-    if (!token) {
-      return {
-        ok: false,
-        provider,
-        error: "Token Gmail indisponível. Volte a ligar a conta Google.",
-        status: 409,
-      };
-    }
-
-    const gmail = await sendGmailEmail({
-      bearerToken: token,
-      to: input.to,
-      subject: input.subject,
-      text: input.text,
-      from,
-      fromName,
-      inReplyTo: input.inReplyTo,
-      references: input.references,
-      threadId: input.threadId,
-    });
-
-    if (!gmail.ok) {
-      return { ok: false, provider, error: gmail.error, status: gmail.status };
-    }
-
-    return { ok: true, provider, id: gmail.id, threadId: gmail.threadId };
+  const integracaoId =
+    typeof agente.email_integracao_id === "string" ? agente.email_integracao_id.trim() : "";
+  if (!integracaoId) {
+    return { ok: false, provider, error: "Agente sem integração Gmail (email_integracao_id).", status: 409 };
   }
 
-  if (!resendConfigured()) {
-    return { ok: false, provider, error: "Resend não configurado: defina RESEND_API_KEY", status: 503 };
+  const { data: credRow } = await supabase
+    .from("hub_integracao_credenciais")
+    .select("*")
+    .eq("integracao_id", integracaoId)
+    .maybeSingle();
+
+  const token = await getValidGoogleAccessToken(supabase, tenantId, credRow, integracaoId);
+  if (!token) {
+    return {
+      ok: false,
+      provider,
+      error: "Token Gmail indisponível. Volte a ligar a conta Google.",
+      status: 409,
+    };
   }
 
-  const resend = await sendEmail({
+  const gmail = await sendGmailEmail({
+    bearerToken: token,
     to: input.to,
     subject: input.subject,
     text: input.text,
@@ -116,12 +88,12 @@ export async function sendEmailViaAgente(
     fromName,
     inReplyTo: input.inReplyTo,
     references: input.references,
-    replyTo: input.replyTo || undefined,
+    threadId: input.threadId,
   });
 
-  if (!resend.ok) {
-    return { ok: false, provider, error: resend.error, status: resend.status, body: resend.body };
+  if (!gmail.ok) {
+    return { ok: false, provider, error: gmail.error, status: gmail.status };
   }
 
-  return { ok: true, provider, id: resend.id };
+  return { ok: true, provider, id: gmail.id, threadId: gmail.threadId };
 }

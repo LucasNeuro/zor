@@ -113,6 +113,27 @@ export async function carregarResumoConversa(
   return null;
 }
 
+/** Memórias recentes do lead para o prompt (Supabase — sem cache Redis). */
+export async function listarMemoriasLeadParaPrompt(
+  supabase: SupabaseClient,
+  leadId: string,
+  opts?: { cutoffIso?: string; limit?: number }
+): Promise<Array<{ chave: string; valor: string }>> {
+  let q = supabase
+    .from("hub_memorias_lead")
+    .select("chave, valor")
+    .eq("lead_id", leadId)
+    .order("criado_em", { ascending: false })
+    .limit(opts?.limit ?? 8);
+
+  if (opts?.cutoffIso) {
+    q = q.gte("criado_em", opts.cutoffIso);
+  }
+
+  const { data } = await q;
+  return (data ?? []) as Array<{ chave: string; valor: string }>;
+}
+
 export async function salvarResumoConversa(
   supabase: SupabaseClient,
   leadId: string,

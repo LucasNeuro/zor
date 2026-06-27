@@ -73,6 +73,7 @@ type TenantCadastro = {
   billing_uf?: string | null;
   billing_fonte?: string | null;
   pronto_cora: boolean;
+  pronto_cobranca?: boolean;
   cora_emissao_bloqueada?: boolean;
   cora_emissao_motivo?: string | null;
   cora_emissor_nome?: string | null;
@@ -304,7 +305,7 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
     setSalvando(true);
     setErro("");
     setInfo("");
-    setProgressoBoletos("A emitir cobranças…");
+    setProgressoBoletos("A criar mensalidades…");
     try {
       const valorCentavos = Math.round(parseFloat(valorPlano.replace(",", ".")) * 100);
       const numParcelas = Math.round(Number(parcelas));
@@ -319,7 +320,8 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
       }
 
       const cadAtual = await carregarCadastro();
-      if (!cadAtual?.pronto_cora) {
+      const pronto = cadAtual?.pronto_cobranca ?? cadAtual?.pronto_cora;
+      if (!pronto) {
         throw new Error(
           cadAtual?.cora_emissao_motivo ??
             "Cadastro incompleto — preencha CPF/CNPJ e endereço do cliente abaixo e clique em Salvar faturamento.",
@@ -339,7 +341,8 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
       const json = (await res.json()) as {
         data?: TenantMensalidadeRow[];
         erros?: Array<{ parcela: number; error: string }>;
-        resumo?: { emitidas: number; falhas: number; total_solicitado: number };
+        resumo?: { criadas?: number; emitidas?: number; falhas: number; total_solicitado: number };
+        aviso?: string;
         error?: string;
       };
 
@@ -347,46 +350,31 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
         json.erros?.map((e) => `Parcela ${e.parcela}: ${e.error}`).join(" · ") ?? "";
 
       if (!res.ok && !json.data?.length) {
-        throw new Error(detalheErros || json.error || "Falha ao gerar boletos.");
+        throw new Error(detalheErros || json.error || "Falha ao criar mensalidades.");
       }
 
-      const emitidas = json.resumo?.emitidas ?? json.data?.length ?? 0;
+      const criadas = json.resumo?.criadas ?? json.resumo?.emitidas ?? json.data?.length ?? 0;
       const falhas = json.resumo?.falhas ?? json.erros?.length ?? 0;
 
-      if (emitidas === 0) {
-        throw new Error(detalheErros || json.error || "Nenhum boleto foi emitido.");
+      if (criadas === 0) {
+        throw new Error(detalheErros || json.error || "Nenhuma mensalidade foi criada.");
       }
 
       if (falhas > 0) {
         const detalhe = json.erros?.map((e) => `Parcela ${e.parcela}: ${e.error}`).join(" · ");
         setErro(detalhe ?? `${falhas} parcela(s) falharam.`);
       }
-      if (emitidas > 0) {
+      if (criadas > 0) {
         setInfo(
-          `${emitidas} boleto(s) emitido(s) com boleto + Pix. ` +
-            `No app Cora (ONNZE), abra Gestão de boletos → «A receber» ou «Todos» — ` +
-            `não aparecem em «Atrasados» se o vencimento for futuro.`,
+          `${criadas} mensalidade(s) criada(s) no CRM. ` +
+            (json.aviso ??
+              "Emissão bancária descontinuada — nova integração de pagamentos em breve."),
         );
       }
 
       await carregarMensalidades({ syncParent: true });
     } catch (e) {
-      let msg = e instanceof Error ? e.message : "Erro ao gerar boletos.";
-      if (tenant?.id) {
-        try {
-          const dRes = await fetch(`/api/ops/tenants/${tenant.id}/cora-diagnostico`, {
-            headers: await opsApiHeaders(),
-            credentials: "include",
-          });
-          const dJson = (await dRes.json()) as { data?: { conclusao?: string; payload_pagador?: { document_identity?: string } } };
-          if (dRes.ok && dJson.data?.conclusao) {
-            msg = `${msg}\n\nDiagnóstico: ${dJson.data.conclusao}`;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-      setErro(msg);
+      setErro(e instanceof Error ? e.message : "Erro ao criar mensalidades.");
     } finally {
       setSalvando(false);
       setProgressoBoletos("");
@@ -408,82 +396,6 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
       await carregarMensalidades({ syncParent: true });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro na cobrança.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  async function emitirCora(id: string, tipo: "boleto" | "pix") {
-    setSalvando(true);
-    setErro("");
-    try {
-      const path = tipo === "pix" ? "cora-pix" : "cora-boleto";
-      const res = await fetch(`/api/ops/pagamentos/${id}/${path}`, {
-        method: "POST",
-        headers: await opsApiHeaders(),
-        credentials: "include",
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Falha ao emitir cobrança.");
-      await carregarMensalidades({ syncParent: true });
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao emitir cobrança.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  async function verificarNaCora(id: string) {
-    setSalvando(true);
-    setErro("");
-    setInfo("");
-    try {
-      const res = await fetch(`/api/ops/pagamentos/${id}/cora-verificar`, {
-        headers: await opsApiHeaders(),
-        credentials: "include",
-      });
-      const json = (await res.json()) as {
-        data?: {
-          cora_invoice_id: string;
-          status: string;
-          customer_name: string | null;
-          cora_ambiente: string;
-          cora_client_id: string;
-          dica_painel_cora: string;
-        };
-        error?: string;
-        dica?: string;
-      };
-      if (!res.ok || !json.data) {
-        throw new Error([json.error, json.dica].filter(Boolean).join(" "));
-      }
-      const d = json.data;
-      setInfo(
-        `Cora confirmou a fatura ${d.cora_invoice_id} (${d.status}) — cliente «${d.customer_name ?? "?"}» ` +
-          `· ambiente ${d.cora_ambiente} · client_id ${d.cora_client_id}. ` +
-          d.dica_painel_cora,
-      );
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Falha ao verificar na Cora.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  async function cancelarCora(id: string) {
-    setSalvando(true);
-    setErro("");
-    try {
-      const res = await fetch(`/api/ops/pagamentos/${id}/cora`, {
-        method: "DELETE",
-        headers: await opsApiHeaders(),
-        credentials: "include",
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Falha ao cancelar.");
-      await carregarMensalidades({ syncParent: true });
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao cancelar.");
     } finally {
       setSalvando(false);
     }
@@ -557,7 +469,8 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
   );
 
   const emitidasCount = useMemo(
-    () => mensalidades.filter((m) => Boolean(m.cora_invoice_id)).length,
+    () =>
+      mensalidades.filter((m) => Boolean(m.cora_invoice_id || m.boleto_arquivo_url)).length,
     [mensalidades],
   );
 
@@ -702,17 +615,9 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
               carregandoCadastro
                 ? "A carregar dados do cadastro…"
                 : cadastro?.cora_emissao_bloqueada
-                  ? [
-                      cadastro.cora_emissao_motivo,
-                      cadastro.cora_emissor_cnpj && cadastro.cora_cliente_documento
-                        ? `Emissor (credenciais Cora): ${cadastro.cora_emissor_nome ?? "—"} · ${cadastro.cora_emissor_cnpj} · Pagador (cadastro): ${cadastro.cora_cliente_documento}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") ||
-                    "Documento do pagador igual ao da conta Cora emissora."
-                  : cadastro?.pronto_cora
-                    ? "Pagador = cadastro do cliente (SHEFA). Emissor = conta Cora das credenciais (ex.: Onze Tecnologia)."
+                  ? cadastro.cora_emissao_motivo ?? "Cadastro bloqueado para cobrança."
+                  : cadastro?.pronto_cora || cadastro?.pronto_cobranca
+                    ? "Cadastro do pagador completo. Emissão bancária via nova API em breve."
                     : "Preencha CPF/CNPJ do cliente no formulário abaixo e salve."
             }
             statusLabel={
@@ -910,7 +815,7 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
                   }
                   onClick={() => void gerarBoletosPlano()}
                 >
-                  {salvando ? "A gerar…" : `Gerar ${parcelas} boleto(s)`}
+                  {salvando ? "A criar…" : `Criar ${parcelas} mensalidade(s)`}
                 </WajeOwnerActionBtn>
                 {progressoBoletos ? (
                   <span className="text-[10px]" style={{ color: "#b8d4bc" }}>
@@ -944,8 +849,8 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
           {mensalidades.length > 0 ? (
             <p className="mb-2 px-1 text-xs" style={rfBodyOnDarkStyle()}>
               {emitidasCount > 0
-                ? "Cobranças com boleto — abra o PDF ou copie o Pix de cada parcela."
-                : "Nenhum boleto emitido ainda para este tenant."}
+                ? "Cobranças com boleto legado (Cora) — abra o PDF ou copie o Pix se disponível."
+                : "Mensalidades no CRM — emissão bancária via nova integração em breve."}
             </p>
           ) : null}
 
@@ -957,38 +862,21 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
             <div className="flex flex-col gap-2">
               {mensalidades.map((m) => {
                 const pago = m.status === "pago";
-                const temCora = Boolean(m.cora_invoice_id);
+                const temBoletoLegado = Boolean(m.cora_invoice_id || m.boleto_arquivo_url);
                 return (
                   <WajeOwnerRetrofitCard
                     key={m.id}
-                    icon={temCora ? QrCode : Receipt}
+                    icon={temBoletoLegado ? QrCode : Receipt}
                     title={`${formatarData(m.competencia)} · ${formatarMoeda(m.valor_reais)}`}
                     description={
-                      temCora
-                        ? `Venc. ${formatarData(m.vencimento)} · ${m.status} · Cora ${m.cora_invoice_id?.slice(0, 8)}…`
+                      temBoletoLegado
+                        ? `Venc. ${formatarData(m.vencimento)} · ${m.status}${m.cora_invoice_id ? ` · legado ${m.cora_invoice_id.slice(0, 8)}…` : ""}`
                         : `Venc. ${formatarData(m.vencimento)} · ${m.status}`
                     }
-                    statusLabel={pago ? "PAGO" : temCora ? "COBRANÇA" : "PENDENTE"}
+                    statusLabel={pago ? "PAGO" : temBoletoLegado ? "LEGADO" : "PENDENTE"}
                     statusActive={pago}
                   >
                     <div className="flex flex-wrap gap-2 pl-[54px]">
-                      {!temCora && !pago ? (
-                        <>
-                          <WajeOwnerActionBtn
-                            variant="primary"
-                            disabled={salvando}
-                            onClick={() => void emitirCora(m.id, "boleto")}
-                          >
-                            Boleto
-                          </WajeOwnerActionBtn>
-                          <WajeOwnerActionBtn
-                            disabled={salvando}
-                            onClick={() => void emitirCora(m.id, "pix")}
-                          >
-                            Pix
-                          </WajeOwnerActionBtn>
-                        </>
-                      ) : null}
                       {m.boleto_arquivo_url || m.cora_boleto_url ? (
                         <a
                           href={m.boleto_arquivo_url ?? m.cora_boleto_url!}
@@ -1010,14 +898,6 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
                           Copiar Pix
                         </WajeOwnerActionBtn>
                       ) : null}
-                      {temCora ? (
-                        <WajeOwnerActionBtn
-                          disabled={salvando}
-                          onClick={() => void verificarNaCora(m.id)}
-                        >
-                          Verificar Cora
-                        </WajeOwnerActionBtn>
-                      ) : null}
                       {!pago && m.status !== "cancelado" ? (
                         <WajeOwnerActionBtn
                           disabled={salvando}
@@ -1026,7 +906,7 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
                           Marcar pago
                         </WajeOwnerActionBtn>
                       ) : null}
-                      {!temCora && !pago && m.status !== "cancelado" ? (
+                      {!temBoletoLegado && !pago && m.status !== "cancelado" ? (
                         <WajeOwnerActionBtn
                           variant="danger"
                           disabled={salvando}
@@ -1034,16 +914,6 @@ export function WajeOwnerTenantSideover({ open, tenant, onClose, onUpdated, onBi
                         >
                           <Trash2 size={12} className="mr-1 inline" />
                           Apagar
-                        </WajeOwnerActionBtn>
-                      ) : null}
-                      {temCora && !pago ? (
-                        <WajeOwnerActionBtn
-                          variant="danger"
-                          disabled={salvando}
-                          onClick={() => void cancelarCora(m.id)}
-                        >
-                          <Trash2 size={12} className="mr-1 inline" />
-                          Cancelar
                         </WajeOwnerActionBtn>
                       ) : null}
                     </div>

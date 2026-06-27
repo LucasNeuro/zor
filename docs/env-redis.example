@@ -1,18 +1,18 @@
 # Redis — variáveis de ambiente
 
-Configuração compartilhada para idempotência de webhook, rate limit por tenant e fila de retroalimentação (`waje:learn:queue`).
+Configuração para idempotência de webhook, rate limit por tenant e cache de tenant (agentes/cargos).
 
 Quando `REDIS_HOST` **não** está definido, a app usa fallback **em memória** (adequado para dev local; **não** deduplica entre réplicas no Render).
 
-## Variáveis
+## Redis Database (cache operacional)
 
 | Variável | Obrigatória | Exemplo | Descrição |
 |----------|-------------|---------|-----------|
-| `REDIS_HOST` | Sim (prod) | `red-xxxxx.render.com` | Hostname do Redis gerenciado |
+| `REDIS_HOST` | Sim (prod) | `redis-xxxxx.redislabs.com` | Hostname do Redis gerenciado |
 | `REDIS_PORT` | Não | `6379` | Porta TCP (padrão `6379`) |
 | `REDIS_USERNAME` | Depende do provedor | `default` | Usuário ACL (Redis 6+). No **Redis Cloud**, use o username exibido no painel (muitas vezes `default`). |
 | `REDIS_PASSWORD` | Sim (prod) | `sua-chave-secreta` | Senha do serviço Redis — copie exatamente do painel (sem espaços). Erro `WRONGPASS` = credencial errada. |
-| `REDIS_TLS` | Não | `true` | **Redis Cloud:** TLS obrigatório. Auto-ligado se `REDIS_HOST` contém `redislabs.com`. |
+| `REDIS_TLS` | Não | `true` | **Redis Cloud:** TLS na maioria dos endpoints públicos. Auto-ligado se `REDIS_HOST` contém `redislabs.com`. Erro `wrong version number` → tente `REDIS_TLS=false` ou confirme a porta do painel. |
 | `REDIS_KEY_PREFIX` | Não | `waje:` | Prefixo de todas as chaves (padrão `waje:`) |
 
 ## Rate limit de webhook (opcional)
@@ -24,18 +24,19 @@ Quando `REDIS_HOST` **não** está definido, a app usa fallback **em memória** 
 
 Exemplo: `WEBHOOK_RATE_LIMIT_MAX=120` limita a 120 eventos/minuto por tenant.
 
-## Chaves Redis
+## Chaves Redis (Database)
 
 | Chave (após prefixo) | Uso |
 |----------------------|-----|
 | `webhook:idem:{tenantId}:{messageId}` | SET NX — dedupe distribuído (TTL 24h) |
 | `ratelimit:{tenantId}:{bucket}` | INCR + EXPIRE — burst por tenant |
 | `learn:queue` | LIST — jobs de retroalimentação de conhecimento |
+| `tenant:{tenantId}:{key}` | Cache JSON por tenant (agentes, cargos) |
 
 ## Render
 
-1. Criar **Redis** no Render (ou Upstash/external).
-2. Copiar host, port, password para o Web Service **e** o Worker WhatsApp.
+1. Criar **Redis Database** no Redis Cloud (ou Render/Upstash), ou **omitir** `REDIS_*` para modo memória local.
+2. Copiar host, port, password para o Web Service.
 3. Definir `REDIS_KEY_PREFIX=waje:` (ou prefixo por ambiente, ex. `waje:staging:`).
 
-**Nunca** commitar credenciais reais — configure apenas no painel Render / `.env.local` (gitignored).
+**Nunca** commitar credenciais reais — configure apenas no painel Render / `.env` (gitignored).

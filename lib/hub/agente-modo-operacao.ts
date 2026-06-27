@@ -60,7 +60,7 @@ export const MODO_OPERACAO_DESCRICAO: Record<ModoOperacaoAgente, string> = {
   canal_whatsapp:
     "Atende clientes e leads no WhatsApp: cada mensagem dispara o agente (cargo + playbook no runtime).",
   canal_email:
-    "Atende clientes e leads por e-mail (Resend): cada mensagem recebida dispara o agente no canal.",
+    "Atende clientes e leads por e-mail (Gmail OAuth): cada mensagem recebida dispara o agente no canal.",
   jobs_internos:
     "Copiloto interno: relatórios, análises e tarefas agendadas via ciclos — sem fila de atendimento ao vivo.",
 };

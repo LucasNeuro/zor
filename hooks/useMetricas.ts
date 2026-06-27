@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 import type { CrmMetricas } from "@/lib/crm/dashboard-aggregate";
 import { supabase } from "@/lib/supabase/client";
 
@@ -41,9 +41,7 @@ export function useMetricas() {
 
   const carregar = useCallback(async () => {
     const since = inicioDiaLocalISO();
-    const res = await fetch(`/api/crm/metricas?since=${encodeURIComponent(since)}`, {
-      headers: { ...internalApiHeaders() },
-    });
+    const res = await crmFetch(`/api/crm/metricas?since=${encodeURIComponent(since)}`);
     if (!res.ok) {
       setMetricas((prev) => ({ ...prev, loading: false }));
       return;

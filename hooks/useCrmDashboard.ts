@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 import type {
   AlertaResumo,
   CicloStatus,
@@ -86,10 +86,7 @@ export function useCrmDashboard(): CrmDashboardState {
 
   const carregar = useCallback(async () => {
     const since = inicioDiaLocalISO();
-    const res = await fetch(`/api/crm/dashboard?since=${encodeURIComponent(since)}`, {
-      credentials: "include",
-      headers: { ...internalApiHeaders() },
-    });
+    const res = await crmFetch(`/api/crm/dashboard?since=${encodeURIComponent(since)}`);
     if (res.ok) {
       const body = (await res.json()) as DashboardPayload;
       setState((prev) => aplicarPayload(prev, body));

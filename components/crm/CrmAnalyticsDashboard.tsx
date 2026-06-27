@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 import type { AnalyticsPayload, KpiCard } from "@/lib/crm/analytics-aggregate";
 import {
   ANALYTICS_PERIODOS,
@@ -156,10 +156,7 @@ export function CrmAnalyticsDashboard() {
 
   const carregarPipelines = useCallback(async () => {
     try {
-      const res = await fetch("/api/crm/pipelines?tipo=negocio", {
-        credentials: "include",
-        headers: internalApiHeaders(),
-      });
+      const res = await crmFetch("/api/crm/pipelines?tipo=negocio");
       const json = (await res.json().catch(() => ({ data: [] }))) as { data?: PipelineTabItem[] };
       const list = json.data ?? [];
       const porMercado = list.filter((p) => p.mercado_sigla);
@@ -174,10 +171,7 @@ export function CrmAnalyticsDashboard() {
       setCarregandoFunilNeg(true);
       setErroFunilNeg(null);
       try {
-        const res = await fetch(`/api/crm/analytics?periodo=${periodo}&mercado=${mercado}`, {
-          credentials: "include",
-          headers: internalApiHeaders(),
-        });
+        const res = await crmFetch(`/api/crm/analytics?periodo=${periodo}&mercado=${mercado}`);
         if (!res.ok) {
           const j = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(j.error ?? `HTTP ${res.status}`);
@@ -208,10 +202,7 @@ export function CrmAnalyticsDashboard() {
     setCarregando(true);
     setErro(null);
     try {
-      const res = await fetch(`/api/crm/analytics?periodo=${periodo}`, {
-        credentials: "include",
-        headers: internalApiHeaders(),
-      });
+      const res = await crmFetch(`/api/crm/analytics?periodo=${periodo}`);
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(j.error ?? `HTTP ${res.status}`);
@@ -229,10 +220,7 @@ export function CrmAnalyticsDashboard() {
     setAtualizandoKpis(true);
     setKpiFeedback(null);
     try {
-      const res = await fetch("/api/crm/kpis/calcular", {
-        method: "POST",
-        headers: internalApiHeaders(),
-      });
+      const res = await crmFetch("/api/crm/kpis/calcular", { method: "POST" });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(j.error ?? "Falha ao calcular KPIs");

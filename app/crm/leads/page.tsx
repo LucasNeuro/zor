@@ -53,8 +53,7 @@ import {
   useCrmLeadsList,
   type CrmLeadRow,
 } from "@/hooks/useCrmLeadsQueries";
-import { useCrmPipelines } from "@/hooks/useCrmDataQueries";
-import { crmQueryKeys } from "@/lib/crm/crm-query-keys";
+import { invalidateCrmPipelines, useCrmPipelines } from "@/hooks/useCrmDataQueries";
 import { CrmLeadsPageSkeleton } from "@/components/crm/leads/CrmLeadsPageSkeleton";
 
 type AtendimentoCanalFilter = "whatsapp" | "email";
@@ -1403,7 +1402,7 @@ export default function LeadsPage() {
         focusCreate={pipelineConfigFocusCreate}
         onSelectPipeline={(id) => setPipelineId(id)}
         onUpdated={() => {
-          void queryClient.invalidateQueries({ queryKey: crmQueryKeys.pipelines("lead") });
+          void invalidateCrmPipelines(queryClient, "lead");
         }}
       />
     </div>

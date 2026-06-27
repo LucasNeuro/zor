@@ -1,4 +1,4 @@
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 
 export type PatchLeadResult =
   | { ok: true; data: Record<string, unknown> }
@@ -8,10 +8,9 @@ export async function patchLeadCrm(
   leadId: string,
   body: Record<string, unknown> & { _estagio_anterior?: string }
 ): Promise<PatchLeadResult> {
-  const res = await fetch(`/api/crm/leads/${encodeURIComponent(leadId)}`, {
+  const res = await crmFetch(`/api/crm/leads/${encodeURIComponent(leadId)}`, {
     method: "PATCH",
-    credentials: "include",
-    headers: { ...internalApiHeaders(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));

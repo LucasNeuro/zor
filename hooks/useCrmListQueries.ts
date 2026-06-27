@@ -2,7 +2,7 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 import {
   crmQueryKeys,
   type CrmEmpresasFiltros,
@@ -15,7 +15,7 @@ import { listQueryDefaults } from "@/lib/crm/query-config";
 import { CRM_MODULE_PARCEIROS_ENABLED } from "@/lib/crm/waje-modules";
 
 async function fetchJsonList<T>(url: string): Promise<T[]> {
-  const res = await fetch(url, { headers: internalApiHeaders() });
+  const res = await crmFetch(url);
   const data = (await res.json().catch(() => ({}))) as { data?: T[]; erro?: string; error?: string };
   if (!res.ok) {
     throw new Error(data.erro || data.error || "Falha ao carregar lista.");
@@ -76,7 +76,7 @@ export type ParceiroListaRow = {
 
 export async function fetchCrmParceirosList(): Promise<ParceiroListaRow[]> {
   if (!CRM_MODULE_PARCEIROS_ENABLED) return [];
-  const res = await fetch("/api/parceiros", { headers: internalApiHeaders() });
+  const res = await crmFetch("/api/parceiros");
   const data = (await res.json().catch(() => ({}))) as {
     parceiros?: ParceiroListaRow[];
     erro?: string;

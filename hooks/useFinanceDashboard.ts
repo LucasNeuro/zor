@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 import type { FinanceDashboardPayload } from "@/lib/crm/finance-dashboard-aggregate";
 import { aggregateFinanceDashboard } from "@/lib/crm/finance-dashboard-aggregate";
 import { DEFAULT_OBRA10_TENANT_ID } from "@/lib/tenant-default";
@@ -50,11 +50,7 @@ export function useFinanceDashboard(): FinanceDashboardState {
   const carregar = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, erro: null }));
     try {
-      const res = await fetch("/api/crm/financeiro/dashboard", {
-        headers: internalApiHeaders(),
-        credentials: "include",
-        cache: "no-store",
-      });
+      const res = await crmFetch("/api/crm/financeiro/dashboard", { cache: "no-store" });
       if (res.ok) {
         const body = (await res.json()) as FinanceDashboardPayload;
         setState({

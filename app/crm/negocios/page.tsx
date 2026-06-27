@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
+import { invalidateCrmPipelines, useCrmPipelines } from "@/hooks/useCrmDataQueries";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 import { NegocioFormDrawer } from "@/components/crm/NegocioFormDrawer";
@@ -122,6 +124,7 @@ export default function NegociosPage() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { setSlot } = useCrmHeaderSlot();
   const { error: toastError } = useCrmToast();
   const narrow = useNarrowViewport();
@@ -143,33 +146,43 @@ export default function NegociosPage() {
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [drawerAberto, setDrawerAberto] = useState(false);
   const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
-  const [pipelines, setPipelines] = useState<PipelineUi[]>([]);
+  const [pipelineConfigFocusCreate, setPipelineConfigFocusCreate] = useState(false);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const pipelinesNegocioQuery = useCrmPipelines("negocio");
   const [etapasKanban, setEtapasKanban] = useState<EtapaUi[]>(ETAPAS_FALLBACK);
   const [notasMap, setNotasMap] = useState<Map<string, NotaPreview[]>>(new Map());
   const [selectedNegocioId, setSelectedNegocioId] = useState<string | null>(null);
   const [selectedNegocio, setSelectedNegocio] = useState<NegocioDetailData | null>(null);
 
-  const carregarPipelines = useCallback(async () => {
-    const headers = await crmApiHeaders();
-    const res = await fetch("/api/crm/pipelines?tipo=negocio", { headers });
-    const json = await res.json().catch(() => ({ data: [] }));
-    const list = (json.data || []) as PipelineUi[];
-    if (!list.length) return;
-    setPipelines(list);
-    setPipelineId((prev) =>
-      prev && list.some((p) => p.id === prev) ? prev : (list[0]?.id ?? null)
-    );
-  }, []);
+  const pipelines = useMemo((): PipelineUi[] => {
+    const list = pipelinesNegocioQuery.data ?? [];
+    return list.map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      nome: p.nome,
+      mercado_sigla: p.mercado_sigla ?? null,
+      estagios: (p.estagios ?? []).map((e) => ({
+        slug: e.slug,
+        label: e.label,
+        cor: e.cor || "#6B7280",
+        ativo: e.ativo !== false,
+        ordem: e.ordem,
+      })),
+    }));
+  }, [pipelinesNegocioQuery.data]);
+
+  useEffect(() => {
+    if (!pipelines.length) return;
+    setPipelineId((prev) => {
+      if (prev && pipelines.some((p) => p.id === prev)) return prev;
+      return pipelines[0]?.id ?? null;
+    });
+  }, [pipelines]);
 
   const pipelineAtivo = useMemo(
     () => pipelines.find((p) => p.id === pipelineId) ?? null,
     [pipelines, pipelineId]
   );
-
-  useEffect(() => {
-    void carregarPipelines();
-  }, [carregarPipelines]);
 
   useEffect(() => {
     const cols =
@@ -512,11 +525,18 @@ export default function NegociosPage() {
       pipelines={pipelines}
       activePipelineId={pipelineId}
       onSelectPipeline={setPipelineId}
-      hidePipelines
+      pipelinesLoading={pipelinesNegocioQuery.isPending && pipelines.length === 0}
       sectionLabel="FUNIL"
       view={view}
       onViewChange={setView}
-      onOpenStages={() => setPipelineConfigOpen(true)}
+      onCreatePipeline={() => {
+        setPipelineConfigFocusCreate(true);
+        setPipelineConfigOpen(true);
+      }}
+      onOpenStages={() => {
+        setPipelineConfigFocusCreate(false);
+        setPipelineConfigOpen(true);
+      }}
     />
   );
 
@@ -537,13 +557,16 @@ export default function NegociosPage() {
 
       <PipelineConfigSideover
         open={pipelineConfigOpen}
-        onClose={() => setPipelineConfigOpen(false)}
+        onClose={() => {
+          setPipelineConfigOpen(false);
+          setPipelineConfigFocusCreate(false);
+        }}
         tipo="negocio"
         pipelineId={pipelineId}
+        focusCreate={pipelineConfigFocusCreate}
         onSelectPipeline={setPipelineId}
-        showPipelineAdmin={false}
         onUpdated={() => {
-          void carregarPipelines();
+          void invalidateCrmPipelines(queryClient, "negocio");
           void carregarLista(0, false);
         }}
       />

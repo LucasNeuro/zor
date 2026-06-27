@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 import type { AnalyticsPayload } from "@/lib/crm/analytics-aggregate";
 import type { AnalyticsPeriodo } from "@/lib/crm/analytics-period";
 import { MERCADO_PREFIXO_PADRAO } from "@/lib/crm/negocio-cadastro";
@@ -15,9 +15,8 @@ export function useCrmPainelAnalytics(periodo: AnalyticsPeriodo) {
     setCarregando(true);
     setErro(null);
     try {
-      const res = await fetch(
-        `/api/crm/analytics?periodo=${periodo}&mercado=${MERCADO_PREFIXO_PADRAO}`,
-        { credentials: "include", headers: internalApiHeaders() }
+      const res = await crmFetch(
+        `/api/crm/analytics?periodo=${periodo}&mercado=${MERCADO_PREFIXO_PADRAO}`
       );
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };

@@ -87,6 +87,20 @@ export async function crmApiHeadersWithActor(actor?: {
   return h;
 }
 
+/** Fetch browser CRM/Hub com tenant e sessão da conta (preferir a `internalApiHeaders()`). */
+export async function crmFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const authHeaders = await crmApiHeaders();
+  const merged = new Headers(init?.headers);
+  for (const [key, value] of Object.entries(authHeaders)) {
+    if (!merged.has(key)) merged.set(key, value);
+  }
+  return fetch(input, {
+    ...init,
+    credentials: init?.credentials ?? "include",
+    headers: merged,
+  });
+}
+
 /** Perfil do utilizador logado (nome do CRM quando disponível). */
 export async function getCrmSessionActor(): Promise<CrmSessionActor> {
   const { data: { user } } = await supabase.auth.getUser();

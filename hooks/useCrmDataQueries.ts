@@ -2,8 +2,7 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { crmApiHeaders, hubApiHeaders } from "@/lib/internal-api-headers-client";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 import { crmQueryKeys, type CrmNegociosFiltros } from "@/lib/crm/crm-query-keys";
 import { listQueryDefaults, ciclosListQueryDefaults } from "@/lib/crm/query-config";
 import { hubQueryKeys } from "@/lib/hub/hub-query-keys";
@@ -32,8 +31,7 @@ export type CrmNegociosPage = {
 export type CrmPipelineTipo = "lead" | "negocio" | "atendimento";
 
 async function fetchCrmPipelines(tipo: CrmPipelineTipo): Promise<CrmPipelineRow[]> {
-  const headers = await crmApiHeaders();
-  const res = await fetch(`/api/crm/pipelines?tipo=${tipo}`, { headers });
+  const res = await crmFetch(`/api/crm/pipelines?tipo=${tipo}`);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg =
@@ -50,14 +48,14 @@ async function fetchCrmNegociosPage(f: CrmNegociosFiltros): Promise<CrmNegociosP
   if (f.busca) p.set("busca", f.busca);
   if (f.etapa) p.set("etapa", f.etapa);
   if (f.pipelineId) p.set("pipeline_id", f.pipelineId);
-  const res = await fetch(`/api/crm/negocios?${p}`, { headers: internalApiHeaders() });
+  const res = await crmFetch(`/api/crm/negocios?${p}`);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error("Falha ao carregar negócios.");
   return { data: json.data ?? [], total: json.total ?? 0 };
 }
 
 async function fetchHubCiclosList(): Promise<Record<string, unknown>[]> {
-  const res = await fetch("/api/hub/ciclos", { headers: await hubApiHeaders() });
+  const res = await crmFetch("/api/hub/ciclos");
   const json = (await res.json().catch(() => ({}))) as { ciclos?: unknown; error?: string };
   if (!res.ok) {
     if (res.status === 400 || res.status === 404) {

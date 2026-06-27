@@ -82,16 +82,6 @@ export async function POST(request: NextRequest) {
     .eq("tipo", tipo)
     .eq("ativo", true);
 
-  if (tipo === "negocio" && (count ?? 0) >= 1) {
-    return NextResponse.json(
-      {
-        error:
-          "Negócios usa um único funil por empresa. Personalize os estágios em Estágios.",
-      },
-      { status: 400 }
-    );
-  }
-
   const { data: pipeline, error } = await supabase
     .from("hub_pipelines")
     .insert({

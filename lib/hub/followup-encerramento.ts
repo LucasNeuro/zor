@@ -10,7 +10,8 @@ export type FollowupEncerramentoMotivo =
   | "reserva_calendario"
   | "playbook_concluido"
   | "ia_encerramento"
-  | "heuristica_encerramento";
+  | "heuristica_encerramento"
+  | "limite_total_envios";
 
 export type ClassificacaoFollowupCliente = "encerramento" | "continuar";
 

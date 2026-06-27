@@ -21,12 +21,15 @@ import {
 } from "@/lib/hub/followup-agenda";
 import {
   contarEnviosFollowupHoje,
+  contarEnviosFollowupTotalLead,
   estadoCadenciaFromLedger,
   followupPassoJaEnviado,
+  incrementarContadorTotalEnviosFollowup,
   limparLedgerCadenciaLead,
   registrarFollowupEnvio,
   sincronizarFollowupPassoComLedger,
 } from "@/lib/hub/followup-ledger";
+import { pausarFollowupPorEncerramento } from "@/lib/hub/followup-encerramento";
 import {
   clienteRespondeuAposUltimoFollowup,
   followupLeadBloqueadoPorEnvioRecente,
@@ -508,7 +511,30 @@ export async function executarFollowupParaAgente(
       passosAtivos.length,
       Math.min(10, config.max_envios_por_dia ?? passosAtivos.length)
     );
+    const maxTotalLead = Math.max(
+      passosAtivos.length,
+      Math.min(100, config.max_envios_total_lead ?? passosAtivos.length * 5)
+    );
     if (!options?.simular) {
+      const enviosTotal = await contarEnviosFollowupTotalLead(supabase, lead.id, slug);
+      if (enviosTotal >= maxTotalLead) {
+        await pausarFollowupPorEncerramento(supabase, lead.id, {
+          motivo: "limite_total_envios",
+          detalhe: `limite total (${maxTotalLead}) atingido — ${enviosTotal} envio(s) históricos`,
+          agente_slug: slug,
+        });
+        if (coletarDiagnostico) {
+          registrarSkip(result, {
+            lead_id: lead.id,
+            lead_nome: lead.nome,
+            motivo: "limite_total_atingido",
+            detalhe: `limite total (${maxTotalLead}) — ${enviosTotal} envio(s) na vida do lead`,
+            proximo_passo: indicePasso + 1,
+          });
+        }
+        continue;
+      }
+
       const enviosHoje = await contarEnviosFollowupHoje(supabase, lead.id, slug, config.timezone);
       if (enviosHoje >= maxPorDia) {
         if (coletarDiagnostico) {
@@ -672,6 +698,8 @@ export async function executarFollowupParaAgente(
       result.erros.push(`${lead.nome}: falha ao gravar ledger (${ledger.erro})`);
       continue;
     }
+
+    await incrementarContadorTotalEnviosFollowup(supabase, lead.id);
 
     const { error: leadErr } = await supabase
       .from("hub_leads_crm")

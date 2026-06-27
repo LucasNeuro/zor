@@ -162,6 +162,97 @@ export async function contarEnviosFollowupHoje(
   return count ?? 0;
 }
 
+const META_TOTAL_ENVIOS = "followup_total_envios";
+
+/** Total histórico de follow-ups do lead (persiste mesmo quando a cadência reinicia). */
+export async function contarEnviosFollowupTotalLead(
+  supabase: SupabaseClient,
+  leadId: string,
+  agenteSlug: string
+): Promise<number> {
+  const { data: lead, error: leadErr } = await supabase
+    .from("hub_leads_crm")
+    .select("metadata")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (!leadErr && lead?.metadata && typeof lead.metadata === "object" && !Array.isArray(lead.metadata)) {
+    const n = (lead.metadata as Record<string, unknown>)[META_TOTAL_ENVIOS];
+    if (typeof n === "number" && Number.isFinite(n) && n >= 0) {
+      return Math.floor(n);
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("hub_fila_mensagens")
+    .select("id, metadata, agente_id")
+    .eq("lead_id", leadId)
+    .eq("direcao", "saida");
+
+  if (error || !data?.length) return 0;
+
+  const slug = agenteSlug.trim();
+  let total = 0;
+  for (const row of data) {
+    const meta =
+      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : {};
+    if (meta.tipo !== "followup_automatico") continue;
+    const aid = typeof row.agente_id === "string" ? row.agente_id.trim() : "";
+    if (slug && aid && aid !== slug) continue;
+    total += 1;
+  }
+
+  if (total > 0) {
+    await sincronizarContadorTotalEnviosFollowup(supabase, leadId, total);
+  }
+  return total;
+}
+
+/** Incrementa contador histórico após envio bem-sucedido. */
+export async function incrementarContadorTotalEnviosFollowup(
+  supabase: SupabaseClient,
+  leadId: string
+): Promise<number> {
+  const { data } = await supabase.from("hub_leads_crm").select("metadata").eq("id", leadId).maybeSingle();
+  const prev =
+    data?.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+      ? { ...(data.metadata as Record<string, unknown>) }
+      : {};
+  const atual =
+    typeof prev[META_TOTAL_ENVIOS] === "number" && Number.isFinite(prev[META_TOTAL_ENVIOS])
+      ? Math.max(0, Math.floor(prev[META_TOTAL_ENVIOS] as number))
+      : 0;
+  const next = atual + 1;
+  prev[META_TOTAL_ENVIOS] = next;
+  try {
+    await supabase.from("hub_leads_crm").update({ metadata: prev }).eq("id", leadId);
+  } catch (e) {
+    console.warn("[followup-ledger] incrementarContadorTotalEnviosFollowup:", e);
+  }
+  return next;
+}
+
+async function sincronizarContadorTotalEnviosFollowup(
+  supabase: SupabaseClient,
+  leadId: string,
+  total: number
+): Promise<void> {
+  const { data } = await supabase.from("hub_leads_crm").select("metadata").eq("id", leadId).maybeSingle();
+  const prev =
+    data?.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+      ? { ...(data.metadata as Record<string, unknown>) }
+      : {};
+  if (typeof prev[META_TOTAL_ENVIOS] === "number" && prev[META_TOTAL_ENVIOS] >= total) return;
+  prev[META_TOTAL_ENVIOS] = total;
+  try {
+    await supabase.from("hub_leads_crm").update({ metadata: prev }).eq("id", leadId);
+  } catch {
+    /* ok */
+  }
+}
+
 /** Lista passos já enviados para um lead (painel/diagnóstico). */
 export async function listarEnviosLedgerLead(
   supabase: SupabaseClient,

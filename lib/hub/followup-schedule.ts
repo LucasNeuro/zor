@@ -12,7 +12,8 @@ export type MotivoFollowupSkip =
   | "sem_ultima_msg_cliente"
   | "passo_ja_enviado"
   | "cliente_respondeu"
-  | "atendimento_encerrado";
+  | "atendimento_encerrado"
+  | "limite_total_atingido";
 
 const TZ_PADRAO = "America/Sao_Paulo";
 

@@ -108,6 +108,7 @@ export async function PATCH(
     horario_inicio?: string;
     horario_fim?: string;
     max_envios_por_dia?: number;
+    max_envios_total_lead?: number;
   };
   try {
     body = await request.json();
@@ -212,6 +213,13 @@ export async function PATCH(
       return NextResponse.json({ error: "max_envios_por_dia inválido (1–10)." }, { status: 400 });
     }
     patch.max_envios_por_dia = n;
+  }
+  if (body.max_envios_total_lead != null) {
+    const n = Number.parseInt(String(body.max_envios_total_lead), 10);
+    if (!Number.isFinite(n) || n < 1 || n > 100) {
+      return NextResponse.json({ error: "max_envios_total_lead inválido (1–100)." }, { status: 400 });
+    }
+    patch.max_envios_total_lead = n;
   }
   if (body.horarios_disparo !== undefined) {
     const horarios = normalizarHorariosDisparoInput(body.horarios_disparo);

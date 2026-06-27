@@ -41,6 +41,7 @@ export async function obterOuCriarFollowupConfig(
     horario_fim: "22:00",
     timezone: "America/Sao_Paulo",
     max_envios_por_dia: 1,
+    max_envios_total_lead: 10,
   };
   if (tenantId) row.tenant_id = tenantId;
 

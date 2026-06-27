@@ -92,6 +92,9 @@ function normalizarConfig(c: HubAgenteFollowupConfig): HubAgenteFollowupConfig {
     horario_inicio: c.horario_inicio?.trim() || HORARIO_INICIO_PADRAO,
     horario_fim: c.horario_fim?.trim() || HORARIO_FIM_PADRAO,
     max_envios_por_dia: Number.isFinite(c.max_envios_por_dia) ? Math.max(1, c.max_envios_por_dia!) : 1,
+    max_envios_total_lead: Number.isFinite(c.max_envios_total_lead)
+      ? Math.max(1, c.max_envios_total_lead!)
+      : 10,
     horarios_disparo: horarios,
     gatilho_tipo: c.gatilho_tipo ?? padrao.gatilho_tipo,
     gatilho_dias: c.gatilho_dias ?? padrao.gatilho_dias,
@@ -207,6 +210,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
       horario_inicio: string;
       horario_fim: string;
       max_envios_por_dia: number;
+      max_envios_total_lead: number;
     }>
   ) {
     setSaving(true);
@@ -931,25 +935,57 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
             />
           </label>
         </div>
-        <label style={{ display: "block", marginTop: 10 }}>
-          <span style={{ ...rfLabelStyle(), fontSize: 10 }}>Máx. automáticos por lead / dia</span>
-          <input
-            type="number"
-            min={1}
-            max={10}
-            value={config?.max_envios_por_dia ?? 1}
-            disabled={loading || saving || !config}
-            onChange={(e) => {
-              const n = Math.min(10, Math.max(1, Number.parseInt(e.target.value, 10) || 1));
-              atualizarConfigLocal({ max_envios_por_dia: n });
-            }}
-            onBlur={() => {
-              if (!config) return;
-              void salvarConfig({ max_envios_por_dia: config.max_envios_por_dia ?? 1 });
-            }}
-            style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
-          />
-        </label>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 10,
+            marginTop: 10,
+          }}
+        >
+          <label style={{ display: "block" }}>
+            <span style={{ ...rfLabelStyle(), fontSize: 10 }}>Máx. por lead / dia</span>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={config?.max_envios_por_dia ?? 1}
+              disabled={loading || saving || !config}
+              onChange={(e) => {
+                const n = Math.min(10, Math.max(1, Number.parseInt(e.target.value, 10) || 1));
+                atualizarConfigLocal({ max_envios_por_dia: n });
+              }}
+              onBlur={() => {
+                if (!config) return;
+                void salvarConfig({ max_envios_por_dia: config.max_envios_por_dia ?? 1 });
+              }}
+              style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
+            />
+          </label>
+          <label style={{ display: "block" }}>
+            <span style={{ ...rfLabelStyle(), fontSize: 10 }}>Máx. total por lead (vida toda)</span>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={config?.max_envios_total_lead ?? 10}
+              disabled={loading || saving || !config}
+              onChange={(e) => {
+                const n = Math.min(100, Math.max(1, Number.parseInt(e.target.value, 10) || 10));
+                atualizarConfigLocal({ max_envios_total_lead: n });
+              }}
+              onBlur={() => {
+                if (!config) return;
+                void salvarConfig({ max_envios_total_lead: config.max_envios_total_lead ?? 10 });
+              }}
+              style={{ ...rfInputStyle(), width: "100%", marginTop: 4 }}
+            />
+          </label>
+        </div>
+        <p style={{ margin: "8px 0 0", fontSize: 9, color: RF_TEXT_MUTED, lineHeight: 1.4 }}>
+          O limite <strong style={{ color: RF_TEXT_SECONDARY }}>total</strong> conta todos os follow-ups já enviados ao
+          mesmo contato (mesmo em dias ou meses diferentes). Ao atingir, o automático para para sempre neste lead.
+        </p>
       </div>
       ) : null}
 

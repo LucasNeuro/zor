@@ -4,7 +4,7 @@ export function mensagemErroFollowupDb(error: { message?: string; code?: string 
   const code = String(error?.code ?? "");
 
   const colunaGatilho =
-    /gatilho_|atraso_dias|disparo_hora_dia|execucao_modo|horarios_disparo|janela_modo|horario_inicio|horario_fim|max_envios_por_dia|hub_followup_envio/i.test(msg) ||
+    /gatilho_|atraso_dias|disparo_hora_dia|execucao_modo|horarios_disparo|janela_modo|horario_inicio|horario_fim|max_envios_por_dia|max_envios_total_lead|hub_followup_envio/i.test(msg) ||
     code === "42703" ||
     code === "PGRST204";
 

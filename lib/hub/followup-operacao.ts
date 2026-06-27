@@ -60,6 +60,7 @@ const MOTIVO_LABEL: Record<string, string> = {
   passo_ja_enviado: "Passo já enviado",
   cliente_respondeu: "Cliente respondeu",
   atendimento_encerrado: "Atendimento encerrado",
+  limite_total_atingido: "Limite total atingido",
   sem_telefone: "Sem telefone",
 };
 

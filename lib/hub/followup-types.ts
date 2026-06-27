@@ -20,6 +20,8 @@ export type HubAgenteFollowupConfig = {
   horario_inicio?: string;
   horario_fim?: string;
   max_envios_por_dia?: number;
+  /** Teto histórico de follow-ups por lead (independente de dia/mês). */
+  max_envios_total_lead?: number;
   /** HH:MM America/Sao_Paulo — ex. ["09:00","14:00","18:00"]. */
   horarios_disparo?: string[] | null;
   gatilho_tipo?: FollowupGatilhoTipo;

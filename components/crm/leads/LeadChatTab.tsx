@@ -137,7 +137,7 @@ function autorFromMensagem(row: Record<string, unknown>): {
   agentSlug?: string;
 } {
   const direcao = String(row.direcao ?? "");
-  if (direcao === "entrada") return { autor: "cliente", label: "Lead" };
+  if (direcao === "entrada") return { autor: "cliente", label: "Cliente" };
 
   const agenteId = String(row.agente_id ?? row.agente_responsavel ?? "").trim();
   const meta =
@@ -156,7 +156,7 @@ function autorFromMensagem(row: Record<string, unknown>): {
   }
   return {
     autor: "ia",
-    label: agenteId ? `Funcionário IA · ${agenteId}` : "Funcionário IA",
+    label: agenteId ? `Assistente · ${agenteId}` : "Assistente",
     agentSlug: agenteId || undefined,
   };
 }
@@ -239,7 +239,7 @@ function mergeMensagens(
         id,
         conteudo: turno.content,
         autor: turno.role === "assistant" ? "ia" : "cliente",
-        autorLabel: turno.role === "assistant" ? "Funcionário IA" : "Lead",
+        autorLabel: turno.role === "assistant" ? "Assistente" : "Cliente",
         criado_em: turno.at ?? new Date(0).toISOString(),
         tipoMidia: midiaTurno.tipo,
         urlMidia: midiaTurno.urlMidia,
@@ -952,23 +952,8 @@ export function LeadChatTab({
               aria-hidden
             />
             <span className="shrink-0 text-[10px] font-bold" style={{ color: CHAT.accent }}>
-              {stats.total} mensagens
+              {stats.total} {stats.total === 1 ? "mensagem" : "mensagens"}
             </span>
-            {stats.cliente > 0 ? (
-              <span className="hidden shrink-0 text-[10px] font-bold md:inline" style={{ color: CHAT.muted }}>
-                Lead {stats.cliente}
-              </span>
-            ) : null}
-            {stats.ia > 0 ? (
-              <span className="hidden shrink-0 text-[10px] font-bold md:inline" style={{ color: CHAT.muted }}>
-                IA {stats.ia}
-              </span>
-            ) : null}
-            {stats.humano > 0 ? (
-              <span className="hidden shrink-0 text-[10px] font-bold md:inline" style={{ color: CHAT.muted }}>
-                Humano {stats.humano}
-              </span>
-            ) : null}
           </div>
 
           {interactive ? (
@@ -1189,7 +1174,7 @@ export function LeadChatTab({
           </div>
           <p className="mt-2 text-center text-[10px]" style={{ color: CHAT.muted }}>
             {assumido
-              ? "Fotos, áudios e arquivos até 12 MB · Enter envia · tag *[Waje · seu nome]* automática"
+              ? "Fotos, áudios e arquivos até 12 MB · Enter envia · seu nome aparece em negrito no WhatsApp"
               : "Enter envia · Shift+Enter nova linha"}
           </p>
         </div>

@@ -1,29 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
 import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
+import {
+  nomeLeadEhPlaceholder,
+  pushNameParaNomeExibicao,
+} from "@/lib/crm/lead-nome-validacao";
 
-/** Nome genérico de lead — deve ser substituído por pushName ou nome dito pelo cliente. */
-export function nomeLeadEhPlaceholder(nome: string | null | undefined): boolean {
-  const n = String(nome ?? "").trim().toLowerCase();
-  if (!n || n.length < 2) return true;
-  if (n.startsWith("lead ")) return true;
-  if (n === "lead whatsapp") return true;
-  if (/^lead\s*\d{3,4}$/.test(n)) return true;
-  return false;
-}
+export { nomeLeadEhPlaceholder, pushNameParaNomeExibicao };
 
 export function normalizarTelefoneWhatsapp(telefone: string): string {
   return telefone.replace(/\D/g, "").slice(0, 15);
-}
-
-export function pushNameParaNomeExibicao(pushName: string | null | undefined): string | undefined {
-  const raw = String(pushName ?? "").trim();
-  if (!raw || raw.length < 2) return undefined;
-  const lower = raw.toLowerCase();
-  if (lower === "whatsapp" || lower === "unknown") return undefined;
-  const parts = raw.split(/\s+/).filter(Boolean).slice(0, 4);
-  const nome = parts.join(" ").slice(0, 240);
-  return nomeLeadEhPlaceholder(nome) ? undefined : nome;
 }
 
 export type DadosContatoWhatsapp = {

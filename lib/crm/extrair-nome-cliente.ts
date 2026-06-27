@@ -1,4 +1,6 @@
-import { nomeLeadEhPlaceholder } from "@/lib/crm/sincronizar-contato-whatsapp";
+import { nomeLeadEhPlaceholder } from "@/lib/crm/lead-nome-validacao";
+
+export { nomeCandidatoEhValido } from "@/lib/crm/lead-nome-validacao";
 
 /** Palavras típicas de conversa — não são nomes próprios. */
 const PALAVRAS_NAO_NOME =
@@ -22,15 +24,6 @@ function mensagemPareceNomeCurto(mensagem: string): boolean {
   /** Nome curto espontâneo: «Marcelo» ou «Ana Silva» — não frases. */
   if (words.length > 2) return false;
   return !nomeLeadEhPlaceholder(t);
-}
-
-export function nomeCandidatoEhValido(nome: string | null | undefined): boolean {
-  const t = String(nome ?? "").trim();
-  if (!t || nomeLeadEhPlaceholder(t)) return false;
-  if (PALAVRAS_NAO_NOME.test(t)) return false;
-  const words = t.split(/\s+/).filter(Boolean);
-  if (words.length > 4) return false;
-  return true;
 }
 
 /**

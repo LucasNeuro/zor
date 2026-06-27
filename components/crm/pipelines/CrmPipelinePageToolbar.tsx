@@ -35,6 +35,8 @@ type Props = {
   stageFilterLabel?: string;
   showingCount?: number;
   showingLabel?: string;
+  /** Evita «Nenhum pipeline» enquanto a lista ainda carrega. */
+  pipelinesLoading?: boolean;
   extra?: ReactNode;
 };
 
@@ -60,6 +62,7 @@ export function CrmPipelinePageToolbar({
   stageFilterLabel = "Todos os estágios",
   showingCount,
   showingLabel = "registos",
+  pipelinesLoading = false,
   extra,
 }: Props) {
   const pipelineItems = pipelines.map((pipe) => {
@@ -106,7 +109,10 @@ export function CrmPipelinePageToolbar({
         {!hidePipelines && pipelineItems.length > 0 ? (
           <CrmSegmentedPills items={pipelineItems} aria-label="Pipelines" />
         ) : null}
-        {!hidePipelines && pipelineItems.length === 0 ? (
+        {!hidePipelines && pipelinesLoading ? (
+          <span style={{ fontSize: 12, color: "#6b8a76" }}>Carregando pipelines…</span>
+        ) : null}
+        {!hidePipelines && !pipelinesLoading && pipelineItems.length === 0 ? (
           <span style={{ fontSize: 12, color: "#6b8a76" }}>Nenhum pipeline — crie o primeiro abaixo.</span>
         ) : null}
 

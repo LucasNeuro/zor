@@ -2,7 +2,7 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { hubApiHeaders } from "@/lib/internal-api-headers-client";
+import { crmApiHeaders, hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { internalApiHeaders } from "@/lib/internal-api-headers";
 import { crmQueryKeys, type CrmNegociosFiltros } from "@/lib/crm/crm-query-keys";
 import { listQueryDefaults, ciclosListQueryDefaults } from "@/lib/crm/query-config";
@@ -32,9 +32,16 @@ export type CrmNegociosPage = {
 export type CrmPipelineTipo = "lead" | "negocio" | "atendimento";
 
 async function fetchCrmPipelines(tipo: CrmPipelineTipo): Promise<CrmPipelineRow[]> {
-  const res = await fetch(`/api/crm/pipelines?tipo=${tipo}`, { headers: internalApiHeaders() });
+  const headers = await crmApiHeaders();
+  const res = await fetch(`/api/crm/pipelines?tipo=${tipo}`, { headers });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error("Falha ao carregar pipelines.");
+  if (!res.ok) {
+    const msg =
+      typeof json.error === "string" && json.error.trim()
+        ? json.error
+        : "Falha ao carregar pipelines.";
+    throw new Error(msg);
+  }
   return (json.data || []) as CrmPipelineRow[];
 }
 
@@ -97,6 +104,13 @@ export function useCrmPipelines(tipo: CrmPipelineTipo, enabled = true) {
     ...listQueryDefaults,
     placeholderData: (prev) => prev,
   });
+}
+
+export function invalidateCrmPipelines(qc: QueryClient, tipo?: CrmPipelineTipo) {
+  if (tipo) {
+    return qc.invalidateQueries({ queryKey: crmQueryKeys.pipelines(tipo) });
+  }
+  return qc.invalidateQueries({ queryKey: [...crmQueryKeys.all, "pipelines"] });
 }
 
 export function useCrmNegociosList(filtros: CrmNegociosFiltros, enabled = true) {

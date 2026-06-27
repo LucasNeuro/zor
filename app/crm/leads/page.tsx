@@ -1022,6 +1022,7 @@ export default function LeadsPage() {
       pipelines={pipelines}
       activePipelineId={pipelineId}
       onSelectPipeline={setPipelineId}
+      pipelinesLoading={pipelinesLeadQuery.isPending && pipelines.length === 0}
       pipelineCount={pipelineCount}
       view={view}
       onViewChange={onViewChange}

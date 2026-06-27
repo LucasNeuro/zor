@@ -6,7 +6,7 @@ import { CadastroConhecimentoBanner } from "@/components/crm/cadastro/CadastroCo
 import { CadastroPremiumSideover } from "@/components/crm/cadastro/CadastroPremiumSideover";
 import { LEAD_ORIGENS } from "@/lib/crm/lead-cadastro";
 import { labelPipelineTab } from "@/lib/crm/tenant-pipelines";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 
 const ORIGEM_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp",
@@ -89,9 +89,8 @@ export function LeadRapidoSideover({ open, onClose, onSaved, activePipelineId }:
     setCarregandoPipelines(true);
     void (async () => {
       try {
-        const res = await fetch("/api/crm/pipelines?tipo=lead", {
-          headers: internalApiHeaders(),
-        });
+        const headers = await crmApiHeaders();
+        const res = await fetch("/api/crm/pipelines?tipo=lead", { headers });
         const json = (await res.json().catch(() => ({}))) as { data?: PipelineOption[] };
         if (cancelled) return;
         const list = json.data || [];
@@ -164,9 +163,10 @@ export function LeadRapidoSideover({ open, onClose, onSaved, activePipelineId }:
         body.indicado_por = form.indicado_por.trim();
       }
 
+      const headers = await crmApiHeaders();
       const res = await fetch("/api/crm/leads", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...internalApiHeaders() },
+        headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify(body),
       });
       const data = (await res.json().catch(() => ({}))) as {

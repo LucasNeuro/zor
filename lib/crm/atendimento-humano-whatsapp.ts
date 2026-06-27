@@ -259,7 +259,7 @@ export async function enviarMensagemAtendimentoHumano(
     const detalheToken =
       tokenOrigem.includes("desconectado") || !instanceToken
         ? "WhatsApp do agente não está conectado. Reconecte em Agentes → Canais → WhatsApp."
-        : "WhatsApp não configurado: conecte um agente em Canais ou defina UAZAPI_BASE_URL + token.";
+        : "WhatsApp não configurado. Reconecte o canal em Agentes → Canais.";
     if (!allowWhatsappDryRun()) {
       logAtendimentoSend({
         event: "send_skip",

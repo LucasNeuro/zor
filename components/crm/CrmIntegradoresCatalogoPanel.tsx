@@ -329,7 +329,7 @@ export function CrmIntegradoresCatalogoPanel({ agentes = [], agentesNomes = {} }
     <>
       <div className="border-b border-[#eef5ec] px-4 py-3">
         <p className="m-0 text-sm text-[#1e4a24]">
-          <strong>Ambiente</strong> — credenciais no servidor (.env).{" "}
+          <strong>Plataforma</strong> — credenciais geridas pelo servidor.{" "}
           <strong>Agente IA</strong> — ligue com API key/token e active funções na ficha de cada modelo.
         </p>
         {erro ? <p className="mt-2 text-sm text-[#c0392b]">{erro}</p> : null}

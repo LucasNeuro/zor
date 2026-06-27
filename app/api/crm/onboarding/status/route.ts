@@ -49,25 +49,25 @@ export async function GET(request: NextRequest) {
   const steps: OnboardingStep[] = [
     {
       id: "env",
-      label: "Variáveis de ambiente",
+      label: "Plataforma",
       ok: envOk,
       detail: envOk
-        ? "Supabase e API interna configurados"
-        : `Faltam: ${health.missingRequired.join(", ") || "revisar .env"}`,
+        ? "Serviços base configurados"
+        : "Configuração incompleta — contacte o suporte da plataforma",
       href: "/crm/configuracoes",
     },
     {
       id: "tenant",
-      label: "Tenant ativo",
+      label: "Empresa activa",
       ok: tenantOk,
       detail: tenantOk
         ? `${tenantRes.data?.nome_exibicao} (${tenantRes.data?.slug})`
-        : "Criar ou ativar linha em hub_tenants",
+        : "Active ou crie a empresa na plataforma",
       href: "/crm/onboarding-tenant",
     },
     {
       id: "users",
-      label: "Equipa em public.users",
+      label: "Equipa",
       ok: usersOk,
       detail: usersOk ? `${usersRes.count} utilizador(es)` : "Convidar pelo menos um membro",
       href: "/crm/usuarios",
@@ -76,14 +76,14 @@ export async function GET(request: NextRequest) {
       id: "whatsapp",
       label: "WhatsApp / canais",
       ok: canalOk,
-      detail: canalOk ? "UAZAPI ou canal cadastrado" : "Configurar UAZAPI ou /crm/canais",
+      detail: canalOk ? "Canal WhatsApp configurado" : "Configure o WhatsApp em Canais",
       href: "/crm/canais",
     },
     {
       id: "integracoes",
       label: "Integrações opcionais",
       ok: Boolean(process.env.WINDSOR_API_KEY?.trim()) || Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
-      detail: "Windsor (campanhas) ou Anthropic (IA)",
+      detail: "Campanhas ou IA alternativa (opcional)",
       href: "/crm/integracoes",
     },
     {
@@ -91,8 +91,8 @@ export async function GET(request: NextRequest) {
       label: "Dados CRM",
       ok: (leadsRes.count ?? 0) >= 0 && !leadsRes.error,
       detail: leadsRes.error
-        ? `Erro hub_leads_crm: ${leadsRes.error.message}`
-        : "Tabela hub_leads_crm acessível",
+        ? "Não foi possível aceder aos leads. Contacte o suporte."
+        : "Base de leads acessível",
       href: "/crm/leads",
     },
   ];

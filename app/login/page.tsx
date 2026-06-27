@@ -18,17 +18,9 @@ function messageForAuthRequestFailure(err: unknown): string {
   if (!isNetwork) {
     return msg || "Não foi possível iniciar sessão. Tente novamente.";
   }
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const urlHint =
-    !url || !/^https?:\/\//i.test(url)
-      ? " NEXT_PUBLIC_SUPABASE_URL no .env.local deve ser uma URL válida (ex.: https://xxxxx.supabase.co ou http://127.0.0.1:54321)."
-      : "";
   return (
-    "Não foi possível contactar o servidor de autenticação (Supabase). Verifique: ligação à Internet; URL e chave em .env.local (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY); reinicie o servidor após alterar o .env; no dashboard Supabase confirme que o projeto não está em pausa." +
-    urlHint +
-    (typeof window !== "undefined" && /^http:\/\/(127\.0\.0\.1|localhost):/i.test(window.location.origin)
-      ? " Se usar Supabase local (CLI), deixe supabase start a correr e confira CORS/additional redirects para este origin."
-      : "")
+    "Não foi possível contactar o servidor de autenticação. Verifique a ligação à Internet e tente novamente. " +
+    "Se o problema persistir, contacte o suporte da plataforma."
   );
 }
 

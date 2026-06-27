@@ -140,7 +140,7 @@ export function googleOAuthErroAmigavel(raw: string | null | undefined): string 
   if (/invalid_client/i.test(msg)) {
     return (
       "A chave secreta OAuth no servidor não confere com o Google Cloud (invalid_client). " +
-      "Confira GOOGLE_OAUTH_CLIENT_SECRET no .env / Render — use a secret ativa em GCP → Clientes."
+      "Não foi possível concluir a ligação com Google. Contacte o suporte da plataforma."
     );
   }
   return msg.length > 220 ? `${msg.slice(0, 220)}…` : msg;

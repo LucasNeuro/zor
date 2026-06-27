@@ -82,8 +82,7 @@ export function CicloTimelinePanel({ cicloId, theme = "dark", onRefreshRequest }
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
         <p style={{ margin: 0, fontSize: 12, color: muted, lineHeight: 1.45, flex: "1 1 auto" }}>
-          Histórico unificado: execuções em{" "}
-          <code style={{ color: RF_ACCENT, fontSize: 11 }}>hub_ciclos_log</code>
+          Histórico unificado: execuções registadas
           {cicloTipo === "gatilho" ? (
             <>
               , prompts e ações IA do agente

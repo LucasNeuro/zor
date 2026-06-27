@@ -1127,7 +1127,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       }
 
       if (res.status === 503 && !agenteSlugCriado) {
-        setPlaybookAnaliseErro("Configure MISTRAL_API_KEY no servidor para análise com nota.");
+        setPlaybookAnaliseErro("Serviço de IA indisponível para análise com nota. Contacte o suporte da plataforma.");
         return;
       }
 
@@ -1154,7 +1154,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           pontosChave: linhas,
           gaps: [],
           riscos: ["Valide no backend o endpoint POST /playbook/analisar."],
-          recomendacoes: ["Clique novamente após configurar MISTRAL_API_KEY."],
+          recomendacoes: ["Tente novamente quando o serviço de IA estiver disponível."],
           textoBruto: detalhes,
           modelo: null,
           origem: "fallback",

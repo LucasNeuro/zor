@@ -134,7 +134,7 @@ export async function sugerirCargoCatalogoComMistral(opts: {
   mercados?: MercadoContextRow[];
   conhecimentoEmpresa?: string;
 }): Promise<{ ok: true; sugestao: SugestaoCargoCatalogo } | { ok: false; error: string }> {
-  if (!mistralApiKey()) return { ok: false, error: "MISTRAL_API_KEY não configurada no .env." };
+  if (!mistralApiKey()) return { ok: false, error: "Serviço de IA indisponível." };
 
   const model =
     process.env.HUB_CARGO_SUGESTAO_MISTRAL_MODEL?.trim() ||

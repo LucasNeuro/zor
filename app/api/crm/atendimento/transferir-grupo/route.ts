@@ -168,8 +168,7 @@ export async function POST(request: NextRequest) {
   if (!whatsappConfigured({ instanceToken })) {
     return NextResponse.json(
       {
-        error:
-          "WhatsApp não configurado: defina UAZAPI_BASE_URL e token da instância (agente ligado à UAZAPI ou UAZAPI_INSTANCE_TOKEN)",
+        error: "WhatsApp não configurado. Reconecte o canal em Agentes → Canais.",
         tokenOrigem,
       },
       { status: 502 }
@@ -196,7 +195,7 @@ export async function POST(request: NextRequest) {
   if (!criacao.ok) {
     const is401 = criacao.status === 401;
     const errorDetail = is401
-      ? `${criacao.error} Verifique UAZAPI_BASE_URL (ex.: https://fitbot.uazapi.com) e o token da instância (${tokenOrigem}).`
+      ? `${criacao.error} Reconecte o WhatsApp em Agentes → Canais.`
       : criacao.error;
     return NextResponse.json(
       {

@@ -105,7 +105,7 @@ ${refinamento}
 
 async function gerarComMistral(user: string): Promise<{ ok: true; texto: string } | { ok: false; error: string }> {
   const key = process.env.MISTRAL_API_KEY?.trim();
-  if (!key) return { ok: false, error: "MISTRAL_API_KEY não configurada." };
+  if (!key) return { ok: false, error: "Serviço de IA indisponível." };
 
   const model =
     process.env.AGENTE_WIZARD_CONHECIMENTO_MISTRAL_MODEL?.trim() ||
@@ -185,7 +185,7 @@ async function gerarComAnthropic(user: string): Promise<{ ok: true; texto: strin
     let friendly = sanitizarErroApi(raw);
     if (/credit balance|billing|too low/i.test(raw)) {
       friendly =
-        "Anthropic (backup): créditos ou plano insuficientes. Use MISTRAL_API_KEY como provedor principal.";
+        "Serviço de IA alternativo indisponível. Contacte o suporte da plataforma.";
     }
     return { ok: false, error: friendly };
   }
@@ -223,6 +223,6 @@ export async function gerarConhecimentoSecaoComIa(opts: {
     ok: false,
     error:
       onlyAnth.error +
-      " Configure MISTRAL_API_KEY no servidor (provedor principal para este assistente).",
+      " Contacte o suporte da plataforma para activar o serviço de IA.",
   };
 }

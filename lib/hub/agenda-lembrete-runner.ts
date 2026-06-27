@@ -58,7 +58,7 @@ export async function executarAgendaLembreteParaAgente(
   if (!whatsappConfigured({ instanceToken })) {
     result.erros.push(
       instanceToken
-        ? `${slug}: UAZAPI_BASE_URL não configurado.`
+        ? `${slug}: WhatsApp não configurado para este agente.`
         : `${slug}: sem token UAZAPI para lembretes de agenda.`
     );
     return result;

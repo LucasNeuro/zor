@@ -266,7 +266,7 @@ export function CrmConhecimentoGerirSideover({
                 lineHeight: 1.45,
               }}
             >
-              {aviso} Execute <code style={{ fontSize: 11 }}>ensure_hub_tenant_conhecimento.sql</code> no Supabase.
+              {aviso} Contacte o suporte da plataforma para activar a base de conhecimento.
             </p>
           ) : null}
 

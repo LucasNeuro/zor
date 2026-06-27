@@ -591,17 +591,6 @@ export function AgenteFerramentasIaBlock({
                             </span>
                           ) : null}
                         </div>
-                        <code
-                          style={{
-                            display: "block",
-                            fontSize: 10,
-                            color: "#93c5fd",
-                            marginTop: 4,
-                            wordBreak: "break-all",
-                          }}
-                        >
-                          {tool.ferramenta_key}
-                        </code>
                         <span
                           style={{ display: "block", color: t.listItem, fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
                         >
@@ -727,17 +716,6 @@ export function AgenteFerramentasIaBlock({
                             {tool.metodo_http}
                           </span>
                         </div>
-                        <code
-                          style={{
-                            display: "block",
-                            fontSize: 10,
-                            color: "#c4b5fd",
-                            marginTop: 4,
-                            wordBreak: "break-all",
-                          }}
-                        >
-                          {tool.ferramenta_key}
-                        </code>
                         <span
                           style={{ display: "block", color: t.listItem, fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
                         >
@@ -839,22 +817,11 @@ export function AgenteFerramentasIaBlock({
                           >
                             {tool.requerConexao
                               ? tool.ferramenta_key.startsWith("hub_int_mem0")
-                                ? "LIGAR MEM0"
+                                ? "CONFIGURAR MEMÓRIA"
                                 : "REQUER OAUTH"
                               : tool.integrador_nome}
                           </span>
                         </div>
-                        <code
-                          style={{
-                            display: "block",
-                            fontSize: 10,
-                            color: "#92ff00",
-                            marginTop: 4,
-                            wordBreak: "break-all",
-                          }}
-                        >
-                          {tool.ferramenta_key}
-                        </code>
                         <span
                           style={{ display: "block", color: t.listItem, fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
                         >

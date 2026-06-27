@@ -502,8 +502,8 @@ export function PlaybookUploadAnalisePanel({
             </p>
             {analiseResultado.origem === "fallback" ? (
               <p style={{ margin: "8px 0 0", color: "#d29922", fontSize: 11, lineHeight: 1.45 }}>
-                Análise local (sem Mistral). Verifique MISTRAL_API_KEY e faturamento no console Mistral para nota
-                automática completa.
+                Análise simplificada (sem IA completa). Para nota automática detalhada, confirme que o serviço de IA
+                está activo na sua conta.
               </p>
             ) : null}
           </div>

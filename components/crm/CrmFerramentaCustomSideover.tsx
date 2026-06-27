@@ -404,7 +404,7 @@ export function CrmFerramentaCustomSideover({
                 <>
                   {mode === "create" ? (
                     <label style={{ display: "block", marginBottom: 14 }}>
-                      <span style={RF_LABEL_STYLE}>Slug curto (opcional — gera hub_custom_*)</span>
+                      <span style={RF_LABEL_STYLE}>Identificador curto (opcional)</span>
                       <input
                         value={form.slug_curto}
                         onChange={(e) => setForm((p) => ({ ...p, slug_curto: e.target.value }))}
@@ -657,9 +657,8 @@ export function CrmFerramentaCustomSideover({
               <code style={{ fontSize: 12, color: "#92ff00" }}>{row.ferramenta_key}</code>
             </p>
             <p style={{ margin: 0 }}>
-              Esta acção remove o registo na base de dados. Agentes que tiverem esta chave em{" "}
-              <code style={{ fontSize: 11 }}>uso_ferramentas_ia</code> podem ficar com referência órfã até limpar
-              manualmente a ficha do agente.
+              Esta acção remove o registo na base de dados. Agentes que tiverem esta ferramenta activa podem ficar com
+              referência inválida até actualizar a ficha do agente.
             </p>
             <p style={{ margin: "12px 0 0", color: "#f85149", fontWeight: 600 }}>Esta operação não pode ser desfeita.</p>
           </>

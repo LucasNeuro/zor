@@ -17,7 +17,7 @@ async function gerarComMistral(
   maxTokens: number
 ): Promise<{ ok: true; texto: string } | { ok: false; error: string }> {
   const key = process.env.MISTRAL_API_KEY?.trim();
-  if (!key) return { ok: false, error: "MISTRAL_API_KEY não configurada." };
+  if (!key) return { ok: false, error: "Serviço de IA indisponível." };
 
   const model =
     process.env.MISTRAL_MODEL?.trim() ||
@@ -128,6 +128,6 @@ export async function gerarTextoIa(
   if (only.ok) return only;
   return {
     ok: false,
-    error: only.error + " Configure MISTRAL_API_KEY ou ANTHROPIC_API_KEY.",
+    error: only.error + " Contacte o suporte da plataforma para activar o serviço de IA.",
   };
 }

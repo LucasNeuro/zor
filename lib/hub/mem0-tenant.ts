@@ -15,11 +15,11 @@ export async function mem0IntegracaoLigada(): Promise<boolean> {
 export async function validarMem0Plataforma(): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = resolverMem0ApiKeyEnv();
   if (!apiKey) {
-    return { ok: false, error: "Defina MEM0_API_KEY no ambiente (Render ou .env local)." };
+    return { ok: false, error: "Super Memória não está configurada neste ambiente. Contacte o suporte da plataforma." };
   }
   const ping = await mem0Ping(apiKey);
   if (!ping.ok) {
-    return { ok: false, error: ping.erro || "Falha ao validar MEM0_API_KEY." };
+    return { ok: false, error: ping.erro || "Não foi possível validar a ligação com Mem0." };
   }
   return { ok: true };
 }

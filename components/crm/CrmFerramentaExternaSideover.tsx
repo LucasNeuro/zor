@@ -439,7 +439,7 @@ export function CrmFerramentaExternaSideover({
       if (!payload.descricao_modelo) throw new Error("Descrição para o modelo é obrigatória.");
       if (!payload.url_template) throw new Error("URL template é obrigatória.");
       if (mode === "create" && !ferramentaKeyExternaFromSlug(form.slug_curto)) {
-        throw new Error("Slug inválido (mín. 2 caracteres, hub_ext_*).");
+        throw new Error("Identificador inválido (mínimo 2 caracteres).");
       }
 
       const saved = await saveHubFerramentaExterna(
@@ -586,9 +586,8 @@ export function CrmFerramentaExternaSideover({
                 <div style={{ padding: "12px 14px" }}>
                   {mode === "create" ? (
                     <label style={{ display: "block", marginBottom: 14 }}>
-                      <span style={RF_LABEL_STYLE}>Slug (hub_ext_*)</span>
+                      <span style={RF_LABEL_STYLE}>Identificador curto</span>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
-                        <span style={{ fontSize: 12, color: RF_TEXT_MUTED, flexShrink: 0 }}>hub_ext_</span>
                         <input
                           type="text"
                           value={form.slug_curto}
@@ -599,8 +598,6 @@ export function CrmFerramentaExternaSideover({
                         />
                       </div>
                     </label>
-                  ) : row ? (
-                    <ReadOnlyBlock label="Chave (só leitura)" value={row.ferramenta_key} mono />
                   ) : null}
 
                   <label style={{ display: "block", marginBottom: 14 }}>

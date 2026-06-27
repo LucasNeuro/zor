@@ -486,7 +486,7 @@ async function executarMem0(
   if (!token) {
     return JSON.stringify({
       erro: "mem0_sem_api_key",
-      detalhe: "Ligue Mem0 em Integrações (API Key) ou defina MEM0_API_KEY no ambiente.",
+      detalhe: "Active Super Memória em Integrações ou contacte o suporte da plataforma.",
     });
   }
 
@@ -560,7 +560,7 @@ export async function executarFerramentaIntegrador(
     if (!mem0PlataformaConfigurada()) {
       return JSON.stringify({
         erro: "mem0_sem_api_key",
-        detalhe: "Defina MEM0_API_KEY no ambiente (Render / .env local).",
+        detalhe: "Super Memória não está disponível neste ambiente. Contacte o suporte da plataforma.",
       });
     }
     return executarMem0(toolName, args, null, supabase, tenantId, gcalCtx);

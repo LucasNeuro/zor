@@ -280,12 +280,12 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
     id: "mem0",
     nome: "Mem0 — Super Memória",
     descricao:
-      "Memória persistente entre sessões (credencial de plataforma: MEM0_API_KEY no Render). Recall semântico por agente.",
+      "Memória persistente entre sessões com recall semântico por agente. Plus opcional — desligado usa memória interna do CRM.",
     categoria: "agente",
     authModo: "none",
     authLabels: {
-      principal: "MEM0_API_KEY (ambiente)",
-      principalPlaceholder: "Definida no Render / .env — não na UI",
+      principal: "Credencial da plataforma",
+      principalPlaceholder: "Configurada pela plataforma — não editável aqui",
     },
     ferramentas: [
       {

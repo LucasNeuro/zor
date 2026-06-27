@@ -65,23 +65,15 @@ export function CrmFerramentasGuiaPanel() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <GuiaCard icon={Puzzle} title="Built-in" badge="Catálogo fixo">
           <p className="m-0">
-            Funções seguras já implementadas no Hub (resumo de lead, métricas, notas, etc.). Não editáveis — apenas
-            activar ou desactivar por agente. O nome da função Mistral é fixo (ex.:{" "}
-            <code className="text-[11px]" style={{ color: L.link }}>
-              hub_lead_resumo
-            </code>
-            ).
+            Funções seguras já implementadas na plataforma (resumo de lead, métricas, notas, etc.). Não editáveis —
+            apenas activar ou desactivar por agente.
           </p>
         </GuiaCard>
 
         <GuiaCard icon={Wrench} title="Custom" badge="Alias do tenant">
           <p className="m-0">
             Crie um alias com título e instruções próprios sobre uma built-in existente. A execução continua segura
-            (mesma implementação), mas o modelo vê outro nome e descrição. Chave no formato{" "}
-            <code className="text-[11px]" style={{ color: L.link }}>
-              hub_custom_*
-            </code>
-            .
+            (mesma implementação), mas o modelo vê outro nome e descrição.
           </p>
         </GuiaCard>
 
@@ -89,11 +81,7 @@ export function CrmFerramentasGuiaPanel() {
           <p className="m-0">
             Chamadas HTTP configuráveis via integração do tenant (API key, Bearer ou webhook). Defina URL template,
             método, cabeçalhos e corpo. A credencial vem da integração associada — configure-a primeiro no separador{" "}
-            <strong style={{ color: L.text }}>Integrações</strong>. Chave{" "}
-            <code className="text-[11px]" style={{ color: L.link }}>
-              hub_ext_*
-            </code>
-            .
+            <strong style={{ color: L.text }}>Integrações</strong>.
           </p>
         </GuiaCard>
 

@@ -442,7 +442,7 @@ export function AgenteEmailConnectBlock({
     if (acoesOff) return;
     setErr({
       titulo: "Microsoft 365 em breve.",
-      detalhes: ["Defina MICROSOFT_OAUTH_CLIENT_ID e MICROSOFT_OAUTH_CLIENT_SECRET no servidor quando estiver disponível."],
+      detalhes: ["A ligação com Microsoft 365 estará disponível em breve."],
     });
   }
 
@@ -593,8 +593,8 @@ export function AgenteEmailConnectBlock({
             </div>
           ) : !googleDisponivel && !microsoftDisponivel ? (
             <p style={{ margin: "12px 0 0", fontSize: 11, color: "#e6c06a", lineHeight: 1.5 }}>
-              OAuth não configurado no servidor. Defina GOOGLE_OAUTH_* e HUB_CREDENTIALS_ENCRYPTION_KEY no .env /
-              Render.
+              OAuth não configurado no servidor. Contacte o suporte da plataforma para activar ligação com Google ou
+              Microsoft.
             </p>
           ) : null}
         </div>

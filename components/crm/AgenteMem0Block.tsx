@@ -15,6 +15,7 @@ import {
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { mergeUsoFerramentasComPadraoPreservandoCustom } from "@/lib/hub/agente-ferramentas-registry";
 import { MEM0_BUSCAR_KEY, MEM0_SUPER_MEMORIA_KEY } from "@/lib/hub/mem0-constants";
+import { mensagemUsuario } from "@/lib/crm/mensagens-usuario";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 
 export type AgenteMem0BlockProps = {
@@ -60,8 +61,8 @@ export function AgenteMem0Block({
 
   const tituloIntegracao = "Mem0 — Super Memória";
   const subtituloCard = superOn
-    ? "Plus activo · recall semântico Mem0"
-    : "Memória Supabase (tradicional)";
+    ? "Plus activo · recall semântico"
+    : "Memória interna do CRM";
 
   const toggleRow = (
     key: string,
@@ -146,9 +147,9 @@ export function AgenteMem0Block({
       }
       setPlataformaOk(true);
       setTesteOk(true);
-      setTesteMsg(data.message || "Mem0 OK — active as ferramentas abaixo.");
+      setTesteMsg(data.message || "Ligação confirmada — active as opções abaixo.");
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao validar Mem0");
+      setErro(mensagemUsuario(e instanceof Error ? e.message : "Erro ao validar Mem0"));
     } finally {
       setBusy(false);
     }
@@ -170,10 +171,10 @@ export function AgenteMem0Block({
         throw new Error(data.error || data.message || "Teste Mem0 falhou.");
       }
       setTesteOk(true);
-      setTesteMsg(data.message || "Conexão Mem0 OK.");
+      setTesteMsg(data.message || "Ligação com Mem0 confirmada.");
     } catch (e) {
       setTesteOk(false);
-      setTesteMsg(e instanceof Error ? e.message : "Erro no teste");
+      setTesteMsg(mensagemUsuario(e instanceof Error ? e.message : "Erro no teste"));
     } finally {
       setBusy(false);
     }
@@ -236,9 +237,8 @@ export function AgenteMem0Block({
             MEM0 · SUPER MEMÓRIA
           </p>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: RF_TEXT_SECONDARY, lineHeight: 1.5 }}>
-            Plus opcional por agente. Com Super Memória <strong>desligada</strong>, o atendimento usa só a memória
-            tradicional do Supabase (<code style={{ fontSize: 11 }}>hub_memorias_lead</code> e ferramenta{" "}
-            <code style={{ fontSize: 11 }}>hub_lead_memorias</code>) — o fluxo WhatsApp não muda.
+            Plus opcional por agente. Com Super Memória <strong>desligada</strong>, o atendimento usa a memória
+            interna do CRM — o fluxo WhatsApp não muda.
           </p>
         </div>
       </div>
@@ -257,8 +257,8 @@ export function AgenteMem0Block({
               lineHeight: 1.5,
             }}
           >
-            Defina <strong>MEM0_API_KEY</strong> no <strong>.env</strong> local e no Render (web + worker WhatsApp),
-            reinicie o servidor e clique em validar.
+            Super Memória ainda não está activa neste ambiente. Contacte o suporte da plataforma ou clique em validar
+            quando o serviço estiver disponível.
           </p>
           <button
             type="button"
@@ -267,7 +267,7 @@ export function AgenteMem0Block({
             style={btnPrimaryDark(busy)}
           >
             {busy ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
-            Validar MEM0_API_KEY
+            Validar ligação
           </button>
         </>
       ) : (
@@ -284,8 +284,8 @@ export function AgenteMem0Block({
               lineHeight: 1.5,
             }}
           >
-            Integração disponível (<code style={{ fontSize: 11 }}>MEM0_API_KEY</code> detectada). Active abaixo o
-            plus Mem0 — ou deixe desligado para memória Supabase apenas.
+            Serviço Mem0 disponível neste ambiente. Active abaixo o plus — ou deixe desligado para usar só a memória
+            interna do CRM.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {toggleRow(
@@ -298,7 +298,7 @@ export function AgenteMem0Block({
             {toggleRow(
               MEM0_BUSCAR_KEY,
               "Buscar memórias (ferramenta IA)",
-              "Permite à IA pesquisar Mem0 sob demanda (function calling). Requer Super Memória ou uso manual.",
+              "Permite à IA pesquisar memórias avançadas sob demanda. Requer Super Memória activa ou uso manual.",
               buscarOn,
               !plataformaOk
             )}
@@ -306,7 +306,7 @@ export function AgenteMem0Block({
           <p style={{ margin: 0, fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.5 }}>
             Modo actual:{" "}
             <strong style={{ color: superOn ? "#3fb950" : RF_TEXT_PRIMARY }}>
-              {superOn ? "Supabase + Mem0 (plus)" : "Supabase tradicional"}
+              {superOn ? "Memória interna + Super Memória" : "Memória interna do CRM"}
             </strong>
             . Guarde a ficha do agente após alterar os toggles.
           </p>
@@ -320,13 +320,15 @@ export function AgenteMem0Block({
               Testar conexão Mem0
             </button>
           </div>
-          {testeOk != null ? (
-            <p style={{ margin: 0, fontSize: 11, color: testeOk ? "#3fb950" : "#f85149" }}>{testeMsg}</p>
+            {testeOk != null ? (
+            <p style={{ margin: 0, fontSize: 11, color: testeOk ? "#3fb950" : "#f85149" }}>
+              {mensagemUsuario(testeMsg)}
+            </p>
           ) : null}
         </>
       )}
 
-      {erro ? <p style={{ margin: 0, fontSize: 11, color: "#f85149" }}>{erro}</p> : null}
+      {erro ? <p style={{ margin: 0, fontSize: 11, color: "#f85149" }}>{mensagemUsuario(erro)}</p> : null}
     </div>
   );
 
@@ -412,11 +414,11 @@ export function AgenteMem0Block({
                   </p>
                 ) : plataformaOk ? (
                   <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
-                    Chave OK · {superOn ? "Plus Mem0 activo" : "Só memória Supabase — active o plus se quiser"}
+                    Serviço OK · {superOn ? "Plus activo" : "Só memória interna — active o plus se quiser"}
                   </p>
                 ) : (
                   <p style={{ margin: "6px 0 0", color: "#c9a24a", fontSize: 11, fontWeight: 600 }}>
-                    Defina MEM0_API_KEY no Render / .env
+                    Super Memória indisponível neste ambiente
                   </p>
                 )}
               </div>

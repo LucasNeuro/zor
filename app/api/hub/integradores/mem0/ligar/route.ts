@@ -17,6 +17,6 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     ligado: true,
-    message: "Mem0 disponível. Active as ferramentas na secção Integrações ligadas deste agente.",
+    message: "Super Memória disponível. Active as opções na secção de integrações deste agente.",
   });
 }

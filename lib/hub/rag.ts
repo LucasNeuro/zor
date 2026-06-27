@@ -376,7 +376,7 @@ export async function gerarEmbeddingsRag(
 
 async function mistralEmbedTexts(inputs: string[]): Promise<{ ok: true; embeddings: number[][] } | { ok: false; error: string }> {
   const key = process.env.MISTRAL_API_KEY?.trim();
-  if (!key) return { ok: false, error: "MISTRAL_API_KEY não configurada para gerar embeddings." };
+  if (!key) return { ok: false, error: "Serviço de IA indisponível para processar documentos." };
 
   const model = process.env.MISTRAL_EMBED_MODEL?.trim() || "mistral-embed";
   const embeddings: number[][] = [];

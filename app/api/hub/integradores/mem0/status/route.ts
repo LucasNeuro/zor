@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
     plataforma,
     ligado,
     configurado: ligado,
-    origem: "env",
-    variavel: "MEM0_API_KEY",
+    origem: "plataforma",
   });
 }

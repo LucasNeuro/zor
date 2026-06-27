@@ -13,14 +13,14 @@ export async function POST(request: NextRequest) {
 
   if (!mem0PlataformaConfigurada()) {
     return NextResponse.json(
-      { ok: false, error: "Defina MEM0_API_KEY no ambiente (Render ou .env local)." },
+      { ok: false, error: "Super Memória não está configurada neste ambiente. Contacte o suporte da plataforma." },
       { status: 400 }
     );
   }
 
   const apiKey = await resolverMem0ApiKey();
   if (!apiKey) {
-    return NextResponse.json({ ok: false, error: "MEM0_API_KEY vazia." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Credencial Mem0 inválida ou vazia." }, { status: 400 });
   }
 
   const ping = await mem0Ping(apiKey);
@@ -30,6 +30,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    message: "Conexão Mem0 OK — MEM0_API_KEY válida.",
+    message: "Ligação com Mem0 confirmada.",
   });
 }

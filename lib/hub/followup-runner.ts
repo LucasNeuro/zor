@@ -267,7 +267,7 @@ export async function executarFollowupParaAgente(
   if (!whatsappConfigured({ instanceToken })) {
     result.erros.push(
       instanceToken
-        ? `${slug}: UAZAPI_BASE_URL não configurado no servidor.`
+        ? `${slug}: WhatsApp não configurado para este agente.`
         : `${slug}: sem token UAZAPI — configure a instância WhatsApp do agente em Integrações.`
     );
     if (options?.registrarTick) {

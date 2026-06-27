@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crmConfigError } from "@/lib/crm/supabase-server";
 import { requireInternalApiKey } from "@/lib/crm/crm-api-auth";
-import { mistralApiKey, mistralKeyFingerprint, pingMistralApi } from "@/lib/ia/mistral-health";
+import { mistralApiKey, pingMistralApi } from "@/lib/ia/mistral-health";
 
 export type IntegracaoStatus = {
   id: string;
@@ -27,15 +27,15 @@ export async function GET(request: NextRequest) {
   const integracoes: IntegracaoStatus[] = [
     {
       id: "whatsapp",
-      nome: "WhatsApp (UAZAPI)",
+      nome: "WhatsApp",
       descricao: "Canais e inbox de atendimento",
       status:
         uazapiUrl && uazapiToken ? "conectado" : uazapiUrl || uazapiToken ? "erro" : "nao_configurado",
       href: "/crm/canais",
       detail:
         uazapiUrl && uazapiToken
-          ? "Credenciais UAZAPI presentes"
-          : "Defina UAZAPI_BASE_URL e UAZAPI_INSTANCE_TOKEN",
+          ? "Canal WhatsApp ligado"
+          : "Configure o WhatsApp em Canais",
     },
     {
       id: "windsor",
@@ -43,19 +43,19 @@ export async function GET(request: NextRequest) {
       descricao: "Campanhas e métricas de tráfego pago",
       status: windsor ? "conectado" : "nao_configurado",
       href: "/crm/trafego",
-      detail: windsor ? "WINDSOR_API_KEY configurada" : "Adicione WINDSOR_API_KEY no ambiente",
+      detail: windsor ? "Integração de tráfego activa" : "Integração de tráfego ainda não configurada",
     },
     {
       id: "mistral",
-      nome: "Mistral AI (LLM principal)",
+      nome: "Motor de IA",
       descricao: "Agentes, cargos, WhatsApp e automações",
       status: !mistralPresent ? "nao_configurado" : mistralPing?.ok ? "conectado" : "erro",
       href: "/crm/agentes",
       detail: !mistralPresent
-        ? "Defina MISTRAL_API_KEY no .env"
+        ? "Serviço de IA ainda não disponível neste ambiente"
         : mistralPing?.ok
-          ? `Chave ${mistralKeyFingerprint()} aceite pela API`
-          : mistralPing?.detail?.slice(0, 200) ?? "Falha ao contactar Mistral",
+          ? "Serviço de IA operacional"
+          : mistralPing?.detail?.slice(0, 200) ?? "Falha ao contactar o serviço de IA",
     },
     {
       id: "meta",

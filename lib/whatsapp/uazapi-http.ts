@@ -108,7 +108,7 @@ export async function uazapiFetchJson<T = unknown>(
 ): Promise<UazapiJsonResult<T>> {
   const base = uazapiBaseUrlNormalizado();
   if (!base) {
-    return { ok: false, status: 0, data: undefined, error: "UAZAPI_BASE_URL não configurado" };
+    return { ok: false, status: 0, data: undefined, error: "Serviço WhatsApp não configurado" };
   }
 
   const headers: Record<string, string> = {
@@ -118,7 +118,7 @@ export async function uazapiFetchJson<T = unknown>(
   if (options.admin) {
     const adm = process.env.UAZAPI_ADMIN_TOKEN?.trim();
     if (!adm) {
-      return { ok: false, status: 0, data: undefined, error: "UAZAPI_ADMIN_TOKEN não configurado" };
+      return { ok: false, status: 0, data: undefined, error: "Credencial administrativa WhatsApp não configurada" };
     }
     headers.admintoken = adm;
   }
@@ -165,11 +165,11 @@ export async function uazapiFetchJson<T = unknown>(
       const msg = extrairMensagemErroUazapi(data, res.status);
       const hint404 =
         res.status === 404
-          ? " Verifique UAZAPI_BASE_URL (ex.: https://SUBDOMINIO.uazapi.com, sem /api no fim) e UAZAPI_ADMIN_TOKEN no painel."
+          ? " Verifique a ligação do canal WhatsApp nas configurações do agente."
           : "";
       const hint401 =
         res.status === 401
-          ? " Token inválido ou expirado: confira UAZAPI_BASE_URL (ex.: https://fitbot.uazapi.com) e o token da instância (hub_agente_identidade.uazapi_instance_token ou UAZAPI_INSTANCE_TOKEN no Render)."
+          ? " Sessão ou token inválido: reconecte o WhatsApp em Agentes → Canais."
           : "";
       return {
         ok: false,
@@ -186,7 +186,7 @@ export async function uazapiFetchJson<T = unknown>(
       ok: false,
       status: 0,
       data: undefined,
-      error: e instanceof Error ? e.message : "Erro de rede UAZAPI",
+      error: e instanceof Error ? e.message : "Erro de rede ao contactar WhatsApp",
       request: requestMeta,
     };
   }

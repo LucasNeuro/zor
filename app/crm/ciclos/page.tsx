@@ -1264,7 +1264,7 @@ export default function CiclosPage() {
                             : "pointer",
                         opacity: sugestaoIaLoading !== null || !fNome.trim() || !fAgenteSlug.trim() ? 0.5 : 1,
                       }}
-                      title="Gera texto com IA (Mistral ou Anthropic conforme .env)."
+                      title="Gera texto com IA."
                     >
                       <Sparkles size={14} aria-hidden />
                       {sugestaoIaLoading === "descricao" ? "A gerar…" : "Gerar com IA"}

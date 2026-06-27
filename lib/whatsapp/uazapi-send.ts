@@ -72,7 +72,7 @@ export async function uazapiSendText(
     return {
       ok: false,
       error:
-        "UAZAPI_BASE_URL ou token da instância não configurados (instância do agente ou UAZAPI_INSTANCE_TOKEN)",
+        "WhatsApp não configurado. Reconecte o canal do agente em Canais.",
     };
   }
 

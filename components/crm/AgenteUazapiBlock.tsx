@@ -973,7 +973,7 @@ export function AgenteUazapiBlock({
             <p style={{ margin: "8px 0 0", color: textMuted, fontSize: 10, lineHeight: 1.45, gridColumn: "1 / -1" }}>
               <strong style={{ color: textStrong }}>Trocar número:</strong> use «Desligar sessão» e depois «Gerar QR/código» —
               mantém a mesma instância. <strong style={{ color: textStrong }}>Eliminar ligação</strong> apaga a instância na
-              UAZAPI (libera vaga no plano).
+              no provedor WhatsApp (libera vaga no plano).
             </p>
           </div>
           {!conectado ? (
@@ -991,7 +991,7 @@ export function AgenteUazapiBlock({
                 onClick={() => postAction("sync_webhook")}
               >
                 {loading === "sync_webhook" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                Sincronizar webhook
+                Sincronizar recepção
               </button>
               {layout === "card" ? (
                 <button
@@ -1526,14 +1526,14 @@ export function AgenteUazapiBlock({
                 userSelect: "none",
               }}
             >
-              Dicas de webhook
+              Dicas avançadas
             </summary>
             <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.55, color: textMuted }}>
               <p style={{ margin: 0 }}>
-                <code style={{ fontSize: 11, color: "#79c0ff" }}>/api/whatsapp/webhook?wh=…</code>
+                Se as mensagens não chegarem ao CRM, use «Sincronizar recepção» após ligar o WhatsApp.
               </p>
               <p style={{ margin: "8px 0 0", color: "#e6c06a", fontSize: 11 }}>
-                Excluir: wasSentByApi e isGroupYes. Não use wasNotSentByApi.
+                Em caso de dúvida, contacte o suporte da plataforma.
               </p>
             </div>
           </details>
@@ -1608,7 +1608,7 @@ export function AgenteUazapiBlock({
         }}
       >
         <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
-          A instância WhatsApp deste agente será apagada no servidor UAZAPI (fitbot). Use isto para libertar uma vaga do
+          A instância WhatsApp deste agente será apagada no servidor do provedor. Use isto para libertar uma vaga do
           plano ou antes de criar outra ligação do zero.
         </p>
         <p style={{ margin: "10px 0 0", color: "#9cb0c9", fontSize: 12, lineHeight: 1.5 }}>

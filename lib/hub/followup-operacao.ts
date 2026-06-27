@@ -59,6 +59,7 @@ const MOTIVO_LABEL: Record<string, string> = {
   cadencia_concluida: "Cadência concluída",
   passo_ja_enviado: "Passo já enviado",
   cliente_respondeu: "Cliente respondeu",
+  atendimento_encerrado: "Atendimento encerrado",
   sem_telefone: "Sem telefone",
 };
 

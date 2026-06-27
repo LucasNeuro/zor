@@ -511,6 +511,20 @@ async function atualizarLeadPlaybook(
 
   await supabase.from("hub_leads_crm").update(built.patch).eq("id", leadId);
 
+  const metaPatch = args.metadata;
+  if (
+    metaPatch &&
+    typeof metaPatch === "object" &&
+    !Array.isArray(metaPatch) &&
+    (metaPatch as Record<string, unknown>).wa_playbook_complete === true
+  ) {
+    const { pausarFollowupPorEncerramento } = await import("@/lib/hub/followup-encerramento");
+    await pausarFollowupPorEncerramento(supabase, leadId, {
+      motivo: "playbook_concluido",
+      agente_slug: agenteSlug,
+    });
+  }
+
   await supabase.from("hub_acoes_ia").insert({
     agente_slug: agenteSlug,
     tipo: "memoria_salva",

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { humanoBloqueiaRespostaIa } from "@/lib/crm/resolve-crm-actor";
 import { defaultTenantId, isMissingPgColumn } from "@/lib/tenant-default";
-import { resetFollowupAoReceberMensagemCliente } from "@/lib/hub/followup-lead-state";
+import { processarFollowupInboundMensagemCliente } from "@/lib/hub/followup-encerramento";
 import { parseFollowupTimestamp } from "@/lib/hub/followup-relogio";
 import { respostaIaJaEnviadaRecente } from "@/lib/whatsapp/anti-duplicata-resposta";
 import { prepararTextoIaParaWhatsapp } from "@/lib/whatsapp/formatar-texto-whatsapp";
@@ -258,13 +258,15 @@ export async function processarMensagemInboundWhatsapp(params: {
   if (!params.fromMe) {
     const quandoCliente =
       parseFollowupTimestamp(params.timestamp) ?? new Date();
-    await resetFollowupAoReceberMensagemCliente(
+    await processarFollowupInboundMensagemCliente(
       supabase,
       lead.id,
+      params.mensagemFinal,
       {
         pausado: humanoResponsavelAtivo || isGroupTransfer,
         agente_slug:
           agente && typeof agente.agente_slug === "string" ? agente.agente_slug.trim() : undefined,
+        metadata: lead.metadata,
       },
       quandoCliente
     );

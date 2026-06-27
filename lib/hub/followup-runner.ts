@@ -35,6 +35,7 @@ import {
   minutosSilencioDesdeUltimaMsgCliente,
 } from "@/lib/hub/followup-relogio";
 import { criarContextoTemplateFollowup } from "@/lib/hub/followup-template-vars";
+import { leadTemReservaCalendarioFutura } from "@/lib/hub/followup-encerramento";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { whatsappConfigured, whatsappSendMedia, whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 
@@ -313,6 +314,18 @@ export async function executarFollowupParaAgente(
           lead_id: lead.id,
           lead_nome: lead.nome,
           motivo: "sem_telefone",
+        });
+      }
+      continue;
+    }
+
+    if (leadTemReservaCalendarioFutura(lead.metadata)) {
+      if (coletarDiagnostico) {
+        registrarSkip(result, {
+          lead_id: lead.id,
+          lead_nome: lead.nome,
+          motivo: "atendimento_encerrado",
+          detalhe: "reserva no calendário — follow-up pausado",
         });
       }
       continue;

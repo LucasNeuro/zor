@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { pausarFollowupPorEncerramento } from "@/lib/hub/followup-encerramento";
 
 export type LeadGcalReserva = {
   event_id: string;
@@ -33,6 +34,11 @@ export async function gravarReservaGcalNoLead(
       atualizado_em: new Date().toISOString(),
     })
     .eq("id", leadId);
+
+  await pausarFollowupPorEncerramento(supabase, leadId, {
+    motivo: "reserva_calendario",
+    detalhe: `evento ${reserva.event_id}`,
+  });
 }
 
 export async function removerReservaGcalDoLead(

@@ -783,7 +783,7 @@ export function AgenteFollowupBlock({ agenteSlug, agenteNome, layout = "card" }:
           A <strong style={{ color: RF_TEXT_SECONDARY }}>cadência</strong> (no fluxo) define os minutos entre passos.
           A <strong style={{ color: RF_TEXT_SECONDARY }}>faixa horária</strong> só impede envio de madrugada — não
           repete mensagens. Cada passo dispara <strong style={{ color: RF_TEXT_SECONDARY }}>uma única vez</strong> por
-          lead; ao concluir a cadência ou encerrar atendimento, o automático para.
+          lead; ao concluir a cadência, agendar demo ou encerrar conversa (IA detecta despedida), o automático para.
         </p>
         <div style={{ display: "grid", gap: 8 }}>
           {(

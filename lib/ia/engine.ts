@@ -526,6 +526,16 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
     }
     await db.from("hub_fila_mensagens").insert(filaSaida);
 
+    if (ctx.canal === "whatsapp" && ctx.leadId) {
+      const { processarFollowupAposRespostaAgente } = await import("@/lib/hub/followup-encerramento");
+      await processarFollowupAposRespostaAgente(db, {
+        leadId: ctx.leadId,
+        agenteSlug: agente.slug,
+        respostaAgente: textoResposta,
+        toolCallsExecutadas,
+      });
+    }
+
     const hora = new Date().getHours();
     try {
       await db.from("hub_ml_padroes").insert({

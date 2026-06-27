@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
 import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
-import { nomeLeadEhPlaceholder } from "@/lib/crm/sincronizar-contato-whatsapp";
 
 /** Nome genérico de lead — deve ser substituído por pushName ou nome dito pelo cliente. */
 export function nomeLeadEhPlaceholder(nome: string | null | undefined): boolean {

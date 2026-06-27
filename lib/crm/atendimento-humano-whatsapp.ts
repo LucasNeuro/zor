@@ -5,6 +5,7 @@ import { ensureConversaAtiva, gravarMensagemSaidaConversa } from "@/lib/crm/conv
 import { formatarMensagemConsultorWhatsapp } from "@/lib/crm/mensagem-consultor-whatsapp";
 import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsapp";
 import { formatHumanoDisplayName } from "@/lib/crm/resolve-crm-actor";
+import { extrairMensagemErroUazapi } from "@/lib/whatsapp/uazapi-http";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { insertFilaMensagemCompat } from "@/lib/crm/insert-fila-mensagem-compat";
 import { extrairWhatsappMessageIdDeRespostaUazapi } from "@/lib/whatsapp/uazapi-response";
@@ -46,16 +47,20 @@ function erroEnvioWhatsapp(status: number | undefined, error: string, body?: unk
   if (status === 403) {
     return "WhatsApp recusou o envio (403). Verifique se a instância está ligada e autorizada.";
   }
-  if (status === 500 && error === "HTTP 500") {
-    const detalhe =
-      body && typeof body === "object" && body !== null
-        ? JSON.stringify(body).slice(0, 200)
-        : "";
-    return detalhe
-      ? `WhatsApp recusou o envio (500). Detalhe: ${detalhe}`
-      : "WhatsApp recusou o envio (500). Verifique se o número do lead está correto e a instância conectada.";
+  if (body && typeof body === "object" && body !== null) {
+    const o = body as Record<string, unknown>;
+    if (o.error_key === "WHATSAPP_REACHOUT_TIMELOCK") {
+      return extrairMensagemErroUazapi(body, status ?? 500);
+    }
   }
-  return error;
+  if (error && error !== `HTTP ${status}` && !/^HTTP \d+$/.test(error.trim())) {
+    return error;
+  }
+  if (body) {
+    const parsed = extrairMensagemErroUazapi(body, status ?? 500);
+    if (parsed && parsed !== `HTTP ${status}`) return parsed;
+  }
+  return error || "WhatsApp recusou o envio. Verifique a instância e se o cliente pode receber mensagens.";
 }
 
 export type AssumirAtendimentoHumanoOpts = {
@@ -287,6 +292,7 @@ export async function enviarMensagemAtendimentoHumano(
       }
     }
     if (!envio.ok) {
+      const erroUsuario = erroEnvioWhatsapp(envio.status, envio.error, envio.body);
       logAtendimentoSend({
         event: "send_fail",
         lead_id: opts.leadId,
@@ -296,11 +302,12 @@ export async function enviarMensagemAtendimentoHumano(
         token_origem: tokenOrigem,
         status: envio.status,
         error: envio.error,
+        error_user: erroUsuario,
         uazapi_body: envio.body,
       });
       return {
         ok: false,
-        error: erroEnvioWhatsapp(envio.status, envio.error, envio.body),
+        error: erroUsuario,
         status: envio.status ?? 502,
       };
     }

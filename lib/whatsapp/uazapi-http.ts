@@ -32,7 +32,52 @@ export function extrairMensagemErroUazapi(data: unknown, status: number): string
   }
   if (data && typeof data === "object") {
     const o = data as Record<string, unknown>;
-    for (const k of ["message", "error", "detail", "response", "info"]) {
+
+    const errorKey = typeof o.error_key === "string" ? o.error_key.trim() : "";
+    const msgPt =
+      typeof o.message_ptbr === "string" && o.message_ptbr.trim()
+        ? o.message_ptbr.trim()
+        : typeof o.provider_message_ptbr === "string" && o.provider_message_ptbr.trim()
+          ? o.provider_message_ptbr.trim()
+          : "";
+
+    if (errorKey === "WHATSAPP_REACHOUT_TIMELOCK") {
+      const details =
+        o.details && typeof o.details === "object" && !Array.isArray(o.details)
+          ? (o.details as Record<string, unknown>)
+          : null;
+      const timelock =
+        details?.reachout_timelock &&
+        typeof details.reachout_timelock === "object" &&
+        !Array.isArray(details.reachout_timelock)
+          ? (details.reachout_timelock as Record<string, unknown>)
+          : null;
+      const untilRaw = typeof timelock?.until === "string" ? timelock.until : "";
+      let untilLabel = "";
+      if (untilRaw) {
+        const d = new Date(untilRaw);
+        if (!Number.isNaN(d.getTime())) {
+          untilLabel = new Intl.DateTimeFormat("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(d);
+        }
+      }
+      const base =
+        msgPt ||
+        "O WhatsApp bloqueou este envio: restrição temporária para iniciar conversas (volume ou qualidade).";
+      return untilLabel
+        ? `${base} Limite até ${untilLabel} (horário de Brasília). Peça ao cliente enviar uma mensagem primeiro ou aguarde.`
+        : `${base} Peça ao cliente enviar uma mensagem no WhatsApp antes de responder pelo CRM.`;
+    }
+
+    if (msgPt) return msgPt;
+
+    for (const k of ["message", "error", "detail", "response", "info", "provider_message"]) {
       const v = o[k];
       if (typeof v === "string" && v.trim()) return v.trim();
     }

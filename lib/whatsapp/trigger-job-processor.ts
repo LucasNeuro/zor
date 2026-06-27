@@ -2,10 +2,41 @@
  * Dispara processamento da fila hub_msg_jobs no próprio web service (Render).
  * Necessário quando o Background Worker whatsapp-job-worker não está ativo.
  */
-export function dispararProcessamentoJobsWhatsapp(log?: {
+import { runWhatsappWorkerTick } from "@/lib/workers/whatsapp-job-worker";
+
+type WorkerLog = {
   info: (event: string, fields?: Record<string, unknown>) => void;
   warn: (event: string, fields?: Record<string, unknown>) => void;
-}): void {
+};
+
+/** Re-tenta claim quando o 1.º tick não apanhou job (race com commit ou lock por telefone). */
+export function agendarRetryWorkerWhatsapp(
+  log: WorkerLog,
+  delaysMs: number[] = [2500, 7000]
+): void {
+  void (async () => {
+    for (const delay of delaysMs) {
+      await new Promise((r) => setTimeout(r, delay));
+      try {
+        const result = await runWhatsappWorkerTick();
+        log.info("wa.webhook.job_processor_retry", {
+          delay_ms: delay,
+          claimed: result.claimed,
+          error: result.error ?? null,
+        });
+        if (result.claimed > 0) return;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        log.warn("wa.webhook.job_processor_retry_failed", {
+          delay_ms: delay,
+          error: msg.slice(0, 200),
+        });
+      }
+    }
+  })();
+}
+
+export function dispararProcessamentoJobsWhatsapp(log?: WorkerLog): void {
   const secret = process.env.CRON_SECRET?.trim();
   const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "").replace(/\/+$/, "");
   if (!secret || !base) {

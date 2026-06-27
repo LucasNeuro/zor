@@ -22,7 +22,7 @@ import { telefoneConversaId } from "@/lib/crm/isolamento-conversa-lead";
 import { garantirCodigoLead, prepararRowHubLeadInsert } from "@/lib/crm/lead-cadastro";
 import { gerarCodigoPessoa } from "@/lib/crm/pessoa-cadastro";
 import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
-import { dispararProcessamentoJobsWhatsapp } from "@/lib/whatsapp/trigger-job-processor";
+import { agendarRetryWorkerWhatsapp, dispararProcessamentoJobsWhatsapp } from "@/lib/whatsapp/trigger-job-processor";
 import { runWhatsappWorkerTick } from "@/lib/workers/whatsapp-job-worker";
 import { supersedeJobsAntigosMesmoTelefone } from "@/lib/whatsapp/supersede-jobs-antigos";
 import { ativarAtendimentoHumanoPorMensagemDoCelular } from "@/lib/whatsapp/human-handoff-from-device";
@@ -602,6 +602,9 @@ async function despacharJobWhatsappAposEnqueue(
             ok: !result.error,
             error: result.error ?? null,
           });
+          if (result.claimed === 0 && !result.error) {
+            agendarRetryWorkerWhatsapp(log);
+          }
         })
         .catch((e) => {
           const msg = e instanceof Error ? e.message : String(e);
@@ -615,6 +618,10 @@ async function despacharJobWhatsappAposEnqueue(
             ok: !result.error,
             error: result.error ?? null,
           });
+          if (result.claimed === 0 && !result.error) {
+            agendarRetryWorkerWhatsapp(log);
+            return;
+          }
           if (result.error && result.claimed === 0) {
             log.warn("wa.webhook.job_processor_inline_fallback", {
               error: result.error.slice(0, 240),

@@ -4,9 +4,10 @@ import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
 import {
   nomeLeadEhPlaceholder,
   pushNameParaNomeExibicao,
+  resolverNomeExibicaoLead,
 } from "@/lib/crm/lead-nome-validacao";
 
-export { nomeLeadEhPlaceholder, pushNameParaNomeExibicao };
+export { nomeLeadEhPlaceholder, pushNameParaNomeExibicao, resolverNomeExibicaoLead };
 
 export function normalizarTelefoneWhatsapp(telefone: string): string {
   return telefone.replace(/\D/g, "").slice(0, 15);
@@ -66,9 +67,12 @@ export function montarPatchContatoWhatsapp(
   patch.metadata = mergeMetadataWhatsapp(metaBase, dados);
 
   const nomeAtual = typeof leadAtual?.nome === "string" ? leadAtual.nome : "";
-  const nomeWa = pushNameParaNomeExibicao(dados.pushName);
-  if (nomeWa && nomeLeadEhPlaceholder(nomeAtual)) {
-    patch.nome = nomeWa;
+  if (nomeLeadEhPlaceholder(nomeAtual)) {
+    patch.nome = resolverNomeExibicaoLead({
+      nomeAtual,
+      pushName: dados.pushName,
+      telefone: tel,
+    });
   }
 
   return patch;
@@ -106,14 +110,29 @@ export async function sincronizarContatoWhatsappNoCrm(
   const pid =
     pessoaId?.trim() ||
     (typeof leadAtual.pessoa_id === "string" ? leadAtual.pessoa_id.trim() : "");
+  const nomeAtualLead = typeof leadAtual.nome === "string" ? leadAtual.nome : "";
+  const nomeCorrigido =
+    typeof patch.nome === "string"
+      ? patch.nome
+      : nomeWa && nomeLeadEhPlaceholder(nomeAtualLead)
+        ? nomeWa
+        : undefined;
   if (pid) {
     const pessoaPatch: Record<string, unknown> = {
       telefone: tel,
       whatsapp_id: tel,
       atualizado_em: new Date().toISOString(),
     };
-    if (nomeWa) pessoaPatch.nome = nomeWa;
+    if (nomeCorrigido) pessoaPatch.nome = nomeCorrigido;
     await supabase.from("hub_pessoas").update(pessoaPatch).eq("id", pid);
+  }
+
+  if (nomeCorrigido && nomeLeadEhPlaceholder(nomeAtualLead)) {
+    await supabase
+      .from("hub_memorias_lead")
+      .delete()
+      .eq("lead_id", leadId)
+      .eq("chave", "nome");
   }
 
   return { ok: true, campos: Object.keys(patch).filter((k) => k !== "atualizado_em") };

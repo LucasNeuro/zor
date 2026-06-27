@@ -3,6 +3,7 @@ import {
   nomeCandidatoEhValido,
   nomeLeadEhPlaceholder,
   pushNameParaNomeExibicao,
+  resolverNomeExibicaoLead,
 } from "@/lib/crm/lead-nome-validacao";
 
 describe("lead-nome-validacao", () => {
@@ -20,5 +21,15 @@ describe("lead-nome-validacao", () => {
   it("valida candidatos a nome", () => {
     expect(nomeCandidatoEhValido("Lucas De Deus Marcondes")).toBe(true);
     expect(nomeCandidatoEhValido("desmarque a minha agenda")).toBe(false);
+  });
+
+  it("resolve nome de exibição com fallback", () => {
+    expect(
+      resolverNomeExibicaoLead({
+        nomeAtual: "Oi está aí",
+        pushName: "lucas",
+        telefone: "5511970364501",
+      })
+    ).toBe("Lucas");
   });
 });

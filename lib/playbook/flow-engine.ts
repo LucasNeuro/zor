@@ -1,4 +1,5 @@
 import { mensagemEhSaudacaoSimples } from "@/lib/whatsapp/menu-triagem-uazapi";
+import { nomeCandidatoEhValido } from "@/lib/crm/lead-nome-validacao";
 import { mensagemJaIndicaIntentTriagem } from "@/lib/whatsapp/menu-intent";
 
 function menuTypeForStep(step: FlowMenuStep): "list" | "button" {
@@ -197,6 +198,7 @@ export function mensagemPareceNome(mensagem: string): boolean {
   const t = mensagem.trim();
   if (t.length < 2 || t.length > 60) return false;
   if (mensagemEhSaudacaoSimples(t)) return false;
+  if (!nomeCandidatoEhValido(t)) return false;
   if (/^\d+$/.test(t)) return false;
   if (t.includes("@")) return false;
   return true;
@@ -546,7 +548,12 @@ export async function executeFlowEngine(
           (askTextAceitaResposta(step, texto, input.tipoMidia) ? texto : null);
         if (waitingAtCurrentStep && respostaTexto && !choiceId) {
           answers[step.answer_key] = mediaOk ? input.tipoMidia : respostaTexto;
-          if (step.answer_key === "nome" && adapter.onNameCaptured && !mediaOk) {
+          if (
+            step.answer_key === "nome" &&
+            adapter.onNameCaptured &&
+            !mediaOk &&
+            nomeCandidatoEhValido(respostaTexto)
+          ) {
             await adapter.onNameCaptured(respostaTexto);
           }
           await adapter.persistState({

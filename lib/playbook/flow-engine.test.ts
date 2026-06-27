@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   executeFlowEngine,
   extrairNomeDaMensagemFluxo,
+  mensagemPareceNome,
   normMenuChoiceText,
   resolveMenuChoiceId,
   type FlowEngineDefinition,
@@ -58,6 +59,11 @@ describe("extrairNomeDaMensagemFluxo", () => {
 
   it("aceita nome curto puro", () => {
     expect(extrairNomeDaMensagemFluxo("Pedro")).toBe("Pedro");
+  });
+
+  it("rejeita frases de conversa como nome", () => {
+    expect(extrairNomeDaMensagemFluxo("Oi está aí")).toBeNull();
+    expect(mensagemPareceNome("Oi está aí")).toBe(false);
   });
 });
 

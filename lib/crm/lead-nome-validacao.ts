@@ -48,3 +48,20 @@ export function pushNameParaNomeExibicao(pushName: string | null | undefined): s
   const nome = parts.map(capitalizarPalavra).join(" ").slice(0, 240);
   return nomeLeadEhPlaceholder(nome) ? undefined : nome;
 }
+
+/** Nome de exibição preferido: válido actual, senão pushName, senão fallback telefone. */
+export function resolverNomeExibicaoLead(opts: {
+  nomeAtual?: string | null;
+  pushName?: string | null;
+  telefone?: string | null;
+}): string {
+  const atual = normalizarNomeTexto(String(opts.nomeAtual ?? ""));
+  if (atual && nomeCandidatoEhValido(atual)) return atual.slice(0, 240);
+
+  const wa = pushNameParaNomeExibicao(opts.pushName);
+  if (wa) return wa;
+
+  const tel = String(opts.telefone ?? "").replace(/\D/g, "");
+  if (tel.length >= 4) return `Lead ${tel.slice(-4)}`;
+  return "Lead WhatsApp";
+}

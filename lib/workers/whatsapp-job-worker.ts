@@ -244,12 +244,18 @@ async function claimBatchJsFallback(
 
     const { data: processing } = await supabase
       .from("hub_msg_jobs")
-      .select("id")
+      .select("id, locked_at")
       .eq("telefone", job.telefone)
       .eq("status", "processing")
       .neq("id", job.id)
       .limit(1);
-    if (Array.isArray(processing) && processing.length > 0) continue;
+    if (Array.isArray(processing) && processing.length > 0) {
+      const lockedAt = processing[0]?.locked_at;
+      const lockedMs = lockedAt ? Date.parse(String(lockedAt)) : NaN;
+      const bloqueioAtivo =
+        Number.isFinite(lockedMs) && Date.now() - lockedMs < 4 * 60_000;
+      if (bloqueioAtivo) continue;
+    }
 
     const attempts = typeof job.attempts === "number" ? job.attempts : 0;
     const { data: updated, error: updErr } = await supabase
@@ -300,7 +306,7 @@ async function claimBatch(
 /** Jobs presos em processing (ex.: crash) voltam a retry para não bloquear o telefone no claim. */
 async function recuperarJobsProcessingExpirados(
   supabase: SupabaseClient,
-  maxMinutos = 8
+  maxMinutos = 4
 ): Promise<number> {
   const limite = new Date(Date.now() - maxMinutos * 60_000).toISOString();
   const { data, error } = await supabase

@@ -229,6 +229,7 @@ export async function processarMensagemInboundWhatsapp(params: {
   isNovo: boolean;
   tipoMidia: string;
   menuChoiceId?: string | null;
+  chatid?: string | null;
   waSendOpts?: { instanceToken?: string | null };
   isGroupTransfer?: boolean;
   groupJid?: string | null;
@@ -516,6 +517,7 @@ export async function processarMensagemInboundWhatsapp(params: {
         timestamp: params.timestamp,
         mercado: params.mercado,
         instanceKey: params.instanceKey,
+        chatid: params.chatid,
       },
     });
     const { processarMensagem } = await import("@/lib/ia/engine");

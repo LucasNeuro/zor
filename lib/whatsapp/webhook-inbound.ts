@@ -4,6 +4,8 @@
 
 export type NormalizedWhatsappInbound = {
   telefone: string;
+  /** JID bruto UAZAPI (chatid) — usar no envio outbound quando disponível. */
+  chatid?: string;
   pushName: string;
   messageId: string;
   timestamp: string;
@@ -558,6 +560,7 @@ function parseUazapi(body: Record<string, unknown>): WhatsappWebhookParseResult 
     kind: "ok",
     value: {
       telefone,
+      chatid: chatid || undefined,
       pushName,
       messageId,
       timestamp,

@@ -127,6 +127,7 @@ type ReconstructedContext = {
   groupJid: string | null;
   fromMe: boolean;
   senderTelefone: string | null;
+  chatid: string | null;
   lead: {
     id: string;
     telefone?: string | null;
@@ -179,6 +180,7 @@ function reconstruirContexto(job: HubMsgJob): ReconstructedContext {
     groupJid: toNullableStr(payload.groupJid),
     fromMe: toBool(payload.fromMe),
     senderTelefone: toNullableStr(payload.senderTelefone),
+    chatid: toNullableStr(payload.chatid),
     lead: {
       id: leadId,
       pessoa_id: toNullableStr(payload.pessoaId),
@@ -458,6 +460,7 @@ async function processJob(supabase: SupabaseClient, job: HubMsgJob, log: HubLogg
       groupJid: contexto.groupJid,
       fromMe: contexto.fromMe,
       senderTelefone: contexto.senderTelefone,
+      chatid: contexto.chatid,
       tenantId: contexto.tenantId,
     });
 

@@ -512,6 +512,7 @@ async function processarWhatsappInlineSeFilaIndisponivel(
     isNovo: payload.isNovo === true,
     tipoMidia: String(payload.tipoMidia ?? "text"),
     menuChoiceId: typeof payload.menuChoiceId === "string" ? payload.menuChoiceId : null,
+    chatid: typeof payload.chatid === "string" ? payload.chatid : null,
     waSendOpts: instanceToken ? { instanceToken } : {},
     isGroupTransfer: payload.isGroupTransfer === true,
     groupJid: typeof payload.groupJid === "string" ? payload.groupJid : null,
@@ -822,9 +823,10 @@ export async function POST(request: NextRequest) {
           hasInstanceToken: Boolean(waSendOpts.instanceToken),
           isGroupTransfer: true,
           groupJid: outbound.groupJid,
-          fromMe: true,
-          humano_responsavel: leadGrupo.humano_responsavel ?? null,
-        };
+        fromMe: true,
+        humano_responsavel: leadGrupo.humano_responsavel ?? null,
+        chatid: outbound.chatid ?? null,
+      };
 
         const enqueueResult = await enqueueWhatsappJob(supabase, {
           tenantId,
@@ -1016,6 +1018,7 @@ export async function POST(request: NextRequest) {
         groupJid: inboundRaw.groupJid,
         fromMe: false,
         humano_responsavel: leadGrupo.humano_responsavel ?? null,
+        chatid: inboundRaw.chatid ?? null,
       };
 
       const enqueueResult = await enqueueWhatsappJob(supabase, {
@@ -1268,6 +1271,7 @@ export async function POST(request: NextRequest) {
       agenteSlugHint,
       linhaKind: linhaWa.kind,
       hasInstanceToken: Boolean(waSendOpts.instanceToken),
+      chatid: inboundRaw.chatid ?? null,
     };
 
     const enqueueResult = await enqueueWhatsappJob(supabase, {

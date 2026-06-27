@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { telefoneConversaId } from "@/lib/crm/isolamento-conversa-lead";
-import { resolverTelefoneWhatsappLead } from "@/lib/crm/resolver-telefone-whatsapp-lead";
+import { resolverDestinoWhatsappLead, resolverTelefoneWhatsappLead } from "@/lib/crm/resolver-telefone-whatsapp-lead";
 import { ensureConversaAtiva, gravarMensagemSaidaConversa } from "@/lib/crm/conversa-canal";
 import { formatarMensagemConsultorWhatsapp } from "@/lib/crm/mensagem-consultor-whatsapp";
 import { resolverTokenInstanciaWhatsapp } from "@/lib/crm/resolver-token-whatsapp";
@@ -39,12 +39,21 @@ function allowWhatsappDryRun(): boolean {
   return process.env.NODE_ENV === "development" || process.env.WHATSAPP_DRY_RUN === "1";
 }
 
-function erroEnvioWhatsapp(status: number | undefined, error: string): string {
+function erroEnvioWhatsapp(status: number | undefined, error: string, body?: unknown): string {
   if (status === 401) {
     return "WhatsApp recusou o token (401). Reconecte a instância em Agentes → Canais → WhatsApp.";
   }
   if (status === 403) {
     return "WhatsApp recusou o envio (403). Verifique se a instância está ligada e autorizada.";
+  }
+  if (status === 500 && error === "HTTP 500") {
+    const detalhe =
+      body && typeof body === "object" && body !== null
+        ? JSON.stringify(body).slice(0, 200)
+        : "";
+    return detalhe
+      ? `WhatsApp recusou o envio (500). Detalhe: ${detalhe}`
+      : "WhatsApp recusou o envio (500). Verifique se o número do lead está correto e a instância conectada.";
   }
   return error;
 }
@@ -183,6 +192,7 @@ export async function enviarMensagemAtendimentoHumano(
   }
 
   const telefone = resolverTelefoneWhatsappLead(lead);
+  const destinoWhatsapp = resolverDestinoWhatsappLead(lead);
   if (telefone.length < 10) {
     return { ok: false, error: "Lead sem telefone válido para WhatsApp.", status: 400 };
   }
@@ -223,14 +233,14 @@ export async function enviarMensagemAtendimentoHumano(
   let sendInfo: { skipped?: boolean; status?: number; body?: unknown; provider?: string } = {};
 
   async function tentarEnvioTexto(token: string | null | undefined) {
-    return whatsappSendText(telefone, textoWhatsapp, { instanceToken: token });
+    return whatsappSendText(destinoWhatsapp, textoWhatsapp, { instanceToken: token });
   }
 
   async function tentarEnvioMidia(token: string | null | undefined) {
     if (!midia || !uazapiTipo) {
       return { ok: false as const, error: "Tipo de mídia inválido." };
     }
-    return whatsappSendMedia(telefone, {
+    return whatsappSendMedia(destinoWhatsapp, {
       type: uazapiTipo,
       file: base64ParaUazapiFile(midia.base64, midia.mimeType),
       caption: textoWhatsapp || undefined,
@@ -281,14 +291,16 @@ export async function enviarMensagemAtendimentoHumano(
         event: "send_fail",
         lead_id: opts.leadId,
         telefone: maskTelefone(telefone),
+        destino_whatsapp: destinoWhatsapp.includes("@") ? destinoWhatsapp.split("@")[0] + "@…" : maskTelefone(destinoWhatsapp),
         agente_slug: agenteSlug,
         token_origem: tokenOrigem,
         status: envio.status,
         error: envio.error,
+        uazapi_body: envio.body,
       });
       return {
         ok: false,
-        error: erroEnvioWhatsapp(envio.status, envio.error),
+        error: erroEnvioWhatsapp(envio.status, envio.error, envio.body),
         status: envio.status ?? 502,
       };
     }

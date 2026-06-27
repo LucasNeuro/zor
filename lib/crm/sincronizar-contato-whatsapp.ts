@@ -34,6 +34,8 @@ export type DadosContatoWhatsapp = {
   timestamp?: string | null;
   mercado?: string | null;
   instanceKey?: string | null;
+  /** JID UAZAPI (ex. 5511...@s.whatsapp.net ou ...@lid) — preferido no envio outbound. */
+  chatid?: string | null;
 };
 
 export function mergeMetadataWhatsapp(
@@ -42,11 +44,15 @@ export function mergeMetadataWhatsapp(
 ): Record<string, unknown> {
   const tel = normalizarTelefoneWhatsapp(dados.telefone);
   const push = pushNameParaNomeExibicao(dados.pushName);
+  const chatid = typeof dados.chatid === "string" ? dados.chatid.trim() : "";
   const out: Record<string, unknown> = {
     ...metaBase,
     wa_telefone: tel,
     wa_ultimo_contacto_em: dados.timestamp || new Date().toISOString(),
   };
+  if (chatid && (chatid.includes("@") || chatid.length >= 10)) {
+    out.wa_chatid = chatid;
+  }
   if (push) out.wa_push_name = push;
   if (dados.messageId?.trim()) out.wa_ultima_message_id = dados.messageId.trim();
   if (dados.tipoMidia?.trim()) out.wa_ultimo_tipo_midia = dados.tipoMidia.trim();

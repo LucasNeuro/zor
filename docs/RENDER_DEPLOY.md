@@ -66,10 +66,11 @@ Ver `docs/env-redis.example`. Mínimo em produção:
 | Variável | Exemplo / notas |
 |----------|-----------------|
 | `REDIS_HOST` | hostname do Redis Render/Upstash |
-| `REDIS_PORT` | `6379` |
+| `REDIS_PORT` | `13107` (copiar do painel Redis Cloud) |
 | `REDIS_PASSWORD` | senha do serviço |
-| `REDIS_USERNAME` | opcional (ACL Redis 6+) |
+| `REDIS_USERNAME` | `default` |
 | `REDIS_KEY_PREFIX` | `waje:` |
+| `REDIS_TLS` | `false` para porta custom (13107); `true` se painel exigir TLS |
 | `WEBHOOK_RATE_LIMIT_MAX` | opcional — ex. `120` eventos/janela |
 | `WEBHOOK_RATE_LIMIT_WINDOW_SEC` | opcional — padrão `60` |
 

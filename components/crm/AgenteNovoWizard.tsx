@@ -21,7 +21,7 @@ import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-ext
 import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
 import {
   AgenteEmailConnectBlock,
-  type AgenteResendSnapshot,
+  type AgenteEmailSnapshot,
 } from "@/components/crm/AgenteEmailConnectBlock";
 import {
   AgenteUazapiBlock,
@@ -395,7 +395,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   /** Preenchido após POST bem-sucedido em `/api/hub/agentes`. */
   const [agenteSlugCriado, setAgenteSlugCriado] = useState<string | null>(null);
   const [uazapiSnap, setUazapiSnap] = useState<AgenteUazapiSnapshot | null>(null);
-  const [emailSnap, setEmailSnap] = useState<AgenteResendSnapshot | null>(null);
+  const [emailSnap, setEmailSnap] = useState<AgenteEmailSnapshot | null>(null);
   const [playbookMetaLoading, setPlaybookMetaLoading] = useState(false);
   const [playbookGerando, setPlaybookGerando] = useState(false);
   const [playbookErro, setPlaybookErro] = useState("");
@@ -2867,7 +2867,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   <div style={{ ...wizardInfoBox(), marginBottom: 14 }}>
                     <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Canal E-mail:</strong> no passo{" "}
                     <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Canal</strong> configure remetente
-                    Resend e endereço inbound. Recomendamos activar resumo do lead e registo de nota nas ferramentas.
+                    Gmail OAuth — ligue a conta Google do agente. Recomendamos activar resumo do lead e registo de nota nas ferramentas.
                   </div>
                 ) : null}
 

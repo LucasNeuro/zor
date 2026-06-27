@@ -475,6 +475,7 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
         toolCallsExecutadas,
       });
     }
+
     try {
       const { extrairESalvarMemoriasAgente } = await import("@/lib/ia/memoria-agente");
       await extrairESalvarMemoriasAgente(db, {

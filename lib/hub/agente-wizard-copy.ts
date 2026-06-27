@@ -63,7 +63,7 @@ export function agenteWizardPasso8Descricao(
 ): string {
   if (emailChannelEnabled && modo === "canal_email") {
     const base =
-      "Configure remetente, endereço de entrada e envie um e-mail de teste (Resend). O playbook publicado define o fluxo de atendimento.";
+      "Configure Gmail (OAuth), ligue a conta Google e envie um e-mail de teste. O playbook publicado define o fluxo de atendimento.";
     return comAgendaGoogle
       ? `${base} Ligue também a agenda Google da empresa na secção abaixo.`
       : base;

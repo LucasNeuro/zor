@@ -11,7 +11,7 @@ export type EmailOAuthStatusPayload = {
   oauth_display_name: string | null;
   oauth_connected_at: string | null;
   oauth_last_sync_at: string | null;
-  email_mode: "oauth" | "resend";
+  email_mode: "oauth" | null;
   email_provider: string | null;
   email_integracao_id: string | null;
 };
@@ -46,8 +46,8 @@ export async function carregarEmailOAuthStatus(
       oauth_display_name: null,
       oauth_connected_at: null,
       oauth_last_sync_at: null,
-      email_mode: "resend",
-      email_provider: typeof agente.email_provider === "string" ? agente.email_provider : "resend",
+      email_mode: null,
+      email_provider: typeof agente.email_provider === "string" ? agente.email_provider : null,
       email_integracao_id: integracaoId || null,
     };
   }

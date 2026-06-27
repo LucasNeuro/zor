@@ -48,7 +48,7 @@ import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
 import type { FollowupOperacaoSnapshot } from "@/lib/hub/followup-operacao";
 import {
   AgenteEmailConnectBlock,
-  type AgenteResendSnapshot,
+  type AgenteEmailSnapshot,
 } from "@/components/crm/AgenteEmailConnectBlock";
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
 import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
@@ -1126,7 +1126,7 @@ export default function AgentePage() {
                       email_inbound: typeof agente.email_inbound === "string" ? agente.email_inbound : null,
                       email_ativo: agente.email_ativo !== false,
                     }}
-                    onSnapshotPatch={(patch: Partial<AgenteResendSnapshot>) => {
+                    onSnapshotPatch={(patch: Partial<AgenteEmailSnapshot>) => {
                       setAgente((prev) => {
                         if (!prev) return prev;
                         return {

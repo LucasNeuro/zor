@@ -145,7 +145,7 @@ export async function DELETE(
   }
 
   const patch: Record<string, unknown> = {
-    email_provider: "resend",
+    email_provider: null,
     email_integracao_id: null,
   };
 

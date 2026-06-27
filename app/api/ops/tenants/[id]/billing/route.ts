@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { isValidCnpj, isValidCpf, onlyDigits } from "@/lib/brasil-docs";
 import { crmDb } from "@/lib/crm/supabase-server";
 import {
-  avaliarEmissaoCoraTenant,
-  cadastroProntoParaCora,
+  avaliarEmissaoCobrancaTenant,
+  cadastroProntoParaCobranca,
   formatarCnpj,
   resumoEnderecoCadastral,
-} from "@/lib/ops/cora-mensalidade";
+} from "@/lib/ops/mensalidade";
 import { lerEmpresaCadastralTenant } from "@/lib/hub/tenant-empresa-cadastral";
 import {
   resolverPerfilCobrancaTenant,
@@ -32,11 +32,11 @@ function mapCadastroResponse(
   billing: Awaited<ReturnType<typeof resolverPerfilCobrancaTenant>>,
   cadastral: Awaited<ReturnType<typeof lerEmpresaCadastralTenant>>["cadastral"],
 ) {
-  const coraEmissao = avaliarEmissaoCoraTenant(
+  const cobrancaEmissao = avaliarEmissaoCobrancaTenant(
     billing?.document ?? cadastral?.cnpj ?? null,
     billing?.document_type ?? "CNPJ",
   );
-  const pronto = cadastroProntoParaCora(billing, cadastral) && !coraEmissao.bloqueado;
+  const pronto = cadastroProntoParaCobranca(billing, cadastral) && !cobrancaEmissao.bloqueado;
   const docLabel = billing
     ? formatarDocumento(billing.document, billing.document_type)
     : formatarCnpj(cadastral?.cnpj ?? null) || null;
@@ -60,12 +60,13 @@ function mapCadastroResponse(
     billing_uf: billing?.uf ?? cadastral?.estado ?? null,
     billing_fonte: billing?.fonte ?? null,
     pronto_cora: pronto,
-    cora_emissao_bloqueada: coraEmissao.bloqueado,
-    cora_emissao_motivo: coraEmissao.motivo,
-    cora_emissor_nome: coraEmissao.emissor_nome,
-    cora_emissor_cnpj: coraEmissao.emissor_cnpj ? formatarCnpj(coraEmissao.emissor_cnpj) : null,
-    cora_cliente_documento: coraEmissao.cliente_documento
-      ? formatarCnpj(coraEmissao.cliente_documento)
+    pronto_cobranca: pronto,
+    cora_emissao_bloqueada: cobrancaEmissao.bloqueado,
+    cora_emissao_motivo: cobrancaEmissao.motivo,
+    cora_emissor_nome: cobrancaEmissao.emissor_nome,
+    cora_emissor_cnpj: cobrancaEmissao.emissor_cnpj ? formatarCnpj(cobrancaEmissao.emissor_cnpj) : null,
+    cora_cliente_documento: cobrancaEmissao.cliente_documento
+      ? formatarCnpj(cobrancaEmissao.cliente_documento)
       : null,
   };
 }

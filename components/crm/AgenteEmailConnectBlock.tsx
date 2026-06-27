@@ -24,9 +24,9 @@ import {
   rfCloseButtonStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
-import type { AgenteResendSnapshot } from "@/components/crm/AgenteResendBlock";
+import type { AgenteEmailSnapshot } from "@/lib/email/agente-email-types";
 
-export type { AgenteResendSnapshot };
+export type { AgenteEmailSnapshot };
 
 export type EmailOAuthStatus = {
   connected: boolean;
@@ -40,8 +40,8 @@ export type EmailOAuthStatus = {
 
 export type AgenteEmailConnectBlockProps = {
   agenteSlug: string;
-  snapshot: AgenteResendSnapshot;
-  onSnapshotPatch?: (patch: Partial<AgenteResendSnapshot>) => void;
+  snapshot: AgenteEmailSnapshot;
+  onSnapshotPatch?: (patch: Partial<AgenteEmailSnapshot>) => void;
   agenteNome?: string;
   bloqueado?: boolean;
   layout?: "card" | "painel";

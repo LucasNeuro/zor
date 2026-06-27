@@ -590,7 +590,11 @@ async function despacharJobWhatsappAposEnqueue(
     }
     if (process.env.WHATSAPP_JOB_PROCESSOR === "worker_only") {
       dispararProcessamentoJobsWhatsapp(log);
+<<<<<<< HEAD
       // Rede de segurança: processa 1 job no web se worker/cron falhar
+=======
+      // Rede de segurança: processa pelo menos 1 job no web se worker/cron falhar
+>>>>>>> 7b07445936348a14859d17bc60f8965a88da2553
       void runWhatsappWorkerTick()
         .then((result) => {
           log.info("wa.webhook.job_processor_inline_safety", {

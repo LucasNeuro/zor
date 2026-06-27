@@ -14,7 +14,7 @@ function db() {
   );
 }
 
-/** Lista canais (WhatsApp UAZAPI + e-mail Resend) — só leitura do banco, sem chamadas externas. */
+/** Lista canais (WhatsApp UAZAPI + e-mail Gmail OAuth) — só leitura do banco, sem chamadas externas. */
 export async function GET(request: NextRequest) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 });

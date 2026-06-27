@@ -87,30 +87,8 @@ export function WajeOwnerPagamentoSideover({ open, pagamento, onClose, onUpdated
     }
   }
 
-  async function emitirBoletoCora() {
-    if (!pagamento) return;
-    setSalvando(true);
-    setErro("");
-    try {
-      const res = await fetch(`/api/ops/pagamentos/${pagamento.id}/cora-boleto`, {
-        method: "POST",
-        headers: await opsApiHeaders(),
-        credentials: "include",
-      });
-      const json = (await res.json()) as { data?: PagamentoRow; error?: string };
-      if (!res.ok || !json.data) throw new Error(json.error ?? "Falha ao emitir boleto.");
-      onUpdated({
-        ...pagamento,
-        ...json.data,
-        tenant_nome: pagamento.tenant_nome,
-        valor_reais: json.data.valor_reais ?? pagamento.valor_reais,
-      });
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro Cora.");
-    } finally {
-      setSalvando(false);
-    }
-  }
+  const boletoUrl = pagamento?.boleto_arquivo_url ?? pagamento?.cora_boleto_url ?? null;
+  const temLegado = Boolean(pagamento?.cora_invoice_id || boletoUrl);
 
   return (
     <CrmRetrofitSideoverShell
@@ -171,7 +149,9 @@ export function WajeOwnerPagamentoSideover({ open, pagamento, onClose, onUpdated
               ["Valor", formatarMoeda(pagamento.valor_reais)],
               ["Vencimento", formatarData(pagamento.vencimento)],
               ["Pago em", formatarData(pagamento.pago_em)],
-              ["Cora invoice", pagamento.cora_invoice_id ?? "—"],
+              ...(pagamento.cora_invoice_id
+                ? [["Ref. legado (Cora)", pagamento.cora_invoice_id] as const]
+                : []),
             ].map(([k, v]) => (
               <div key={k} className="grid grid-cols-[110px_1fr] gap-2">
                 <dt style={{ color: "#7a9a7e" }}>{k}</dt>
@@ -212,40 +192,29 @@ export function WajeOwnerPagamentoSideover({ open, pagamento, onClose, onUpdated
             style={{ borderColor: "rgba(146,255,0,0.12)", background: "rgba(6,13,8,0.5)" }}
           >
             <p className="mb-3 text-xs font-bold uppercase tracking-wide" style={{ color: RF_ACCENT }}>
-              Cobrança Cora
+              Cobrança bancária
             </p>
             <p className="mb-3 text-xs" style={rfBodyOnDarkStyle()}>
-              Emite boleto registrado + Pix via API Cora (Integração Direta). Requer CNPJ do tenant e
-              variáveis CORA_* no servidor.
+              Emissão via Cora descontinuada. Nova integração de pagamentos em breve — use «Marcar como
+              pago» para registar pagamentos manuais.
             </p>
-            {pagamento.cora_boleto_url ? (
+            {boletoUrl ? (
               <a
-                href={pagamento.cora_boleto_url}
+                href={boletoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold underline"
                 style={{ color: RF_ACCENT }}
               >
                 <ExternalLink size={13} />
-                Abrir boleto PDF
+                Abrir boleto PDF{temLegado ? " (legado)" : ""}
               </a>
             ) : null}
             {pagamento.cora_pix_emv ? (
               <p className="mb-2 break-all text-[10px]" style={{ color: "#b8d4bc" }}>
                 <QrCode size={12} className="mr-1 inline" />
-                Pix copia e cola disponível
+                Pix copia e cola (legado) disponível no registo
               </p>
-            ) : null}
-            {!pagamento.cora_invoice_id ? (
-              <button
-                type="button"
-                disabled={salvando || pagamento.status === "pago"}
-                onClick={() => void emitirBoletoCora()}
-                className="rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50"
-                style={{ background: RF_ACCENT, color: "#0b1f10" }}
-              >
-                {salvando ? "Emitindo…" : "Gerar boleto Cora"}
-              </button>
             ) : null}
           </div>
         </div>

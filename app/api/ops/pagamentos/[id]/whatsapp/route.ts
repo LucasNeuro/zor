@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crmDb } from "@/lib/crm/supabase-server";
-import { MENSALIDADE_SELECT } from "@/lib/ops/cora-mensalidade";
+import { MENSALIDADE_SELECT } from "@/lib/ops/mensalidade";
 import { enviarBoletoWhatsappOps, opsWhatsappConfigurado } from "@/lib/ops/ops-whatsapp-cobranca";
 import { requireOpsApiAccess, getOpsActor } from "@/lib/ops/ops-api-auth";
 

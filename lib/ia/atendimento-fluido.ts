@@ -54,6 +54,13 @@ export async function carregarContextoLeadCrmParaPrompt(
   supabase: SupabaseClient,
   leadId: string
 ): Promise<ContextoLeadCrmPrompt | null> {
+  return carregarContextoLeadCrmParaPromptDb(supabase, leadId);
+}
+
+async function carregarContextoLeadCrmParaPromptDb(
+  supabase: SupabaseClient,
+  leadId: string
+): Promise<ContextoLeadCrmPrompt | null> {
   const { data: lead } = await supabase
     .from("hub_leads_crm")
     .select(

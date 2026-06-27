@@ -95,7 +95,8 @@ export async function backfillMensagensIaCrm(
     if (turno.role !== "assistant") continue;
     const conteudo = turno.content.trim();
     if (!conteudo) continue;
-    const criadoEm = turno.at ?? new Date().toISOString();
+    const criadoEm = turno.at?.trim();
+    if (!criadoEm) continue;
     if (await filaSaidaExiste(supabase, leadId, conteudo, criadoEm)) continue;
     await inserirSaidaIa(supabase, {
       leadId,

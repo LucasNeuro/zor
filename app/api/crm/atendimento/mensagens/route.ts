@@ -39,7 +39,8 @@ function mapHubMensagem(row: Record<string, unknown>) {
         : remetente === "ia" || remetente === "agente"
           ? "ia"
           : meta.feito_por_tipo ?? null,
-    criado_em: row.enviada_em ?? row.criado_em,
+    enviada_em: row.enviada_em ?? row.criado_em,
+    criado_em: row.criado_em ?? row.enviada_em,
     email_subject: row.email_subject ?? null,
     email_message_id: row.email_message_id ?? null,
     tipo_conteudo: midia.tipo,
@@ -64,7 +65,8 @@ function mapFilaMensagem(row: Record<string, unknown>) {
     remetente,
     agente_id: row.agente_id ?? null,
     feito_por_tipo: feitoPorTipo,
-    criado_em: row.enviada_em ?? row.criado_em ?? row.recebida_em,
+    enviada_em: row.enviada_em ?? row.criado_em ?? row.recebida_em,
+    criado_em: row.criado_em ?? row.enviada_em ?? row.recebida_em,
     tipo_conteudo: midia.tipo,
     url_midia: midia.urlMidia,
     nome_arquivo: midia.nomeArquivo,

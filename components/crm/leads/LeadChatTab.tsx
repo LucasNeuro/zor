@@ -19,7 +19,7 @@ import {
   formatHumanoDisplayName,
 } from "@/lib/crm/resolve-crm-actor";
 import { crmApiHeaders, crmApiHeadersWithActor, getCrmSessionActor } from "@/lib/internal-api-headers-client";
-import { mergeMensagensChatDeduped, normalizarConteudoMensagem } from "@/lib/crm/dedup-mensagens-chat";
+import { compareMensagensChat, mergeMensagensChatDeduped, normalizarConteudoMensagem } from "@/lib/crm/dedup-mensagens-chat";
 import { parseConversaTurnos } from "@/lib/crm/lead-timeline";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -210,6 +210,15 @@ function notasParaMensagens(notas: CrmNota[]): ChatMsg[] {
   }));
 }
 
+function chatMsgParaOrdenacao(msg: ChatMsg): Record<string, unknown> {
+  return {
+    id: msg.id,
+    criado_em: msg.criado_em,
+    enviada_em: msg.criado_em,
+    direcao: msg.autor === "cliente" ? "entrada" : "saida",
+  };
+}
+
 function mergeMensagens(
   fila: Record<string, unknown>[],
   metadata: unknown,
@@ -253,8 +262,8 @@ function mergeMensagens(
     map.set(msg.id, msg);
   }
 
-  const sorted = [...map.values()].sort(
-    (a, b) => new Date(a.criado_em).getTime() - new Date(b.criado_em).getTime()
+  const sorted = [...map.values()].sort((a, b) =>
+    compareMensagensChat(chatMsgParaOrdenacao(a), chatMsgParaOrdenacao(b))
   );
 
   /** Segunda passagem: remove duplicatas visuais (conteúdo + autor + ±60s). */

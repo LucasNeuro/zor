@@ -6,9 +6,29 @@ export function normalizarConteudoMensagem(conteudo: unknown): string {
   return String(conteudo ?? "").trim();
 }
 
+/** Prefer enviada_em (horário real do WhatsApp) sobre criado_em (insert no banco). */
 export function timestampMensagem(row: MensagemChatRow): number {
-  const em = new Date(String(row.criado_em ?? row.enviada_em ?? 0)).getTime();
+  const raw = row.enviada_em ?? row.criado_em ?? row.recebida_em ?? 0;
+  const em = new Date(String(raw)).getTime();
   return Number.isFinite(em) ? em : 0;
+}
+
+function pesoDirecaoOrdenacao(row: MensagemChatRow): number {
+  const dir = String(row.direcao ?? "").toLowerCase();
+  if (dir === "entrada") return 0;
+  if (dir === "saida") return 1;
+  return 2;
+}
+
+/** Ordenação estável estilo WhatsApp: cronológico, lead antes da resposta no mesmo instante. */
+export function compareMensagensChat(a: MensagemChatRow, b: MensagemChatRow): number {
+  const diff = timestampMensagem(a) - timestampMensagem(b);
+  if (diff !== 0) return diff;
+
+  const dirDiff = pesoDirecaoOrdenacao(a) - pesoDirecaoOrdenacao(b);
+  if (dirDiff !== 0) return dirDiff;
+
+  return String(a.id ?? "").localeCompare(String(b.id ?? ""));
 }
 
 export function scoreMensagemPreferida(row: MensagemChatRow): number {
@@ -54,11 +74,5 @@ export function mergeMensagensChatDeduped(rows: MensagemChatRow[]): MensagemChat
     }
   }
 
-  return order
-    .map((k) => byKey.get(k)!)
-    .sort((a, b) => {
-      const diff = timestampMensagem(a) - timestampMensagem(b);
-      if (diff !== 0) return diff;
-      return String(a.id ?? "").localeCompare(String(b.id ?? ""));
-    });
+  return order.map((k) => byKey.get(k)!).sort(compareMensagensChat);
 }

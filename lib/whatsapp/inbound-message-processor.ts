@@ -793,6 +793,11 @@ export async function processarMensagemInboundWhatsapp(params: {
 
       try {
         if (conversaId && iaEnviadaWhatsapp) {
+          const leadEnviadaEm = params.timestamp;
+          const leadMs = new Date(leadEnviadaEm).getTime();
+          const iaEnviadaEm = new Date(
+            Number.isFinite(leadMs) ? Math.max(Date.now(), leadMs + 1) : Date.now()
+          ).toISOString();
           await supabase.from("hub_mensagens").insert([
             {
               conversa_id: conversaId,
@@ -801,7 +806,7 @@ export async function processarMensagemInboundWhatsapp(params: {
               tipo_conteudo: params.tipoMidia,
               conteudo: params.mensagemFinal,
               whatsapp_message_id: params.messageId,
-              enviada_em: params.timestamp,
+              enviada_em: leadEnviadaEm,
             },
             {
               conversa_id: conversaId,
@@ -811,7 +816,7 @@ export async function processarMensagemInboundWhatsapp(params: {
               ia_modelo: modeloUsado,
               tipo_conteudo: "texto",
               conteudo: respostaTexto,
-              enviada_em: new Date().toISOString(),
+              enviada_em: iaEnviadaEm,
               metadata: {
                 feito_por_tipo: "ia",
                 motor: resultado.motor ?? playbookMotor ?? "llm_prompt",

@@ -539,6 +539,19 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       /* hub_memorias_agente opcional até migração aplicada */
     }
 
+    const inboundTs =
+      typeof ctx.metadata?.timestamp === "string" && ctx.metadata.timestamp.trim()
+        ? ctx.metadata.timestamp.trim()
+        : null;
+    const inboundMs = inboundTs ? new Date(inboundTs).getTime() : NaN;
+    const enviadaEntrada =
+      Number.isFinite(inboundMs) ? new Date(inboundMs).toISOString() : new Date().toISOString();
+    const enviadaSaida = new Date(
+      Number.isFinite(inboundMs) ? Math.max(Date.now(), inboundMs + 1) : Date.now()
+    ).toISOString();
+    const waMessageId =
+      typeof ctx.metadata?.messageId === "string" ? ctx.metadata.messageId.trim() : "";
+
     const statusSaida = ctx.statusFilaSaida ?? "enviado";
     const filaSaida: Record<string, unknown> = {
       lead_id: ctx.leadId,
@@ -547,6 +560,8 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       direcao: "saida",
       conteudo: textoResposta,
       status: statusSaida,
+      enviada_em: enviadaSaida,
+      criado_em: enviadaSaida,
       metadata: {
         logId: logData?.id,
         modelo: modeloLog,
@@ -567,8 +582,11 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       direcao: "entrada",
       conteudo: ctx.mensagem,
       status: "pendente",
-      metadata: { feito_por: "engine", messageId: ctx.metadata?.messageId ?? null },
+      enviada_em: enviadaEntrada,
+      criado_em: enviadaEntrada,
+      metadata: { feito_por: "engine", messageId: waMessageId || null },
     };
+    if (waMessageId) filaEntrada.whatsapp_message_id = waMessageId;
     if (ctx.tenantId) filaEntrada.tenant_id = ctx.tenantId;
     try {
       await db.from("hub_fila_mensagens").insert(filaEntrada);

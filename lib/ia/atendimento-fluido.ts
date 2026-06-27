@@ -124,7 +124,9 @@ async function carregarContextoLeadCrmParaPromptDb(
 export function formatarBlocoContextoLeadCrm(ctx: ContextoLeadCrmPrompt): string {
   const linhas = [
     "═══ CLIENTE NO CRM (use antes de repetir perguntas) ═══",
-    ctx.nome ? `- Nome gravado: **${ctx.nome}** — use na conversa; não peça de novo salvo regra de retorno.` : "- Nome ainda não confirmado no CRM.",
+    ctx.nome
+      ? `- Nome gravado: **${ctx.nome}** — use na conversa; se o cliente corrigir o nome, a correção prevalece (actualize com **hub_atualizar_lead**).`
+      : "- Nome ainda não confirmado no CRM.",
     ctx.telefone ? `- Telefone: ${ctx.telefone}` : null,
     ctx.estagio ? `- Estágio no funil: ${ctx.estagio}` : null,
     ctx.interesse ? `- Interesse registrado: ${ctx.interesse}` : null,

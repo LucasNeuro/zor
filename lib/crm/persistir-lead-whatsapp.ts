@@ -2,7 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
 import { extrairNomeClienteDaMensagem } from "@/lib/crm/extrair-nome-cliente";
 import { nomeLeadEhPlaceholder, pushNameParaNomeExibicao } from "@/lib/crm/sincronizar-contato-whatsapp";
-import { extrairESalvarMemoriasLead } from "@/lib/ia/memoria-lead";
+import {
+  carregarNomeMemoriaLead,
+  CHAVE_NOME_LEAD,
+  extrairESalvarMemoriasLead,
+  normalizarChaveMemoria,
+  salvarMemoriaNomeLead,
+} from "@/lib/ia/memoria-lead";
 import { cutoffSessaoConversaMs } from "@/lib/ia/sessao-conversa-ttl";
 
 function parseValorBrl(texto: string): number | undefined {
@@ -23,28 +29,47 @@ export type MemoriasPatchCrmResult = {
   resumo: string;
 };
 
-/** Converte memórias do lead em patch CRM estruturado. */
+/** Converte memórias do lead em patch CRM estruturado. Espera lista por `criado_em` desc — campos escalares usam só a entrada mais recente. */
 export function memoriasParaPatchCrm(
   memorias: Array<{ chave: string; valor: string }>
 ): MemoriasPatchCrmResult {
   const args: Record<string, unknown> = {};
   const metaExtra: Record<string, unknown> = {};
   const textos: string[] = [];
+  const escalaresAplicados = new Set<string>();
 
   for (const m of memorias) {
-    const chave = (m.chave || "").toLowerCase().replace(/_auto$/, "");
+    const chave = normalizarChaveMemoria(m.chave);
     const val = String(m.valor || "").trim();
     if (!val) continue;
+
+    if (chave === CHAVE_NOME_LEAD) {
+      if (escalaresAplicados.has(CHAVE_NOME_LEAD)) continue;
+      if (nomeParecePlaceholder(val)) continue;
+      escalaresAplicados.add(CHAVE_NOME_LEAD);
+      args.nome = val.slice(0, 240);
+      textos.push(`${chave}: ${val.slice(0, 120)}`);
+      continue;
+    }
+
+    if (chave === "email" && val.includes("@")) {
+      if (escalaresAplicados.has("email")) continue;
+      escalaresAplicados.add("email");
+      args.email = val.slice(0, 320);
+      textos.push(`${chave}: ${val.slice(0, 120)}`);
+      continue;
+    }
+
+    if (chave === "interesse" || chave === "interesse_principal" || chave === "projeto") {
+      if (escalaresAplicados.has("interesse_principal")) continue;
+      escalaresAplicados.add("interesse_principal");
+      args.interesse_principal = val.slice(0, 500);
+      textos.push(`${chave}: ${val.slice(0, 120)}`);
+      continue;
+    }
+
     textos.push(`${chave}: ${val.slice(0, 120)}`);
 
-    if (chave === "nome" && !nomeParecePlaceholder(val)) {
-      args.nome = val.slice(0, 240);
-      continue;
-    }
-    if (chave === "interesse" || chave === "interesse_principal" || chave === "projeto") {
-      args.interesse_principal = val.slice(0, 500);
-      continue;
-    }
     if (chave === "orcamento" || chave === "valor" || chave === "financeiro") {
       const v = parseValorBrl(val);
       if (v !== undefined) args.valor_estimado = v;
@@ -56,10 +81,6 @@ export function memoriasParaPatchCrm(
     }
     if (chave === "cidade" || chave === "localizacao") {
       metaExtra.cidade = val.slice(0, 120);
-      continue;
-    }
-    if (chave === "email" && val.includes("@")) {
-      args.email = val.slice(0, 320);
       continue;
     }
     metaExtra[chave] = val.slice(0, 200);
@@ -98,13 +119,7 @@ export async function persistirDadosLeadWhatsapp(
 
   const nomeMsg = extrairNomeClienteDaMensagem(mensagemUsuario, { respostaCurtaPermitida: true });
   if (nomeMsg) {
-    await supabase.from("hub_memorias_lead").insert({
-      lead_id: leadId,
-      chave: "nome",
-      valor: nomeMsg,
-      confianca: 0.95,
-      criado_por: "whatsapp",
-    });
+    await salvarMemoriaNomeLead(supabase, leadId, nomeMsg, "whatsapp", 0.95);
   }
 
   const cutoffIso = new Date(cutoffSessaoConversaMs()).toISOString();
@@ -127,6 +142,14 @@ export async function persistirDadosLeadWhatsapp(
   const { args: toolArgs, resumo } = memoriasParaPatchCrm(
     (mems || []) as Array<{ chave: string; valor: string }>
   );
+
+  const nomeCanonico =
+    nomeMsg && !nomeParecePlaceholder(nomeMsg)
+      ? nomeMsg.slice(0, 240)
+      : await carregarNomeMemoriaLead(supabase, leadId);
+  if (nomeCanonico) {
+    toolArgs.nome = nomeCanonico;
+  }
 
   if (resumo) {
     toolArgs.metadata = {

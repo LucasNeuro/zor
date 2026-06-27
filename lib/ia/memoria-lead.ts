@@ -1,5 +1,104 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { nomeLeadEhPlaceholder } from "@/lib/crm/sincronizar-contato-whatsapp";
 import { extrairMemoriasLeadViaLlm } from "@/lib/ia/memoria-llm";
+
+export const CHAVE_NOME_LEAD = "nome";
+
+/** Normaliza chave de memória (`nome_auto` → `nome`). */
+export function normalizarChaveMemoria(chave: string): string {
+  return (chave || "").toLowerCase().replace(/_auto$/, "");
+}
+
+/**
+ * Grava um único nome canónico por lead (substitui linhas antigas com chave `nome`).
+ * Evita Renato + Marcelo coexistirem e o patch CRM preferir o nome errado.
+ */
+export async function salvarMemoriaNomeLead(
+  supabase: SupabaseClient,
+  leadId: string,
+  nome: string,
+  criadoPor: string,
+  confianca = 0.95
+): Promise<void> {
+  const valor = nome.trim().slice(0, 240);
+  if (!valor || nomeLeadEhPlaceholder(valor)) return;
+
+  const { data: rows } = await supabase
+    .from("hub_memorias_lead")
+    .select("id, valor")
+    .eq("lead_id", leadId)
+    .eq("chave", CHAVE_NOME_LEAD)
+    .order("criado_em", { ascending: false });
+
+  const existentes = rows ?? [];
+  const principal = existentes[0];
+
+  if (principal?.id) {
+    await supabase
+      .from("hub_memorias_lead")
+      .update({
+        valor,
+        confianca,
+        criado_por: criadoPor,
+        criado_em: new Date().toISOString(),
+      })
+      .eq("id", principal.id);
+
+    const duplicados = existentes.slice(1).map((r) => r.id).filter(Boolean);
+    if (duplicados.length > 0) {
+      await supabase.from("hub_memorias_lead").delete().in("id", duplicados);
+    }
+    return;
+  }
+
+  await supabase.from("hub_memorias_lead").insert({
+    lead_id: leadId,
+    chave: CHAVE_NOME_LEAD,
+    valor,
+    confianca,
+    criado_por: criadoPor,
+  });
+}
+
+/** Nome confirmado mais recente em hub_memorias_lead (independe da janela de sessão). */
+export async function carregarNomeMemoriaLead(
+  supabase: SupabaseClient,
+  leadId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("hub_memorias_lead")
+    .select("valor")
+    .eq("lead_id", leadId)
+    .eq("chave", CHAVE_NOME_LEAD)
+    .order("criado_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const nome = typeof data?.valor === "string" ? data.valor.trim() : "";
+  if (!nome || nomeLeadEhPlaceholder(nome)) return null;
+  return nome.slice(0, 240);
+}
+
+/** No prompt, só uma entrada `nome` (a mais recente). */
+export function deduplicarMemoriasParaPrompt(
+  memorias: Array<{ chave: string; valor: string }>
+): Array<{ chave: string; valor: string }> {
+  const vistos = new Set<string>();
+  const out: Array<{ chave: string; valor: string }> = [];
+
+  for (const m of memorias) {
+    const base = normalizarChaveMemoria(m.chave);
+    if (base === CHAVE_NOME_LEAD) {
+      if (vistos.has(CHAVE_NOME_LEAD)) continue;
+      vistos.add(CHAVE_NOME_LEAD);
+      out.push({ chave: CHAVE_NOME_LEAD, valor: m.valor });
+      continue;
+    }
+    out.push(m);
+  }
+
+  return out;
+}
 
 const PADROES_LEAD: Array<{ regex: RegExp; tipo: string; relevancia: number }> = [
   { regex: /não (tenho|quero|posso|consigo|preciso)/gi, tipo: "objecao", relevancia: 0.8 },
@@ -73,6 +172,11 @@ export async function extrairESalvarMemoriasLead(
   }
 
   for (const m of memorias) {
+    const chaveBase = normalizarChaveMemoria(m.chave);
+    if (chaveBase === CHAVE_NOME_LEAD) {
+      await salvarMemoriaNomeLead(supabase, leadId, m.valor, "ia_engine", m.confianca);
+      continue;
+    }
     const chave = m.chave.endsWith("_auto") ? m.chave : `${m.chave}_auto`;
     await upsertMemoriaLead(supabase, leadId, chave, m.valor, m.confianca);
   }
@@ -131,7 +235,7 @@ export async function listarMemoriasLeadParaPrompt(
   }
 
   const { data } = await q;
-  return (data ?? []) as Array<{ chave: string; valor: string }>;
+  return deduplicarMemoriasParaPrompt((data ?? []) as Array<{ chave: string; valor: string }>);
 }
 
 export async function salvarResumoConversa(

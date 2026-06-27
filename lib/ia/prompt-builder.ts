@@ -17,7 +17,7 @@ import {
 } from "@/lib/hub/tenant-empresa-cadastral";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
-import { listarMemoriasLeadParaPrompt } from "@/lib/ia/memoria-lead";
+import { carregarNomeMemoriaLead, listarMemoriasLeadParaPrompt } from "@/lib/ia/memoria-lead";
 import { blocoFluxoPrimeiroAtendimentoWhatsapp } from "@/lib/ia/primeiro-atendimento-whatsapp";
 import { blocoRegrasFluxoSequencialPlaybook } from "@/lib/ia/playbook-mari-runtime";
 import { agenteUsaPlaybookLegadoMari } from "@/lib/whatsapp/playbook-flow-runtime";
@@ -176,6 +176,10 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
   if (params.leadId) {
     try {
       contextoLeadCrm = await carregarContextoLeadCrmParaPrompt(supabase, params.leadId);
+      const nomeMemoria = await carregarNomeMemoriaLead(supabase, params.leadId);
+      if (contextoLeadCrm && nomeMemoria && nomeMemoria !== contextoLeadCrm.nome) {
+        contextoLeadCrm = { ...contextoLeadCrm, nome: nomeMemoria };
+      }
     } catch {
       contextoLeadCrm = null;
     }
@@ -225,7 +229,7 @@ ${playbookPublicado.prompt}`);
 - Siga o playbook: apresente-se como **${nomeAgente}**, acolha e pergunte o nome quando o playbook exigir, antes de personalizar.
 - Só use nome na saudação se vier confirmado em «DADOS DO CANAL (WhatsApp → CRM)» para este número ou se o cliente tiver dito o nome nesta sessão.`);
 
-    if (!conversaEmAndamento && !(params.sessaoReiniciada && contextoLeadCrm?.nome)) {
+    if (!conversaEmAndamento && !(contextoLeadCrm?.nome && (params.sessaoReiniciada || contextoLeadCrm.evitarRepetirQualificacao))) {
       const empresaLabel = nomeEmpresaComercial || "nossa empresa";
       secoes.push(`═══ APRESENTAÇÃO NA 1ª MENSAGEM (obrigatório) ═══
 - Você é **${nomeAgente}**, representando **${empresaLabel}**.
@@ -538,7 +542,9 @@ Adapte sua linguagem e conhecimento para este contexto específico.`);
   // CAMADA 5 — MEMÓRIAS DO LEAD
   if (memorias.length > 0) {
     const memTexto = memorias.map(m => `• [${m.chave}] ${m.valor}`).join("\n");
-    secoes.push(`═══ O QUE VOCÊ LEMBRA DESTE LEAD ═══\n${memTexto}`);
+    secoes.push(`═══ O QUE VOCÊ LEMBRA DESTE LEAD ═══
+${memTexto}
+- Se houver conflito entre nome no CRM e nome dito agora pelo cliente, **priorize o que o cliente acabou de dizer** e actualize o CRM.`);
   }
 
   if (memoriasAgenteTexto) {

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CHAVE_NOME_LEAD } from "@/lib/ia/memoria-lead";
 
 /** Janela de contexto ativo (horas). Env: HUB_SESSAO_CONVERSA_TTL_HORAS (default 12). */
 export function sessaoConversaTtlMs(): number {
@@ -166,7 +167,11 @@ export async function limparSessaoConversaExpirada(
     }
   }
 
-  const { error: memErr } = await supabase.from("hub_memorias_lead").delete().eq("lead_id", leadId);
+  const { error: memErr } = await supabase
+    .from("hub_memorias_lead")
+    .delete()
+    .eq("lead_id", leadId)
+    .neq("chave", CHAVE_NOME_LEAD);
 
   if (memErr) console.warn("[SESSAO] limpar memorias:", memErr.message);
 }

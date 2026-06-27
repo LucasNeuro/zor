@@ -317,12 +317,16 @@ function redisTlsEnabled(): boolean {
   if (flag === "1" || flag === "true" || flag === "yes") return true;
   if (flag === "0" || flag === "false" || flag === "no") return false;
   const host = process.env.REDIS_HOST?.trim().toLowerCase() ?? "";
-  // Redis Cloud / Redis Enterprise Cloud exige TLS no endpoint público.
-  return (
-    host.includes("redislabs.com") ||
-    host.includes("redis-cloud.com") ||
-    host.endsWith(".render.com")
-  );
+  const port = Number.parseInt(process.env.REDIS_PORT || "6379", 10);
+  if (host.endsWith(".render.com")) return true;
+  // Redis Cloud: portas custom (ex. 15295, 13107) são plain TCP; TLS só na 6379 ou REDIS_TLS=true.
+  if (
+    (host.includes("redislabs.com") || host.includes("redis-cloud.com")) &&
+    port === 6379
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function buildIoredisClient(): IoredisLike | null {

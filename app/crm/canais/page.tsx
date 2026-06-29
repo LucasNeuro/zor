@@ -15,6 +15,7 @@ import { CrmMetricCard, CrmMetricsGrid } from "@/components/crm/CrmMetricCard";
 import { FilterPills } from "@/components/crm/FilterPills";
 import { useCrmHeaderSlot } from "@/components/crm/CrmHeaderContext";
 import { CrmCanalSideover, type CanalAgenteRow } from "@/components/crm/CrmCanalSideover";
+import { GestorWhatsappIntegracaoBlock } from "@/components/crm/GestorWhatsappIntegracaoBlock";
 import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { isEmailChannelEnabledClient } from "@/lib/feature-flags";
 import {
@@ -29,7 +30,7 @@ type ListMode = "todos" | "conectados" | "sem_instancia";
 const FILTRO_PILLS = [
   { id: "todos", label: "Todos" },
   { id: "conectados", label: "Conectados" },
-  { id: "sem_instancia", label: "Sem instância" },
+  { id: "sem_instancia", label: "Sem ligação" },
 ] as const;
 
 const SLUGS_CANAL_PADRAO = new Set(["atendente", "sdr", "gerente_atendimento", "diretor_geral_ia"]);
@@ -48,8 +49,8 @@ function ehCanalRelevante(a: CanalAgenteRow): boolean {
   return false;
 }
 
-function statusLabel(status?: string | null, temInstancia?: boolean): string {
-  if (!temInstancia) return "Sem instância";
+function statusLabel(status?: string | null, temLigacao?: boolean): string {
+  if (!temLigacao) return "Sem ligação";
   const s = (status || "").toLowerCase();
   if (s === "connected") return "Conectado";
   if (s === "connecting") return "Conectando";
@@ -135,7 +136,7 @@ export default function CanaisPage() {
   useEffect(() => {
     setSlot({
       path: pathname,
-      subtitle: `${agentes.length} canais · WhatsApp${isEmailChannelEnabledClient() ? " e e-mail" : ""}`,
+      subtitle: `${agentes.length} canais`,
       actions: botaoAtualizar,
     });
     return () => setSlot(null);
@@ -199,34 +200,10 @@ export default function CanaisPage() {
         render: (a) => crmTableIdBadge(a.agente_slug, "green"),
       },
       {
-        id: "instancia",
-        label: "Instância",
-        defaultWidth: 160,
-        minWidth: 120,
-        render: (a) => {
-          if (a.modo_operacao === "canal_email") {
-            return (a.email_from || a.email_inbound || "—").trim();
-          }
-          const tem = Boolean((a.uazapi_instance_id || "").trim());
-          return tem ? a.uazapi_instance_name || a.uazapi_instance_id || "—" : "—";
-        },
-      },
-      {
-        id: "instancia_id",
-        label: "ID instância",
-        defaultWidth: 140,
-        minWidth: 100,
-        render: (a) => (
-          <span className="truncate font-mono text-[11px] text-[#5d7a67]" title={a.uazapi_instance_id ?? undefined}>
-            {a.uazapi_instance_id || "—"}
-          </span>
-        ),
-      },
-      {
         id: "conexao",
         label: "Conexão",
-        defaultWidth: 120,
-        minWidth: 96,
+        defaultWidth: 140,
+        minWidth: 110,
         render: (a) => {
           if (a.modo_operacao === "canal_email") {
             const configured =
@@ -240,15 +217,6 @@ export default function CanaisPage() {
           const label = statusLabel(a.uazapi_connection_status, tem);
           return crmTableStatusPill(label, tone === "green");
         },
-      },
-      {
-        id: "token",
-        label: "Token",
-        defaultWidth: 88,
-        minWidth: 72,
-        align: "center",
-        render: (a) =>
-          crmTableStatusPill(a.uazapi_has_instance_token ? "Configurado" : "Ausente", a.uazapi_has_instance_token),
       },
       {
         id: "modo",
@@ -328,10 +296,10 @@ export default function CanaisPage() {
             loading={loadingInicial}
           />
           <CrmMetricCard
-            label="Com instância UAZAPI"
+            label="Com ligação"
             valor={kpis.comInstancia}
             tone="success"
-            sub="Token / instância cadastrada"
+            sub="WhatsApp cadastrado"
             progress={{
               value: kpis.comInstancia,
               max: Math.max(kpis.total, 1),
@@ -340,7 +308,7 @@ export default function CanaisPage() {
             loading={loadingInicial}
           />
           <CrmMetricCard
-            label="Sem instância"
+            label="Sem ligação"
             valor={kpis.semInstancia}
             tone="muted"
             sub="Precisam de configuração"
@@ -357,11 +325,7 @@ export default function CanaisPage() {
           />
           </CrmMetricsGrid>
 
-          <p className="m-0 max-w-3xl text-xs leading-relaxed text-[#5d7a67]">
-            Visão operacional da conexão WhatsApp.{" "}
-            <strong className="text-[#3f9848]">Cadastrar instância</strong> (nome, proxy, token) é na ficha do
-            agente; <strong className="text-[#3f9848]">QR / pareamento</strong> liga o telefone quando for operar.
-          </p>
+          <GestorWhatsappIntegracaoBlock titulo="WhatsApp interno" />
 
           {erro ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert">
@@ -384,7 +348,7 @@ export default function CanaisPage() {
             toolbar={{
               searchValue: busca,
               onSearchChange: setBusca,
-              searchPlaceholder: "Buscar por nome ou instância…",
+              searchPlaceholder: "Buscar por nome ou agente…",
               showAdvancedFilters,
               onToggleAdvancedFilters: () => setShowAdvancedFilters((v) => !v),
               advancedFilters: (
@@ -397,26 +361,13 @@ export default function CanaisPage() {
             }}
             exportConfig={{
               filename: "canais-whatsapp.csv",
-              headers: [
-                "Agente",
-                "Slug",
-                "Instância",
-                "ID instância",
-                "Conexão",
-                "Token",
-                "Modo",
-                "Status",
-                "Snapshot",
-              ],
+              headers: ["Agente", "Slug", "Conexão", "Modo", "Status", "Atualizado"],
               rowValues: (a) => {
                 const tem = Boolean((a.uazapi_instance_id || "").trim());
                 return [
                   a.nome,
                   a.agente_slug,
-                  tem ? a.uazapi_instance_name || a.uazapi_instance_id || "" : "",
-                  a.uazapi_instance_id || "",
                   statusLabel(a.uazapi_connection_status, tem),
-                  a.uazapi_has_instance_token ? "Configurado" : "Ausente",
                   modoOperacaoExportLabel(a.modo_operacao) ||
                     (SLUGS_CANAL_PADRAO.has(a.agente_slug) ? "Atendimento (WhatsApp)" : ""),
                   a.ativo !== false ? "Ativo" : "Inativo",
@@ -429,7 +380,28 @@ export default function CanaisPage() {
         </div>
       </div>
 
-      <CrmCanalSideover agente={sideover} onClose={() => setSideover(null)} />
+      <CrmCanalSideover
+        agente={sideover}
+        onClose={() => setSideover(null)}
+        onSnapshotPatch={(slug, patch) => {
+          const merge = (row: CanalAgenteRow): CanalAgenteRow => ({
+            ...row,
+            ...(patch.uazapi_instance_id !== undefined && { uazapi_instance_id: patch.uazapi_instance_id }),
+            ...(patch.uazapi_instance_name !== undefined && { uazapi_instance_name: patch.uazapi_instance_name }),
+            ...(patch.uazapi_connection_status !== undefined && {
+              uazapi_connection_status: patch.uazapi_connection_status,
+            }),
+            ...(patch.uazapi_has_instance_token !== undefined && {
+              uazapi_has_instance_token: patch.uazapi_has_instance_token,
+            }),
+            ...(patch.uazapi_proxy_country !== undefined && { uazapi_proxy_country: patch.uazapi_proxy_country }),
+            ...(patch.uazapi_proxy_state !== undefined && { uazapi_proxy_state: patch.uazapi_proxy_state }),
+            ...(patch.uazapi_proxy_city !== undefined && { uazapi_proxy_city: patch.uazapi_proxy_city }),
+          });
+          setAgentes((prev) => prev.map((a) => (a.agente_slug === slug ? merge(a) : a)));
+          setSideover((prev) => (prev?.agente_slug === slug ? merge(prev) : prev));
+        }}
+      />
     </div>
   );
 }

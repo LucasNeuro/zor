@@ -19,7 +19,7 @@ import {
   type CrmPainelFiltros,
 } from "@/lib/crm/painel-filtros";
 import { CrmPainelTableSkeleton } from "@/components/crm/painel/CrmPainelSkeleton";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 
 type RelatorioJson = {
   viewId: string;
@@ -82,10 +82,7 @@ export function CrmPainelRelatorioPanel({
       if (colunasVisiveis?.length) {
         params.set("colunas", colunasVisiveis.join(","));
       }
-      const res = await fetch(`/api/crm/relatorios/export?${params.toString()}`, {
-        credentials: "include",
-        headers: internalApiHeaders(),
-      });
+      const res = await crmFetch(`/api/crm/relatorios/export?${params.toString()}`);
       const json = (await res.json().catch(() => ({}))) as RelatorioJson & { error?: string };
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       setDataset(json);

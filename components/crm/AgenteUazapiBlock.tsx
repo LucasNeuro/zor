@@ -429,7 +429,7 @@ export function AgenteUazapiBlock({
   const rotuloEstado = useMemo(() => {
     if (statusTempoReal?.authFailed) return "TOKEN INVÁLIDO";
     if (temInstancia) return String(statusExibido).toUpperCase();
-    return "SEM INSTÂNCIA";
+    return "SEM LIGAÇÃO";
   }, [temInstancia, statusExibido, statusTempoReal]);
 
   const regiaoGuardada = (snapshot.uazapi_proxy_city?.trim() || proxyCity.trim()).toLowerCase();
@@ -931,7 +931,7 @@ export function AgenteUazapiBlock({
           </button>
           {!regiaoGuardada && temInstancia ? (
             <p style={{ margin: 0, color: "#e6c06a", fontSize: 11 }}>
-              Instância criada — seleccione a cidade acima e use «Guardar região» antes de gerar o QR.
+              Ligação criada — seleccione a cidade acima e use «Guardar região» antes de gerar o QR.
             </p>
           ) : null}
         </>
@@ -1079,7 +1079,7 @@ export function AgenteUazapiBlock({
                   {temInstancia
                     ? conectado
                       ? "Telefone ligado · "
-                      : "Instância criada — ligue o telefone (passo 2) · "
+                      : "Ligue o telefone (passo 2) · "
                     : "Passo 1: cadastro · "}
                   <span
                     style={{
@@ -1095,11 +1095,6 @@ export function AgenteUazapiBlock({
                     {rotuloEstado}
                   </span>
                 </p>
-                {regiaoLabel ? (
-                  <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
-                    Região: <strong style={{ color: "#2d4a38" }}>{regiaoLabel}</strong>
-                  </p>
-                ) : null}
               </div>
             </div>
             <button

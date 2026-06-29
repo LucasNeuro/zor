@@ -20,12 +20,14 @@ import {
   UAZAPI_PROXY_SETUP_HINT,
 } from "@/lib/whatsapp/uazapi-proxy-connect";
 import {
-  formatWebhookSyncWarnings,
+  formatGestorWebhookSyncWarnings,
   maskWebhookUrlForUi,
-  publicWebhookUrlFromRequest,
-  syncWebhooksUazapi,
+  publicGestorWebhookUrlFromRequest,
+  syncWebhooksUazapiGestor,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
-import { deleteUazapiInstanceRemotely } from "@/lib/whatsapp/uazapi-delete-instance";
+import {
+  deleteUazapiInstanceForAgent,
+} from "@/lib/whatsapp/uazapi-delete-instance";
 import { resolverTokenCatalogoProxyCidades } from "@/lib/whatsapp/uazapi-proxy-cities-token";
 import {
   jsonErroUazapi,
@@ -34,10 +36,13 @@ import {
   type UazapiErrOut,
 } from "@/lib/whatsapp/uazapi-route-helpers";
 import {
+  instanciaGestorNomeValido,
+  instanciaNaListaAdminUazapi,
   nomeInstanciaGestorUazapi,
   verificarInstanciaNoUazapi,
 } from "@/lib/whatsapp/uazapi-verify-instance";
 import { uazapiBaseUrlNormalizado } from "@/lib/whatsapp/uazapi-http";
+import { pickPublicAppOrigin } from "@/lib/whatsapp/uazapi-webhook-sync";
 
 function db() {
   return createClient(
@@ -61,7 +66,7 @@ async function ensureLinhaGestor(supabase: ReturnType<typeof db>, tenantId: stri
   await supabase.from("hub_linha_gestor_whatsapp").insert({ tenant_id: tenantId });
 }
 
-function sanitizarLinhaGestor(row: LinhaGestorRow) {
+function sanitizarLinhaGestor(row: LinhaGestorRow, extras?: { remoto_verificado?: boolean }) {
   return {
     tenant_id: row.tenant_id,
     uazapi_instance_id: row.uazapi_instance_id ?? null,
@@ -76,7 +81,34 @@ function sanitizarLinhaGestor(row: LinhaGestorRow) {
     telefones_autorizados: telefonesAutorizadosGestor(row.telefones_autorizados),
     ativo: row.ativo !== false,
     uazapi_snapshot_at: row.uazapi_snapshot_at ?? null,
+    ...(typeof extras?.remoto_verificado === "boolean"
+      ? { remoto_verificado: extras.remoto_verificado }
+      : {}),
   };
+}
+
+function servidorWhatsappHost(): string | null {
+  const base = uazapiBaseUrlNormalizado();
+  if (!base) return null;
+  try {
+    return new URL(base).host;
+  } catch {
+    return base.replace(/^https?:\/\//, "").split("/")[0] || null;
+  }
+}
+
+async function linhaRemotoVerificado(
+  row: LinhaGestorRow,
+  tenantId: string
+): Promise<boolean> {
+  const token = tokenInstancia(row);
+  const id = idInstancia(row);
+  const name = nomeInstancia(row);
+  if (!token && !id && !name) return false;
+
+  const lista = await instanciaNaListaAdminUazapi({ instanceId: id, instanceName: name, instanceToken: token });
+  if (!lista.ok || !lista.encontrada) return false;
+  return instanciaGestorNomeValido(lista.nome || name, tenantId);
 }
 
 function tokenInstancia(row: LinhaGestorRow): string {
@@ -109,21 +141,40 @@ async function limparInstanciaGestorLocal(
   await persistGestor(patch);
 }
 
-/** Remove registo local se a instância não existir no painel UAZAPI (órfão). */
+/** Remove registo local se a instância não existir ou não for a linha gestor deste tenant. */
 async function garantirInstanciaGestorNoServidor(
   row: LinhaGestorRow,
+  tenantId: string,
   persistGestor: (patch: Record<string, unknown>) => Promise<void>
-): Promise<{ ok: true; remotoExiste: boolean } | { ok: false; error: string }> {
+): Promise<{ ok: true; remotoExiste: boolean; nomeRemoto?: string } | { ok: false; error: string }> {
   const token = tokenInstancia(row);
   const id = idInstancia(row);
   const name = nomeInstancia(row);
   if (!token && !id && !name) return { ok: true, remotoExiste: false };
 
-  const verif = await verificarInstanciaNoUazapi({ instanceId: id, instanceName: name, instanceToken: token });
-  if (!verif.ok) return { ok: false, error: verif.error };
-  if (verif.encontrada) return { ok: true, remotoExiste: true };
+  const lista = await instanciaNaListaAdminUazapi({ instanceId: id, instanceName: name, instanceToken: token });
+  if (!lista.ok) return { ok: false, error: lista.error };
 
-  if (token) await deleteUazapiInstanceRemotely(token);
+  const nomeRemoto = lista.nome || name || undefined;
+  const nomeOk =
+    lista.encontrada && instanciaGestorNomeValido(nomeRemoto || name, tenantId);
+
+  if (nomeOk) {
+    return { ok: true, remotoExiste: true, nomeRemoto };
+  }
+
+  if (lista.encontrada && !nomeOk) {
+    await limparInstanciaGestorLocal(persistGestor, { manterProxy: true });
+    return { ok: true, remotoExiste: false };
+  }
+
+  if (instanciaGestorNomeValido(name, tenantId)) {
+    await deleteUazapiInstanceForAgent({
+      instanceToken: token,
+      instanceId: id,
+      instanceName: name,
+    });
+  }
   await limparInstanciaGestorLocal(persistGestor, { manterProxy: true });
   return { ok: true, remotoExiste: false };
 }
@@ -150,18 +201,60 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  let linhaOut = data as LinhaGestorRow | null;
+  const syncRemoto = request.nextUrl.searchParams.get("sync") === "1";
+  if (data && syncRemoto) {
+    const row = data as LinhaGestorRow;
+    const temRegisto =
+      Boolean(tokenInstancia(row)) || Boolean(idInstancia(row)) || Boolean(nomeInstancia(row));
+    if (temRegisto) {
+      const check = await garantirInstanciaGestorNoServidor(
+        row,
+        tenantResolved.tenantId,
+        async (patch) => {
+          const full = {
+            ...patch,
+            atualizado_em: new Date().toISOString(),
+            uazapi_snapshot_at: new Date().toISOString(),
+          };
+          await supabase.from("hub_linha_gestor_whatsapp").update(full).eq("tenant_id", tenantResolved.tenantId);
+        }
+      );
+      if (check.ok && !check.remotoExiste) {
+        const { data: fresh } = await supabase
+          .from("hub_linha_gestor_whatsapp")
+          .select(SELECT_LINHA)
+          .eq("tenant_id", tenantResolved.tenantId)
+          .maybeSingle();
+        linhaOut = (fresh as LinhaGestorRow | null) ?? null;
+      }
+    }
+  }
+
+  const remotoVerificado = linhaOut
+    ? await linhaRemotoVerificado(linhaOut, tenantResolved.tenantId)
+    : false;
+  const registroLocalOrfao = Boolean(
+    linhaOut &&
+      (tokenInstancia(linhaOut) || idInstancia(linhaOut) || nomeInstancia(linhaOut)) &&
+      !remotoVerificado
+  );
+
+  const appOrigin = pickPublicAppOrigin(request);
+  const webhookLocalhost = Boolean(
+    appOrigin && /localhost|127\.0\.0\.1/i.test(appOrigin)
+  );
+
   return NextResponse.json({
     ok: true,
-    linha: data ? sanitizarLinhaGestor(data as LinhaGestorRow) : null,
-    uazapi_server: (() => {
-      const b = uazapiBaseUrlNormalizado();
-      if (!b) return null;
-      try {
-        return new URL(b).host;
-      } catch {
-        return b;
-      }
-    })(),
+    linha: linhaOut ? sanitizarLinhaGestor(linhaOut, { remoto_verificado: remotoVerificado }) : null,
+    meta: {
+      servidor_whatsapp: servidorWhatsappHost(),
+      nome_instancia_esperado: nomeInstanciaGestorUazapi(tenantResolved.tenantId),
+      registro_local_orfao: registroLocalOrfao,
+      webhook_localhost: webhookLocalhost,
+      uazapi_configurado: Boolean(uazapiBaseUrlNormalizado() && process.env.UAZAPI_ADMIN_TOKEN?.trim()),
+    },
   });
 }
 
@@ -306,34 +399,50 @@ export async function POST(request: NextRequest) {
   try {
     if (action === "create") {
       const forceRecreate = body.force_recreate === true;
-      const temLocal = Boolean(idInstancia(row) || tokenInstancia(row));
+      const name = nomeInstanciaGestorUazapi(tenantId);
+      const temLocal = Boolean(idInstancia(row) || tokenInstancia(row) || nomeInstancia(row));
 
-      if (temLocal) {
-        const check = await garantirInstanciaGestorNoServidor(row, persistGestor);
+      if (temLocal && !forceRecreate) {
+        const check = await garantirInstanciaGestorNoServidor(row, tenantId, persistGestor);
         if (!check.ok) {
           return NextResponse.json({ error: check.error }, { status: 502 });
         }
         await recarregarLinha();
 
-        if (check.remotoExiste && !forceRecreate) {
+        if (check.remotoExiste) {
           return NextResponse.json(
             {
               error:
-                "Já existe instância gestor no servidor UAZAPI. Use «Eliminar ligação» ou force_recreate para recriar.",
+                "Já existe ligação WhatsApp registada. Use «Eliminar ligação WhatsApp» para remover antes de criar outra.",
             },
             { status: 409 }
           );
         }
-
-        if (check.remotoExiste && forceRecreate) {
-          const tokenOld = tokenInstancia(row);
-          if (tokenOld) await deleteUazapiInstanceRemotely(tokenOld);
-          await limparInstanciaGestorLocal(persistGestor, { manterProxy: true });
-          await recarregarLinha();
-        }
       }
 
-      const name = nomeInstanciaGestorUazapi(tenantId);
+      if (temLocal && forceRecreate) {
+        await deleteUazapiInstanceForAgent({
+          instanceToken: tokenInstancia(row),
+          instanceId: idInstancia(row),
+          instanceName: nomeInstancia(row) || name,
+        });
+        await limparInstanciaGestorLocal(persistGestor, { manterProxy: true });
+        await recarregarLinha();
+      }
+
+      const remotoPorNome = await verificarInstanciaNoUazapi({ instanceName: name });
+      if (!remotoPorNome.ok) {
+        return NextResponse.json({ error: remotoPorNome.error }, { status: 502 });
+      }
+      if (remotoPorNome.encontrada) {
+        const delOrfao = await deleteUazapiInstanceForAgent({
+          instanceName: name,
+          instanceId: remotoPorNome.id,
+        });
+        if (!delOrfao.ok) {
+          return NextResponse.json({ error: delOrfao.error }, { status: 502 });
+        }
+      }
       const out = await uazapiFetchJson<Record<string, unknown>>("/instance/create", {
         method: "POST",
         admin: true,
@@ -368,8 +477,61 @@ export async function POST(request: NextRequest) {
         uazapi_connection_status: st,
       });
 
-      const webhookSync = await syncWebhooksUazapi(request, token);
-      const webhookWarning = formatWebhookSyncWarnings(webhookSync);
+      let confirmacaoLista: Awaited<ReturnType<typeof instanciaNaListaAdminUazapi>> | null = null;
+      for (let tentativa = 0; tentativa < 4; tentativa++) {
+        confirmacaoLista = await instanciaNaListaAdminUazapi({
+          instanceToken: token,
+          instanceId: id,
+          instanceName: name,
+        });
+        if (confirmacaoLista.ok && confirmacaoLista.encontrada) break;
+        await new Promise((r) => setTimeout(r, 600 + tentativa * 400));
+      }
+
+      if (!confirmacaoLista?.ok) {
+        const errMsg =
+          confirmacaoLista && "error" in confirmacaoLista
+            ? confirmacaoLista.error
+            : "Falha ao confirmar instância no painel UAZAPI.";
+        await deleteUazapiInstanceForAgent({ instanceToken: token, instanceId: id, instanceName: name });
+        await limparInstanciaGestorLocal(persistGestor, { manterProxy: true });
+        return NextResponse.json({ error: errMsg }, { status: 502 });
+      }
+      if (!confirmacaoLista.encontrada) {
+        await deleteUazapiInstanceForAgent({ instanceToken: token, instanceId: id, instanceName: name });
+        await limparInstanciaGestorLocal(persistGestor, { manterProxy: true });
+        return NextResponse.json(
+          {
+            error:
+              "A ligação foi criada mas não apareceu no painel UAZAPI. Confira UAZAPI_BASE_URL e o Admin Token do mesmo servidor e tente de novo.",
+          },
+          { status: 502 }
+        );
+      }
+
+      const confirmacao = await verificarInstanciaNoUazapi({
+        instanceToken: token,
+        instanceId: id,
+        instanceName: name,
+      });
+      if (!confirmacao.ok) {
+        await deleteUazapiInstanceForAgent({ instanceToken: token, instanceId: id, instanceName: name });
+        await limparInstanciaGestorLocal(persistGestor, { manterProxy: true });
+        return NextResponse.json({ error: confirmacao.error }, { status: 502 });
+      }
+      if (!confirmacao.encontrada) {
+        await limparInstanciaGestorLocal(persistGestor, { manterProxy: true });
+        return NextResponse.json(
+          {
+            error:
+              "A ligação não foi confirmada no servidor WhatsApp. Tente de novo em alguns segundos ou reinicie a API no painel do provedor.",
+          },
+          { status: 502 }
+        );
+      }
+
+      const webhookSync = await syncWebhooksUazapiGestor(request, token);
+      const webhookWarning = formatGestorWebhookSyncWarnings(webhookSync);
 
       return NextResponse.json({
         ok: true,
@@ -377,11 +539,12 @@ export async function POST(request: NextRequest) {
         uazapi_instance_id: id,
         uazapi_instance_name: name,
         uazapi_connection_status: st,
+        servidor_confirmado: true,
+        servidor_whatsapp: servidorWhatsappHost(),
+        remoto_verificado: true,
         orphan_cleared: temLocal,
-        webhook_sync: {
-          instance: webhookSync.instance.ok,
-          global: webhookSync.global.ok || webhookSync.global.skipped === true,
-        },
+        webhook_sync: { instance: webhookSync.instance.ok },
+        webhook_url: publicGestorWebhookUrlFromRequest(request),
         ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
       });
     }
@@ -394,7 +557,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Sem instância gestor registada." }, { status: 409 });
       }
 
-      const check = await garantirInstanciaGestorNoServidor(row, persistGestor);
+      const check = await garantirInstanciaGestorNoServidor(row, tenantId, persistGestor);
       if (!check.ok) {
         return NextResponse.json({ error: check.error }, { status: 502 });
       }
@@ -482,7 +645,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "connect") {
-      const check = await garantirInstanciaGestorNoServidor(row, persistGestor);
+      const check = await garantirInstanciaGestorNoServidor(row, tenantId, persistGestor);
       if (!check.ok) {
         return NextResponse.json({ error: check.error }, { status: 502 });
       }
@@ -551,8 +714,8 @@ export async function POST(request: NextRequest) {
 
       const st = statusFromPayloadUazapi(out.data);
       await persistGestor({ uazapi_connection_status: st });
-      const webhookSync = await syncWebhooksUazapi(request, tokenAtual);
-      const webhookWarning = formatWebhookSyncWarnings(webhookSync);
+      const webhookSync = await syncWebhooksUazapiGestor(request, tokenAtual);
+      const webhookWarning = formatGestorWebhookSyncWarnings(webhookSync);
 
       const qrPack = await resolverQrRespostaUazapi(out.data, tokenAtual);
       const paircode = extrairPaircodeDePayloadUazapi(out.data);
@@ -571,7 +734,6 @@ export async function POST(request: NextRequest) {
         ...diag,
         webhook_sync: {
           instance: webhookSync.instance.ok,
-          global: webhookSync.global.ok || webhookSync.global.skipped === true,
         },
         ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
         ...(paircode
@@ -595,7 +757,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "status") {
-      const check = await garantirInstanciaGestorNoServidor(row, persistGestor);
+      const check = await garantirInstanciaGestorNoServidor(row, tenantId, persistGestor);
       if (!check.ok) {
         return NextResponse.json({ error: check.error }, { status: 502 });
       }
@@ -624,10 +786,10 @@ export async function POST(request: NextRequest) {
       await persistGestor({ uazapi_connection_status: st });
 
       let webhookWarning: string | undefined;
-      let webhookSync: Awaited<ReturnType<typeof syncWebhooksUazapi>> | undefined;
+      let webhookSync: Awaited<ReturnType<typeof syncWebhooksUazapiGestor>> | undefined;
       if (st === "connected") {
-        webhookSync = await syncWebhooksUazapi(request, tokenAtual);
-        webhookWarning = formatWebhookSyncWarnings(webhookSync);
+        webhookSync = await syncWebhooksUazapiGestor(request, tokenAtual);
+        webhookWarning = formatGestorWebhookSyncWarnings(webhookSync);
       }
 
       const inst = pickInstanceFromResponse(out.data);
@@ -648,14 +810,13 @@ export async function POST(request: NextRequest) {
           ? {
               webhook_sync: {
                 instance: webhookSync.instance.ok,
-                global: webhookSync.global.ok || webhookSync.global.skipped === true,
               },
             }
           : {}),
         ...(webhookWarning ? { webhook_warning: webhookWarning } : {}),
-        webhook_url: publicWebhookUrlFromRequest(request),
+        webhook_url: publicGestorWebhookUrlFromRequest(request),
         webhook_url_display: (() => {
-          const u = publicWebhookUrlFromRequest(request);
+          const u = publicGestorWebhookUrlFromRequest(request);
           return u ? maskWebhookUrlForUi(u) : null;
         })(),
       });
@@ -678,21 +839,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "sync_webhook") {
-      const webhookSync = await syncWebhooksUazapi(request, tokenInst);
-      const webhookWarning = formatWebhookSyncWarnings(webhookSync);
-      if (!webhookSync.instance.ok && !webhookSync.global.ok) {
+      const webhookSync = await syncWebhooksUazapiGestor(request, tokenInst);
+      const webhookWarning = formatGestorWebhookSyncWarnings(webhookSync);
+      if (!webhookSync.instance.ok) {
         return NextResponse.json(
-          { error: webhookWarning || "Falha ao sincronizar webhooks", webhook_sync: webhookSync },
+          { error: webhookWarning || "Falha ao sincronizar webhook gestor", webhook_sync: webhookSync },
           { status: 502 }
         );
       }
-      const webhookUrl = publicWebhookUrlFromRequest(request);
+      const webhookUrl = publicGestorWebhookUrlFromRequest(request);
       return NextResponse.json({
         ok: true,
         action: "sync_webhook",
         webhook_sync: {
           instance: webhookSync.instance.ok,
-          global: webhookSync.global.ok || webhookSync.global.skipped === true,
         },
         webhook_url: webhookUrl,
         webhook_url_display: webhookUrl ? maskWebhookUrlForUi(webhookUrl) : null,
@@ -701,14 +861,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "delete_remote") {
-      const del = await deleteUazapiInstanceRemotely(tokenInst);
+      const del = await deleteUazapiInstanceForAgent({
+        instanceToken: tokenInst,
+        instanceId: idInstancia(row),
+        instanceName: nomeInstancia(row) || nomeInstanciaGestorUazapi(tenantId),
+      });
       if (!del.ok) {
         return NextResponse.json({ error: del.error, action: "delete_remote" }, { status: 502 });
       }
 
       await limparInstanciaGestorLocal(persistGestor);
 
-      return NextResponse.json({ ok: true, action: "delete_remote" });
+      return NextResponse.json({ ok: true, action: "delete_remote", deleted: del.deleted });
     }
 
     return NextResponse.json({ error: `Action desconhecida: ${action}` }, { status: 400 });

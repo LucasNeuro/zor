@@ -52,8 +52,8 @@ import {
 } from "@/components/crm/AgenteEmailConnectBlock";
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
 import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
+import Link from "next/link";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
-import { GestorWhatsappIntegracaoBlock } from "@/components/crm/GestorWhatsappIntegracaoBlock";
 import { AgenteMem0Block } from "@/components/crm/AgenteMem0Block";
 import { MEM0_FERRAMENTA_KEYS } from "@/lib/hub/mem0-constants";
 import { buildGoogleIntegradorCatalogLite } from "@/lib/hub/agente-wizard-google";
@@ -1071,12 +1071,45 @@ export default function AgentePage() {
                   <h2 style={{ ...sectionHeadingStyle, marginBottom: 8 }}>Integrações</h2>
                   <p style={{ fontSize: 12, color: "#3d5c48", margin: 0, lineHeight: 1.5 }}>
                     {agente.modo_operacao === "jobs_internos"
-                      ? "WhatsApp com o mesmo fluxo dos externos (linha única da empresa). Gmail/Calendar e ferramentas são deste agente."
+                      ? "Gmail/Calendar e ferramentas são deste agente. A ligação WhatsApp para agentes internos configura-se em Canais."
                       : `Canal de atendimento (WhatsApp${isEmailChannelEnabledClient() ? " ou e-mail" : ""}) e ferramentas disponíveis para este agente.`}
                   </p>
                 </div>
                 {agente.modo_operacao === "jobs_internos" ? (
-                  <GestorWhatsappIntegracaoBlock agenteSlug={slug} agenteNome={agente.nome} />
+                  <div
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: 12,
+                      border: "1px solid #dcebd8",
+                      background: "#f8fcf6",
+                    }}
+                  >
+                    <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#0b2210" }}>
+                      WhatsApp (agentes internos)
+                    </p>
+                    <p style={{ margin: "0 0 12px", fontSize: 12, color: "#5d7a67", lineHeight: 1.5 }}>
+                      Um número por empresa para falar com todos os agentes internos via menu. A configuração (QR e
+                      telefones autorizados) fica em{" "}
+                      <Link href="/crm/canais" style={{ color: CRM_ACCENT, fontWeight: 700 }}>
+                        Canais
+                      </Link>
+                      .
+                    </p>
+                    <Link
+                      href="/crm/canais"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: BRAND_TEXT_DARK,
+                        textDecoration: "none",
+                      }}
+                    >
+                      Abrir configuração em Canais →
+                    </Link>
+                  </div>
                 ) : null}
                 {agente.modo_operacao === "canal_whatsapp" ? (
                   <>

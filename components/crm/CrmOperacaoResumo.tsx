@@ -12,7 +12,7 @@ export function CrmOperacaoResumo({
 }) {
   return (
     <section className="h-full rounded-2xl border border-[#dcebd8] bg-[#ffffff] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
-      <CrmSectionTitle>Operação · lead → negócio → obra</CrmSectionTitle>
+      <CrmSectionTitle>Operação comercial</CrmSectionTitle>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-1">
         <CrmMetricCard
           label="Negócios abertos"
@@ -23,19 +23,19 @@ export function CrmOperacaoResumo({
           loading={loading}
         />
         <CrmMetricCard
-          label="Obras em andamento"
-          valor={operacao.obrasEmAndamento}
-          sub="execução"
+          label="Conversas ativas"
+          valor={operacao.conversasAtivas}
+          sub="WhatsApp e canais"
           tone="brand"
-          href="/crm/obras"
+          href="/crm/atendimentos"
           loading={loading}
         />
         <CrmMetricCard
-          label="Pedidos de material"
-          valor={operacao.pedidosAbertos}
-          sub="rascunho a aprovado"
+          label="Leads em atendimento"
+          valor={operacao.leadsAtivos}
+          sub="fora de ganho/perda"
           tone="success"
-          href="/crm/pedidos"
+          href="/crm/leads"
           loading={loading}
         />
       </div>

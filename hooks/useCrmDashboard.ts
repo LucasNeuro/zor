@@ -53,7 +53,7 @@ const inicial: CrmDashboardState = {
   alertas: [],
   leadsRecentes: [],
   ciclos: [],
-  operacao: { negociosAbertos: 0, obrasEmAndamento: 0, pedidosAbertos: 0 },
+  operacao: { negociosAbertos: 0, conversasAtivas: 0, leadsAtivos: 0 },
   loading: true,
   erro: null,
   carregado: false,

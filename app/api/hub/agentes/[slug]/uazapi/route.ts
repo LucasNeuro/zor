@@ -28,7 +28,7 @@ import {
   publicWebhookUrlFromRequest,
   syncWebhooksUazapi,
 } from "@/lib/whatsapp/uazapi-webhook-sync";
-import { deleteUazapiInstanceRemotely } from "@/lib/whatsapp/uazapi-delete-instance";
+import { deleteUazapiInstanceForAgent } from "@/lib/whatsapp/uazapi-delete-instance";
 import { resolverTokenCatalogoProxyCidades } from "@/lib/whatsapp/uazapi-proxy-cities-token";
 
 function db() {
@@ -449,7 +449,11 @@ export async function POST(
     }
 
     if (action === "delete_remote") {
-      const del = await deleteUazapiInstanceRemotely(tokenInst);
+      const del = await deleteUazapiInstanceForAgent({
+        instanceToken: tokenInst,
+        instanceId: row.uazapi_instance_id,
+        instanceName: row.uazapi_instance_name,
+      });
       if (!del.ok) {
         return NextResponse.json(
           { error: del.error, action: "delete_remote" },
@@ -467,7 +471,7 @@ export async function POST(
         uazapi_proxy_city: null,
       });
 
-      return NextResponse.json({ ok: true, action: "delete_remote" });
+      return NextResponse.json({ ok: true, action: "delete_remote", deleted: del.deleted });
     }
 
     return NextResponse.json({ error: "action inválida" }, { status: 400 });

@@ -6,6 +6,7 @@ import {
   resolveWajePlatformOwner,
 } from "@/lib/auth/verify-ops-user";
 import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+import { hostFromRequest, resolvePlatformBrand } from "@/lib/platform-brands";
 
 export type TenantResolveResult =
   | { ok: true; tenantId: string }
@@ -63,6 +64,51 @@ async function firstValidTenant(candidates: string[]): Promise<string | null> {
   return null;
 }
 
+/** Tenant activo ligado à marca white-label do host (ex.: synkronia.com.br → Synkron). */
+async function resolveTenantFromBrandHost(request: NextRequest): Promise<string | null> {
+  const host = hostFromRequest(request);
+  if (!host) return null;
+  try {
+    const brand = await resolvePlatformBrand(host);
+
+    const lookupByBrandId = async (brandId: string): Promise<string | null> => {
+      const { data } = await crmDb()
+        .from("hub_tenants")
+        .select("id")
+        .eq("platform_brand_id", brandId)
+        .eq("ativo", true)
+        .order("criado_em", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const id = typeof data?.id === "string" ? data.id.trim() : "";
+      return id || null;
+    };
+
+    if (brand.id) {
+      const fromId = await lookupByBrandId(brand.id);
+      if (fromId) return fromId;
+    }
+
+    if (brand.slug?.trim()) {
+      const { data: brandRow } = await crmDb()
+        .from("hub_platform_brands")
+        .select("id")
+        .eq("slug", brand.slug.trim())
+        .eq("ativo", true)
+        .maybeSingle();
+      const brandId = typeof brandRow?.id === "string" ? brandRow.id.trim() : "";
+      if (brandId) {
+        const fromSlug = await lookupByBrandId(brandId);
+        if (fromSlug) return fromSlug;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolve tenant para Hub (agentes, ciclos, ferramentas) com validação em `hub_tenants`.
  *
@@ -92,6 +138,8 @@ export async function resolveValidatedTenantId(
 
   const fallbackCandidates: string[] = [];
   if (bodyTenant && caller?.isWajePlatform) fallbackCandidates.push(bodyTenant);
+  const fromBrandHost = await resolveTenantFromBrandHost(request);
+  if (fromBrandHost) fallbackCandidates.push(fromBrandHost);
   if (headerTenant) fallbackCandidates.push(headerTenant);
   fallbackCandidates.push(defaultTenantId());
 

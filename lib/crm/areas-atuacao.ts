@@ -21,7 +21,7 @@ export type AreaAtuacaoOption = {
 };
 
 export const AREAS_ATUACAO: readonly AreaAtuacaoOption[] = [
-  { value: "geral", label: "Geral / multi-setor", mercadoSigla: "GRL" },
+  { value: "geral", label: "Comercial", mercadoSigla: "GRL" },
   { value: "imobiliario", label: "Imobiliário", mercadoSigla: "IMB" },
   { value: "arquitetura", label: "Arquitetura", mercadoSigla: "ARQ" },
   { value: "reforma_obra", label: "Reforma e obra", mercadoSigla: "RFM" },

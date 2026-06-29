@@ -23,7 +23,7 @@ import {
   type RelatorioViewId,
 } from "@/lib/crm/relatorio-views-catalog";
 import type { PainelRelatorioCustom } from "@/lib/crm/painel-tabs";
-import { internalApiHeaders } from "@/lib/internal-api-headers";
+import { crmFetch } from "@/lib/internal-api-headers-client";
 
 type ColunasMeta = {
   disponiveis: string[];
@@ -67,9 +67,8 @@ export function CrmPainelRelatorioBuilderSideover({ open, onClose, initial, onSa
     async (vid: RelatorioViewId) => {
       setLoadingColunas(true);
       try {
-        const res = await fetch(
-          `/api/crm/relatorios/columns?view_id=${encodeURIComponent(vid)}`,
-          { credentials: "include", headers: internalApiHeaders() }
+        const res = await crmFetch(
+          `/api/crm/relatorios/columns?view_id=${encodeURIComponent(vid)}`
         );
         const json = (await res.json().catch(() => ({}))) as ColunasMeta & { error?: string };
         const disponiveis = Array.isArray(json.disponiveis) ? json.disponiveis : [];

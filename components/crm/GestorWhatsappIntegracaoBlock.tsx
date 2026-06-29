@@ -20,7 +20,6 @@ import { UazapiProxyCityPicker } from "@/components/crm/UazapiProxyCityPicker";
 import { CRM_ACCENT, crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
 import {
-  RF_BORDER,
   RF_BORDER_STRONG,
   RF_TEXT_MUTED,
   RF_TEXT_PRIMARY,
@@ -32,10 +31,6 @@ import {
   avisoTelefoneBrPareamento,
   UAZAPI_PAIRCODE_VALID_MS,
 } from "@/lib/whatsapp/uazapi-proxy-connect";
-import {
-  formatProxyCityDisplay,
-  formatProxyCityLabel,
-} from "@/lib/whatsapp/uazapi-proxy-city-label";
 
 const UAZAPI_QR_VALID_MS = 120_000;
 
@@ -44,6 +39,7 @@ type LinhaGestor = {
   uazapi_instance_name?: string | null;
   uazapi_connection_status?: string | null;
   uazapi_has_instance_token?: boolean;
+  remoto_verificado?: boolean;
   uazapi_proxy_country?: string | null;
   uazapi_proxy_state?: string | null;
   uazapi_proxy_city?: string | null;
@@ -51,9 +47,19 @@ type LinhaGestor = {
   ativo?: boolean;
 };
 
+type GestorWhatsappMeta = {
+  servidor_whatsapp?: string | null;
+  registro_local_orfao?: boolean;
+  webhook_localhost?: boolean;
+  uazapi_configurado?: boolean;
+};
+
 export type GestorWhatsappIntegracaoBlockProps = {
-  agenteSlug: string;
+  /** Opcional — só usado pelo picker de proxy quando não é linha gestor. */
+  agenteSlug?: string;
   agenteNome?: string;
+  /** Título do cartão (ex. na página Canais). */
+  titulo?: string;
 };
 
 function badgeCor(status?: string | null): { bg: string; fg: string; bar: string } {
@@ -77,11 +83,12 @@ function erroUiAmigavel(msg: string): string {
 }
 
 export function GestorWhatsappIntegracaoBlock({
-  agenteSlug,
-  agenteNome,
+  agenteSlug = "",
+  titulo = "WhatsApp",
 }: GestorWhatsappIntegracaoBlockProps) {
   const [sideoverOpen, setSideoverOpen] = useState(false);
   const [linha, setLinha] = useState<LinhaGestor | null>(null);
+  const [metaGestor, setMetaGestor] = useState<GestorWhatsappMeta | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [loading, setLoading] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -95,20 +102,19 @@ export function GestorWhatsappIntegracaoBlock({
   const [proxyCity, setProxyCity] = useState("");
   const [proxyState, setProxyState] = useState("");
   const [dialogExcluir, setDialogExcluir] = useState(false);
-  const [uazapiServer, setUazapiServer] = useState<string | null>(null);
+  const [avisoConexao, setAvisoConexao] = useState<string | null>(null);
 
   const statusExibido = linha?.uazapi_connection_status ?? "—";
-  const temInstancia = Boolean(linha?.uazapi_instance_id?.trim());
+  const temInstancia = linha?.remoto_verificado === true;
+  const registroLocalPendente = Boolean(
+    (linha?.uazapi_instance_id?.trim() ||
+      linha?.uazapi_has_instance_token ||
+      linha?.uazapi_instance_name?.trim()) &&
+      !temInstancia
+  );
   const conectado = (statusExibido || "").toLowerCase() === "connected";
   const badge = badgeCor(statusExibido);
   const acoesOff = loading !== null;
-
-  const regiaoLabel = useMemo(() => {
-    const city = (linha?.uazapi_proxy_city?.trim() || proxyCity.trim()).toLowerCase();
-    if (!city) return null;
-    const st = (linha?.uazapi_proxy_state?.trim() || proxyState.trim()).toUpperCase();
-    return formatProxyCityDisplay(formatProxyCityLabel(city), st);
-  }, [linha?.uazapi_proxy_city, linha?.uazapi_proxy_state, proxyCity, proxyState]);
 
   const pairingPhoneDigits = pairingPhone.replace(/\D/g, "");
   const podeConectarPorCodigo = pairingPhoneDigits.length >= 10 && pairingPhoneDigits.length <= 15;
@@ -118,11 +124,30 @@ export function GestorWhatsappIntegracaoBlock({
     setCarregando(true);
     setErro(null);
     try {
-      const res = await fetch("/api/hub/gestor-whatsapp", { headers: await crmApiHeaders() });
-      const json = (await res.json()) as { linha?: LinhaGestor; uazapi_server?: string | null; error?: string };
+      const res = await fetch("/api/hub/gestor-whatsapp?sync=1", { headers: await crmApiHeaders() });
+      const json = (await res.json()) as {
+        linha?: LinhaGestor;
+        meta?: GestorWhatsappMeta;
+        error?: string;
+      };
       if (!res.ok) throw new Error(json.error || `Erro ${res.status}`);
       setLinha(json.linha ?? null);
-      setUazapiServer(typeof json.uazapi_server === "string" ? json.uazapi_server : null);
+      setMetaGestor(json.meta ?? null);
+      if (json.meta?.registro_local_orfao) {
+        setAvisoConexao(
+          "Havia um registo local sem ligação no servidor WhatsApp — foi limpo. Clique «Criar ligação WhatsApp» de novo."
+        );
+      } else if (!json.linha?.remoto_verificado) {
+        setAvisoConexao("Não há ligação activa no servidor. Comece pelo passo 1 — criar ligação exclusiva.");
+      } else if (json.linha?.remoto_verificado && json.meta?.servidor_whatsapp) {
+        setAvisoConexao(
+          `Ligação activa no servidor ${json.meta.servidor_whatsapp}. Confira o mesmo host no painel UAZAPI (não misture fitbot com onnzetecnologia).`
+        );
+      } else if (json.meta?.webhook_localhost) {
+        setAvisoConexao(
+          "A ligação cria-se na nuvem UAZAPI; o aviso de localhost só afecta receber mensagens em desenvolvimento. Para testar webhooks em local, defina WHATSAPP_WEBHOOK_PUBLIC_ORIGIN com o domínio público."
+        );
+      }
       const tels = json.linha?.telefones_autorizados ?? [];
       setTelefones(tels.join("\n"));
       setProxyCity(json.linha?.uazapi_proxy_city?.trim() || "");
@@ -142,11 +167,33 @@ export function GestorWhatsappIntegracaoBlock({
     (action: string, extra?: Record<string, unknown>, opts?: { silent?: boolean }) => Promise<Record<string, unknown> | null>
   >(() => Promise.resolve(null));
 
+  const telefonesAutorizadosVazios = useMemo(() => {
+    return !telefones
+      .split(/[\n,;]+/)
+      .map((t) => t.replace(/\D/g, ""))
+      .some((t) => t.length >= 10);
+  }, [telefones]);
+
+  const aplicarStatusLinha = useCallback((status?: string) => {
+    if (!status) return;
+    setLinha((prev) => ({
+      ...(prev ?? {}),
+      uazapi_connection_status: status,
+    }));
+    if (status.toLowerCase() === "connected") {
+      setQrcode(null);
+      setPaircode(null);
+      setPareamentoGeradoEm(null);
+      setAvisoConexao("WhatsApp ligado. Guarde os telefones autorizados e envie *menu* para escolher um assistente.");
+    }
+  }, []);
+
   const postAction = useCallback(
     async (action: string, extra?: Record<string, unknown>, opts?: { silent?: boolean }) => {
       if (!opts?.silent) {
         setErro(null);
         setLoading(action);
+        if (action === "connect") setAvisoConexao(null);
       }
       try {
         const res = await fetch("/api/hub/gestor-whatsapp", {
@@ -158,29 +205,87 @@ export function GestorWhatsappIntegracaoBlock({
         if (!res.ok) {
           if (!opts?.silent) {
             setErro(erroUiAmigavel(typeof json.error === "string" ? json.error : `Erro ${res.status}`));
-            if (action === "connect") {
+            if (action === "connect" || action === "status") {
               setQrcode(null);
               setPaircode(null);
+              setPareamentoGeradoEm(null);
             }
+            if (json.uazapi_auth_failed === true) {
+              setAvisoConexao(
+                "Não foi possível validar a ligação. Elimine a ligação actual e crie uma nova."
+              );
+            }
+          }
+          if (typeof json.uazapi_connection_status === "string") {
+            aplicarStatusLinha(json.uazapi_connection_status as string);
           }
           return json;
         }
-        if (typeof json.qrcode === "string") {
-          setQrcode(normalizarSrcImagemQrUazapi(json.qrcode));
-          setPaircode(null);
-          setPareamentoGeradoEm(Date.now());
-        }
-        if (typeof json.paircode === "string") {
-          setPaircode(json.paircode);
+
+        if (json.qr_invalid === true) {
           setQrcode(null);
-          setPareamentoGeradoEm(Date.now());
+          setPaircode(null);
+          setPareamentoGeradoEm(null);
+          if (!opts?.silent) {
+            setErro(
+              typeof json.connect_hint === "string" && json.connect_hint.trim()
+                ? json.connect_hint.trim()
+                : "QR inválido. Desligue a sessão, guarde a região e tente de novo."
+            );
+          }
+        } else if (typeof json.qrcode === "string" && json.qrcode.trim()) {
+          const norm = normalizarSrcImagemQrUazapi(json.qrcode);
+          if (norm) {
+            setQrcode(norm);
+            setPaircode(null);
+            if (action === "connect") {
+              setPareamentoGeradoEm(Date.now());
+              setSideoverOpen(true);
+            }
+          } else if (!opts?.silent && action === "connect") {
+            setQrcode(null);
+            setPareamentoGeradoEm(null);
+            setErro("O servidor enviou um QR inválido. Gere outro código.");
+          }
+        } else if (!opts?.silent && (action === "connect" || action === "status")) {
+          setQrcode(null);
+          setPareamentoGeradoEm(null);
         }
+
+        if (typeof json.paircode === "string" && json.paircode.trim()) {
+          setPaircode(json.paircode.trim());
+          setQrcode(null);
+          if (action === "connect") {
+            setPareamentoGeradoEm(Date.now());
+            setSideoverOpen(true);
+          }
+        } else if (!opts?.silent && (action === "connect" || action === "status")) {
+          setPaircode(null);
+        }
+
         if (typeof json.uazapi_connection_status === "string") {
-          setLinha((prev) => ({
-            ...(prev ?? {}),
-            uazapi_connection_status: json.uazapi_connection_status as string,
-          }));
+          aplicarStatusLinha(json.uazapi_connection_status as string);
         }
+
+        const connectHint = typeof json.connect_hint === "string" ? json.connect_hint.trim() : "";
+        const webhookWarning = typeof json.webhook_warning === "string" ? json.webhook_warning.trim() : "";
+        if (!opts?.silent) {
+          if (connectHint) setAvisoConexao(connectHint);
+          else if (webhookWarning) setAvisoConexao(webhookWarning);
+          else if (
+            action === "sync_webhook" &&
+            typeof json.webhook_url_display === "string" &&
+            json.webhook_url_display.trim()
+          ) {
+            const wh = json.webhook_url_display.trim();
+            setAvisoConexao(
+              /localhost|127\.0\.0\.1/i.test(wh)
+                ? `Webhook em localhost (${wh}). Em produção, abra o CRM no domínio público e sincronize de novo.`
+                : `Webhook sincronizado: ${wh}`
+            );
+          }
+        }
+
         if (action === "create" && typeof json.uazapi_instance_id === "string") {
           setLinha((prev) => ({
             ...(prev ?? {}),
@@ -194,7 +299,27 @@ export function GestorWhatsappIntegracaoBlock({
                 ? (json.uazapi_connection_status as string)
                 : prev?.uazapi_connection_status,
             uazapi_has_instance_token: true,
+            remoto_verificado: json.remoto_verificado === true || json.servidor_confirmado === true,
           }));
+          if (typeof json.servidor_whatsapp === "string" && json.servidor_whatsapp.trim()) {
+            setMetaGestor((prev) => ({
+              ...(prev ?? {}),
+              servidor_whatsapp: json.servidor_whatsapp as string,
+            }));
+          }
+          setSideoverOpen(true);
+          const srv =
+            typeof json.servidor_whatsapp === "string" && json.servidor_whatsapp.trim()
+              ? json.servidor_whatsapp.trim()
+              : metaGestor?.servidor_whatsapp;
+          setAvisoConexao(
+            srv
+              ? `Ligação criada no servidor ${srv}. Passo 2: escolha a cidade e guarde a região antes de gerar o QR.`
+              : "Ligação exclusiva criada no servidor. Passo 2: escolha a cidade e guarde a região antes de gerar o QR."
+          );
+        }
+        if (action === "save_proxy" && json.ok === true) {
+          setAvisoConexao("Região guardada. Passo 3: gere o QR no rodapé e ligue o telefone.");
         }
         if (action === "verify_remote" && json.encontrada === false) {
           setLinha(null);
@@ -208,14 +333,23 @@ export function GestorWhatsappIntegracaoBlock({
           setLinha(null);
           setQrcode(null);
           setPaircode(null);
-          setErro("Instância não existe no UAZAPI — clique «Recriar no UAZAPI» para registar de novo.");
+          if (!opts?.silent) {
+            setErro("Ligação não encontrada no servidor — crie uma nova ligação WhatsApp.");
+          }
+        }
+        if (action === "disconnect") {
+          setQrcode(null);
+          setPaircode(null);
+          setPareamentoGeradoEm(null);
         }
         if (action === "delete_remote") {
           setLinha(null);
+          setMetaGestor((prev) => (prev ? { ...prev, registro_local_orfao: false } : prev));
           setQrcode(null);
           setPaircode(null);
+          setAvisoConexao(null);
         }
-        if (!opts?.silent && action !== "status") {
+        if (!opts?.silent && action !== "status" && action !== "create") {
           await carregar();
         }
         return json;
@@ -228,7 +362,7 @@ export function GestorWhatsappIntegracaoBlock({
         if (!opts?.silent) setLoading(null);
       }
     },
-    [carregar]
+    [aplicarStatusLinha, carregar, metaGestor?.servidor_whatsapp]
   );
 
   postActionRef.current = postAction;
@@ -267,9 +401,65 @@ export function GestorWhatsappIntegracaoBlock({
     return extra;
   }, [proxyCity, proxyState]);
 
+  const conectarGestor = useCallback(
+    async (opts?: { resetSession?: boolean }) => {
+      const extra: Record<string, unknown> = {
+        ...proxyConnectExtra(),
+        ...(opts?.resetSession ? { reset_session: true } : {}),
+        ...(pairingMode === "code" && podeConectarPorCodigo ? { phone: pairingPhoneDigits } : {}),
+      };
+      const city = proxyCity.trim().toLowerCase();
+      if (city && !linha?.uazapi_proxy_city?.trim()) {
+        await postAction("save_proxy", {
+          proxy_managed_country: "br",
+          proxy_managed_city: city,
+          ...(proxyState.trim() ? { proxy_managed_state: proxyState.trim().toLowerCase() } : {}),
+        });
+      }
+      await postAction("connect", extra);
+    },
+    [
+      linha?.uazapi_proxy_city,
+      pairingMode,
+      pairingPhoneDigits,
+      podeConectarPorCodigo,
+      postAction,
+      proxyCity,
+      proxyConnectExtra,
+      proxyState,
+    ]
+  );
+
+  const reconectarWhatsApp = useCallback(() => {
+    void conectarGestor({ resetSession: true });
+  }, [conectarGestor]);
+
   const regiaoGuardada = Boolean((linha?.uazapi_proxy_city?.trim() || proxyCity.trim()).length);
-  const conectarBloqueado = acoesOff || !temInstancia || !regiaoGuardada;
   const mostrarQr = qrcode && (qrcode.startsWith("data:image") || /^https?:\/\//i.test(qrcode));
+  const pareamentoSegundosRestantes = pareamentoGeradoEm
+    ? Math.max(
+        0,
+        Math.floor(
+          ((paircode && !qrcode ? UAZAPI_PAIRCODE_VALID_MS : UAZAPI_QR_VALID_MS) -
+            (Date.now() - pareamentoGeradoEm)) /
+            1000
+        )
+      )
+    : null;
+  const qrExpirado =
+    mostrarQr && pareamentoGeradoEm != null && (pareamentoSegundosRestantes ?? 0) <= 0;
+  const mostrarQrAtivo = Boolean(mostrarQr && !qrExpirado);
+  const paircodeAtivo = Boolean(
+    paircode?.trim() && pareamentoGeradoEm != null && (pareamentoSegundosRestantes ?? 0) > 0 && !qrcode
+  );
+  const precisaReconectar =
+    temInstancia &&
+    !conectado &&
+    (qrExpirado ||
+      (String(statusExibido).toLowerCase() === "connecting" && !mostrarQrAtivo && !paircodeAtivo));
+  const conectarBloqueado =
+    acoesOff || loading === "connect" || !temInstancia || !regiaoGuardada ||
+    (pairingMode === "code" && !podeConectarPorCodigo);
 
   useEffect(() => {
     if (!pareamentoGeradoEm || (!qrcode && !paircode?.trim())) return;
@@ -295,6 +485,7 @@ export function GestorWhatsappIntegracaoBlock({
     if (!temInstancia || !sideoverOpen) return;
     const st = (statusExibido || "").toLowerCase();
     const aguardando = Boolean(paircode?.trim() || qrcode);
+    if (st === "connected") return;
     if (st !== "connecting" && !aguardando) return;
     const id = window.setInterval(() => {
       void postActionRef.current("status", undefined, { silent: true });
@@ -304,7 +495,7 @@ export function GestorWhatsappIntegracaoBlock({
 
   const rotuloEstado = useMemo(() => {
     if (temInstancia) return String(statusExibido).toUpperCase();
-    return "SEM INSTÂNCIA";
+    return "SEM LIGAÇÃO";
   }, [temInstancia, statusExibido]);
 
   const fieldStyle: CSSProperties = {
@@ -384,26 +575,16 @@ export function GestorWhatsappIntegracaoBlock({
     boxShadow: "none",
   });
 
-  const segundosRestantesPareamento = pareamentoGeradoEm
-    ? Math.max(
-        0,
-        Math.floor(
-          ((paircode && !qrcode ? UAZAPI_PAIRCODE_VALID_MS : UAZAPI_QR_VALID_MS) -
-            (Date.now() - pareamentoGeradoEm)) /
-            1000
-        )
-      )
-    : 0;
-
   const botoesFooter = (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {!temInstancia ? (
         <>
           <p style={{ margin: 0, color: CRM_ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: 0.08 }}>
-            PASSO 1 — CADASTRAR INSTÂNCIA
+            PASSO 1 — CRIAR LIGAÇÃO
           </p>
           <p style={{ margin: 0, color: RF_TEXT_MUTED, fontSize: 11, lineHeight: 1.45 }}>
-            Uma ligação partilhada por todos os agentes internos. Crie a instância, escolha a região e ligue o telefone.
+            Crie a ligação WhatsApp com o botão abaixo. Depois escolha a cidade e use «Guardar região». O QR para ligar
+            o telefone fica no passo 2.
           </p>
           <button
             type="button"
@@ -431,15 +612,10 @@ export function GestorWhatsappIntegracaoBlock({
                 type="button"
                 disabled={conectarBloqueado}
                 style={btnInGroup(conectarBloqueado, "primary", true)}
-                onClick={() =>
-                  void postAction("connect", {
-                    ...proxyConnectExtra(),
-                    ...(pairingMode === "code" && podeConectarPorCodigo ? { phone: pairingPhoneDigits } : {}),
-                  })
-                }
+                onClick={() => void conectarGestor({ resetSession: precisaReconectar })}
               >
                 {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
-                {pairingMode === "code" ? "Gerar código" : "Gerar QR"}
+                {precisaReconectar ? "Reconectar" : pairingMode === "code" ? "Gerar código" : "Gerar QR"}
               </button>
             ) : null}
             <button
@@ -460,6 +636,10 @@ export function GestorWhatsappIntegracaoBlock({
               {loading === "disconnect" ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}
               Desligar sessão
             </button>
+            <p style={{ margin: "8px 0 0", color: RF_TEXT_MUTED, fontSize: 10, lineHeight: 1.45, gridColumn: "1 / -1" }}>
+              <strong style={{ color: RF_TEXT_PRIMARY }}>Trocar número:</strong> use «Desligar sessão» e depois «Gerar QR/código».
+              <strong style={{ color: RF_TEXT_PRIMARY }}> Eliminar ligação</strong> remove o cadastro no provedor WhatsApp.
+            </p>
           </div>
           {!conectado ? (
             <div style={{ ...btnGroupShell, gridTemplateColumns: "minmax(0, 1fr)" }}>
@@ -474,32 +654,21 @@ export function GestorWhatsappIntegracaoBlock({
               </button>
             </div>
           ) : null}
-          {temInstancia ? (
+          {precisaReconectar && !conectado ? (
             <button
               type="button"
-              disabled={acoesOff}
-              style={{ ...btnBase(acoesOff, "default"), width: "100%" }}
-              onClick={() => void postAction("verify_remote")}
+              disabled={conectarBloqueado}
+              style={{ ...btnBase(conectarBloqueado, "primary"), width: "100%", minHeight: 44 }}
+              onClick={() => reconectarWhatsApp()}
             >
-              {loading === "verify_remote" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-              Verificar no servidor UAZAPI
-            </button>
-          ) : null}
-          {temInstancia && !conectado ? (
-            <button
-              type="button"
-              disabled={acoesOff}
-              style={{ ...btnBase(acoesOff, "primary"), width: "100%" }}
-              onClick={() => void postAction("create")}
-            >
-              {loading === "create" ? <Loader2 size={15} className="animate-spin" /> : <Smartphone size={15} />}
-              Recriar no UAZAPI
+              {loading === "connect" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              Reconectar WhatsApp
             </button>
           ) : null}
           <button
             type="button"
             disabled={acoesOff}
-            style={{ ...btnBase(acoesOff, "danger"), width: "100%" }}
+            style={{ ...btnBase(acoesOff, "danger"), width: "100%", minHeight: 42 }}
             onClick={() => setDialogExcluir(true)}
           >
             {loading === "delete_remote" ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
@@ -510,9 +679,64 @@ export function GestorWhatsappIntegracaoBlock({
     </div>
   );
 
+  const passoAtual: 1 | 2 | 3 | 4 = !temInstancia
+    ? 1
+    : !regiaoGuardada
+      ? 2
+      : conectado
+        ? 4
+        : 3;
+
+  function renderPassoIndicador() {
+    const passos = [
+      { n: 1, label: "Criar ligação" },
+      { n: 2, label: "Região" },
+      { n: 3, label: "Ligar telefone" },
+      { n: 4, label: "Autorizados" },
+    ] as const;
+    return (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: 6,
+          marginBottom: 4,
+        }}
+      >
+        {passos.map((p) => {
+          const ativo = passoAtual === p.n;
+          const feito = passoAtual > p.n;
+          return (
+            <div
+              key={p.n}
+              style={{
+                padding: "8px 6px",
+                borderRadius: 8,
+                border: `1px solid ${ativo ? "#3f984866" : feito ? "#3f984844" : RF_BORDER_STRONG}`,
+                background: ativo ? "#3f984818" : feito ? "#3f98480c" : "rgba(6, 13, 8, 0.5)",
+                textAlign: "center",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 10,
+                  fontWeight: 800,
+                  color: ativo ? "#86efac" : feito ? "#5d7a67" : RF_TEXT_MUTED,
+                }}
+              >
+                {p.n}. {p.label}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   const painelSubtitle = temInstancia
-    ? "Mesmo fluxo dos agentes externos (região + QR). O número ligado é único na empresa — todos os internos usam esta linha."
-    : "Passo 1: criar ligação. Depois escolha a região; QR no passo 2. Um número para todos os agentes internos.";
+    ? "Passo 2: ligue o WhatsApp com QR ou código."
+    : "Passo 1: criar ligação WhatsApp. Depois escolha a cidade; QR no passo 2.";
 
   return (
     <>
@@ -553,12 +777,12 @@ export function GestorWhatsappIntegracaoBlock({
                 <IntegracaoMarcaIcon variant="whatsapp" size={22} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, color: "#0b2210", fontSize: 14, fontWeight: 800 }}>WhatsApp</p>
+                <p style={{ margin: 0, color: "#0b2210", fontSize: 14, fontWeight: 800 }}>{titulo}</p>
                 <p style={{ margin: "4px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.45 }}>
                   {temInstancia
                     ? conectado
                       ? "Telefone ligado · "
-                      : "Instância criada — ligue o telefone (passo 2) · "
+                      : "Ligue o telefone (passo 2) · "
                     : "Passo 1: cadastro · "}
                   <span
                     style={{
@@ -574,27 +798,6 @@ export function GestorWhatsappIntegracaoBlock({
                     {rotuloEstado}
                   </span>
                 </p>
-                <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
-                  Linha única da empresa · no WhatsApp escreva <strong>menu</strong> para escolher o assistente
-                </p>
-                {linha?.uazapi_instance_name ? (
-                  <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
-                    Instância UAZAPI: <strong style={{ color: "#2d4a38" }}>{linha.uazapi_instance_name}</strong>
-                  </p>
-                ) : null}
-                {uazapiServer ? (
-                  <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
-                    Servidor UAZAPI: <strong style={{ color: "#2d4a38" }}>{uazapiServer}</strong>
-                    {uazapiServer.includes("onnzetecnologia") ? (
-                      <span style={{ color: "#c9a24a" }}> — confira o painel deste host (não outro subdomínio)</span>
-                    ) : null}
-                  </p>
-                ) : null}
-                {regiaoLabel ? (
-                  <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
-                    Região: <strong style={{ color: "#2d4a38" }}>{regiaoLabel}</strong>
-                  </p>
-                ) : null}
               </div>
             </div>
             <button
@@ -621,13 +824,38 @@ export function GestorWhatsappIntegracaoBlock({
         theme="dark"
         open={sideoverOpen}
         onClose={() => setSideoverOpen(false)}
-        title={agenteNome?.trim() ? `WhatsApp ${agenteNome.trim()}` : "WhatsApp"}
+        title="WhatsApp"
         subtitle={painelSubtitle}
         footer={botoesFooter}
         sectionLabel="WhatsApp"
         loading={carregando}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {renderPassoIndicador()}
+
+          {passoAtual === 1 ? (
+            <div style={{ padding: "14px 16px", ...cardSurface }}>
+              <p style={{ margin: 0, color: RF_TEXT_SECONDARY, fontSize: 12, lineHeight: 1.55 }}>
+                Crie uma <strong style={{ color: RF_TEXT_PRIMARY }}>ligação exclusiva</strong> no servidor WhatsApp,
+                separada dos agentes comerciais (Dany, SDR, etc.). Use o botão «Criar ligação WhatsApp» no rodapé.
+              </p>
+              {metaGestor?.servidor_whatsapp ? (
+                <p style={{ margin: "10px 0 0", color: RF_TEXT_MUTED, fontSize: 11, lineHeight: 1.45 }}>
+                  Servidor activo neste processo:{" "}
+                  <strong style={{ color: RF_TEXT_SECONDARY }}>{metaGestor.servidor_whatsapp}</strong>
+                  {" — "}a instância aparece no painel UAZAPI desse host. Se o `.env` diz outro servidor, pare e
+                  reinicie <code style={{ fontSize: 10 }}>npm run dev</code>.
+                </p>
+              ) : null}
+              {registroLocalPendente ? (
+                <p style={{ margin: "10px 0 0", color: "#e6c06a", fontSize: 11, lineHeight: 1.45 }}>
+                  Registo local incompleto ou servidor diferente do painel que está a consultar. Elimine a ligação e
+                  crie de novo após confirmar o <code style={{ fontSize: 10 }}>UAZAPI_BASE_URL</code> no servidor.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {erro ? (
             <div
               style={{
@@ -647,32 +875,57 @@ export function GestorWhatsappIntegracaoBlock({
             </div>
           ) : null}
 
-          <div style={{ padding: "14px 16px", ...cardSurface }}>
-            <p style={{ margin: "0 0 8px", color: CRM_ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
-              TELEFONES AUTORIZADOS
-            </p>
-            <p style={{ margin: "0 0 10px", color: RF_TEXT_MUTED, fontSize: 11, lineHeight: 1.45 }}>
-              Só estes números podem usar a linha (DDI + número, um por linha). Gmail e agenda continuam por agente;
-              apenas o WhatsApp é partilhado entre todos os internos.
-            </p>
-            <textarea
-              value={telefones}
-              onChange={(e) => setTelefones(e.target.value)}
-              placeholder="5511999999999"
-              rows={3}
-              style={{ ...fieldStyle, fontFamily: "inherit", resize: "vertical" }}
-            />
-            <button
-              type="button"
-              disabled={loading !== null}
-              onClick={() => void guardarTelefones()}
-              style={{ ...btnBase(loading !== null, "primary"), marginTop: 10 }}
+          {avisoConexao ? (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 10,
+                border: "1px solid #c9a24a55",
+                background: "#c9a24a12",
+                color: "#e6c06a",
+                fontSize: 12,
+                lineHeight: 1.45,
+              }}
+              role="status"
             >
-              {loading === "telefones" ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-              Guardar telefones
-            </button>
-          </div>
+              {avisoConexao}
+            </div>
+          ) : null}
 
+          {passoAtual >= 3 ? (
+            <div style={{ padding: "14px 16px", ...cardSurface }}>
+              <p style={{ margin: "0 0 8px", color: CRM_ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
+                TELEFONES AUTORIZADOS
+              </p>
+              <p style={{ margin: "0 0 10px", color: RF_TEXT_MUTED, fontSize: 11, lineHeight: 1.45 }}>
+                Só estes números podem usar a linha (DDI + número, um por linha).
+              </p>
+              {telefonesAutorizadosVazios ? (
+                <p style={{ margin: "0 0 10px", color: "#e6c06a", fontSize: 11, lineHeight: 1.45 }}>
+                  Adicione o seu telefone antes de testar — sem número autorizado o assistente responde com aviso de
+                  acesso negado.
+                </p>
+              ) : null}
+              <textarea
+                value={telefones}
+                onChange={(e) => setTelefones(e.target.value)}
+                placeholder="5511999999999"
+                rows={3}
+                style={{ ...fieldStyle, fontFamily: "inherit", resize: "vertical" }}
+              />
+              <button
+                type="button"
+                disabled={loading !== null}
+                onClick={() => void guardarTelefones()}
+                style={{ ...btnBase(loading !== null, "primary"), marginTop: 10 }}
+              >
+                {loading === "telefones" ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                Guardar telefones
+              </button>
+            </div>
+          ) : null}
+
+          {temInstancia ? (
           <div style={{ padding: "14px 16px", ...cardSurface }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 10 }}>
               <span
@@ -690,11 +943,17 @@ export function GestorWhatsappIntegracaoBlock({
             </div>
             {conectado ? (
               <p style={{ margin: 0, color: RF_TEXT_SECONDARY, fontSize: 12, lineHeight: 1.5 }}>
-                A instância está activa. Para trocar de número, desligue a sessão e gere um novo QR.
+                Telefone ligado. Para trocar de número, desligue a sessão e gere um novo QR.
+              </p>
+            ) : passoAtual === 2 ? (
+              <p style={{ margin: 0, color: RF_TEXT_SECONDARY, fontSize: 12, lineHeight: 1.5 }}>
+                Ligação criada no servidor. Escolha a região abaixo antes de gerar o QR.
               </p>
             ) : null}
           </div>
+          ) : null}
 
+          {passoAtual >= 2 ? (
           <div style={{ padding: "14px 16px", ...cardSurface }}>
             <p style={{ margin: "0 0 12px", color: CRM_ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: 0.06 }}>
               REGIÃO DO NÚMERO
@@ -721,8 +980,9 @@ export function GestorWhatsappIntegracaoBlock({
               }
             />
           </div>
+          ) : null}
 
-          {temInstancia && !conectado ? (
+          {passoAtual >= 3 && !conectado ? (
             <div style={{ padding: "14px 16px", ...cardSurface }}>
               <p style={{ margin: "0 0 10px", color: "#c9a24a", fontSize: 11, fontWeight: 800 }}>
                 MODO DE CONEXÃO
@@ -774,31 +1034,88 @@ export function GestorWhatsappIntegracaoBlock({
             </div>
           ) : null}
 
-          {temInstancia && !conectado && mostrarQr ? (
+          {passoAtual >= 3 && !conectado && mostrarQrAtivo ? (
             <div style={{ padding: 16, textAlign: "center", ...cardSurface }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 12,
+                  gap: 8,
+                }}
+              >
+                <p style={{ margin: 0, color: RF_TEXT_MUTED, fontSize: 11, fontWeight: 700 }}>QR WHATSAPP</p>
+                {pareamentoSegundosRestantes != null && pareamentoSegundosRestantes > 0 ? (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: pareamentoSegundosRestantes <= 30 ? "#f85149" : "#58a6ff",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    Expira em {formatarContagemQr(pareamentoSegundosRestantes)}
+                  </span>
+                ) : null}
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={qrcode}
-                alt="QR Code WhatsApp"
-                style={{ maxWidth: 260, borderRadius: 8, border: `1px solid ${RF_BORDER}` }}
+                alt="QR WhatsApp"
+                src={qrcode!}
+                style={{
+                  maxWidth: "100%",
+                  width: 260,
+                  height: "auto",
+                  borderRadius: 10,
+                  border: `1px solid ${RF_BORDER_STRONG}`,
+                  margin: "0 auto",
+                  display: "block",
+                }}
               />
-              {segundosRestantesPareamento > 0 ? (
-                <p style={{ margin: "10px 0 0", color: RF_TEXT_MUTED, fontSize: 11 }}>
-                  Expira em {formatarContagemQr(segundosRestantesPareamento)}
-                </p>
-              ) : null}
+              <p style={{ margin: "12px 0 0", color: RF_TEXT_MUTED, fontSize: 11, lineHeight: 1.5 }}>
+                WhatsApp → Aparelhos ligados → Ligar com QR. Quando o tempo acabar, use{" "}
+                <strong style={{ color: RF_TEXT_PRIMARY }}>Reconectar</strong>.
+              </p>
             </div>
           ) : null}
 
-          {temInstancia && !conectado && paircode ? (
-            <div style={{ padding: "14px 16px", ...cardSurface, textAlign: "center" }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: RF_TEXT_PRIMARY }}>
-                Código de pareamento: <code>{paircode}</code>
+          {passoAtual >= 3 && !conectado && paircodeAtivo ? (
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 12,
+                border: "1px solid #58a6ff66",
+                background: "rgba(31, 111, 235, 0.14)",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 8,
+                  gap: 8,
+                }}
+              >
+                <p style={{ margin: 0, color: "#79c0ff", fontSize: 11, fontWeight: 700 }}>CÓDIGO DE PAREAMENTO</p>
+                {pareamentoSegundosRestantes != null && pareamentoSegundosRestantes > 0 ? (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: pareamentoSegundosRestantes <= 60 ? "#f85149" : "#58a6ff",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    Expira em {formatarContagemQr(pareamentoSegundosRestantes)}
+                  </span>
+                ) : null}
+              </div>
+              <p style={{ margin: 0, fontSize: 28, fontWeight: 900, color: RF_TEXT_PRIMARY, letterSpacing: 4 }}>
+                {paircode}
               </p>
-              {segundosRestantesPareamento > 0 ? (
-                <p style={{ margin: "8px 0 0", color: RF_TEXT_MUTED, fontSize: 11 }}>
-                  Expira em {formatarContagemQr(segundosRestantesPareamento)}
-                </p>
-              ) : null}
             </div>
           ) : null}
         </div>
@@ -816,7 +1133,7 @@ export function GestorWhatsappIntegracaoBlock({
           void postAction("delete_remote");
         }}
       >
-        Apaga a instância no provedor WhatsApp. Terá de criar uma nova ligação para voltar a usar.
+        Apaga a ligação no provedor WhatsApp. Terá de criar uma nova para voltar a usar.
       </CrmConfirmDialog>
     </>
   );

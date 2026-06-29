@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { legacyToFunil } from "@/lib/crm/estagio-map";
-import { metricasLeadsFromRows } from "@/lib/crm/estagio-filters";
+import { metricasLeadsFromRows, POSTGREST_LEAD_TERMINAIS } from "@/lib/crm/estagio-filters";
 import { safeCount, safeSelectRows } from "@/lib/crm/metricas-safe";
 import type { AnalyticsPeriodo } from "@/lib/crm/analytics-period";
 import { sinceFromPeriodo } from "@/lib/crm/analytics-period";
@@ -9,6 +9,7 @@ import {
   buildFunilNegociosPorMercado,
   type EstagioPipelineRef,
 } from "@/lib/crm/funil-analytics";
+import { tenantAgentSlugs } from "@/lib/crm/dashboard-aggregate";
 
 async function loadEstagiosPipelineNegocio(
   supabase: SupabaseClient,
@@ -95,7 +96,7 @@ export type AnalyticsPayload = {
     cpc: number;
     campanhas: number;
   } | null;
-  obras: { emAndamento: number; pedidosAbertos: number };
+  operacao: { conversasAtivas: number; leadsAtivos: number };
   ia: {
     kpisCriticos: number;
     ciclosComFalha: number;
@@ -171,6 +172,18 @@ export async function aggregateAnalytics(
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const sinceHoje = hoje.toISOString();
+  const agentSlugs = await tenantAgentSlugs(supabase, tenantId);
+  const kpiAgentSlugs = agentSlugs.length > 0 ? [...agentSlugs, "crm", "_hub"] : [];
+
+  let resultadosKpiQuery = supabase
+    .from("hub_kpis_resultados")
+    .select("kpi_slug, valor_medido, valor_meta, nivel_alerta, criado_em, agente_slug")
+    .gte("criado_em", since)
+    .order("criado_em", { ascending: false })
+    .limit(200);
+  if (kpiAgentSlugs.length > 0) {
+    resultadosKpiQuery = resultadosKpiQuery.in("agente_slug", kpiAgentSlugs);
+  }
 
   const [
     definicoesRes,
@@ -186,18 +199,16 @@ export async function aggregateAnalytics(
     agentes,
     parceiros,
     encPeriodoRes,
-    obrasAndamento,
-    pedidosAbertos,
+    conversasAtivas,
+    leadsAtivos,
     kpisCriticosRes,
   ] = await Promise.all([
     supabase.from("hub_kpis_definicao").select("slug, nome, unidade").eq("ativo", true),
+    resultadosKpiQuery,
     supabase
-      .from("hub_kpis_resultados")
-      .select("kpi_slug, valor_medido, valor_meta, nivel_alerta, criado_em, agente_slug")
-      .gte("criado_em", since)
-      .order("criado_em", { ascending: false })
-      .limit(200),
-    supabase.from("hub_leads_crm").select("estagio").eq("tenant_id", tenantId),
+      .from("hub_leads_crm")
+      .select("estagio")
+      .eq("tenant_id", tenantId),
     supabase
       .from("hub_negocios")
       .select("etapa, status, prefixo_mercado")
@@ -227,12 +238,17 @@ export async function aggregateAnalytics(
         .gte("criado_em", sinceHoje)
     ),
     safeCount(
-      supabase.from("hub_aprovacoes").select("id", { count: "exact", head: true }).eq("status", "pendente")
+      supabase
+        .from("hub_aprovacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("status", "pendente")
     ),
     safeCount(
       supabase
         .from("hub_fila_mensagens")
         .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
         .eq("direcao", "entrada")
         .eq("status", "pendente")
     ),
@@ -244,44 +260,60 @@ export async function aggregateAnalytics(
         .eq("tenant_id", tenantId)
     ),
     safeCount(
-      supabase.from("hub_parceiros").select("id", { count: "exact", head: true }).eq("status", "homologado")
+      supabase
+        .from("hub_parceiros")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("status", "homologado")
     ),
     supabase
       .from("hub_encaminhamentos")
       .select("lead_id")
+      .eq("tenant_id", tenantId)
       .gte("encaminhado_em", since),
     safeCount(
       supabase
-        .from("hub_obras")
+        .from("hub_conversas")
         .select("id", { count: "exact", head: true })
         .eq("tenant_id", tenantId)
-        .eq("status", "em_andamento")
+        .eq("status", "ativa")
     ),
     safeCount(
       supabase
-        .from("hub_pedidos_material")
+        .from("hub_leads_crm")
         .select("id", { count: "exact", head: true })
         .eq("tenant_id", tenantId)
-        .in("status", ["rascunho", "cotando", "aprovado"])
+        .not("estagio", "in", POSTGREST_LEAD_TERMINAIS)
     ),
     safeCount(
-      supabase
-        .from("hub_kpis_resultados")
-        .select("id", { count: "exact", head: true })
-        .neq("nivel_alerta", "ok")
-        .gte("criado_em", since)
+      (() => {
+        let q = supabase
+          .from("hub_kpis_resultados")
+          .select("id", { count: "exact", head: true })
+          .neq("nivel_alerta", "ok")
+          .gte("criado_em", since);
+        if (kpiAgentSlugs.length > 0) {
+          q = q.in("agente_slug", kpiAgentSlugs);
+        }
+        return q;
+      })()
     ),
   ]);
 
+  let alertasQuery = supabase
+    .from("hub_alertas")
+    .select("id, titulo, tipo, criado_em")
+    .eq("lido", false)
+    .order("criado_em", { ascending: false })
+    .limit(5);
+  if (agentSlugs.length > 0) {
+    alertasQuery = alertasQuery.in("agente_slug", agentSlugs);
+  } else {
+    alertasQuery = alertasQuery.eq("agente_slug", "__no_tenant_agents__");
+  }
+
   const [alertasRows, mlRows, ciclosRows] = await Promise.all([
-    safeSelectRows(
-      supabase
-        .from("hub_alertas")
-        .select("id, titulo, tipo, criado_em")
-        .eq("lido", false)
-        .order("criado_em", { ascending: false })
-        .limit(5)
-    ),
+    safeSelectRows(alertasQuery),
     safeSelectRows(
       supabase
         .from("hub_ml_observacoes")
@@ -289,7 +321,13 @@ export async function aggregateAnalytics(
         .order("criado_em", { ascending: false })
         .limit(5)
     ),
-    safeSelectRows(supabase.from("hub_ciclos_ia").select("ultimo_status").eq("ativo", true)),
+    safeSelectRows(
+      supabase
+        .from("hub_ciclos_ia")
+        .select("ultimo_status")
+        .eq("tenant_id", tenantId)
+        .eq("ativo", true)
+    ),
   ]);
 
   if (leadsRes.error) {
@@ -455,7 +493,7 @@ export async function aggregateAnalytics(
       taxaEncaminhamento: taxaEnc,
     },
     marketing,
-    obras: { emAndamento: obrasAndamento, pedidosAbertos: pedidosAbertos },
+    operacao: { conversasAtivas, leadsAtivos },
     ia: {
       kpisCriticos: kpisCriticosRes,
       ciclosComFalha,

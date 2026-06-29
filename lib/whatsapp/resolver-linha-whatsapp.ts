@@ -6,6 +6,8 @@ import {
   validarLinhaGestorRow,
 } from "@/lib/whatsapp/gestor-linha-db";
 
+export type LinhaWhatsAppEscopo = "externo" | "gestor";
+
 export type LinhaWhatsAppWebhook =
   | {
       kind: "agent_instance";
@@ -37,6 +39,21 @@ const AGENTE_WA_SELECT =
 const WA_LIVE_STATUSES = new Set(["connected", "connecting", "open", "online"]);
 
 export { WA_LIVE_STATUSES };
+
+/** Em produção, não adivinhar instância sem token/id explícito (evita vazamento multi-tenant). */
+function webhookResolverEstrito(): boolean {
+  const raw = process.env.WEBHOOK_STRICT_INSTANCE_RESOLVE?.trim().toLowerCase();
+  if (raw === "0" || raw === "false") return false;
+  if (raw === "1" || raw === "true") return true;
+  return process.env.NODE_ENV === "production";
+}
+
+function legacyGlobalTokenPermitido(): boolean {
+  const raw = process.env.WEBHOOK_ALLOW_LEGACY_GLOBAL_TOKEN?.trim().toLowerCase();
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  return process.env.NODE_ENV !== "production";
+}
 
 /** Valida agente para webhook inbound — não filtra por DEFAULT_TENANT_ID do servidor. */
 export function validarAgenteWaRowForWebhook(r: AgenteWaRow): LinhaWhatsAppWebhook | null {
@@ -108,13 +125,57 @@ async function resolverUnicoAgenteWhatsappConectado(
 export async function resolverLinhaWhatsAppInbound(
   supabase: SupabaseClient,
   instanceId: string | undefined | null,
-  opts?: { instanceToken?: string | null; instanceName?: string | null }
+  opts?: {
+    instanceToken?: string | null;
+    instanceName?: string | null;
+    /** externo = só agentes canal_whatsapp; gestor = só linha empresário */
+    escopo?: LinhaWhatsAppEscopo;
+  }
 ): Promise<LinhaWhatsAppWebhook> {
+  const escopo = opts?.escopo ?? "externo";
   const id = instanceId?.trim() || "";
   const tokenIn = opts?.instanceToken?.trim() || "";
   const nameIn = opts?.instanceName?.trim() || "";
 
-  if (nameIn) {
+  if (escopo === "gestor") {
+    if (id) {
+      const gestorById = await buscarLinhaGestorPorInstancia(supabase, id);
+      if (gestorById) {
+        const v = validarLinhaGestorRow(gestorById);
+        if (v.ok) {
+          return { kind: "gestor_instance", tenantId: v.tenantId, instanceToken: v.instanceToken };
+        }
+        return { kind: "ignored", reason: v.reason };
+      }
+    }
+    if (tokenIn) {
+      const gestorByToken = await buscarLinhaGestorPorToken(supabase, tokenIn);
+      if (gestorByToken) {
+        const v = validarLinhaGestorRow(gestorByToken);
+        if (v.ok) {
+          return { kind: "gestor_instance", tenantId: v.tenantId, instanceToken: v.instanceToken };
+        }
+        return { kind: "ignored", reason: v.reason };
+      }
+    }
+    if (nameIn) {
+      const { data: byName } = await supabase
+        .from("hub_linha_gestor_whatsapp")
+        .select("tenant_id, uazapi_instance_id, uazapi_instance_token, uazapi_instance_name, uazapi_connection_status, ativo, telefones_autorizados")
+        .eq("uazapi_instance_name", nameIn)
+        .maybeSingle();
+      if (byName) {
+        const v = validarLinhaGestorRow(byName as import("@/lib/whatsapp/gestor-linha-db").LinhaGestorWhatsappRow);
+        if (v.ok) {
+          return { kind: "gestor_instance", tenantId: v.tenantId, instanceToken: v.instanceToken };
+        }
+        return { kind: "ignored", reason: v.reason };
+      }
+    }
+    return { kind: "ignored", reason: "gestor_instancia_desconhecida" };
+  }
+
+  if (nameIn && escopo === "externo") {
     const { data: byName, error: nameErr } = await supabase
       .from("hub_agente_identidade")
       .select(AGENTE_WA_SELECT)
@@ -136,57 +197,41 @@ export async function resolverLinhaWhatsAppInbound(
   }
 
   if (id) {
-    const gestorById = await buscarLinhaGestorPorInstancia(supabase, id);
-    if (gestorById) {
-      const v = validarLinhaGestorRow(gestorById);
-      if (v.ok) {
-        return { kind: "gestor_instance", tenantId: v.tenantId, instanceToken: v.instanceToken };
+    if (escopo === "externo") {
+      const { data: row, error } = await supabase
+        .from("hub_agente_identidade")
+        .select(AGENTE_WA_SELECT)
+        .eq("uazapi_instance_id", id)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("[WEBHOOK] resolver linha WhatsApp (id):", error.message);
+        return { kind: "ignored", reason: "erro_bd_resolver_instancia" };
       }
-      return { kind: "ignored", reason: v.reason };
-    }
 
-    const { data: row, error } = await supabase
-      .from("hub_agente_identidade")
-      .select(AGENTE_WA_SELECT)
-      .eq("uazapi_instance_id", id)
-      .maybeSingle();
+      const resolved = await resolverPorLinhaHub(supabase, row as AgenteWaRow | null, "instancia_sem_agente_hub");
+      if (resolved.kind !== "ignored" || resolved.reason !== "instancia_sem_agente_hub") {
+        return resolved;
+      }
 
-    if (error) {
-      console.warn("[WEBHOOK] resolver linha WhatsApp (id):", error.message);
-      return { kind: "ignored", reason: "erro_bd_resolver_instancia" };
-    }
+      const { data: byName, error: nameErr } = await supabase
+        .from("hub_agente_identidade")
+        .select(AGENTE_WA_SELECT)
+        .eq("uazapi_instance_name", id)
+        .maybeSingle();
 
-    const resolved = await resolverPorLinhaHub(supabase, row as AgenteWaRow | null, "instancia_sem_agente_hub");
-    if (resolved.kind !== "ignored" || resolved.reason !== "instancia_sem_agente_hub") {
-      return resolved;
-    }
-
-    const { data: byName, error: nameErr } = await supabase
-      .from("hub_agente_identidade")
-      .select(AGENTE_WA_SELECT)
-      .eq("uazapi_instance_name", id)
-      .maybeSingle();
-
-    if (nameErr) {
-      console.warn("[WEBHOOK] resolver linha WhatsApp (nome):", nameErr.message);
-    } else {
-      const byNameResolved = await resolverPorLinhaHub(supabase, byName as AgenteWaRow | null, "instancia_sem_agente_hub");
-      if (byNameResolved.kind !== "ignored" || byNameResolved.reason !== "instancia_sem_agente_hub") {
-        return byNameResolved;
+      if (nameErr) {
+        console.warn("[WEBHOOK] resolver linha WhatsApp (nome):", nameErr.message);
+      } else {
+        const byNameResolved = await resolverPorLinhaHub(supabase, byName as AgenteWaRow | null, "instancia_sem_agente_hub");
+        if (byNameResolved.kind !== "ignored" || byNameResolved.reason !== "instancia_sem_agente_hub") {
+          return byNameResolved;
+        }
       }
     }
   }
 
-  if (tokenIn) {
-    const gestorByToken = await buscarLinhaGestorPorToken(supabase, tokenIn);
-    if (gestorByToken) {
-      const v = validarLinhaGestorRow(gestorByToken);
-      if (v.ok) {
-        return { kind: "gestor_instance", tenantId: v.tenantId, instanceToken: v.instanceToken };
-      }
-      return { kind: "ignored", reason: v.reason };
-    }
-
+  if (tokenIn && escopo === "externo") {
     const { data: row, error } = await supabase
       .from("hub_agente_identidade")
       .select(AGENTE_WA_SELECT)
@@ -204,12 +249,14 @@ export async function resolverLinhaWhatsAppInbound(
     }
   }
 
-  const unico = await resolverUnicoAgenteWhatsappConectado(supabase);
-  if (unico) return unico;
+  if (!webhookResolverEstrito()) {
+    const unico = await resolverUnicoAgenteWhatsappConectado(supabase);
+    if (unico) return unico;
 
-  const legacy = process.env.UAZAPI_INSTANCE_TOKEN?.trim() || "";
-  if (legacy && (!tokenIn || tokenIn === legacy)) {
-    return { kind: "legacy_global_token" };
+    const legacy = process.env.UAZAPI_INSTANCE_TOKEN?.trim() || "";
+    if (legacyGlobalTokenPermitido() && legacy && (!tokenIn || tokenIn === legacy)) {
+      return { kind: "legacy_global_token" };
+    }
   }
 
   return { kind: "ignored", reason: "instancia_desconhecida_sem_fallback_global" };

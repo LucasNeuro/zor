@@ -39,18 +39,24 @@ function mergeDevAllowedOrigins() {
   return merged;
 }
 
-/** Carrega variáveis do `.env` (fonte única; `.env.local` vazio não sobrescreve). */
+/** Carrega `.env` e depois `.env.local` (mesma ordem do Next.js). */
 function loadDotEnvOnly() {
-  const envPath = path.join(__dirname, "..", ".env");
-  if (!fs.existsSync(envPath)) return;
-  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq < 1) continue;
-    const k = trimmed.slice(0, eq);
-    const v = trimmed.slice(eq + 1).replace(/\r/g, "").trim();
-    process.env[k] = v;
+  const root = path.join(__dirname, "..");
+  for (const name of [".env", ".env.local"]) {
+    const envPath = path.join(root, name);
+    if (!fs.existsSync(envPath)) continue;
+    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq < 1) continue;
+      const k = trimmed.slice(0, eq);
+      let v = trimmed.slice(eq + 1).replace(/\r/g, "").trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      process.env[k] = v;
+    }
   }
 }
 
@@ -81,6 +87,23 @@ console.warn(
     `     allowedDevOrigins: ${process.env.NEXT_DEV_ALLOWED_ORIGINS || "(nenhum)"}\n` +
     `     Cache dev: .next-dev/ (exclua do OneDrive se chunks/CSS falharem)\n`
 );
+const uazBase = (process.env.UAZAPI_BASE_URL || "")
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/api\/?$/, "");
+if (uazBase) {
+  try {
+    const host = new URL(uazBase).host;
+    console.warn(
+      `[dev] UAZAPI servidor: ${host} — instâncias criadas no CRM aparecem só neste painel. ` +
+        `Se alterou .env, reinicie npm run dev.\n`
+    );
+  } catch {
+    console.warn(`[dev] UAZAPI_BASE_URL=${uazBase}\n`);
+  }
+} else {
+  console.warn("[dev] UAZAPI_BASE_URL ausente — WhatsApp desactivado até definir no .env\n");
+}
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const mistralKey = (process.env.MISTRAL_API_KEY || "").replace(/\r/g, "").trim();

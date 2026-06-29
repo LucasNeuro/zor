@@ -474,10 +474,10 @@ export function CrmAnalyticsDashboard() {
               </div>
             )}
 
-            <SectionTitle>Obras</SectionTitle>
+            <SectionTitle>Atendimento & CRM</SectionTitle>
             <div className="grid grid-cols-2 gap-3">
-              <MetricMini label="Em andamento" value={data.obras.emAndamento} cor="#22c55e" href="/crm/obras" />
-              <MetricMini label="Pedidos material" value={data.obras.pedidosAbertos} cor="#eab308" href="/crm/pedidos" />
+              <MetricMini label="Conversas ativas" value={data.operacao.conversasAtivas} cor="#22c55e" href="/crm/atendimentos" />
+              <MetricMini label="Leads em atendimento" value={data.operacao.leadsAtivos} cor="#eab308" href="/crm/leads" />
             </div>
 
             <SectionTitle>IA e automação</SectionTitle>

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { legacyToFunil } from "@/lib/crm/estagio-map";
-import { ESTAGIOS_LEAD_TERMINAIS, metricasLeadsFromRows } from "@/lib/crm/estagio-filters";
+import { metricasLeadsFromRows, POSTGREST_LEAD_TERMINAIS } from "@/lib/crm/estagio-filters";
 import { safeCount } from "@/lib/crm/metricas-safe";
 
 export type CrmMetricas = {
@@ -38,8 +38,8 @@ export type CicloStatus = {
 
 export type OperacaoResumo = {
   negociosAbertos: number;
-  obrasEmAndamento: number;
-  pedidosAbertos: number;
+  conversasAtivas: number;
+  leadsAtivos: number;
 };
 
 export type DashboardPayload = CrmMetricas & {
@@ -55,7 +55,7 @@ function inicioDiaUtcISO(): string {
   ).toISOString();
 }
 
-async function tenantAgentSlugs(
+export async function tenantAgentSlugs(
   supabase: SupabaseClient,
   tenantId: string
 ): Promise<string[]> {
@@ -80,6 +80,7 @@ export async function fetchCrmMetricas(
   const [
     leadsHoje,
     leadsRowsRes,
+    leadsReceitaRes,
     aprovs,
     msgs,
     agentes,
@@ -96,8 +97,13 @@ export async function fetchCrmMetricas(
     ),
     supabase
       .from("hub_leads_crm")
-      .select("estagio, valor_estimado")
+      .select("estagio")
       .eq("tenant_id", tenantId),
+    supabase
+      .from("hub_leads_crm")
+      .select("valor_estimado")
+      .eq("tenant_id", tenantId)
+      .not("estagio", "in", POSTGREST_LEAD_TERMINAIS),
     safeCount(
       supabase
         .from("hub_aprovacoes")
@@ -141,17 +147,16 @@ export async function fetchCrmMetricas(
 
   const leadsRows = (leadsRowsRes.error ? [] : (leadsRowsRes.data ?? [])) as {
     estagio: string | null;
-    valor_estimado?: number | null;
   }[];
   const leadMetricas = metricasLeadsFromRows(leadsRows, (e) => String(legacyToFunil(e)));
   const total = leadMetricas.total;
   const qualificados = leadMetricas.qualificados;
   const aguardando = leadMetricas.aguardando;
-  const terminaisSet = new Set<string>(ESTAGIOS_LEAD_TERMINAIS);
 
-  const receitaLeads = leadsRows
-    .filter((r) => !terminaisSet.has(String(legacyToFunil(r.estagio))))
-    .reduce((s, r) => s + Number(r.valor_estimado ?? 0), 0);
+  const receitaLeads = (leadsReceitaRes.error ? [] : (leadsReceitaRes.data ?? [])).reduce(
+    (s, r) => s + Number((r as { valor_estimado?: number | null }).valor_estimado ?? 0),
+    0
+  );
 
   const negRows = (negPipeRes.error ? [] : (negPipeRes.data ?? [])) as {
     valor_estimado?: number | null;
@@ -204,7 +209,7 @@ export async function aggregateDashboard(
     alertasQuery = alertasQuery.eq("agente_slug", "__no_tenant_agents__");
   }
 
-  const [alts, leads, cics, neg, obras, pedidos] = await Promise.all([
+  const [alts, leads, cics, neg, conversasAtivas, leadsAtivos] = await Promise.all([
     alertasQuery,
     supabase
       .from("hub_leads_crm")
@@ -226,17 +231,17 @@ export async function aggregateDashboard(
     ),
     safeCount(
       supabase
-        .from("hub_obras")
+        .from("hub_conversas")
         .select("id", { count: "exact", head: true })
         .eq("tenant_id", tenantId)
-        .eq("status", "em_andamento")
+        .eq("status", "ativa")
     ),
     safeCount(
       supabase
-        .from("hub_pedidos_material")
+        .from("hub_leads_crm")
         .select("id", { count: "exact", head: true })
         .eq("tenant_id", tenantId)
-        .in("status", ["rascunho", "cotando", "aprovado"])
+        .not("estagio", "in", POSTGREST_LEAD_TERMINAIS)
     ),
   ]);
 
@@ -271,8 +276,8 @@ export async function aggregateDashboard(
     ciclos,
     operacao: {
       negociosAbertos: neg,
-      obrasEmAndamento: obras,
-      pedidosAbertos: pedidos,
+      conversasAtivas,
+      leadsAtivos,
     },
   };
 }

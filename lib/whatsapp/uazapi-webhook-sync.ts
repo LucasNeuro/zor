@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { createHubLogger } from "@/lib/observability/hub-log";
-import { buildPublicWebhookUrl } from "@/lib/whatsapp/webhook-auth";
+import { buildPublicGestorWebhookUrl, buildPublicWebhookUrl } from "@/lib/whatsapp/webhook-auth";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 
 /** Filtros UAZAPI: excluir eco da API (não usar wasNotSentByApi — bloqueia inbound do lead). */
@@ -98,10 +98,21 @@ export function pickPublicAppOrigin(request: NextRequest): string | null {
   return acceptOriginCandidate(request.url, isProd);
 }
 
-function webhookBody(origin: string) {
+function webhookBodyExterno(origin: string) {
   return {
     enabled: true,
     url: buildPublicWebhookUrl(origin, process.env.WEBHOOK_SECRET),
+    events: ["messages", "connection"],
+    excludeMessages: [...UAZAPI_WEBHOOK_EXCLUDE_MESSAGES],
+    addUrlEvents: false,
+    addUrlTypesMessages: false,
+  };
+}
+
+function webhookBodyGestor(origin: string) {
+  return {
+    enabled: true,
+    url: buildPublicGestorWebhookUrl(origin, process.env.WEBHOOK_SECRET),
     events: ["messages", "connection"],
     excludeMessages: [...UAZAPI_WEBHOOK_EXCLUDE_MESSAGES],
     addUrlEvents: false,
@@ -125,7 +136,7 @@ export async function syncWebhookDaInstancia(
   const out = await uazapiFetchJson<Record<string, unknown>>("/webhook", {
     method: "POST",
     instanceToken,
-    body: webhookBody(origin),
+    body: webhookBodyExterno(origin),
   });
 
   if (!out.ok) {
@@ -133,9 +144,61 @@ export async function syncWebhookDaInstancia(
     return { ok: false, error: out.error };
   }
   createHubLogger("uazapi_webhook_sync").info("wa.sync.instance_ok", {
-    url_host: new URL(String(webhookBody(origin).url)).host,
+    url_host: new URL(String(webhookBodyExterno(origin).url)).host,
   });
   return { ok: true };
+}
+
+/** Webhook por instância — linha interna gestor (não altera webhook global). */
+export async function syncWebhookGestorDaInstancia(
+  request: NextRequest,
+  instanceToken: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const origin = pickPublicAppOrigin(request);
+  if (!origin) {
+    return {
+      ok: false,
+      error:
+        "URL pública indisponível. Defina NEXT_PUBLIC_APP_URL=https://waje.com.br no Render (sem localhost).",
+    };
+  }
+
+  const out = await uazapiFetchJson<Record<string, unknown>>("/webhook", {
+    method: "POST",
+    instanceToken,
+    body: webhookBodyGestor(origin),
+  });
+
+  if (!out.ok) {
+    createHubLogger("uazapi_webhook_sync").warn("wa.sync.gestor_instance_failed", { error: out.error });
+    return { ok: false, error: out.error };
+  }
+  createHubLogger("uazapi_webhook_sync").info("wa.sync.gestor_instance_ok", {
+    url_host: new URL(String(webhookBodyGestor(origin).url)).host,
+  });
+  return { ok: true };
+}
+
+export async function syncWebhooksUazapiGestor(
+  request: NextRequest,
+  instanceToken: string
+): Promise<{ instance: { ok: true } | { ok: false; error: string } }> {
+  const instance = await syncWebhookGestorDaInstancia(request, instanceToken);
+  createHubLogger("uazapi_webhook_sync").info("wa.sync.gestor_complete", { instance_ok: instance.ok });
+  return { instance };
+}
+
+export function publicGestorWebhookUrlFromRequest(request: NextRequest): string | null {
+  const origin = pickPublicAppOrigin(request);
+  if (!origin) return null;
+  return buildPublicGestorWebhookUrl(origin, process.env.WEBHOOK_SECRET);
+}
+
+export function formatGestorWebhookSyncWarnings(
+  sync: Awaited<ReturnType<typeof syncWebhooksUazapiGestor>>
+): string | undefined {
+  if (sync.instance.ok) return undefined;
+  return `instância gestor: ${sync.instance.error}`;
 }
 
 async function disableWebhookDaInstancia(
@@ -202,7 +265,7 @@ export async function syncWebhookGlobal(
   const out = await uazapiFetchJson<Record<string, unknown>>("/globalwebhook", {
     method: "POST",
     admin: true,
-    body: webhookBody(origin),
+    body: webhookBodyExterno(origin),
   });
 
   if (!out.ok) {

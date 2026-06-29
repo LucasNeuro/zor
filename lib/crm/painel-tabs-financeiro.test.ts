@@ -16,7 +16,7 @@ const dashBase: CrmDashboardState = {
   alertas: [],
   leadsRecentes: [],
   ciclos: [],
-  operacao: { negociosAbertos: 2, obrasEmAndamento: 0, pedidosAbertos: 0 },
+  operacao: { negociosAbertos: 2, conversasAtivas: 0, leadsAtivos: 0 },
   loading: false,
   erro: null,
   carregado: true,

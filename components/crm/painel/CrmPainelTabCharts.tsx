@@ -13,7 +13,6 @@ import type { AnalyticsPayload } from "@/lib/crm/analytics-aggregate";
 import type { AnalyticsPeriodo } from "@/lib/crm/analytics-period";
 import { periodoLabel as periodoLabelFn } from "@/lib/crm/analytics-period";
 import type { PainelTabId } from "@/lib/crm/painel-tabs";
-import { labelMercadoPrefixo, MERCADO_PREFIXO_PADRAO } from "@/lib/crm/negocio-cadastro";
 import { moedaPipeline } from "@/lib/crm/pipeline-funil";
 import { CRM_MODULE_PARCEIROS_ENABLED } from "@/lib/crm/waje-modules";
 
@@ -31,7 +30,6 @@ function mapFunil(items: AnalyticsPayload["funilLeads"]) {
 }
 
 export function CrmPainelTabCharts({ tabId, data, periodo }: Props) {
-  const mercadoLabel = labelMercadoPrefixo(MERCADO_PREFIXO_PADRAO);
   const periodoTxt = periodoLabelFn(periodo);
 
   switch (tabId) {
@@ -49,7 +47,7 @@ export function CrmPainelTabCharts({ tabId, data, periodo }: Props) {
           <CrmPainelChartShell title="Funil comercial" subtitle="Leads por estágio">
             <DonutChartDark items={mapFunil(data.funilLeads)} centerLabel="leads" />
           </CrmPainelChartShell>
-          <CrmPainelChartShell title={`Negócios · ${mercadoLabel}`} subtitle="Pipeline de vendas">
+          <CrmPainelChartShell title="Pipeline de negócios" subtitle="Etapas do funil comercial">
             <FunilBarChartDark items={data.funilNegocios.map((f) => ({ label: f.label, count: f.count }))} />
           </CrmPainelChartShell>
           <CrmPainelChartShell title="Conversão" subtitle={CRM_MODULE_PARCEIROS_ENABLED ? "Qualificação e parceiros" : "Qualificação de leads"}>
@@ -59,11 +57,11 @@ export function CrmPainelTabCharts({ tabId, data, periodo }: Props) {
               mostrarEncaminhamento={CRM_MODULE_PARCEIROS_ENABLED}
             />
           </CrmPainelChartShell>
-          <CrmPainelChartShell title="Operação de obra" subtitle="Execução e materiais">
+          <CrmPainelChartShell title="Operação comercial" subtitle="CRM em tempo real">
             <MetricBarsChartDark
               items={[
-                { label: "Obras em andamento", count: data.obras.emAndamento },
-                { label: "Pedidos de material", count: data.obras.pedidosAbertos },
+                { label: "Conversas ativas", count: data.operacao.conversasAtivas },
+                { label: "Leads em atendimento", count: data.operacao.leadsAtivos },
                 {
                   label: "Negócios no pipeline",
                   count: data.funilNegocios
@@ -107,7 +105,7 @@ export function CrmPainelTabCharts({ tabId, data, periodo }: Props) {
           <CrmPainelChartShell title="Funil de leads" subtitle="Distribuição por estágio">
             <DonutChartDark items={mapFunil(data.funilLeads)} centerLabel="total" />
           </CrmPainelChartShell>
-          <CrmPainelChartShell title="Funil de negócios" subtitle={mercadoLabel}>
+          <CrmPainelChartShell title="Funil de negócios" subtitle="Etapas comerciais">
             <FunilBarChartDark items={data.funilNegocios.map((f) => ({ label: f.label, count: f.count }))} />
           </CrmPainelChartShell>
           <CrmPainelChartShell title="Taxas comerciais" subtitle={CRM_MODULE_PARCEIROS_ENABLED ? "Meta: qualif. 40% · enc. 15%" : "Meta: qualif. 40%"}>
@@ -183,15 +181,16 @@ export function CrmPainelTabCharts({ tabId, data, periodo }: Props) {
     case "operacao":
       return (
         <ChartsGrid>
-          <CrmPainelChartShell title="Obras e materiais" subtitle="Execução no tenant" highlight>
+          <CrmPainelChartShell title="Operação CRM" subtitle="Atendimento e pipeline" highlight>
             <MetricBarsChartDark
               items={[
-                { label: "Obras em andamento", count: data.obras.emAndamento },
-                { label: "Pedidos de material", count: data.obras.pedidosAbertos },
+                { label: "Conversas ativas", count: data.operacao.conversasAtivas },
+                { label: "Leads em atendimento", count: data.operacao.leadsAtivos },
+                { label: "Mensagens na fila", count: data.atendimento.filaPendente },
               ]}
             />
           </CrmPainelChartShell>
-          <CrmPainelChartShell title="Pipeline comercial" subtitle={mercadoLabel}>
+          <CrmPainelChartShell title="Pipeline comercial" subtitle="Negócios em aberto">
             <DonutChartDark
               items={data.funilNegocios
                 .filter((f) => f.id !== "ganho" && f.id !== "perdido")

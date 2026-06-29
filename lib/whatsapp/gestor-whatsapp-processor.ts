@@ -301,6 +301,8 @@ export async function processarMensagemGestorWhatsapp(
       "agente_slug, nome, cargo, area, bio, modelo, system_prompt_base, motor_ferramentas_habilitado, playbook_generated_at, playbook_object_path, playbook_public_url, playbook_source_hash"
     )
     .eq("agente_slug", agenteAtivoSlug)
+    .eq("tenant_id", params.tenantId)
+    .eq("modo_operacao", "jobs_internos")
     .maybeSingle();
 
   if (!agenteFull) {

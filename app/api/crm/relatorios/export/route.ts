@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { carregarRelatorio } from "@/lib/crm/relatorios-data";
 import { resolveRelatorioViewId, relatorioViewById } from "@/lib/crm/relatorio-views-catalog";
 import { crmConfigError, crmDb } from "@/lib/crm/supabase-server";
-import { defaultTenantId, tenantIdFromRequest } from "@/lib/tenant-default";
+import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 
 function csvEscape(v: unknown): string {
   const s = v == null ? "" : String(v);
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: `view_id inválido: ${viewIdParam}` }, { status: 400 });
   }
 
-  const tenantId = tenantIdFromRequest(request.headers) || defaultTenantId();
+  const tenantId = await resolveTenantIdFromCaller(request);
   const supabase = crmDb();
 
   try {

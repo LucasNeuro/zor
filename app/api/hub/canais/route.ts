@@ -5,7 +5,7 @@ import { sanitizarAgenteHubParaCliente } from "@/lib/hub/sanitize-agente-hub-pub
 import { selectHubAgenteWithColumnFallback } from "@/lib/hub/hub-agente-column-compat";
 
 const CANAIS_SELECT =
-  "agente_slug, nome, ativo, arquivado_em, modo_operacao, uazapi_instance_id, uazapi_instance_name, uazapi_connection_status, uazapi_instance_token, uazapi_snapshot_at, email_from, email_from_name, email_inbound, email_ativo, email_configured_at";
+  "agente_slug, nome, ativo, arquivado_em, modo_operacao, uazapi_instance_id, uazapi_instance_name, uazapi_connection_status, uazapi_instance_token, uazapi_proxy_country, uazapi_proxy_state, uazapi_proxy_city, uazapi_snapshot_at, email_from, email_from_name, email_inbound, email_ativo, email_configured_at";
 
 function db() {
   return createClient(

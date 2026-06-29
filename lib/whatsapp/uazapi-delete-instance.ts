@@ -41,8 +41,9 @@ async function deleteUazapiWithToken(token: string): Promise<UazapiRemoteDeleteR
     method: "DELETE",
     instanceToken: token,
   });
-  if (out.ok || out.status === 404) {
-    return { ok: true, deleted: true };
+  /** 401/404 = instância já não existe no servidor (token inválido ou apagada). */
+  if (out.ok || out.status === 404 || out.status === 401) {
+    return { ok: true, deleted: out.ok };
   }
   return { ok: false, error: out.error };
 }

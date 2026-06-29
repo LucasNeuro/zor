@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { aggregateDashboard } from "@/lib/crm/dashboard-aggregate";
-import { tenantIdFromRequest } from "@/lib/tenant-default";
+import { resolveTenantIdFromCaller } from "@/lib/crm/resolve-tenant-from-caller";
 
 function db() {
   return createClient(
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     new Date(
       Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())
     ).toISOString();
-  const tenantId = tenantIdFromRequest(request.headers);
+  const tenantId = await resolveTenantIdFromCaller(request);
   try {
     const payload = await aggregateDashboard(db(), tenantId, since);
     return NextResponse.json(payload);

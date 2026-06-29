@@ -33,6 +33,8 @@ export type FerramentaHubContexto = {
   modoOperacao?: string | null;
   /** Simulação interna do CRM — não envia WhatsApp real nem grava leads no funil. */
   simulacaoCanal?: boolean;
+  /** Agente interno (copiloto/ciclo) — permite hub_dados_empresa. */
+  agenteInterno?: boolean;
 };
 
 const FERRAMENTAS_CRM_LEAD_ESCRITA: HubAgenteFerramentaId[] = [
@@ -218,6 +220,37 @@ async function executarFerramentaHubBuiltin(
         lead,
         pessoa: pessoa ?? null,
       });
+    }
+    case "hub_dados_empresa": {
+      const ehInterno = ctx.agenteInterno === true || ctx.modoOperacao === "jobs_internos";
+      if (!ehInterno) {
+        return JSON.stringify({
+          erro: "ferramenta_apenas_agente_interno",
+          detalhe: "hub_dados_empresa só está disponível para agentes internos (jobs_internos).",
+        });
+      }
+      const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      const { executarHubDadosEmpresa } = await import("@/lib/hub/hub-dados-empresa");
+      return executarHubDadosEmpresa(supabase, tenant, args as import("@/lib/hub/hub-dados-empresa").HubDadosEmpresaArgs, {
+        agenteSlug: ctx.agenteSlug,
+      });
+    }
+    case "hub_operacao_empresa": {
+      const ehInterno = ctx.agenteInterno === true || ctx.modoOperacao === "jobs_internos";
+      if (!ehInterno) {
+        return JSON.stringify({
+          erro: "ferramenta_apenas_agente_interno",
+          detalhe: "hub_operacao_empresa só está disponível para agentes internos (jobs_internos).",
+        });
+      }
+      const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      const { executarHubOperacaoEmpresa } = await import("@/lib/hub/hub-operacao-empresa");
+      return executarHubOperacaoEmpresa(
+        supabase,
+        tenant,
+        args as import("@/lib/hub/hub-operacao-empresa").HubOperacaoEmpresaArgs,
+        { agenteSlug: ctx.agenteSlug }
+      );
     }
     case "hub_metricas_escritorio": {
       const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();

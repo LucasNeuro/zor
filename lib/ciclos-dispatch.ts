@@ -6,7 +6,7 @@
  * (api ∈ diretor|gerente|atendente; ciclo = chave já implementada na rota).
  */
 
-export const DISPATCH_API_SLUGS = ["diretor", "gerente", "atendente"] as const;
+export const DISPATCH_API_SLUGS = ["diretor", "gerente", "atendente", "agente"] as const;
 export type DispatchApiSlug = (typeof DISPATCH_API_SLUGS)[number];
 
 export type HubCicloIaDispatchRow = {
@@ -119,6 +119,10 @@ export function inferDispatchFromCicloRow(
   const nome = row.nome.toLowerCase();
   const slug = row.agente_slug;
 
+  if (nome.includes("cadência") || nome.includes("cadencia")) {
+    return { api: "agente", ciclo: "briefing_programado" };
+  }
+
   let ciclo: string;
   if (nome.includes("follow")) ciclo = "followup";
   else if (nome.includes("sla")) ciclo = "sla";
@@ -136,6 +140,13 @@ export function inferDispatchFromCicloRow(
   else if (slug === "gerente_atendimento") api = "gerente";
   else if (slug === "atendente") api = "atendente";
 
-  if (!api) return null;
+  if (!api) {
+    const origem =
+      cfg && typeof cfg === "object" ? (cfg as Record<string, unknown>).ciclo_origem_provisionamento : null;
+    if (origem === "wizard_agente_v1") {
+      return { api: "agente", ciclo: "briefing_programado" };
+    }
+    return null;
+  }
   return { api, ciclo };
 }

@@ -9,11 +9,53 @@ export type CrmSessionActor = {
 
 let cachedProfileTenantId: string | null | undefined;
 let cachedWajeOwner: boolean | undefined;
+let getUserInFlight: ReturnType<typeof supabase.auth.getUser> | null = null;
+let acessosMeInFlight: Promise<void> | null = null;
+
+async function getBrowserUserDeduped() {
+  if (!getUserInFlight) {
+    getUserInFlight = supabase.auth.getUser().finally(() => {
+      getUserInFlight = null;
+    });
+  }
+  return getUserInFlight;
+}
+
+async function ensureProfileTenantCached(base: Record<string, string>): Promise<void> {
+  if (cachedProfileTenantId !== undefined) return;
+  if (!acessosMeInFlight) {
+    acessosMeInFlight = (async () => {
+      cachedProfileTenantId = null;
+      cachedWajeOwner = false;
+      const { data: { user } } = await getBrowserUserDeduped();
+      if (!user?.id) return;
+      try {
+        const res = await fetch("/api/crm/acessos/me", { headers: base });
+        if (res.ok) {
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: {
+              tenant_id?: string | null;
+              waje_owner?: boolean;
+              user?: { tenant_id?: string | null };
+            };
+          };
+          cachedProfileTenantId = readTenantIdFromAcessosPayload(json);
+          cachedWajeOwner = json.data?.waje_owner === true;
+        }
+      } catch {
+        /* mantém null */
+      }
+    })();
+  }
+  await acessosMeInFlight;
+}
 
 /** Limpa cache de tenant (ex.: após logout). */
 export function clearCrmApiHeadersCache(): void {
   cachedProfileTenantId = undefined;
   cachedWajeOwner = undefined;
+  getUserInFlight = null;
+  acessosMeInFlight = null;
 }
 
 function readTenantIdFromAcessosPayload(json: {
@@ -32,31 +74,10 @@ function readTenantIdFromAcessosPayload(json: {
 /** Cabeçalhos para APIs CRM / Hub — sempre com sessão e tenant da conta quando existir. */
 export async function crmApiHeaders(): Promise<Record<string, string>> {
   const base = internalApiHeaders();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await getBrowserUserDeduped();
   if (user?.id) base["x-caller-auth-id"] = user.id;
 
-  if (cachedProfileTenantId === undefined) {
-    cachedProfileTenantId = null;
-    cachedWajeOwner = false;
-    if (user?.id) {
-      try {
-        const res = await fetch("/api/crm/acessos/me", { headers: base });
-        if (res.ok) {
-          const json = (await res.json().catch(() => ({}))) as {
-            data?: {
-              tenant_id?: string | null;
-              waje_owner?: boolean;
-              user?: { tenant_id?: string | null };
-            };
-          };
-          cachedProfileTenantId = readTenantIdFromAcessosPayload(json);
-          cachedWajeOwner = json.data?.waje_owner === true;
-        }
-      } catch {
-        /* mantém null */
-      }
-    }
-  }
+  await ensureProfileTenantCached(base);
 
   if (cachedProfileTenantId) {
     base["x-tenant-id"] = cachedProfileTenantId;
@@ -103,7 +124,7 @@ export async function crmFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 
 /** Perfil do utilizador logado (nome do CRM quando disponível). */
 export async function getCrmSessionActor(): Promise<CrmSessionActor> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await getBrowserUserDeduped();
   if (!user) return {};
 
   try {

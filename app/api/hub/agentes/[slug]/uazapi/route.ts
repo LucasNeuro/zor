@@ -1,11 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  extrairPaircodeDePayloadUazapi,
-  extrairQrcodeDePayloadUazapi,
-  resolverQrcodeImagemParaApi,
-} from "@/lib/whatsapp/qr-uazapi";
+import { extrairPaircodeDePayloadUazapi } from "@/lib/whatsapp/qr-uazapi";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
+import {
+  jsonErroUazapi,
+  resolverQrRespostaUazapi,
+  uazapiAuthFalhou,
+  type UazapiErrOut,
+} from "@/lib/whatsapp/uazapi-route-helpers";
 import {
   extrairDiagnosticoInstanciaUazapi,
   pickInstanceFromResponse,
@@ -28,41 +30,6 @@ import {
 } from "@/lib/whatsapp/uazapi-webhook-sync";
 import { deleteUazapiInstanceRemotely } from "@/lib/whatsapp/uazapi-delete-instance";
 import { resolverTokenCatalogoProxyCidades } from "@/lib/whatsapp/uazapi-proxy-cities-token";
-
-async function resolverQrRespostaUazapi(
-  payload: unknown,
-  instanceToken: string
-): Promise<{ qrcode?: string; qr_invalid?: boolean }> {
-  let qrRaw = extrairQrcodeDePayloadUazapi(payload);
-  if (!qrRaw) {
-    const st = await uazapiFetchJson<Record<string, unknown>>("/instance/status", {
-      method: "GET",
-      instanceToken,
-    });
-    if (st.ok) qrRaw = extrairQrcodeDePayloadUazapi(st.data);
-  }
-  if (!qrRaw) return {};
-  const resolved = await resolverQrcodeImagemParaApi(qrRaw, instanceToken);
-  if ("src" in resolved && resolved.src) return { qrcode: resolved.src };
-  if ("invalid" in resolved) return { qr_invalid: true };
-  return {};
-}
-
-function jsonErroUazapi(out: {
-  error: string;
-  data: unknown;
-  request?: { origin: string; pathname: string };
-  uazapi_connection_status?: string;
-  uazapi_auth_failed?: boolean;
-}) {
-  return {
-    error: out.error,
-    uazapi: out.data,
-    ...(out.request ? { uazapi_request: out.request } : {}),
-    ...(out.uazapi_connection_status ? { uazapi_connection_status: out.uazapi_connection_status } : {}),
-    ...(out.uazapi_auth_failed ? { uazapi_auth_failed: true } : {}),
-  };
-}
 
 function db() {
   return createClient(
@@ -142,32 +109,6 @@ export async function POST(
       ({ error } = await supabase.from("hub_agente_identidade").update(patch).eq("agente_slug", slug));
     }
     if (error) throw new Error(error.message);
-  }
-
-  type UazapiErrOut = {
-    ok: false;
-    status: number;
-    data: unknown;
-    error: string;
-    request?: { origin: string; pathname: string };
-  };
-
-  function uazapiAuthFalhou(out: UazapiErrOut): boolean {
-    if (out.status === 401 || out.status === 403) return true;
-    const payloadTxt =
-      typeof out.data === "string"
-        ? out.data
-        : out.data && typeof out.data === "object"
-          ? JSON.stringify(out.data)
-          : "";
-    const msg = `${out.error} ${payloadTxt}`.toLowerCase();
-    return (
-      msg.includes("invalid token") ||
-      msg.includes("token invalid") ||
-      msg.includes("unauthorized") ||
-      msg.includes("forbidden") ||
-      msg.includes("not authorized")
-    );
   }
 
   async function responderErroUazapi(action: string, out: UazapiErrOut) {

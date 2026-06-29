@@ -1,10 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { defaultTenantId } from "@/lib/tenant-default";
+import {
+  buscarLinhaGestorPorInstancia,
+  buscarLinhaGestorPorToken,
+  validarLinhaGestorRow,
+} from "@/lib/whatsapp/gestor-linha-db";
 
 export type LinhaWhatsAppWebhook =
   | {
       kind: "agent_instance";
       agenteSlug: string;
+      instanceToken: string;
+      tenantId: string;
+    }
+  | {
+      kind: "gestor_instance";
       instanceToken: string;
       tenantId: string;
     }
@@ -126,6 +136,15 @@ export async function resolverLinhaWhatsAppInbound(
   }
 
   if (id) {
+    const gestorById = await buscarLinhaGestorPorInstancia(supabase, id);
+    if (gestorById) {
+      const v = validarLinhaGestorRow(gestorById);
+      if (v.ok) {
+        return { kind: "gestor_instance", tenantId: v.tenantId, instanceToken: v.instanceToken };
+      }
+      return { kind: "ignored", reason: v.reason };
+    }
+
     const { data: row, error } = await supabase
       .from("hub_agente_identidade")
       .select(AGENTE_WA_SELECT)
@@ -159,6 +178,15 @@ export async function resolverLinhaWhatsAppInbound(
   }
 
   if (tokenIn) {
+    const gestorByToken = await buscarLinhaGestorPorToken(supabase, tokenIn);
+    if (gestorByToken) {
+      const v = validarLinhaGestorRow(gestorByToken);
+      if (v.ok) {
+        return { kind: "gestor_instance", tenantId: v.tenantId, instanceToken: v.instanceToken };
+      }
+      return { kind: "ignored", reason: v.reason };
+    }
+
     const { data: row, error } = await supabase
       .from("hub_agente_identidade")
       .select(AGENTE_WA_SELECT)

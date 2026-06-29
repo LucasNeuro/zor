@@ -582,6 +582,11 @@ export default function CiclosPage() {
           method: "POST",
           headers: await hubApiHeaders(),
         });
+      } else if (modo === "jobs_internos" && ciclo.tipo === "programado") {
+        await fetch(
+          `/api/ciclos/agente?ciclo=briefing_programado&hub_ciclo_id=${encodeURIComponent(ciclo.id)}&agente_slug=${encodeURIComponent(slugAgente)}&secret=obra10plus_cron_2026`,
+          { headers: internalApiHeaders() }
+        );
       } else {
         const agente = slugParaApiCiclos(slugAgente);
         const nome = ciclo.nome.toLowerCase();

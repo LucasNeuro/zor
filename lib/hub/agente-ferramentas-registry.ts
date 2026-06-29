@@ -5,13 +5,15 @@
 
 import type { MistralChatToolDefinition } from "@/lib/ia/mistral-chat-tools";
 
-export type HubFerramentaCategoria = "cliente" | "analise" | "registos";
+export type HubFerramentaCategoria = "cliente" | "analise" | "registos" | "empresa";
 
 export type HubAgenteFerramentaId =
   | "hub_lead_resumo"
   | "hub_lead_memorias"
   | "hub_lead_lookup_por_telefone"
   | "hub_metricas_escritorio"
+  | "hub_dados_empresa"
+  | "hub_operacao_empresa"
   | "hub_raciocinio_avancado"
   | "hub_relatorio_html_simples"
   | "hub_registar_nota_lead"
@@ -118,6 +120,101 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
       parameters: {
         type: "object",
         properties: {},
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    id: "hub_dados_empresa",
+    categoria: "empresa",
+    titulo: "Dados da empresa (relatórios)",
+    descricao:
+      "Consulta dados operacionais reais do tenant via views de relatório (leads, negócios, financeiro, KPIs, atendimento). Só leitura — exclusivo agentes internos.",
+    recomendadoWhatsApp: false,
+    mistralFunction: {
+      name: "hub_dados_empresa",
+      description:
+        "Consulta dados operacionais da empresa (tenant) em views vw_rel_*: leads, negócios, contas a receber/pagar, fluxo de caixa, KPIs, filas, etc. Use SEMPRE antes de afirmar números ou listas factuais sobre a operação. Parâmetro view obrigatório (ex.: vw_rel_leads_enriquecidos, vw_rel_fluxo_caixa, vw_rel_negocios_pipeline).",
+      parameters: {
+        type: "object",
+        properties: {
+          view: {
+            type: "string",
+            description:
+              "Id da view vw_rel_* (ex.: vw_rel_leads_enriquecidos, vw_rel_contas_receber, vw_rel_fluxo_caixa).",
+          },
+          colunas: {
+            type: "array",
+            items: { type: "string" },
+            description: "Colunas opcionais a devolver (omitir = recomendadas da view).",
+          },
+          limite: {
+            type: "integer",
+            description: "Máximo de linhas (1–50, padrão 25).",
+            minimum: 1,
+            maximum: 50,
+          },
+          filtro_coluna: {
+            type: "string",
+            description: "Coluna para filtro textual simples (ex.: estagio, status, nome).",
+          },
+          filtro_texto: {
+            type: "string",
+            description: "Texto a procurar na filtro_coluna (contém, case-insensitive).",
+          },
+        },
+        required: ["view"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    id: "hub_operacao_empresa",
+    categoria: "empresa",
+    titulo: "Operações CRM (leitura e escrita)",
+    descricao:
+      "Interface conversacional do sistema para agentes internos: consultar views, obter registo por id, criar, actualizar e registar notas em leads, negócios, financeiro, KPIs, etc. Sem SQL livre — exclusivo agentes internos.",
+    recomendadoWhatsApp: false,
+    mistralFunction: {
+      name: "hub_operacao_empresa",
+      description:
+        "Opera o CRM da empresa (tenant). Acções: listar_entidades | consultar (view vw_rel_*) | obter (por id) | criar | atualizar | nota. Entidades: lead, negocio, pessoa, nota, conta_receber, conta_pagar, atividade, aprovacao, alerta, parceiro, servico, proposta, kpi_meta, kpi_resultado. Use consultar/obter antes de alterar; confirme ids reais.",
+      parameters: {
+        type: "object",
+        properties: {
+          acao: {
+            type: "string",
+            enum: ["listar_entidades", "consultar", "obter", "criar", "atualizar", "nota"],
+            description: "Operação a executar.",
+          },
+          entidade: {
+            type: "string",
+            description:
+              "Entidade alvo (ex.: lead, negocio, conta_receber). Obrigatório excepto em listar_entidades e consultar só com view.",
+          },
+          id: {
+            type: "string",
+            description: "UUID do registo — obrigatório em obter e atualizar.",
+          },
+          dados: {
+            type: "object",
+            description: "Campos a criar ou actualizar (validados no servidor).",
+            additionalProperties: true,
+          },
+          view: {
+            type: "string",
+            description: "Para acao=consultar — id vw_rel_* (ex.: vw_rel_leads_enriquecidos).",
+          },
+          colunas: { type: "array", items: { type: "string" } },
+          limite: { type: "integer", minimum: 1, maximum: 50 },
+          filtro_coluna: { type: "string" },
+          filtro_texto: { type: "string" },
+          arquivar: {
+            type: "boolean",
+            description: "Com acao=atualizar, marca como cancelado/arquivado conforme entidade.",
+          },
+        },
+        required: ["acao"],
         additionalProperties: false,
       },
     },
@@ -561,6 +658,8 @@ export function mergeUsoFerramentasComPadrao(
     hub_lead_memorias: false,
     hub_lead_lookup_por_telefone: false,
     hub_metricas_escritorio: false,
+    hub_dados_empresa: false,
+    hub_operacao_empresa: false,
     hub_raciocinio_avancado: false,
     hub_relatorio_html_simples: false,
     hub_registar_nota_lead: false,
@@ -614,10 +713,58 @@ export function mergeUsoFerramentasWhatsappCanal(
   return merged;
 }
 
+/**
+ * Agentes internos (jobs_internos): dados da empresa + integrações; sem pacote WhatsApp/lead.
+ */
+export function mergeUsoFerramentasJobsInternos(
+  uso: Partial<Record<string, boolean>>,
+  modoOperacao?: string | null
+): Record<string, boolean> {
+  const merged = mergeUsoFerramentasComPadraoPreservandoCustom(uso);
+
+  if (modoOperacao !== "jobs_internos") {
+    return merged;
+  }
+
+  if (coalesceFerramentaBool(uso.hub_dados_empresa) !== false) merged.hub_dados_empresa = true;
+  if (coalesceFerramentaBool(uso.hub_operacao_empresa) !== false) merged.hub_operacao_empresa = true;
+  if (coalesceFerramentaBool(uso.hub_metricas_escritorio) !== false) merged.hub_metricas_escritorio = true;
+  if (coalesceFerramentaBool(uso.hub_raciocinio_avancado) !== false) merged.hub_raciocinio_avancado = true;
+
+  if (coalesceFerramentaBool(uso.hub_int_gcal_listar_eventos) !== false) {
+    merged.hub_int_gcal_listar_eventos = true;
+  }
+  if (coalesceFerramentaBool(uso.hub_int_gcal_listar_reservas_lead) !== false) {
+    merged.hub_int_gcal_listar_reservas_lead = true;
+  }
+
+  merged.hub_lead_resumo = coalesceFerramentaBool(uso.hub_lead_resumo) === true;
+  merged.hub_lead_memorias = coalesceFerramentaBool(uso.hub_lead_memorias) === true;
+  merged.hub_lead_lookup_por_telefone = coalesceFerramentaBool(uso.hub_lead_lookup_por_telefone) === true;
+  merged.hub_atualizar_lead = coalesceFerramentaBool(uso.hub_atualizar_lead) === true;
+  merged.hub_criar_negocio = coalesceFerramentaBool(uso.hub_criar_negocio) === true;
+  merged.hub_registar_nota_lead = coalesceFerramentaBool(uso.hub_registar_nota_lead) === true;
+  merged.hub_whatsapp_menu = coalesceFerramentaBool(uso.hub_whatsapp_menu) === true;
+
+  return merged;
+}
+
+/** Escolhe defaults de ferramentas conforme modo_operacao do agente. */
+export function mergeUsoFerramentasPorModoOperacao(
+  uso: Partial<Record<string, boolean>>,
+  modoOperacao?: string | null
+): Record<string, boolean> {
+  if (modoOperacao === "jobs_internos") {
+    return mergeUsoFerramentasJobsInternos(uso, modoOperacao);
+  }
+  return mergeUsoFerramentasWhatsappCanal(uso, modoOperacao);
+}
+
 export const HUB_FERRAMENTA_SECAO_LABEL: Record<HubFerramentaCategoria, string> = {
   cliente: "Dados do cliente nesta conversa",
   analise: "Análise e partilha",
   registos: "Registos no CRM",
+  empresa: "Dados da empresa (agentes internos)",
 };
 
 /** Efeito em dados ou storage (UI / CRM — catálogo fixo no código). */
@@ -628,6 +775,8 @@ export const HUB_FERRAMENTA_ACESSO: Record<HubAgenteFerramentaId, HubFerramentaN
   hub_lead_memorias: "leitura",
   hub_lead_lookup_por_telefone: "leitura",
   hub_metricas_escritorio: "leitura",
+  hub_dados_empresa: "leitura",
+  hub_operacao_empresa: "escrita",
   hub_raciocinio_avancado: "leitura",
   hub_relatorio_html_simples: "escrita",
   hub_registar_nota_lead: "escrita",

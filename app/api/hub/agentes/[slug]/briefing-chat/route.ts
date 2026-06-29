@@ -341,6 +341,8 @@ export async function POST(
         agentReasoningEnabled: agenteRaciocinioAvancadoAtivo(
           mergeUsoFerramentasComPadraoPreservandoCustom(agente.uso_ferramentas_ia)
         ),
+        supabase,
+        tenantId: typeof agente.tenant_id === "string" ? agente.tenant_id : null,
       });
     }
   } catch (e) {

@@ -8,6 +8,7 @@ import {
   BriefcaseBusiness,
   Cloud,
   Cpu,
+  Database,
   FileCode2,
   Globe,
   ListOrdered,
@@ -86,12 +87,14 @@ function ferramentasThemeTokens(theme: FerramentasIaTheme) {
   };
 }
 
-const ORDEM_SECOES: HubFerramentaCategoria[] = ["cliente", "analise", "registos"];
+const ORDEM_SECOES_CANAL: HubFerramentaCategoria[] = ["cliente", "analise", "registos"];
+const ORDEM_SECOES_INTERNO: HubFerramentaCategoria[] = ["empresa", "analise"];
 
 const ICONE_SECAO: Record<HubFerramentaCategoria, LucideIcon> = {
   cliente: Users,
   analise: PieChart,
   registos: ClipboardPenLine,
+  empresa: Database,
 };
 
 const ICONE_FERRAMENTA: Record<HubAgenteFerramentaId, LucideIcon> = {
@@ -99,6 +102,8 @@ const ICONE_FERRAMENTA: Record<HubAgenteFerramentaId, LucideIcon> = {
   hub_lead_memorias: Brain,
   hub_lead_lookup_por_telefone: Search,
   hub_metricas_escritorio: BarChart3,
+  hub_dados_empresa: Database,
+  hub_operacao_empresa: BriefcaseBusiness,
   hub_raciocinio_avancado: Sparkles,
   hub_relatorio_html_simples: FileCode2,
   hub_registar_nota_lead: StickyNote,
@@ -202,6 +207,8 @@ export type AgenteFerramentasIaBlockProps = {
   mistralSyncEm?: string | null;
   mistralSyncErro?: string | null;
   destacarWhatsApp?: boolean;
+  /** Agente interno (jobs_internos) — mostra pacote empresa e oculta ferramentas de canal. */
+  modoInterno?: boolean;
   modoCompacto?: boolean;
   theme?: FerramentasIaTheme;
 };
@@ -217,6 +224,7 @@ export function AgenteFerramentasIaBlock({
   mistralSyncEm,
   mistralSyncErro,
   destacarWhatsApp,
+  modoInterno,
   modoCompacto,
   customCatalog = [],
   externaCatalog = [],
@@ -243,6 +251,18 @@ export function AgenteFerramentasIaBlock({
     }
   }
 
+  function activarPacoteInterno() {
+    onMotorChange(true);
+    onUsoChange("hub_operacao_empresa", true);
+    onUsoChange("hub_dados_empresa", true);
+    onUsoChange("hub_metricas_escritorio", true);
+    onUsoChange("hub_raciocinio_avancado", true);
+    onUsoChange("hub_relatorio_html_simples", true);
+  }
+
+  const ordemSecoes = modoInterno ? ORDEM_SECOES_INTERNO : ORDEM_SECOES_CANAL;
+  const sectionTitle = modoInterno ? "Funções do funcionário IA" : t.sectionTitle;
+
   const rowBase: CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -265,7 +285,7 @@ export function AgenteFerramentasIaBlock({
     >
       {!modoCompacto ? (
         <p style={{ color: t.heading, fontSize: 13, fontWeight: 700, margin: "0 0 12px" }}>
-          {t.sectionTitle}
+          {sectionTitle}
         </p>
       ) : null}
 
@@ -285,6 +305,30 @@ export function AgenteFerramentasIaBlock({
         >
           O motor está ligado mas <strong>nenhuma função está activa</strong>. Active pelo menos uma opção abaixo
           {destacarWhatsApp ? " ou use o atalho recomendado." : "."}
+        </div>
+      ) : null}
+
+      {modoInterno ? (
+        <div style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            onClick={activarPacoteInterno}
+            style={{
+              cursor: "pointer",
+              borderRadius: 8,
+              border: "1px solid #3f984866",
+              background: "#3f984822",
+              color: "#2f7a43",
+              fontSize: 12,
+              fontWeight: 700,
+              padding: "8px 12px",
+            }}
+          >
+            Activar pacote recomendado (agente interno)
+          </button>
+          <p style={{ margin: "8px 0 0", fontSize: 11, color: t.muted, lineHeight: 1.45 }}>
+            Dados da empresa, métricas e relatórios — para copiloto e ciclos programados.
+          </p>
         </div>
       ) : null}
 
@@ -389,7 +433,7 @@ export function AgenteFerramentasIaBlock({
 
       <>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {ORDEM_SECOES.map((cat) => {
+            {ordemSecoes.map((cat) => {
               const tools = HUB_AGENTE_FERRAMENTAS_CATALOGO.filter((t) => t.categoria === cat);
               if (!tools.length) return null;
               const SecIcon = ICONE_SECAO[cat];

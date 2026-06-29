@@ -32,6 +32,7 @@ import {
 } from "@/lib/whatsapp/lead-group-routing";
 import { checkAndSetWebhookIdempotency } from "@/lib/redis/idempotency";
 import { checkTenantRateLimit } from "@/lib/redis/rate-limit";
+import { processarMensagemGestorWhatsapp } from "@/lib/whatsapp/gestor-whatsapp-processor";
 import { enqueueTenantLearnJob } from "@/lib/redis/learn-queue";
 
 let warnedMissingWebhookSecret = false;
@@ -48,7 +49,7 @@ function webhookRateLimitConfig(): { max: number; windowSec: number } | null {
 }
 
 function tenantIdFromLinhaWa(linhaWa: import("@/lib/whatsapp/resolver-linha-whatsapp").LinhaWhatsAppWebhook): string {
-  if (linhaWa.kind === "agent_instance") return linhaWa.tenantId;
+  if (linhaWa.kind === "agent_instance" || linhaWa.kind === "gestor_instance") return linhaWa.tenantId;
   return defaultTenantId();
 }
 
@@ -1107,11 +1108,53 @@ export async function POST(request: NextRequest) {
     }
 
     const waSendOpts =
-      linhaWa.kind === "agent_instance"
+      linhaWa.kind === "agent_instance" || linhaWa.kind === "gestor_instance"
         ? { instanceToken: linhaWa.instanceToken as string }
         : {};
 
     const tenantId = tenantIdFromLinhaWa(linhaWa);
+
+    if (linhaWa.kind === "gestor_instance") {
+      const messageIdParaGestor = (messageId || "").trim();
+      if (messageIdParaGestor) {
+        const redisGuardGestor = await aplicarGuardasRedisWebhook(log, {
+          tenantId,
+          messageId: messageIdParaGestor,
+        });
+        if (redisGuardGestor.blocked) {
+          return trace.json(
+            { status: "ignored", reason: redisGuardGestor.reason },
+            redisGuardGestor.httpStatus ?? 200,
+            redisGuardGestor.reason === "rate_limited" ? "rate_limited" : "duplicate_ignored"
+          );
+        }
+      }
+
+      log.info("wa.webhook.gestor_inbound", {
+        telefone: trace.maskTelefone(telefone),
+        tenant_id: tenantId,
+      });
+
+      const gestorOut = await processarMensagemGestorWhatsapp({
+        supabase,
+        tenantId,
+        telefone,
+        pushName,
+        mensagem: mensagemFinal,
+        instanceToken: linhaWa.instanceToken,
+      });
+
+      return trace.json(
+        {
+          status: gestorOut.ok ? "ok" : "ignored",
+          canal: "gestor_whatsapp",
+          motivo: gestorOut.motivo ?? null,
+          resposta_enviada: gestorOut.respostaEnviada ?? false,
+        },
+        200,
+        gestorOut.ok ? "gestor_ok" : "gestor_ignored"
+      );
+    }
 
     log.info("wa.webhook.message_inbound", {
       telefone: trace.maskTelefone(telefone),

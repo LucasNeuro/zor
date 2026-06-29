@@ -53,6 +53,7 @@ import {
 import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/AgenteUazapiBlock";
 import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
+import { GestorWhatsappIntegracaoBlock } from "@/components/crm/GestorWhatsappIntegracaoBlock";
 import { AgenteMem0Block } from "@/components/crm/AgenteMem0Block";
 import { MEM0_FERRAMENTA_KEYS } from "@/lib/hub/mem0-constants";
 import { buildGoogleIntegradorCatalogLite } from "@/lib/hub/agente-wizard-google";
@@ -1069,10 +1070,14 @@ export default function AgentePage() {
                 <div>
                   <h2 style={{ ...sectionHeadingStyle, marginBottom: 8 }}>Integrações</h2>
                   <p style={{ fontSize: 12, color: "#3d5c48", margin: 0, lineHeight: 1.5 }}>
-                    Canal de atendimento (WhatsApp{isEmailChannelEnabledClient() ? " ou e-mail" : ""}) e ferramentas
-                    disponíveis para este agente.
+                    {agente.modo_operacao === "jobs_internos"
+                      ? "WhatsApp com o mesmo fluxo dos externos (linha única da empresa). Gmail/Calendar e ferramentas são deste agente."
+                      : `Canal de atendimento (WhatsApp${isEmailChannelEnabledClient() ? " ou e-mail" : ""}) e ferramentas disponíveis para este agente.`}
                   </p>
                 </div>
+                {agente.modo_operacao === "jobs_internos" ? (
+                  <GestorWhatsappIntegracaoBlock agenteSlug={slug} agenteNome={agente.nome} />
+                ) : null}
                 {agente.modo_operacao === "canal_whatsapp" ? (
                   <>
                   <AgenteUazapiBlock
@@ -1155,7 +1160,7 @@ export default function AgentePage() {
                     }}
                   />
                 ) : null}
-                {agenteModoCanal ? (
+                {agenteModoCanal || agente.modo_operacao === "jobs_internos" ? (
                   <AgenteGoogleWorkspaceBlock
                     agenteSlug={slug}
                     agenteNome={agente.nome}
@@ -1210,6 +1215,7 @@ export default function AgentePage() {
                     agente.modo_operacao === "canal_whatsapp" ||
                     (isEmailChannelEnabledClient() && agente.modo_operacao === "canal_email")
                   }
+                  modoInterno={agente.modo_operacao === "jobs_internos"}
                 />
                 <button
                   type="button"

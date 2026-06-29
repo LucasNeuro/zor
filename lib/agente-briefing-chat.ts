@@ -10,6 +10,7 @@ import {
   mergeUsoFerramentasWhatsappCanal,
   agenteRaciocinioAvancadoAtivo,
 } from "@/lib/hub/agente-ferramentas-registry";
+import { executarAgenteInterno } from "@/lib/hub/executar-agente-interno";
 import { executarFerramentaHub } from "@/lib/hub/executar-ferramenta-ia";
 import {
   fetchFerramentasCustomAtivas,
@@ -68,8 +69,8 @@ Regras:
 - Explique a **função real deste agente** conforme o escopo oficial abaixo — não invente encaminhamentos nem atendimento WhatsApp.
 - Use as **memórias deste agente** (só de ${agenteNome}), cargo, playbook e extractos operacionais quando relevante — nunca misture contexto de outro assistente.
 - Este agente **não atende cliente final** e **não simula WhatsApp/Hub** neste painel.
-- Ferramentas automáticas não são executadas aqui; interprete apenas o que já está nos extractos.
-- Se faltar dado nos extractos, diga que não há registro — não invente.
+- Com o **motor de funções activo**, use hub_dados_empresa e integrações ligadas para factos reais; sem motor, interprete só os extractos.
+- Se faltar dado nos extractos ou nas consultas, diga que não há registro — não invente.
 ${escopoExtra?.trim() ? `\n${escopoExtra.trim()}` : ""}`;
 }
 
@@ -243,10 +244,41 @@ export async function executarBriefingReply(params: {
   memoriasAgenteBloco?: string;
   modoOperacao?: string | null;
   agentReasoningEnabled?: boolean;
+  supabase?: SupabaseClient;
+  tenantId?: string | null;
 }): Promise<BriefingChatReplyResult> {
   const ehCopilotoInterno = agenteEhCopilotoInterno(
     isModoOperacaoAgente(params.modoOperacao) ? params.modoOperacao : null
   );
+
+  if (ehCopilotoInterno && params.supabase) {
+    const { data: ferrRow } = await params.supabase
+      .from("hub_agente_identidade")
+      .select("motor_ferramentas_habilitado")
+      .eq("agente_slug", params.agenteSlug)
+      .maybeSingle();
+
+    if (ferrRow?.motor_ferramentas_habilitado === true) {
+      return executarAgenteInterno({
+        supabase: params.supabase,
+        modelo: params.modelo,
+        agenteNome: params.agenteNome,
+        agenteSlug: params.agenteSlug,
+        tenantId: params.tenantId,
+        cargo: params.cargo,
+        area: params.area,
+        bio: params.bio,
+        promptBaseTrecho: params.promptBaseTrecho,
+        playbookTrecho: params.playbookTrecho,
+        snapshot: params.snapshot,
+        historico: params.historico,
+        mensagemUsuario: params.mensagemUsuario,
+        memoriasAgenteBloco: params.memoriasAgenteBloco,
+        trigger: "copiloto",
+      });
+    }
+  }
+
   const limitePromptBase = ehCopilotoInterno ? 3_200 : 1_200;
 
   const identity = [

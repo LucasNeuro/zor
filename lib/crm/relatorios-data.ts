@@ -53,16 +53,21 @@ async function selectFromSource(
   supabase: SupabaseClient,
   table: string,
   select: string,
-  order: { column: string; ascending: boolean; nullsFirst?: boolean }
+  order: { column: string; ascending: boolean; nullsFirst?: boolean },
+  tenantId?: string,
+  rowLimit = LIMIT
 ): Promise<QueryOutcome> {
-  const { data, error } = await supabase
-    .from(table)
-    .select(select)
+  let query = supabase.from(table).select(select);
+  const tenant = tenantId?.trim();
+  if (tenant) {
+    query = query.eq("tenant_id", tenant);
+  }
+  const { data, error } = await query
     .order(order.column, {
       ascending: order.ascending,
       nullsFirst: order.nullsFirst ?? false,
     })
-    .limit(LIMIT);
+    .limit(rowLimit);
 
   if (!error) {
     return { rows: (data ?? []) as unknown as Record<string, unknown>[] };
@@ -154,12 +159,18 @@ export function labelColunaRelatorio(key: string): string {
   return RELATORIO_HEADER_LABELS[key] ?? key.replace(/_/g, " ");
 }
 
-async function carregarFluxoCaixaFallback(supabase: SupabaseClient): Promise<QueryOutcome> {
+async function carregarFluxoCaixaFallback(
+  supabase: SupabaseClient,
+  tenantId?: string,
+  rowLimit = LIMIT
+): Promise<QueryOutcome> {
   const receber = await selectFromSource(
     supabase,
     "hub_contas_receber",
     "descricao, valor, vencimento, status, criado_em",
-    { column: "vencimento", ascending: true }
+    { column: "vencimento", ascending: true },
+    tenantId,
+    rowLimit
   );
   if (receber.error || (receber.aviso && receber.rows.length === 0)) {
     return receber;
@@ -169,7 +180,9 @@ async function carregarFluxoCaixaFallback(supabase: SupabaseClient): Promise<Que
     supabase,
     "hub_contas_pagar",
     "descricao, valor, vencimento, status, criado_em",
-    { column: "vencimento", ascending: true }
+    { column: "vencimento", ascending: true },
+    tenantId,
+    rowLimit
   );
 
   const rows: Record<string, unknown>[] = [
@@ -182,7 +195,7 @@ async function carregarFluxoCaixaFallback(supabase: SupabaseClient): Promise<Que
   });
 
   return {
-    rows: rows.slice(0, LIMIT),
+    rows: rows.slice(0, rowLimit),
     aviso:
       receber.aviso ||
       pagar.aviso ||
@@ -194,8 +207,9 @@ async function carregarFluxoCaixaFallback(supabase: SupabaseClient): Promise<Que
 export async function carregarRelatorio(
   supabase: SupabaseClient,
   viewIdOrEntidade: RelatorioViewId | RelatorioEntidade | string,
-  _tenantId: string,
-  colunasSelecionadas?: string[]
+  tenantId: string,
+  colunasSelecionadas?: string[],
+  rowLimit = LIMIT
 ): Promise<RelatorioDataset> {
   const viewId = resolveRelatorioViewId(viewIdOrEntidade);
   const def = relatorioViewById(viewId);
@@ -211,25 +225,46 @@ export async function carregarRelatorio(
   let out: QueryOutcome;
 
   if (viewId === "vw_rel_fluxo_caixa") {
-    out = await selectFromSource(supabase, def.fonte, colunas.join(", "), {
-      column: def.orderColumn,
-      ascending: def.orderAsc ?? false,
-    });
+    out = await selectFromSource(
+      supabase,
+      def.fonte,
+      colunas.join(", "),
+      {
+        column: def.orderColumn,
+        ascending: def.orderAsc ?? false,
+      },
+      tenantId,
+      rowLimit
+    );
     if (out.error || out.aviso) {
-      out = await carregarFluxoCaixaFallback(supabase);
+      out = await carregarFluxoCaixaFallback(supabase, tenantId, rowLimit);
     }
   } else {
     const select = colunas.join(", ");
-    out = await selectFromSource(supabase, def.fonte, select, {
-      column: def.orderColumn,
-      ascending: def.orderAsc ?? false,
-    });
-
-    if ((out.error || out.aviso) && def.tableFallback) {
-      out = await selectFromSource(supabase, def.tableFallback.table, def.tableFallback.select, {
+    out = await selectFromSource(
+      supabase,
+      def.fonte,
+      select,
+      {
         column: def.orderColumn,
         ascending: def.orderAsc ?? false,
-      });
+      },
+      tenantId,
+      rowLimit
+    );
+
+    if ((out.error || out.aviso) && def.tableFallback) {
+      out = await selectFromSource(
+        supabase,
+        def.tableFallback.table,
+        def.tableFallback.select,
+        {
+          column: def.orderColumn,
+          ascending: def.orderAsc ?? false,
+        },
+        tenantId,
+        rowLimit
+      );
       if (!out.error && out.rows.length >= 0) {
         out.aviso = out.aviso || `View ${def.fonte} indisponível; dados da tabela ${def.tableFallback.table}.`;
       }

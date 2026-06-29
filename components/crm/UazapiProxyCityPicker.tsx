@@ -33,6 +33,8 @@ type Props = {
   dark?: boolean;
   temInstancia?: boolean;
   externalError?: string | null;
+  /** Usa API gestor WhatsApp (linha interna) em vez da instância do agente. */
+  gestorWhatsapp?: boolean;
   onSelect: (city: CidadeProxyUazapi) => void;
   onSave: () => void;
 };
@@ -65,6 +67,7 @@ export function UazapiProxyCityPicker({
   dark = false,
   temInstancia = false,
   externalError = null,
+  gestorWhatsapp = false,
   onSelect,
   onSave,
 }: Props) {
@@ -111,11 +114,16 @@ export function UazapiProxyCityPicker({
         if (ufNorm) body.proxy_managed_state = ufNorm;
         if (apiSearch) body.search = apiSearch;
 
-        const res = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`, {
+        const res = await fetch(
+          gestorWhatsapp
+            ? "/api/hub/gestor-whatsapp"
+            : `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`,
+          {
           method: "POST",
           headers: { "Content-Type": "application/json", ...(await hubApiHeaders()) },
           body: JSON.stringify(body),
-        });
+        }
+        );
         const data = await res.json().catch(() => ({}));
 
         if (seq !== fetchSeqRef.current) return;
@@ -145,11 +153,16 @@ export function UazapiProxyCityPicker({
             };
             if (ufNorm) retryBody.proxy_managed_state = ufNorm;
 
-            const retryRes = await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`, {
+            const retryRes = await fetch(
+              gestorWhatsapp
+                ? "/api/hub/gestor-whatsapp"
+                : `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/uazapi`,
+              {
               method: "POST",
               headers: { "Content-Type": "application/json", ...(await hubApiHeaders()) },
               body: JSON.stringify(retryBody),
-            });
+            }
+            );
             const retryData = await retryRes.json().catch(() => ({}));
             if (seq !== fetchSeqRef.current) return;
             if (retryRes.ok) {
@@ -173,7 +186,7 @@ export function UazapiProxyCityPicker({
         if (seq === fetchSeqRef.current) setLoading(false);
       }
     },
-    [agenteSlug]
+    [agenteSlug, gestorWhatsapp]
   );
 
   useEffect(() => {

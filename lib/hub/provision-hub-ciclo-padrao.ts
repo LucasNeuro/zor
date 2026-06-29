@@ -42,8 +42,11 @@ export async function provisionHubCicloPadrao(
     ativo = false;
     baseCfg.ciclo_origem_provisionamento = "wizard_agente_v1";
     baseCfg.dispatch_pendente = true;
+    baseCfg.dispatch = { api: "agente", ciclo: "briefing_programado" };
+    baseCfg.brief_padrao =
+      `Rotina programada de «${rotulo}»: consulte dados operacionais da empresa (hub_dados_empresa) e produza resumo útil para a equipa conforme cargo e playbook.`;
     baseCfg.dica =
-      "Defina configuracoes.dispatch { api: diretor|gerente, ciclo: <chave do runner> } antes de ativar.";
+      "Ciclo interno: dispatch api=agente. Active o ciclo e o motor de ferramentas no agente.";
   }
 
   const descricao =

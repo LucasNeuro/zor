@@ -1,7 +1,7 @@
 "use client";
 
 import type { MouseEvent } from "react";
-import { MessageCircle, Pencil, Banknote } from "lucide-react";
+import { Eye, MessageCircle, Banknote } from "lucide-react";
 import { CrmKanbanEntityCard } from "@/components/crm/CrmKanbanEntityCard";
 import { CrmIconButtonGroup } from "@/components/crm/CrmIconButtonGroup";
 import { LeadNotesCollapsible } from "@/components/crm/leads/LeadNotesCollapsible";
@@ -146,15 +146,15 @@ export function LeadKanbanCard({
     ...(onEdit
       ? [
           {
-            key: "edit",
+            key: "view",
             variant: "outline" as const,
-            icon: <Pencil size={15} strokeWidth={2.2} />,
+            icon: <Eye size={15} strokeWidth={2.2} />,
             onClick: (e: MouseEvent<HTMLButtonElement>) => {
               stop(e);
               onEdit();
             },
-            title: "Editar",
-            "aria-label": "Editar lead",
+            title: "Ver lead",
+            "aria-label": "Ver lead",
           },
         ]
       : []),

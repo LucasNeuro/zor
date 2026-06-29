@@ -56,6 +56,8 @@ type Props = {
   onMetadataChange?: (metadata: unknown) => void;
   notasExternas?: CrmNota[];
   interactive?: boolean;
+  /** Vista 360° atendimento — oculta cabeçalho duplicado do lead. */
+  embedded?: boolean;
 };
 
 const CHAT = {
@@ -550,6 +552,7 @@ export function LeadChatTab({
   onMetadataChange,
   notasExternas = [],
   interactive = true,
+  embedded = false,
 }: Props) {
   const [filaRaw, setFilaRaw] = useState<Record<string, unknown>[]>([]);
   const [notasApi, setNotasApi] = useState<CrmNota[]>([]);
@@ -912,30 +915,34 @@ export function LeadChatTab({
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col rounded-xl border p-4"
-      style={{ background: CHAT.bg, borderColor: CHAT.border }}
+      className={`flex h-full min-h-0 flex-col ${embedded ? "" : "rounded-xl border p-4"}`}
+      style={{ background: embedded ? "transparent" : CHAT.bg, borderColor: CHAT.border }}
     >
-      <div className="shrink-0 pb-3">
+      <div className={`shrink-0 ${embedded ? "pb-2" : "pb-3"}`}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-            <span
-              className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em]"
-              style={{ color: CHAT.muted }}
-            >
-              Atendimento
-            </span>
-            <span
-              className="h-3 w-px shrink-0"
-              style={{ background: CHAT.borderStrong }}
-              aria-hidden
-            />
-            <p
-              className="m-0 min-w-0 truncate text-sm font-bold"
-              style={{ color: CHAT.text }}
-              title={leadNome}
-            >
-              {leadNome}
-            </p>
+            {!embedded ? (
+              <>
+                <span
+                  className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em]"
+                  style={{ color: CHAT.muted }}
+                >
+                  Atendimento
+                </span>
+                <span
+                  className="h-3 w-px shrink-0"
+                  style={{ background: CHAT.borderStrong }}
+                  aria-hidden
+                />
+                <p
+                  className="m-0 min-w-0 truncate text-sm font-bold"
+                  style={{ color: CHAT.text }}
+                  title={leadNome}
+                >
+                  {leadNome}
+                </p>
+              </>
+            ) : null}
             <span
               className="inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide"
               style={{
@@ -946,7 +953,7 @@ export function LeadChatTab({
             >
               {atendimento.badgeLabel}
             </span>
-            {agenteResponsavel ? (
+            {agenteResponsavel && !embedded ? (
               <span
                 className="hidden shrink-0 truncate text-[10px] font-bold sm:inline"
                 style={{ color: CHAT.muted }}
@@ -960,7 +967,7 @@ export function LeadChatTab({
               style={{ background: CHAT.borderStrong }}
               aria-hidden
             />
-            <span className="shrink-0 text-[10px] font-bold" style={{ color: CHAT.accent }}>
+            <span className="shrink-0 text-[10px] font-bold" style={{ color: "#ea580c" }}>
               {stats.total} {stats.total === 1 ? "mensagem" : "mensagens"}
             </span>
           </div>

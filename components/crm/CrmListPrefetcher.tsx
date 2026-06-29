@@ -80,6 +80,10 @@ export function CrmListPrefetcher() {
       void prefetchCrmPipelines(queryClient, "negocio");
       void prefetchCrmNegociosList(queryClient, { offset: 0 });
     }
+    if (pathname.startsWith("/crm/atendimentos")) {
+      void prefetchCrmPipelines(queryClient, "atendimento");
+      void prefetchCrmLeadsList(queryClient);
+    }
     if (pathname.startsWith("/crm/atendimento")) {
       void prefetchCrmPipelines(queryClient, "atendimento");
     }

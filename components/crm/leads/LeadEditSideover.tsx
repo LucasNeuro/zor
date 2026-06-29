@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Briefcase, History, UserRound } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Briefcase, History, MessageSquare, UserRound } from "lucide-react";
+import { crmRetrofitPageXClass } from "@/components/crm/CrmRetrofitTablePanel";
 import {
   CrmSideoverActionBtn,
   CrmSideoverActionGroup,
@@ -103,6 +105,12 @@ type Props = {
   initialTab?: LeadSideoverNavId | "chat" | "status_timeline";
   /** Funil comercial (padrão) ou funil de atendimento (estagio_atendimento). */
   context?: "vendas" | "atendimento";
+  /** Funil comercial sem chat — só timeline, dados, negócio e histórico. */
+  salesTimelineOnly?: boolean;
+  /** Ocupa a página em vez de drawer (módulo Atendimentos). */
+  fullPage?: boolean;
+  fullPageBackHref?: string;
+  fullPageBackLabel?: string;
 };
 
 export function LeadEditSideover({
@@ -118,7 +126,12 @@ export function LeadEditSideover({
   onOpenNegocio,
   initialTab = "timeline",
   context = "vendas",
+  salesTimelineOnly = false,
+  fullPage = false,
+  fullPageBackHref = "/crm/atendimentos",
+  fullPageBackLabel = "Atendimentos",
 }: Props) {
+  const hideChat = salesTimelineOnly;
   const [screen, setScreen] = useState<ScreenId>("timeline");
   const [notas, setNotas] = useState<CrmNota[]>([]);
   const [leadMetadata, setLeadMetadata] = useState<unknown>(null);
@@ -159,12 +172,16 @@ export function LeadEditSideover({
   }, [lead, leadMetadata]);
 
   useEffect(() => {
+    if (hideChat) {
+      if (screen === "conversas" || screen === "conversas_email") setScreen("timeline");
+      return;
+    }
     if (screen === "conversas" && !canalLead.showWhatsapp) {
       setScreen(canalLead.showEmail ? "conversas_email" : "timeline");
     } else if (screen === "conversas_email" && !canalLead.showEmail) {
       setScreen(canalLead.showWhatsapp ? "conversas" : "timeline");
     }
-  }, [screen, canalLead.showWhatsapp, canalLead.showEmail]);
+  }, [screen, canalLead.showWhatsapp, canalLead.showEmail, hideChat]);
 
   const carregarDetalhe = useCallback(async (leadId: string) => {
     const headers = await crmApiHeaders();
@@ -189,17 +206,33 @@ export function LeadEditSideover({
     };
     const abrirWhatsapp = leadEhCanalWhatsapp(canalInput);
     const abrirEmail = isEmailChannelEnabledClient() && leadEhCanalEmail(canalInput);
-    setScreen(
-      initialTab === "chat"
-        ? abrirWhatsapp
-          ? "conversas"
-          : abrirEmail
-            ? "conversas_email"
-            : "timeline"
-        : initialTab === "status_timeline"
+    if (hideChat) {
+      setScreen(
+        initialTab === "status_timeline"
           ? "status_timeline"
-          : initialTab
-    );
+          : initialTab === "chat" || initialTab === "conversas" || initialTab === "conversas_email"
+            ? "timeline"
+            : initialTab
+      );
+    } else {
+      setScreen(
+        initialTab === "chat"
+          ? abrirWhatsapp
+            ? "conversas"
+            : abrirEmail
+              ? "conversas_email"
+              : "timeline"
+          : initialTab === "conversas_email"
+            ? abrirEmail
+              ? "conversas_email"
+              : abrirWhatsapp
+                ? "conversas"
+                : "timeline"
+          : initialTab === "status_timeline"
+            ? "status_timeline"
+            : initialTab
+      );
+    }
     setErro("");
     setErroObservacao("");
     setNovaNota("");
@@ -269,19 +302,6 @@ export function LeadEditSideover({
     }
     const data = res.data as LeadEditData;
     onUpdated?.({ ...lead, ...data });
-  }
-
-  async function moverEstagioAtendimento(novoEstagio: string) {
-    if (!lead) return;
-    const res = await patchLeadCrm(lead.id, { estagio_atendimento: novoEstagio });
-    if (!res.ok) {
-      setErro(res.error);
-      return;
-    }
-    const data = res.data as { estagio_atendimento?: string };
-    const est = String(data.estagio_atendimento ?? novoEstagio);
-    onUpdated?.({ ...lead, estagio_atendimento: est });
-    void carregarDetalhe(lead.id);
   }
 
   async function moverEstagio(novoEstagio: string) {
@@ -358,7 +378,11 @@ export function LeadEditSideover({
             key={e.id}
             active={estagioAtual === e.id}
             onClick={() => void moverEstagio(e.id)}
-            title={`Funil comercial: ${e.label}`}
+            title={
+              context === "atendimento"
+                ? `Atendimento: ${e.label}`
+                : `Funil comercial: ${e.label}`
+            }
             theme={LEAD_SIDEOVER_THEME}
           >
             {e.label}
@@ -366,27 +390,306 @@ export function LeadEditSideover({
         ))}
       </CrmSideoverActionGroup>
 
-      {context === "vendas" && estagiosAtendimento?.length ? (
-        <CrmSideoverActionGroup
-          className="min-w-max"
-          aria-label="Status de atendimento"
-          theme={LEAD_SIDEOVER_THEME}
-        >
-          {estagiosAtendimento.map((e) => (
-            <CrmSideoverActionBtn
-              key={`at-${e.id}`}
-              active={(lead.estagio_atendimento || "novo") === e.id}
-              onClick={() => void moverEstagioAtendimento(e.id)}
-              title={`Atendimento: ${e.label}`}
-              theme={LEAD_SIDEOVER_THEME}
-            >
-              {e.label}
-            </CrmSideoverActionBtn>
-          ))}
-        </CrmSideoverActionGroup>
-      ) : null}
     </CrmSideoverToolbarRow>
   );
+
+  const workspaceBody = (
+    <div className="flex min-h-0 min-w-0 flex-1">
+      {!salesTimelineOnly ? (
+        <LeadSideoverNavRail
+          active={navActive}
+          onChange={(id) => {
+            setScreen(id);
+            setErro("");
+          }}
+          observacoesCount={notas.length}
+          showWhatsappTab={!hideChat && canalLead.showWhatsapp}
+          showEmailTab={!hideChat && canalLead.showEmail}
+          showNegociosTab={context === "atendimento" || Boolean(onNegocioCreated)}
+          theme={LEAD_SIDEOVER_THEME}
+        />
+      ) : null}
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {erro &&
+        screen !== "negocio" &&
+        screen !== "status_timeline" &&
+        screen !== "negocios" &&
+        screen !== "conversas" &&
+        screen !== "conversas_email" ? (
+          <p className="shrink-0 px-6 pt-4 text-xs text-[#f85149]" role="alert">
+            {erro}
+          </p>
+        ) : null}
+
+        <div
+          className={`min-h-0 flex-1 ${
+            screen === "conversas" || screen === "conversas_email"
+              ? "flex flex-col overflow-hidden px-6 py-4"
+              : "overflow-y-auto px-6 py-4"
+          }`}
+        >
+          {screen === "conversas" && !hideChat ? (
+            <LeadChatTab
+              leadId={lead.id}
+              leadNome={lead.nome}
+              metadata={leadMetadata}
+              humanoResponsavel={lead.humano_responsavel}
+              agenteResponsavel={lead.agente_responsavel}
+              notasExternas={notas}
+              onHumanoResponsavelChange={(valor) => {
+                onUpdated?.({ ...lead, humano_responsavel: valor });
+              }}
+              onMetadataChange={setLeadMetadata}
+            />
+          ) : null}
+          {isEmailChannelEnabledClient() && screen === "conversas_email" && !hideChat ? (
+            <LeadEmailChatTab
+              leadId={lead.id}
+              leadNome={lead.nome}
+              leadEmail={lead.email}
+              humanoResponsavel={lead.humano_responsavel}
+              agenteResponsavel={lead.agente_responsavel}
+              onHumanoResponsavelChange={(valor) => {
+                onUpdated?.({ ...lead, humano_responsavel: valor });
+              }}
+            />
+          ) : null}
+
+          {screen === "negocio" && onNegocioCreated ? (
+            <LeadNegocioPanel
+              leadId={lead.id}
+              leadNome={lead.nome}
+              leadCodigo={lead.codigo}
+              valorEstimadoLead={lead.valor_estimado}
+              theme={LEAD_SIDEOVER_THEME}
+              onCancel={() => setScreen(context === "atendimento" ? "negocios" : "timeline")}
+              onSuccess={(negocioId) => {
+                setScreen(context === "atendimento" ? "negocios" : "timeline");
+                void carregarDetalhe(lead.id);
+                onNegocioCreated(lead, negocioId);
+              }}
+            />
+          ) : null}
+
+          {screen === "negocios" ? (
+            <LeadNegociosListPanel
+              leadId={lead.id}
+              theme={LEAD_SIDEOVER_THEME}
+              onOpenNegocio={onOpenNegocio}
+              onCreateNegocio={onNegocioCreated ? () => setScreen("negocio") : undefined}
+            />
+          ) : null}
+
+          {screen === "status_timeline" ? (
+            <LeadStatusTimelineTab
+              leadNome={lead.nome}
+              events={timelineEvents}
+              theme={LEAD_SIDEOVER_THEME}
+              compact
+            />
+          ) : null}
+
+          {screen === "timeline" ? (
+            <LeadTimelineTab
+              leadId={lead.id}
+              leadNome={lead.nome}
+              metadata={leadMetadata}
+              theme={LEAD_SIDEOVER_THEME}
+              compact
+              initialEvents={timelineEvents}
+            />
+          ) : null}
+
+          {screen === "dados" && !salesTimelineOnly ? (
+            <CrmSideoverFormPanel theme={LEAD_SIDEOVER_THEME}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  <span style={LABEL}>Nome</span>
+                  <input
+                    style={INPUT}
+                    value={form.nome}
+                    onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span style={LABEL}>Telefone</span>
+                  <input
+                    style={INPUT}
+                    value={form.telefone}
+                    onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span style={LABEL}>E-mail</span>
+                  <input
+                    style={INPUT}
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span style={LABEL}>Origem</span>
+                  <select
+                    style={INPUT}
+                    value={form.origem}
+                    onChange={(e) => setForm((f) => ({ ...f, origem: e.target.value }))}
+                  >
+                    <option value="">—</option>
+                    {LEAD_ORIGENS.map((o) => (
+                      <option key={o} value={o}>
+                        {ORIGENS_LABEL[o] || o}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span style={LABEL}>Valor estimado</span>
+                  <input
+                    style={INPUT}
+                    type="number"
+                    min={0}
+                    value={form.valor_estimado}
+                    onChange={(e) => setForm((f) => ({ ...f, valor_estimado: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span style={LABEL}>Score</span>
+                  <input
+                    style={INPUT}
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={form.score}
+                    onChange={(e) => setForm((f) => ({ ...f, score: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span style={LABEL}>Agente</span>
+                  <input
+                    style={INPUT}
+                    value={form.agente_responsavel}
+                    onChange={(e) => setForm((f) => ({ ...f, agente_responsavel: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span style={LABEL}>Responsável humano</span>
+                  <input
+                    style={INPUT}
+                    value={form.humano_responsavel}
+                    onChange={(e) => setForm((f) => ({ ...f, humano_responsavel: e.target.value }))}
+                  />
+                </label>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  <span style={LABEL}>Próxima ação</span>
+                  <input
+                    style={INPUT}
+                    value={form.proxima_acao}
+                    onChange={(e) => setForm((f) => ({ ...f, proxima_acao: e.target.value }))}
+                  />
+                </label>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  <span style={LABEL}>Campanha</span>
+                  <input
+                    style={INPUT}
+                    value={form.campanha}
+                    onChange={(e) => setForm((f) => ({ ...f, campanha: e.target.value }))}
+                  />
+                </label>
+              </div>
+              <div
+                className="mt-4 flex flex-wrap gap-3 text-xs"
+                style={{ color: RF_LIGHT_TEXT_MUTED }}
+              >
+                <span>Criado: {new Date(lead.criado_em).toLocaleDateString("pt-BR")}</span>
+                <span>Atualizado: {new Date(lead.atualizado_em).toLocaleDateString("pt-BR")}</span>
+              </div>
+            </CrmSideoverFormPanel>
+          ) : null}
+
+          {screen === "observacoes" && !salesTimelineOnly ? (
+            <>
+              {erroObservacao ? (
+                <p className="mb-3 text-xs text-[#f85149]" role="alert">
+                  {erroObservacao}
+                </p>
+              ) : null}
+              <LeadObservacoesTab
+                notas={notas}
+                novaNota={novaNota}
+                onNovaNotaChange={setNovaNota}
+                onAdicionar={adicionarNota}
+                adicionando={adicionandoNota}
+                theme={LEAD_SIDEOVER_THEME}
+              />
+              {!hideChat ? (
+                <p className="mt-3 text-[11px] leading-relaxed" style={{ color: RF_LIGHT_TEXT_MUTED }}>
+                  As observações aparecem no chat como anotações internas — o cliente não as vê nem
+                  recebe no WhatsApp.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (fullPage) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f8fcf6]">
+        <header
+          className={`shrink-0 border-b border-[#dcebd8] bg-white px-4 py-4 sm:px-6 ${crmRetrofitPageXClass}`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <Link
+                href={fullPageBackHref}
+                className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#6b8a76] hover:text-[#166534]"
+              >
+                <ArrowLeft size={14} />
+                {fullPageBackLabel}
+              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <UserRound size={18} className="text-[#166534]" />
+                <h1 className="truncate text-lg font-bold text-[#0b2210]">{lead.nome}</h1>
+                {lead.origem ? (
+                  <CadastroTipoBadge label={ORIGENS_LABEL[lead.origem] || lead.origem} tone="green" />
+                ) : null}
+              </div>
+              {subtitleParts.length ? (
+                <p className="mt-1 text-xs text-[#6b8a76]">{subtitleParts.join(" · ")}</p>
+              ) : null}
+            </div>
+            {!hideChat ? (
+              <LeadSideoverChatToggle
+                active={screen === "conversas" || screen === "conversas_email"}
+                onClick={() => {
+                  if (screen === "conversas" || screen === "conversas_email") {
+                    setScreen("timeline");
+                  } else {
+                    setScreen(canalLead.showWhatsapp ? "conversas" : "conversas_email");
+                  }
+                }}
+                theme={LEAD_SIDEOVER_THEME}
+              />
+            ) : null}
+          </div>
+          <div className="mt-3">{headerToolbar}</div>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">{workspaceBody}</div>
+        {screen === "dados"
+          ? crmRetrofitSideoverFooterBtnPrimary(
+              salvando ? "Salvando…" : "Salvar alterações",
+              () => void salvarDados(),
+              salvando || !form.nome.trim(),
+              LEAD_SIDEOVER_THEME
+            )
+          : null}
+      </div>
+    );
+  }
 
   return (
     <CrmRetrofitSideoverShell
@@ -404,11 +707,29 @@ export function LeadEditSideover({
         ) : undefined
       }
       headerExtra={
-        <LeadSideoverChatToggle
-          active={screen === "conversas"}
-          onClick={() => setScreen((s) => (s === "conversas" ? "timeline" : "conversas"))}
-          theme={LEAD_SIDEOVER_THEME}
-        />
+        hideChat ? (
+          salesTimelineOnly ? (
+            <Link
+              href={`/crm/atendimentos/${encodeURIComponent(lead.id)}?tab=chat`}
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-[#dcebd8] bg-white px-3 text-[11px] font-bold text-[#15803d] hover:bg-[#f0fdf4]"
+            >
+              <MessageSquare size={15} />
+              Atendimento
+            </Link>
+          ) : undefined
+        ) : (
+          <LeadSideoverChatToggle
+            active={screen === "conversas" || screen === "conversas_email"}
+            onClick={() => {
+              if (screen === "conversas" || screen === "conversas_email") {
+                setScreen("timeline");
+              } else {
+                setScreen(canalLead.showWhatsapp ? "conversas" : "conversas_email");
+              }
+            }}
+            theme={LEAD_SIDEOVER_THEME}
+          />
+        )
       }
       headerToolbar={headerToolbar}
       bodyClassName="flex min-h-0 flex-1 overflow-hidden p-0"
@@ -423,244 +744,7 @@ export function LeadEditSideover({
           : undefined
       }
     >
-      <div className="flex min-h-0 min-w-0 flex-1">
-        <LeadSideoverNavRail
-          active={navActive}
-          onChange={(id) => {
-            setScreen(id);
-            setErro("");
-          }}
-          observacoesCount={notas.length}
-          showWhatsappTab={canalLead.showWhatsapp}
-          showEmailTab={canalLead.showEmail}
-          showNegociosTab={context === "atendimento"}
-          theme={LEAD_SIDEOVER_THEME}
-        />
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {erro &&
-          screen !== "negocio" &&
-          screen !== "status_timeline" &&
-          screen !== "negocios" &&
-          screen !== "conversas" &&
-          screen !== "conversas_email" ? (
-            <p className="shrink-0 px-6 pt-4 text-xs text-[#f85149]" role="alert">
-              {erro}
-            </p>
-          ) : null}
-
-          <div
-            className={`min-h-0 flex-1 ${
-              screen === "conversas" || screen === "conversas_email"
-                ? "flex flex-col overflow-hidden px-6 py-4"
-                : "overflow-y-auto px-6 py-4"
-            }`}
-          >
-            {screen === "conversas" ? (
-              <LeadChatTab
-                leadId={lead.id}
-                leadNome={lead.nome}
-                metadata={leadMetadata}
-                humanoResponsavel={lead.humano_responsavel}
-                agenteResponsavel={lead.agente_responsavel}
-                notasExternas={notas}
-                onHumanoResponsavelChange={(valor) => {
-                  onUpdated?.({ ...lead, humano_responsavel: valor });
-                }}
-                onMetadataChange={setLeadMetadata}
-              />
-            ) : null}
-            {isEmailChannelEnabledClient() && screen === "conversas_email" ? (
-              <LeadEmailChatTab
-                leadId={lead.id}
-                leadNome={lead.nome}
-                leadEmail={lead.email}
-                humanoResponsavel={lead.humano_responsavel}
-                agenteResponsavel={lead.agente_responsavel}
-                onHumanoResponsavelChange={(valor) => {
-                  onUpdated?.({ ...lead, humano_responsavel: valor });
-                }}
-              />
-            ) : null}
-
-            {screen === "negocio" && onNegocioCreated ? (
-              <LeadNegocioPanel
-                leadId={lead.id}
-                leadNome={lead.nome}
-                leadCodigo={lead.codigo}
-                valorEstimadoLead={lead.valor_estimado}
-                theme={LEAD_SIDEOVER_THEME}
-                onCancel={() => setScreen(context === "atendimento" ? "negocios" : "timeline")}
-                onSuccess={(negocioId) => {
-                  setScreen(context === "atendimento" ? "negocios" : "timeline");
-                  void carregarDetalhe(lead.id);
-                  onNegocioCreated(lead, negocioId);
-                }}
-              />
-            ) : null}
-
-            {screen === "negocios" ? (
-              <LeadNegociosListPanel
-                leadId={lead.id}
-                theme={LEAD_SIDEOVER_THEME}
-                onOpenNegocio={onOpenNegocio}
-                onCreateNegocio={
-                  onNegocioCreated ? () => setScreen("negocio") : undefined
-                }
-              />
-            ) : null}
-
-            {screen === "status_timeline" ? (
-              <LeadStatusTimelineTab
-                leadNome={lead.nome}
-                events={timelineEvents}
-                theme={LEAD_SIDEOVER_THEME}
-                compact
-              />
-            ) : null}
-
-            {screen === "timeline" ? (
-              <LeadTimelineTab
-                leadId={lead.id}
-                leadNome={lead.nome}
-                metadata={leadMetadata}
-                theme={LEAD_SIDEOVER_THEME}
-                compact
-                initialEvents={timelineEvents}
-              />
-            ) : null}
-
-            {screen === "dados" ? (
-              <CrmSideoverFormPanel theme={LEAD_SIDEOVER_THEME}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <label style={{ gridColumn: "1 / -1" }}>
-                    <span style={LABEL}>Nome</span>
-                    <input
-                      style={INPUT}
-                      value={form.nome}
-                      onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    <span style={LABEL}>Telefone</span>
-                    <input
-                      style={INPUT}
-                      value={form.telefone}
-                      onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    <span style={LABEL}>E-mail</span>
-                    <input
-                      style={INPUT}
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    <span style={LABEL}>Origem</span>
-                    <select
-                      style={INPUT}
-                      value={form.origem}
-                      onChange={(e) => setForm((f) => ({ ...f, origem: e.target.value }))}
-                    >
-                      <option value="">—</option>
-                      {LEAD_ORIGENS.map((o) => (
-                        <option key={o} value={o}>
-                          {ORIGENS_LABEL[o] || o}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span style={LABEL}>Valor estimado</span>
-                    <input
-                      style={INPUT}
-                      type="number"
-                      min={0}
-                      value={form.valor_estimado}
-                      onChange={(e) => setForm((f) => ({ ...f, valor_estimado: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    <span style={LABEL}>Score</span>
-                    <input
-                      style={INPUT}
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={form.score}
-                      onChange={(e) => setForm((f) => ({ ...f, score: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    <span style={LABEL}>Agente</span>
-                    <input
-                      style={INPUT}
-                      value={form.agente_responsavel}
-                      onChange={(e) => setForm((f) => ({ ...f, agente_responsavel: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    <span style={LABEL}>Responsável humano</span>
-                    <input
-                      style={INPUT}
-                      value={form.humano_responsavel}
-                      onChange={(e) => setForm((f) => ({ ...f, humano_responsavel: e.target.value }))}
-                    />
-                  </label>
-                  <label style={{ gridColumn: "1 / -1" }}>
-                    <span style={LABEL}>Próxima ação</span>
-                    <input
-                      style={INPUT}
-                      value={form.proxima_acao}
-                      onChange={(e) => setForm((f) => ({ ...f, proxima_acao: e.target.value }))}
-                    />
-                  </label>
-                  <label style={{ gridColumn: "1 / -1" }}>
-                    <span style={LABEL}>Campanha</span>
-                    <input
-                      style={INPUT}
-                      value={form.campanha}
-                      onChange={(e) => setForm((f) => ({ ...f, campanha: e.target.value }))}
-                    />
-                  </label>
-                </div>
-                <div
-                  className="mt-4 flex flex-wrap gap-3 text-xs"
-                  style={{ color: RF_LIGHT_TEXT_MUTED }}
-                >
-                  <span>Criado: {new Date(lead.criado_em).toLocaleDateString("pt-BR")}</span>
-                  <span>Atualizado: {new Date(lead.atualizado_em).toLocaleDateString("pt-BR")}</span>
-                </div>
-              </CrmSideoverFormPanel>
-            ) : null}
-
-            {screen === "observacoes" ? (
-              <>
-                {erroObservacao ? (
-                  <p className="mb-3 text-xs text-[#f85149]" role="alert">
-                    {erroObservacao}
-                  </p>
-                ) : null}
-                <LeadObservacoesTab
-                  notas={notas}
-                  novaNota={novaNota}
-                  onNovaNotaChange={setNovaNota}
-                  onAdicionar={adicionarNota}
-                  adicionando={adicionandoNota}
-                  theme={LEAD_SIDEOVER_THEME}
-                />
-                <p className="mt-3 text-[11px] leading-relaxed" style={{ color: RF_LIGHT_TEXT_MUTED }}>
-                  As observações aparecem no chat como anotações internas — o cliente não as vê nem
-                  recebe no WhatsApp.
-                </p>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </div>
+      {workspaceBody}
     </CrmRetrofitSideoverShell>
   );
 }

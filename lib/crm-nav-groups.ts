@@ -74,6 +74,7 @@ export const CRM_NAV_GROUPS: CrmNavGroup[] = [
     sectionIcon: Briefcase,
     items: [
       { href: "/crm/leads", label: "Leads", icon: Users, permission: "leads" },
+      { href: "/crm/atendimentos", label: "Atendimentos", icon: MessageSquare, permission: "atendimento" },
       { href: "/crm/negocios", label: "Negócios", icon: Briefcase, permission: "negocios" },
     ],
   },

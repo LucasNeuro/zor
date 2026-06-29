@@ -137,6 +137,32 @@ export async function resolverLinhaWhatsAppInbound(
   const tokenIn = opts?.instanceToken?.trim() || "";
   const nameIn = opts?.instanceName?.trim() || "";
 
+  /** Instância gestor nunca entra no fluxo CRM / agentes canal_whatsapp. */
+  if (escopo === "externo") {
+    if (id) {
+      const gestorById = await buscarLinhaGestorPorInstancia(supabase, id);
+      if (gestorById) {
+        return { kind: "ignored", reason: "gestor_instancia_bloqueada_webhook_externo" };
+      }
+    }
+    if (tokenIn) {
+      const gestorByToken = await buscarLinhaGestorPorToken(supabase, tokenIn);
+      if (gestorByToken) {
+        return { kind: "ignored", reason: "gestor_instancia_bloqueada_webhook_externo" };
+      }
+    }
+    if (nameIn) {
+      const { data: gestorByName } = await supabase
+        .from("hub_linha_gestor_whatsapp")
+        .select("tenant_id")
+        .eq("uazapi_instance_name", nameIn)
+        .maybeSingle();
+      if (gestorByName) {
+        return { kind: "ignored", reason: "gestor_instancia_bloqueada_webhook_externo" };
+      }
+    }
+  }
+
   if (escopo === "gestor") {
     if (id) {
       const gestorById = await buscarLinhaGestorPorInstancia(supabase, id);

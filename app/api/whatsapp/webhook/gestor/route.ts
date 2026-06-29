@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import {
-  extractWebhookInstanceRefs,
-  normalizeWebhookInstanceId,
-  parseWhatsappWebhookBody,
-} from "@/lib/whatsapp/webhook-inbound";
-import { resolverLinhaWhatsAppInbound } from "@/lib/whatsapp/resolver-linha-whatsapp";
-import { processarMensagemGestorWhatsapp } from "@/lib/whatsapp/gestor-whatsapp-processor";
-import { processarWebhookConnectionUazapi } from "@/lib/whatsapp/webhook-connection-handler";
-import { webhookAuthConfig, webhookAutenticado } from "@/lib/whatsapp/webhook-request-auth";
+import { webhookAuthConfig, webhookAutenticado, webhookAuthMismatchHint } from "@/lib/whatsapp/webhook-request-auth";
 import { createWhatsappWebhookTrace } from "@/lib/observability/whatsapp-webhook-trace";
-import { checkAndSetWebhookIdempotency } from "@/lib/redis/idempotency";
-import { checkTenantRateLimit } from "@/lib/redis/rate-limit";
+import { processarGestorWebhookInbound } from "@/lib/whatsapp/gestor-webhook-inbound";
+import { processarWebhookConnectionUazapi } from "@/lib/whatsapp/webhook-connection-handler";
+import { parseWhatsappWebhookBody } from "@/lib/whatsapp/webhook-inbound";
 
 let warnedMissingWebhookSecret = false;
 
@@ -20,57 +13,6 @@ function db() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-function webhookRateLimitConfig(): { max: number; windowSec: number } | null {
-  const maxRaw = process.env.WEBHOOK_RATE_LIMIT_MAX?.trim();
-  if (!maxRaw) return null;
-  const max = Number.parseInt(maxRaw, 10);
-  if (!Number.isFinite(max) || max <= 0) return null;
-  const windowSec = Number.parseInt(process.env.WEBHOOK_RATE_LIMIT_WINDOW_SEC || "60", 10);
-  return { max, windowSec: Number.isFinite(windowSec) && windowSec > 0 ? windowSec : 60 };
-}
-
-async function aplicarGuardasRedisWebhook(
-  log: { info: (e: string, f?: Record<string, unknown>) => void; warn: (e: string, f?: Record<string, unknown>) => void },
-  opts: { tenantId: string; messageId: string }
-): Promise<{ blocked: true; reason: string; httpStatus?: number } | { blocked: false }> {
-  const messageId = opts.messageId.trim();
-  if (!messageId) return { blocked: false };
-
-  try {
-    const duplicate = await checkAndSetWebhookIdempotency(opts.tenantId, messageId);
-    if (duplicate) {
-      log.info("wa.webhook.gestor.duplicate_ignored_redis", {
-        message_id: messageId,
-        tenant_id: opts.tenantId,
-      });
-      return { blocked: true, reason: "duplicate_message_id_redis" };
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    log.warn("wa.webhook.gestor.redis_idempotency_failed", { error: msg.slice(0, 200) });
-  }
-
-  const rateCfg = webhookRateLimitConfig();
-  if (rateCfg) {
-    try {
-      const rate = await checkTenantRateLimit(
-        opts.tenantId,
-        "whatsapp_webhook_gestor",
-        rateCfg.max,
-        rateCfg.windowSec
-      );
-      if (rate.limited) {
-        return { blocked: true, reason: "rate_limited", httpStatus: 429 };
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      log.warn("wa.webhook.gestor.redis_rate_limit_failed", { error: msg.slice(0, 200) });
-    }
-  }
-
-  return { blocked: false };
 }
 
 export async function GET() {
@@ -92,8 +34,10 @@ export async function POST(request: NextRequest) {
 
     if (secret && !skipVerify) {
       if (!webhookAutenticado(request, rawBody, secret)) {
+        log.warn("wa.webhook.gestor.auth_failed", webhookAuthMismatchHint(request, secret));
         return trace.json({ error: "Não autorizado", code: "WEBHOOK_AUTH_FAILED" }, 401, "auth_failed");
       }
+      log.info("wa.webhook.gestor.auth_ok");
     } else if (!secret && !skipVerify) {
       if (!warnedMissingWebhookSecret) {
         warnedMissingWebhookSecret = true;
@@ -141,77 +85,13 @@ export async function POST(request: NextRequest) {
       return trace.json({ status: "ignored", reason: "outgoing_not_handled_gestor" }, 200, "outgoing_ignored");
     }
 
-    const {
-      telefone,
-      pushName,
-      messageId,
-      mensagemFinal,
-      instance,
-    } = inbound.value;
-
-    if (telefone.length < 10) {
-      return trace.json({ status: "ignored", reason: "invalid_phone" }, 200, "invalid_phone");
+    const gestorOut = await processarGestorWebhookInbound(supabase, body, log);
+    if (gestorOut.handled) {
+      return trace.json(gestorOut.body, gestorOut.status, gestorOut.outcome);
     }
 
-    const refs = extractWebhookInstanceRefs(body);
-    const instanceKey = instance ?? refs.instanceId ?? normalizeWebhookInstanceId(body);
-    const linhaWa = await resolverLinhaWhatsAppInbound(supabase, instanceKey, {
-      instanceToken: refs.instanceToken,
-      instanceName: refs.instanceName,
-      escopo: "gestor",
-    });
-
-    if (linhaWa.kind !== "gestor_instance") {
-      log.warn("wa.webhook.gestor.resolver_ignored", {
-        kind: linhaWa.kind,
-        reason: linhaWa.kind === "ignored" ? linhaWa.reason : linhaWa.kind,
-      });
-      return trace.json(
-        { status: "ignored", reason: linhaWa.kind === "ignored" ? linhaWa.reason : "not_gestor_instance" },
-        200,
-        "resolver_ignored"
-      );
-    }
-
-    const messageIdParaGestor = (messageId || "").trim();
-    if (messageIdParaGestor) {
-      const redisGuard = await aplicarGuardasRedisWebhook(log, {
-        tenantId: linhaWa.tenantId,
-        messageId: messageIdParaGestor,
-      });
-      if (redisGuard.blocked) {
-        return trace.json(
-          { status: "ignored", reason: redisGuard.reason },
-          redisGuard.httpStatus ?? 200,
-          redisGuard.reason === "rate_limited" ? "rate_limited" : "duplicate_ignored"
-        );
-      }
-    }
-
-    log.info("wa.webhook.gestor_inbound", {
-      telefone: trace.maskTelefone(telefone),
-      tenant_id: linhaWa.tenantId,
-    });
-
-    const gestorOut = await processarMensagemGestorWhatsapp({
-      supabase,
-      tenantId: linhaWa.tenantId,
-      telefone,
-      pushName,
-      mensagem: mensagemFinal,
-      instanceToken: linhaWa.instanceToken,
-    });
-
-    return trace.json(
-      {
-        status: gestorOut.ok ? "ok" : "ignored",
-        canal: "gestor_whatsapp",
-        motivo: gestorOut.motivo ?? null,
-        resposta_enviada: gestorOut.respostaEnviada ?? false,
-      },
-      200,
-      gestorOut.ok ? "gestor_ok" : "gestor_ignored"
-    );
+    log.warn("wa.webhook.gestor.resolver_ignored", { reason: "not_gestor_instance" });
+    return trace.json({ status: "ignored", reason: "not_gestor_instance" }, 200, "resolver_ignored");
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log.error("wa.webhook.gestor.unhandled", { error: msg.slice(0, 400) });

@@ -47,9 +47,50 @@ export function webhookAutenticado(request: NextRequest, rawBody: string, secret
 
   const qp = webhookSecretQueryParam().toLowerCase();
   const fromQuery = request.nextUrl.searchParams.get(qp)?.trim();
-  if (fromQuery && timingSafeStringEqual(fromQuery, secret)) return true;
+  if (fromQuery && secretMatches(fromQuery, secret)) return true;
+
+  /** UAZAPI pode enviar o parâmetro com capitalização diferente. */
+  for (const [key, value] of request.nextUrl.searchParams.entries()) {
+    if (key.toLowerCase() === qp && secretMatches((value || "").trim(), secret)) return true;
+  }
 
   return false;
+}
+
+function secretMatches(candidate: string, secret: string): boolean {
+  if (!candidate) return false;
+  if (timingSafeStringEqual(candidate, secret)) return true;
+  try {
+    const once = decodeURIComponent(candidate);
+    if (once !== candidate && timingSafeStringEqual(once, secret)) return true;
+    const twice = decodeURIComponent(once);
+    if (twice !== once && timingSafeStringEqual(twice, secret)) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+export function webhookAuthMismatchHint(request: NextRequest, secret: string): Record<string, unknown> {
+  const qp = webhookSecretQueryParam().toLowerCase();
+  let fromQuery = "";
+  for (const [key, value] of request.nextUrl.searchParams.entries()) {
+    if (key.toLowerCase() === qp) {
+      fromQuery = (value || "").trim();
+      break;
+    }
+  }
+  return {
+    has_query_wh: Boolean(fromQuery),
+    wh_len: fromQuery.length,
+    secret_len: secret.length,
+    wh_prefix: fromQuery.slice(0, 4) || null,
+    secret_prefix: secret.slice(0, 4) || null,
+    hint:
+      fromQuery && secret && fromQuery.slice(0, 4) !== secret.slice(0, 4)
+        ? "Segredo na URL do webhook gestor não coincide com WEBHOOK_SECRET do servidor — sincronize em Canais → WhatsApp interno → Sincronizar recepção (em produção)."
+        : "Falha na verificação do webhook gestor.",
+  };
 }
 
 export function webhookAuthConfig(): {

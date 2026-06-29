@@ -34,6 +34,10 @@ import { checkAndSetWebhookIdempotency } from "@/lib/redis/idempotency";
 import { checkTenantRateLimit } from "@/lib/redis/rate-limit";
 import { processarWebhookConnectionUazapi } from "@/lib/whatsapp/webhook-connection-handler";
 import { enqueueTenantLearnJob } from "@/lib/redis/learn-queue";
+import {
+  eventoEhDaLinhaGestor,
+  processarGestorWebhookInbound,
+} from "@/lib/whatsapp/gestor-webhook-inbound";
 
 let warnedMissingWebhookSecret = false;
 const WEBHOOK_DEDUPE_TTL_MS = 2 * 60 * 1000;
@@ -775,8 +779,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    /** Linha gestor: processa menu/agentes internos aqui se /webhook/gestor falhar auth na UAZAPI. */
+    const gestorInbound = await processarGestorWebhookInbound(supabase, body, log);
+    if (gestorInbound.handled) {
+      return trace.json(gestorInbound.body, gestorInbound.status, gestorInbound.outcome);
+    }
+
     const inbound = parseWhatsappWebhookBody(body);
     if (inbound.kind === "outgoing_human") {
+      if (await eventoEhDaLinhaGestor(supabase, body)) {
+        log.info("wa.webhook.gestor_outgoing_ignored", {
+          reason: "gestor_line_from_me",
+        });
+        return trace.json(
+          { status: "ignored", reason: "gestor_line_from_me" },
+          200,
+          "gestor_outgoing_ignored"
+        );
+      }
+
       const outbound = inbound.value;
 
       if (outbound.isGroup && outbound.groupJid) {
@@ -924,6 +945,19 @@ export async function POST(request: NextRequest) {
         handoff.ok ? "human_takeover_ok" : "human_takeover_skipped"
       );
     }
+
+    /** Firewall: linha gestor nunca cria lead, Dany ou atendimento CRM no webhook externo. */
+    if (await eventoEhDaLinhaGestor(supabase, body)) {
+      log.warn("wa.webhook.gestor_externo_blocked", {
+        reason: "gestor_line_must_not_use_crm_flow",
+      });
+      return trace.json(
+        { status: "ignored", reason: "gestor_line_must_not_use_crm_flow" },
+        200,
+        "gestor_externo_blocked"
+      );
+    }
+
     if (inbound.kind === "ignored") {
       log.info("wa.webhook.parse_ignored", {
         reason: inbound.status,

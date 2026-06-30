@@ -88,7 +88,7 @@ export function ferramentasCrmPorEntidade(): CrmIntegradorFerramentaDef[] {
       ferramenta_key: crmEntidadeToolKey(ent.id),
       titulo: ent.label,
       descricao_curta: `${caps.join(", ")} · tabela CRM (${ent.id}).`,
-      descricao_modelo: `Opera **${ent.label}** (${ent.id}) no CRM Waje. Acções: ${caps.join(", ")}. Entidade fixa — não passe \`entidade\`. Confirme com o utilizador antes de gravar; só afirme sucesso com ok:true.`,
+      descricao_modelo: `Opera **${ent.label}** (${ent.id}) na tabela CRM **${ent.id}**. Acções: ${caps.join(", ")}. consultar=lista registos na tabela (filtro_texto opcional); obter/criar/actualizar usam hub_* directamente. Não passe \`entidade\`. Confirme com o utilizador antes de gravar; só afirme sucesso com ok:true.`,
       politica: ent.pode_criar || ent.pode_atualizar ? "escrita" : "leitura",
       parametros_schema: SCHEMA_OPERAR_ENTIDADE,
     };

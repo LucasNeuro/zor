@@ -237,6 +237,94 @@ function pickAllowed(
   return out;
 }
 
+const CAMPOS_BUSCA_CONSULTAR = [
+  "nome",
+  "titulo",
+  "descricao",
+  "email",
+  "telefone",
+  "conteudo",
+  "codigo",
+  "slug",
+] as const;
+
+function escaparIlike(texto: string): string {
+  return texto.replace(/[%_]/g, " ").trim();
+}
+
+function camposBuscaEntidade(camposLeitura: string[]): string[] {
+  return CAMPOS_BUSCA_CONSULTAR.filter((c) => camposLeitura.includes(c));
+}
+
+/** Lista registos na tabela CRM real (hub_*) — paridade com a interface, não só views vw_rel_*. */
+async function consultarEntidadeNaTabela(
+  supabase: SupabaseClient,
+  tenant: string,
+  entidade: OperacaoEmpresaEntidade,
+  cfg: EntidadeConfig,
+  args: HubOperacaoEmpresaArgs,
+  ctx: { agenteSlug: string }
+): Promise<string> {
+  const limite = Math.min(Math.max(Number(args.limite) || 25, 1), 50);
+  const colunasPedidas = Array.isArray(args.colunas)
+    ? args.colunas.map((c) => String(c).trim()).filter((c) => cfg.camposLeitura.includes(c))
+    : [];
+  const selectCols = colunasPedidas.length ? colunasPedidas : cfg.camposLeitura;
+
+  let query = supabase
+    .from(cfg.tabela)
+    .select(selectCols.join(", "))
+    .eq("tenant_id", tenant)
+    .limit(limite);
+
+  const filtroTexto = String(args.filtro_texto || "").trim();
+  const filtroColuna = String(args.filtro_coluna || "").trim();
+
+  if (filtroTexto) {
+    const safe = escaparIlike(filtroTexto);
+    if (filtroColuna && cfg.camposLeitura.includes(filtroColuna)) {
+      query = query.ilike(filtroColuna, `%${safe}%`);
+    } else {
+      const busca = camposBuscaEntidade(cfg.camposLeitura);
+      if (busca.length === 1) {
+        query = query.ilike(busca[0], `%${safe}%`);
+      } else if (busca.length > 1) {
+        const orExpr = busca.map((f) => `${f}.ilike.%${safe}%`).join(",");
+        query = query.or(orExpr);
+      }
+    }
+  }
+
+  if (cfg.camposLeitura.includes("criado_em")) {
+    query = query.order("criado_em", { ascending: false });
+  } else if (cfg.camposLeitura.includes("id")) {
+    query = query.order("id", { ascending: false });
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return JSON.stringify({ erro: "supabase", detalhe: error.message, entidade, tabela: cfg.tabela });
+  }
+
+  const linhas = data ?? [];
+  await auditar(
+    supabase,
+    { agenteSlug: ctx.agenteSlug, tenantId: tenant },
+    "hub_operacao_empresa",
+    `Consultou ${entidade} (${linhas.length} reg.)`,
+    { acao: "consultar", entidade, tabela: cfg.tabela, total: linhas.length }
+  );
+
+  return JSON.stringify({
+    ok: true,
+    entidade,
+    tabela: cfg.tabela,
+    fonte: "tabela_crm",
+    total: linhas.length,
+    registos: linhas,
+  });
+}
+
 async function auditar(
   supabase: SupabaseClient,
   ctx: { agenteSlug: string; tenantId: string },
@@ -311,10 +399,26 @@ export async function executarHubOperacaoEmpresa(
   }
 
   if (acao === "consultar") {
+    const entRaw = String(args.entidade || "").trim().toLowerCase();
+    const viewExplicita = String(args.view || "").trim();
+
+    // Superagente interno: listar na tabela hub_* (como a UI). Views só se view=vw_rel_* explícita.
+    if (entRaw && entRaw in ENTIDADES && !viewExplicita.startsWith("vw_rel_")) {
+      const entidade = entRaw as OperacaoEmpresaEntidade;
+      return consultarEntidadeNaTabela(
+        supabase,
+        tenant,
+        entidade,
+        ENTIDADES[entidade],
+        args,
+        ctx
+      );
+    }
+
     const entView =
       args.entidade && ENTIDADES[args.entidade as OperacaoEmpresaEntidade]?.view;
     const hubArgs: HubDadosEmpresaArgs = {
-      view: args.view || entView || "",
+      view: viewExplicita || entView || "",
       colunas: args.colunas,
       limite: args.limite,
       filtro_texto: args.filtro_texto,

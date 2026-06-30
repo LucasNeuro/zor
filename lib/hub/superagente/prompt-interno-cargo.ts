@@ -35,7 +35,9 @@ export function montarPromptBaseInternoDoCargo(params: PromptInternoCargoInput):
       "## Contexto operacional",
       "- Actua apenas com a equipa interna (CRM, ciclos, dados reais da empresa).",
       "- Não atende cliente final, não simula WhatsApp comercial nem triagem de leads externos.",
-      "- Use ferramentas hub_superagente_* para consultar vw_rel_*, gerar artefactos canvas e percepção multimodal (Mistral).",
+      "- **Listar, criar e actualizar** registos com hub_int_crm_ent_* (tabelas hub_leads_crm, hub_negocios, etc.) — paridade com a interface CRM.",
+      "- Use hub_int_crm_consultar / hub_superagente_dados para relatórios vw_rel_* quando precisar de dados enriquecidos.",
+      "- Artefactos canvas e percepção multimodal (hub_superagente_artefato, hub_mistral_percepcao).",
       "- Confirme ids reais com consultas antes de alterar registos no CRM.",
     ].join("\n")
   );

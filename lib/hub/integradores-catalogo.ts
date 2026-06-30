@@ -377,9 +377,9 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
       {
         ferramenta_key: "hub_int_crm_consultar",
         titulo: "Consultar dados do CRM",
-        descricao_curta: "Views vw_rel_* — leads, negócios, financeiro, KPIs (só leitura).",
+        descricao_curta: "Relatórios enriquecidos vw_rel_* (complementar às ferramentas por entidade).",
         descricao_modelo:
-          "Use SEMPRE antes de afirmar factos sobre clientes, valores ou listas. Acções: catalogar (lista views) ou consultar (view + filtros). Ex.: vw_rel_leads_enriquecidos com filtro_texto=Mateus.",
+          "Relatórios agregados em views vw_rel_*. Para listar ou editar leads, negócios, pessoas, etc., prefira hub_int_crm_ent_{entidade} (tabela CRM). Acções aqui: catalogar (lista views) ou consultar (view + filtros).",
         politica: "leitura",
         parametros_schema: {
           type: "object",

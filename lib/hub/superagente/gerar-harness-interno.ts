@@ -43,14 +43,15 @@ function extrairJsonObjeto(raw: string): Record<string, unknown> | null {
   }
 }
 
-const SYSTEM_IA = `És um arquitecto de **superagentes internos** no ecossistema Waje (CRM, dados vw_rel_*, artefactos canvas, Mistral multimodal).
+const SYSTEM_IA = `És um arquitecto de **superagentes internos** no ecossistema Waje (CRM com tabelas hub_* e CRUD via hub_int_crm_ent_*, relatórios vw_rel_*, artefactos canvas, Mistral multimodal).
 
 Recebes contexto JSON de um cargo do catálogo hub_cargos_catalogo e um rascunho determinístico de system prompt.
 
 Devolve **apenas** um objeto JSON válido (sem Markdown à volta) com:
 - "system_prompt_base": string em português (Brasil), markdown leve permitido (## títulos, bullets). 400–1200 palavras no máximo.
   - Foco em trabalho interno (equipa, CRM, relatórios, ciclos) — **nunca** regras de atendimento WhatsApp ao cliente final.
-  - Incorpora missão do cargo, limites claros, quando usar ferramentas de dados/artefactos/OCR.
+  - Incorpora missão do cargo, limites claros, quando usar hub_int_crm_ent_* (tabelas CRM) e artefactos/OCR.
+  - Nunca diga que o agente «só lê views» — tem CRUD nas entidades activas.
   - Não mencione "playbook" nem upload de ficheiros como requisito operacional.
 - "skills_resumo": array opcional de 2–6 strings curtas (títulos de competências derivadas do cargo).
 

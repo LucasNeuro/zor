@@ -74,7 +74,7 @@ function trunc(s: string, n: number): string {
 }
 
 const BLOCO_SUPERAGENTE = `### SUPERAGENTE (canvas + Mistral)
-- **hub_superagente_dados** — catálogo completo vw_rel_* e consultas com filtros.
+- **hub_superagente_dados** — catálogo vw_rel_* e consultas em views (complementar às tabelas hub_int_crm_ent_*).
 - **hub_superagente_artefato** — relatório canvas com UI Synkron.IA, avatar e nome do agente, tabelas e gráficos Chart.js (inclua seções tipo grafico; tabelas numéricas geram gráfico automático).
 - **hub_mistral_percepcao** — OCR, transcrição de áudio, visão de imagens (Mistral).
 - Para relatório visual: **sempre** chame hub_superagente_artefato e cite **apenas** a url_publica devolvida pela ferramenta.
@@ -94,22 +94,25 @@ function extrairUrlsPublicasDeResultadoFerramenta(result: string): string[] {
 }
 
 const BLOCO_FERRAMENTAS_INTERNAS = `### FERRAMENTAS INTERNAS (function calling)
-- **hub_int_crm_consultar** — leitura em views vw_rel_* (ex.: vw_rel_leads_enriquecidos com filtro_texto no nome).
-- **hub_int_crm_operar** — CRUD do CRM: consultar, obter, criar, actualizar e notas (leads, negócios, pessoas, financeiro, KPIs).
+- **hub_int_crm_ent_{entidade}** (ex.: hub_int_crm_ent_lead, hub_int_crm_ent_negocio) — **principal**: listar (acao=consultar), obter, criar, actualizar e notas nas **tabelas CRM** (hub_leads_crm, hub_negocios, etc.), como na interface web.
+- **hub_int_crm_consultar** — relatórios enriquecidos em views vw_rel_* (complementar; use quando precisar de joins agregados).
+- **hub_int_crm_operar** — legado unificado (preferir hub_int_crm_ent_* por entidade).
 - **hub_int_crm_atualizar_lead** — atalho para gravar telefone, e-mail, estágio, score, etc. (exige lead_id no copiloto).
 - Entidades operáveis:
 ${HUB_OPERACAO_EMPRESA_ENTIDADES_PROMPT}
-- Views de consulta (vw_rel_*):
+- Views de relatório (opcional, vw_rel_*):
 ${HUB_DADOS_EMPRESA_VIEWS_PROMPT}
 - **hub_int_supabase_externo_consultar** — leitura em Supabase externo ligado pelo tenant (comparar com CRM Waje).
 - **hub_metricas_escritorio** para contagens rápidas; integrações Google/Mem0/Mistral/Supabase externo se estiverem activas.
 
-### REGRAS DE GRAVAÇÃO (obrigatório)
-1. **Nunca** diga que gravou sem ter chamado a ferramenta e recebido \`ok: true\` no JSON.
-2. Antes de criar/actualizar: resuma o que vai mudar e peça confirmação, **excepto** se o utilizador já deu os valores exactos (ex.: «actualize o telefone para X»).
-3. Depois de gravar: chame **obter** ou **consultar** de novo e mostre os dados **da resposta da ferramenta** — não invente.
-4. Para procurar clientes por nome: \`hub_int_crm_consultar\` com acao=consultar, view=vw_rel_leads_enriquecidos, filtro_texto=Mateus (ou variação).
-5. Telefone e e-mail gravam em hub_leads_crm (e sincronizam hub_pessoas quando existir pessoa_id).`;
+### REGRAS DE DADOS E GRAVAÇÃO (obrigatório)
+1. **Nunca** afirme listas, contagens ou factos sobre CRM sem chamar uma ferramenta no **mesmo turno** e usar o JSON devolvido.
+2. Para listar leads, pessoas, negócios, etc.: **hub_int_crm_ent_*** com acao=consultar (tabela real). filtro_texto opcional para nome/telefone/e-mail.
+3. **Nunca** diga que «só tem acesso a views» ou «não pode gravar» — tem CRUD nas entidades activas; confirme com ok:true após gravar.
+4. **Nunca** diga que gravou sem ter chamado a ferramenta e recebido \`ok: true\` no JSON.
+5. Antes de criar/actualizar: resuma o que vai mudar e peça confirmação, **excepto** se o utilizador já deu os valores exactos (ex.: «actualize o telefone para X»).
+6. Depois de gravar: chame **obter** ou **consultar** de novo e mostre os dados **da resposta da ferramenta** — não invente.
+7. Telefone e e-mail gravam em hub_leads_crm (e sincronizam hub_pessoas quando existir pessoa_id).`;
 
 export async function executarAgenteInterno(params: {
   supabase: SupabaseClient;

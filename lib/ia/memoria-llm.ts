@@ -90,13 +90,13 @@ export async function extrairMemoriasAgenteViaLlm(params: {
   const system = `Extrai aprendizados OPERACIONAIS para o agente "${params.agenteSlug}" (origem: ${params.origem}).
 Responda APENAS JSON array: [{"chave":"tipo_snake","valor":"facto curto","confianca":0.0-1.0}]
 Chaves úteis: preferencia_operacional, fluxo_recomendado, tom_preferido, sla_operacional, padrao_segmento, problema_recorrente.
-Regras: só o que ajude futuras conversas deste agente; máx. 4 itens; português; sem PII desnecessária.`;
+Regras: só o que ajude futuras conversas deste agente; máx. 6 itens; português; sem PII desnecessária.`;
   const user = `Turno:\nUtilizador: ${params.mensagemUsuario.slice(0, 1800)}\nAssistente: ${params.respostaIA.slice(0, 1800)}`;
   const raw = await completarJsonLlm(system, user, 420);
   if (!raw) return [];
   const arr = parseJsonArray(raw);
   if (!arr) return [];
-  return normalizarMemorias(arr, 4);
+  return normalizarMemorias(arr, 6);
 }
 
 /** Resume mensagens antigas de uma conversa longa. */

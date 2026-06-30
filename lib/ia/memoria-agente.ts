@@ -2,7 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { extrairMemoriasAgenteViaLlm } from "@/lib/ia/memoria-llm";
 import { defaultTenantId } from "@/lib/tenant-default";
 
-export type MemoriaAgenteOrigem = "ia_engine" | "briefing" | "whatsapp" | "gestor_whatsapp" | "manual";
+export type MemoriaAgenteOrigem =
+  | "ia_engine"
+  | "briefing"
+  | "whatsapp"
+  | "gestor_whatsapp"
+  | "manual"
+  | "ciclo_programado";
 
 export type MemoriaAgenteLinha = {
   chave: string;
@@ -81,8 +87,8 @@ export async function listarMemoriasAgente(
 export function formatarBlocoMemoriasAgente(memorias: MemoriaAgenteLinha[]): string {
   if (!memorias.length) return "";
   const linhas = memorias.map((m) => `• [${m.chave}] ${m.valor}`).join("\n");
-  return `═══ MEMÓRIAS DO AGENTE (operacionais) ═══
-Aprendizados persistentes deste agente — use quando relevante; não contradiga dados factuais do CRM.
+  return `═══ MEMÓRIAS DO AGENTE (operacionais — persistem entre dias) ═══
+Aprendizados deste superagente interno. Use quando relevante; não contradiga dados factuais do CRM.
 
 ${linhas}`;
 }

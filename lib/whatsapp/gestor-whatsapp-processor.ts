@@ -10,11 +10,6 @@ import {
   montarSnapshotOperacionalReadOnly,
   type BriefingMensagemLinha,
 } from "@/lib/agente-briefing-chat";
-import {
-  extrairESalvarMemoriasAgente,
-  formatarBlocoMemoriasAgente,
-  listarMemoriasAgente,
-} from "@/lib/ia/memoria-agente";
 import { formatarLinksArtefactosParaTexto } from "@/lib/hub/superagente/canais-internos";
 import { prepararTextoIaParaWhatsapp } from "@/lib/whatsapp/formatar-texto-whatsapp";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
@@ -361,14 +356,6 @@ export async function processarMensagemGestorWhatsapp(
         typeof agenteFull.playbook_source_hash === "string" ? agenteFull.playbook_source_hash : null,
     });
 
-    let memoriasAgenteBloco = "";
-    try {
-      const mem = await listarMemoriasAgente(params.supabase, agenteAtivoSlug, 4);
-      memoriasAgenteBloco = formatarBlocoMemoriasAgente(mem);
-    } catch {
-      memoriasAgenteBloco = "";
-    }
-
     const modelo =
       typeof agenteFull.modelo === "string" && agenteFull.modelo.trim()
         ? agenteFull.modelo.trim()
@@ -389,7 +376,6 @@ export async function processarMensagemGestorWhatsapp(
       snapshot,
       historico: historicoParaModelo,
       mensagemUsuario: mensagem,
-      memoriasAgenteBloco,
       trigger: "copiloto",
       canalInterno: "whatsapp_gestor",
       telefoneSessao: params.telefone,
@@ -416,17 +402,6 @@ export async function processarMensagemGestorWhatsapp(
     agente_slug: agenteAtivoSlug,
     whatsapp_ok: envio.ok,
   });
-
-  try {
-    await extrairESalvarMemoriasAgente(params.supabase, {
-      agenteSlug: agenteAtivoSlug,
-      mensagemUsuario: mensagem,
-      respostaIA: textoResposta,
-      origem: "gestor_whatsapp",
-    });
-  } catch {
-    /* opcional */
-  }
 
   return { ok: true, respostaEnviada: envio.ok };
 }

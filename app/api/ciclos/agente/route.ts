@@ -4,7 +4,6 @@ import { cronRequestAuthorized } from "@/lib/cron-auth";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { executarAgenteInterno } from "@/lib/hub/executar-agente-interno";
 import { carregarTrechoPlaybookCopiloto, montarSnapshotOperacionalReadOnly } from "@/lib/agente-briefing-chat";
-import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -159,14 +158,6 @@ export async function GET(request: NextRequest) {
         typeof agente.playbook_source_hash === "string" ? agente.playbook_source_hash : null,
     });
 
-    let memoriasAgenteBloco = "";
-    try {
-      const memAgente = await listarMemoriasAgente(supabase, agenteSlug, 4);
-      memoriasAgenteBloco = formatarBlocoMemoriasAgente(memAgente);
-    } catch {
-      memoriasAgenteBloco = "";
-    }
-
     const tenantId =
       typeof agente.tenant_id === "string" && agente.tenant_id.trim()
         ? agente.tenant_id.trim()
@@ -190,7 +181,6 @@ export async function GET(request: NextRequest) {
       snapshot,
       historico: [],
       mensagemUsuario: briefCiclo,
-      memoriasAgenteBloco,
       trigger: "ciclo",
       canalInterno: "ciclo_programado",
       briefCiclo,

@@ -5,7 +5,7 @@ import {
   crmEntidadeToolKey,
   isCrmEntidadeToolKey,
   parseCrmEntidadeToolKey,
-} from "@/lib/hub/crm-integrador-entidades";
+} from "@/lib/hub/crm-integrador-entidades-shared";
 
 export {
   CRM_ENTIDADES_TOOL_KEYS,

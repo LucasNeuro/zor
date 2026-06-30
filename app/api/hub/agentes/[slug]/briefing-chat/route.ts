@@ -18,6 +18,11 @@ import { registrarInteracaoPainelAgente } from "@/lib/hub/registrar-interacao-pa
 import { CRM_ACCESS_COOKIE, fetchAuthUserFromAccessToken } from "@/lib/auth/crm-session";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 import { formatarLinksArtefactosParaTexto } from "@/lib/hub/superagente/canais-internos";
+import {
+  montarMensagemComAnexos,
+  processarAnexosBriefingChat,
+  validarAnexosBriefingChat,
+} from "@/lib/hub/briefing-chat-anexos";
 
 function erroBriefingJson(message: string, status: number) {
   return NextResponse.json({ error: mensagemErroBriefingChat(message) }, { status });
@@ -178,7 +183,12 @@ export async function POST(
   const { slug: raw } = await params;
   const slug = decodeURIComponent(raw);
 
-  let body: { sessao_id?: string | null; mensagem?: string; modo?: unknown };
+  let body: {
+    sessao_id?: string | null;
+    mensagem?: string;
+    modo?: unknown;
+    anexos?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -188,9 +198,37 @@ export async function POST(
   const modo = normalizarModoBriefing(body.modo);
 
   const textoUser = String(body.mensagem ?? "").trim();
-  if (!textoUser || textoUser.length > MAX_MENSAGEM_LEN) {
+  let anexosInput: ReturnType<typeof validarAnexosBriefingChat> = [];
+  try {
+    anexosInput = validarAnexosBriefingChat(body.anexos);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Anexos inválidos.";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+
+  if ((!textoUser && anexosInput.length === 0) || textoUser.length > MAX_MENSAGEM_LEN) {
     return NextResponse.json({ error: "Mensagem inválida ou muito longa." }, { status: 400 });
   }
+
+  let blocoMultimodal = "";
+  let anexosMeta: Awaited<ReturnType<typeof processarAnexosBriefingChat>>["anexosMeta"] = [];
+  if (anexosInput.length > 0) {
+    try {
+      const proc = await processarAnexosBriefingChat(anexosInput);
+      blocoMultimodal = proc.blocoMultimodal;
+      anexosMeta = proc.anexosMeta;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha ao processar anexos.";
+      return NextResponse.json({ error: msg }, { status: 502 });
+    }
+  }
+
+  const mensagemParaModelo = montarMensagemComAnexos(textoUser, blocoMultimodal);
+  const conteudoVisivelUser =
+    textoUser ||
+    (anexosMeta.length === 1
+      ? `[Anexo: ${anexosMeta[0].nome}]`
+      : `[${anexosMeta.length} anexos]`);
 
   const supabase = db();
 
@@ -260,8 +298,17 @@ export async function POST(
   const { error: uErr } = await supabase.from("hub_crm_agente_briefing_mensagem").insert({
     sessao_id: sessaoId,
     papel: "user",
-    conteudo: textoUser,
-    metadata: { modo },
+    conteudo: conteudoVisivelUser,
+    metadata: {
+      modo,
+      ...(anexosMeta.length
+        ? {
+            multimodal: true,
+            anexos: anexosMeta,
+            texto_utilizador: textoUser || null,
+          }
+        : {}),
+    },
   });
   if (uErr) return erroBriefingJson(uErr.message, 500);
 
@@ -300,7 +347,7 @@ export async function POST(
       resultado = await executarSimulacaoCanalReply({
         agenteSlug: slug,
         historico: historicoParaModelo,
-        mensagemUsuario: textoUser,
+        mensagemUsuario: mensagemParaModelo,
         supabase,
         sessaoId,
         modoOperacao:
@@ -339,7 +386,7 @@ export async function POST(
         playbookTrecho,
         snapshot,
         historico: historicoParaModelo,
-        mensagemUsuario: textoUser,
+        mensagemUsuario: mensagemParaModelo,
         modoOperacao,
         agentReasoningEnabled: agenteRaciocinioAvancadoAtivo(
           mergeUsoFerramentasComPadraoPreservandoCustom(agente.uso_ferramentas_ia)
@@ -391,7 +438,7 @@ export async function POST(
       agenteSlug: slug,
       modo,
       sessaoId,
-      mensagemUsuario: textoUser,
+      mensagemUsuario: mensagemParaModelo,
       respostaTexto: resultado.texto,
       modelo: resultado.modelo,
       tokens_input: resultado.tokens_input,

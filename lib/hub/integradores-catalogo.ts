@@ -3,7 +3,7 @@
  * O tenant só guarda credenciais — a lógica HTTP fica no código.
  */
 
-import { ferramentasCrmPorEntidade } from "@/lib/hub/crm-integrador-entidades";
+import { ferramentasCrmPorEntidade } from "@/lib/hub/crm-integrador-entidades-shared";
 
 export type HubIntegradorId =
   | "google_calendar"

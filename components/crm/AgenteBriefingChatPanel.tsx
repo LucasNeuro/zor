@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bot, Send, User, X } from "lucide-react";
+import { Bot, User, X } from "lucide-react";
+import { CopilotoMultimodalComposer } from "@/components/crm/CopilotoMultimodalComposer";
 import { hubApiHeaders } from "@/lib/internal-api-headers-client";
 import { hubQueryKeys } from "@/lib/hub/hub-query-keys";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
@@ -21,7 +22,6 @@ import {
   RF_ACCENT,
   RF_BORDER,
   RF_BORDER_STRONG,
-  RF_INPUT_STYLE,
   RF_TEXT_MUTED,
   RF_TEXT_PRIMARY,
   RF_TEXT_SECONDARY,
@@ -35,6 +35,21 @@ type Msg = {
   criado_em: string;
   metadata?: Record<string, unknown>;
 };
+
+function anexosDaMensagem(metadata?: Record<string, unknown>): Array<{
+  nome: string;
+  tipo?: string;
+  resumo?: string;
+}> {
+  if (!metadata || !Array.isArray(metadata.anexos)) return [];
+  return (metadata.anexos as Record<string, unknown>[])
+    .map((a) => ({
+      nome: String(a.nome ?? "anexo"),
+      tipo: typeof a.tipo === "string" ? a.tipo : undefined,
+      resumo: typeof a.resumo === "string" ? a.resumo : undefined,
+    }))
+    .filter((a) => a.nome);
+}
 
 const OPTIMISTIC_USER_PREFIX = "optimistic-user-";
 
@@ -98,12 +113,30 @@ export function AgenteBriefingDrawer({
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens, enviando, open]);
 
-  async function enviar() {
-    const t = input.trim();
-    if (!t || enviando) return;
+  async function enviar(payload?: { texto: string; anexos: Array<{ nome: string; mime: string; base64: string }> }) {
+    const t = (payload?.texto ?? input).trim();
+    const anexos = payload?.anexos ?? [];
+    if ((!t && anexos.length === 0) || enviando) return;
+    const preview =
+      t ||
+      (anexos.length === 1 ? `[Anexo: ${anexos[0].nome}]` : `[${anexos.length} anexos]`);
     const tempId = `${OPTIMISTIC_USER_PREFIX}${Date.now()}`;
     const now = new Date().toISOString();
-    setMensagens((prev) => [...prev, { id: tempId, papel: "user", conteudo: t, criado_em: now }]);
+    setMensagens((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        papel: "user",
+        conteudo: preview,
+        criado_em: now,
+        metadata: anexos.length
+          ? {
+              multimodal: true,
+              anexos: anexos.map((a) => ({ nome: a.nome, tipo: a.mime.split("/")[0] })),
+            }
+          : undefined,
+      },
+    ]);
     setEnviando(true);
     setErro("");
     setInput("");
@@ -115,6 +148,7 @@ export function AgenteBriefingDrawer({
           sessao_id: sessaoId,
           mensagem: t,
           modo: ehCopilotoInterno ? "briefing_interno" : modoChat,
+          ...(anexos.length ? { anexos } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -409,6 +443,32 @@ export function AgenteBriefingDrawer({
                         }}
                       >
                         {m.conteudo}
+                        {isUser && anexosDaMensagem(m.metadata).length > 0 ? (
+                          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                            {anexosDaMensagem(m.metadata).map((an) => (
+                              <div
+                                key={an.nome}
+                                style={{
+                                  fontSize: 11,
+                                  color: RF_TEXT_SECONDARY,
+                                  borderTop: `1px solid ${RF_BORDER}`,
+                                  paddingTop: 8,
+                                }}
+                              >
+                                <span style={{ fontWeight: 700, color: "#79c0ff" }}>
+                                  {an.tipo === "audio" ? "Áudio" : an.tipo === "imagem" ? "Imagem" : "Anexo"}:{" "}
+                                  {an.nome}
+                                </span>
+                                {an.resumo ? (
+                                  <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", color: RF_TEXT_MUTED }}>
+                                    {an.resumo.slice(0, 280)}
+                                    {an.resumo.length > 280 ? "…" : ""}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       {!isUser &&
                       m.metadata &&
@@ -577,70 +637,20 @@ export function AgenteBriefingDrawer({
               background: "#0b1f10",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: 10,
-                background: "rgba(6, 13, 8, 0.85)",
-                border: `1px solid ${RF_BORDER_STRONG}`,
-                borderRadius: 14,
-                padding: "8px 10px 8px 14px",
-              }}
-            >
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={
-                  ehCopilotoInterno
-                    ? "Pergunte ao copiloto sobre leads, ciclos, relatórios ou a função deste assistente…"
-                    : "Escreva sua mensagem para testar o assistente…"
-                }
-                rows={2}
-                disabled={enviando}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void enviar();
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  minHeight: 44,
-                  maxHeight: 120,
-                  resize: "none",
-                  border: "none",
-                  background: "transparent",
-                  color: RF_TEXT_PRIMARY,
-                  fontSize: 13,
-                  lineHeight: 1.45,
-                  outline: "none",
-                }}
-              />
-              <button
-                type="button"
-                disabled={enviando || !input.trim()}
-                onClick={() => void enviar()}
-                aria-label="Enviar"
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: "50%",
-                  border: "none",
-                  background:
-                    enviando || !input.trim() ? "#dcebd8" : "linear-gradient(145deg, #003b26, #14532d)",
-                  color: "#c9a24a",
-                  cursor: enviando || !input.trim() ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Send size={20} />
-              </button>
-            </div>
-            <p style={{ fontSize: 10, color: "#484f58", margin: "8px 0 0", textAlign: "center" }}>
+            <CopilotoMultimodalComposer
+              value={input}
+              onChange={setInput}
+              onSend={(p) => enviar(p)}
+              disabled={enviando}
+              sending={enviando}
+              multimodalAtivo
+              placeholder={
+                ehCopilotoInterno
+                  ? "Pergunte ao copiloto ou anexe imagem, áudio ou documento para testar multimodal…"
+                  : "Escreva sua mensagem ou anexe ficheiros para testar…"
+              }
+            />
+            <p style={{ fontSize: 10, color: "#484f58", margin: "4px 0 0", textAlign: "center" }}>
               Enter envia · Shift+Enter nova linha · feche e reabra para conversa nova
             </p>
           </div>

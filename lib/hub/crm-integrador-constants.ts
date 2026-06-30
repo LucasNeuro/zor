@@ -1,4 +1,19 @@
 import type { HubAgenteFerramentaId } from "@/lib/hub/agente-ferramentas-registry";
+import {
+  CRM_ENTIDADES_TOOL_KEYS,
+  HUB_INT_CRM_ENT_PREFIX,
+  crmEntidadeToolKey,
+  isCrmEntidadeToolKey,
+  parseCrmEntidadeToolKey,
+} from "@/lib/hub/crm-integrador-entidades";
+
+export {
+  CRM_ENTIDADES_TOOL_KEYS,
+  HUB_INT_CRM_ENT_PREFIX,
+  crmEntidadeToolKey,
+  isCrmEntidadeToolKey,
+  parseCrmEntidadeToolKey,
+};
 
 /** Integrador nativo da plataforma — CRM Supabase do tenant (sem OAuth). */
 export const WAJE_CRM_INTEGRADOR_ID = "waje_crm" as const;
@@ -9,12 +24,18 @@ export const HUB_INT_CRM_ATUALIZAR_LEAD = "hub_int_crm_atualizar_lead";
 export const HUB_INT_CRM_REGISTAR_NOTA = "hub_int_crm_registar_nota";
 export const HUB_INT_CRM_CRIAR_NEGOCIO = "hub_int_crm_criar_negocio";
 
-export const HUB_INT_CRM_KEYS = [
-  HUB_INT_CRM_CONSULTAR,
-  HUB_INT_CRM_OPERAR,
+/** Atalhos de canal WhatsApp/e-mail (não duplicar em agentes internos). */
+export const HUB_INT_CRM_ATALHOS_CANAL = [
   HUB_INT_CRM_ATUALIZAR_LEAD,
   HUB_INT_CRM_REGISTAR_NOTA,
   HUB_INT_CRM_CRIAR_NEGOCIO,
+] as const;
+
+export const HUB_INT_CRM_KEYS = [
+  HUB_INT_CRM_CONSULTAR,
+  HUB_INT_CRM_OPERAR,
+  ...HUB_INT_CRM_ATALHOS_CANAL,
+  ...CRM_ENTIDADES_TOOL_KEYS,
 ] as const;
 
 export type HubIntCrmKey = (typeof HUB_INT_CRM_KEYS)[number];
@@ -29,7 +50,14 @@ export const FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR: readonly HubAgenteFerramentaId
   "hub_criar_negocio",
 ];
 
-export const CRM_INTEGRADOR_BUILTIN_MAP: Record<HubIntCrmKey, HubAgenteFerramentaId> = {
+export const CRM_INTEGRADOR_BUILTIN_MAP: Record<
+  | typeof HUB_INT_CRM_CONSULTAR
+  | typeof HUB_INT_CRM_OPERAR
+  | typeof HUB_INT_CRM_ATUALIZAR_LEAD
+  | typeof HUB_INT_CRM_REGISTAR_NOTA
+  | typeof HUB_INT_CRM_CRIAR_NEGOCIO,
+  HubAgenteFerramentaId
+> = {
   [HUB_INT_CRM_CONSULTAR]: "hub_superagente_dados",
   [HUB_INT_CRM_OPERAR]: "hub_operacao_empresa",
   [HUB_INT_CRM_ATUALIZAR_LEAD]: "hub_atualizar_lead",
@@ -41,7 +69,10 @@ export const CRM_INTEGRADOR_BUILTIN_MAP: Record<HubIntCrmKey, HubAgenteFerrament
 export function sincronizarUsoCrmIntegrador(uso: Record<string, boolean>): Record<string, boolean> {
   const m = { ...uso };
 
-  if (m.hub_operacao_empresa === true) m[HUB_INT_CRM_OPERAR] = true;
+  if (m.hub_operacao_empresa === true) {
+    m[HUB_INT_CRM_OPERAR] = true;
+    for (const key of CRM_ENTIDADES_TOOL_KEYS) m[key] = true;
+  }
   if (m.hub_dados_empresa === true || m.hub_superagente_dados === true) {
     m[HUB_INT_CRM_CONSULTAR] = true;
   }

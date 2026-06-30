@@ -6,6 +6,7 @@
 import type { MistralChatToolDefinition } from "@/lib/ia/mistral-chat-tools";
 import { MEM0_BUSCAR_KEY, MEM0_SUPER_MEMORIA_KEY } from "@/lib/hub/mem0-constants";
 import {
+  CRM_ENTIDADES_TOOL_KEYS,
   FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR,
   HUB_INT_CRM_ATUALIZAR_LEAD,
   HUB_INT_CRM_CONSULTAR,
@@ -857,12 +858,8 @@ export function ferramentaObrigatoriaFuncionarioIa(_id: string): boolean {
 
 /** Pacote inicial ao criar funcionário IA no wizard (tudo ligado por defeito; editável depois). */
 export function pacoteUsoFerramentasSuperagenteInterno(): Record<string, boolean> {
-  return {
+  const pack: Record<string, boolean> = {
     [HUB_INT_CRM_CONSULTAR]: true,
-    [HUB_INT_CRM_OPERAR]: true,
-    [HUB_INT_CRM_ATUALIZAR_LEAD]: true,
-    [HUB_INT_CRM_REGISTAR_NOTA]: true,
-    [HUB_INT_CRM_CRIAR_NEGOCIO]: true,
     hub_metricas_escritorio: true,
     hub_raciocinio_avancado: true,
     hub_relatorio_html_simples: true,
@@ -871,6 +868,8 @@ export function pacoteUsoFerramentasSuperagenteInterno(): Record<string, boolean
     [MEM0_SUPER_MEMORIA_KEY]: true,
     [MEM0_BUSCAR_KEY]: true,
   };
+  for (const key of CRM_ENTIDADES_TOOL_KEYS) pack[key] = true;
+  return pack;
 }
 
 /** Escolhe defaults de ferramentas conforme modo_operacao do agente. */

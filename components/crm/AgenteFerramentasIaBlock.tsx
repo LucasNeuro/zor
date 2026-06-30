@@ -33,9 +33,10 @@ import {
 } from "@/lib/hub/agente-ferramentas-registry";
 import {
   FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR,
-  HUB_INT_CRM_KEYS,
+  HUB_INT_CRM_ATALHOS_CANAL,
+  HUB_INT_CRM_OPERAR,
+  isCrmEntidadeToolKey,
 } from "@/lib/hub/crm-integrador-constants";
-import { HUB_INT_SUPABASE_EXTERNO_CONSULTAR } from "@/lib/hub/supabase-externo-constants";
 import { MEM0_BUSCAR_KEY, MEM0_SUPER_MEMORIA_KEY } from "@/lib/hub/mem0-constants";
 import { MISTRAL_PERCEPCAO_KEY } from "@/lib/hub/mistral-integracao-constants";
 import type { CatalogoFerramentaIntegradorLite } from "@/lib/hub/integrador-catalogo-ui";
@@ -241,13 +242,17 @@ export function AgenteFerramentasIaBlock({
   const nAtivas = Object.entries(uso).filter(([, on]) => on === true).length;
   const customActivos = customCatalog.filter((c) => c.ativo);
   const externaActivos = externaCatalog.filter((c) => c.ativo);
-  const integradorActivos = integradorCatalog.filter(
-    (tool) =>
-      tool.ferramenta_key !== MEM0_SUPER_MEMORIA_KEY &&
-      tool.ferramenta_key !== MEM0_BUSCAR_KEY &&
-      !(HUB_INT_CRM_KEYS as readonly string[]).includes(tool.ferramenta_key) &&
-      tool.ferramenta_key !== HUB_INT_SUPABASE_EXTERNO_CONSULTAR
-  );
+  const integradorActivos = integradorCatalog.filter((tool) => {
+    if (tool.ferramenta_key === MEM0_SUPER_MEMORIA_KEY || tool.ferramenta_key === MEM0_BUSCAR_KEY) {
+      return false;
+    }
+    if (tool.ferramenta_key === HUB_INT_CRM_OPERAR) return false;
+    if (isCrmEntidadeToolKey(tool.ferramenta_key)) return Boolean(modoInterno);
+    if ((HUB_INT_CRM_ATALHOS_CANAL as readonly string[]).includes(tool.ferramenta_key)) {
+      return !modoInterno;
+    }
+    return true;
+  });
   const nSlots =
     HUB_AGENTE_FERRAMENTAS_CATALOGO.length +
     customActivos.length +

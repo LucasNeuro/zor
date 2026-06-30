@@ -6,8 +6,8 @@ import {
 import { HUB_INT_SUPABASE_EXTERNO_CONSULTAR } from "@/lib/hub/supabase-externo-constants";
 import {
   CRM_INTEGRADOR_BUILTIN_MAP,
+  parseCrmEntidadeToolKey,
   WAJE_CRM_INTEGRADOR_ID,
-  type HubIntCrmKey,
 } from "@/lib/hub/crm-integrador-constants";
 import {
   ferramentaIntegradorPorKey,
@@ -573,10 +573,18 @@ async function executarCrmIntegrador(
   args: Record<string, unknown>,
   gcalCtx?: GcalFerramentaContexto
 ): Promise<string> {
-  const builtin = CRM_INTEGRADOR_BUILTIN_MAP[toolName as HubIntCrmKey];
+  const entSlug = parseCrmEntidadeToolKey(toolName);
+  let builtin: import("@/lib/hub/agente-ferramentas-registry").HubAgenteFerramentaId | undefined;
+  if (entSlug) {
+    builtin = "hub_operacao_empresa";
+  } else if (toolName in CRM_INTEGRADOR_BUILTIN_MAP) {
+    builtin = CRM_INTEGRADOR_BUILTIN_MAP[toolName as keyof typeof CRM_INTEGRADOR_BUILTIN_MAP];
+  }
   if (!builtin) {
     return JSON.stringify({ erro: "ferramenta_crm_desconhecida", chave: toolName });
   }
+
+  const payload = entSlug ? { ...args, entidade: entSlug } : args;
 
   const { executarFerramentaHub } = await import("@/lib/hub/executar-ferramenta-ia");
   const modoOperacao =
@@ -588,7 +596,7 @@ async function executarCrmIntegrador(
           ? "jobs_internos"
           : null;
 
-  return executarFerramentaHub(builtin, JSON.stringify(args), {
+  return executarFerramentaHub(builtin, JSON.stringify(payload), {
     leadId: gcalCtx?.leadId,
     agenteSlug: gcalCtx?.agenteSlug ?? "",
     tenantId: gcalCtx?.tenantId,

@@ -3,6 +3,8 @@
  * O tenant só guarda credenciais — a lógica HTTP fica no código.
  */
 
+import { ferramentasCrmPorEntidade } from "@/lib/hub/crm-integrador-entidades";
+
 export type HubIntegradorId =
   | "google_calendar"
   | "gmail"
@@ -398,34 +400,7 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
           additionalProperties: false,
         },
       },
-      {
-        ferramenta_key: "hub_int_crm_operar",
-        titulo: "Operações CRM (criar, actualizar, notas)",
-        descricao_curta: "CRUD validado — leads, negócios, contas, KPIs (agentes internos).",
-        descricao_modelo:
-          "Opera o CRM da empresa. Acções: listar_entidades | consultar | obter | criar | atualizar | nota. Confirme com o utilizador antes de gravar; só afirme sucesso com ok:true; releia com obter depois.",
-        politica: "escrita",
-        parametros_schema: {
-          type: "object",
-          properties: {
-            acao: {
-              type: "string",
-              enum: ["listar_entidades", "consultar", "obter", "criar", "atualizar", "nota"],
-            },
-            entidade: { type: "string" },
-            id: { type: "string", description: "UUID — obrigatório em obter e atualizar" },
-            dados: { type: "object", additionalProperties: true },
-            view: { type: "string" },
-            colunas: { type: "array", items: { type: "string" } },
-            limite: { type: "integer", minimum: 1, maximum: 50 },
-            filtro_coluna: { type: "string" },
-            filtro_texto: { type: "string" },
-            arquivar: { type: "boolean" },
-          },
-          required: ["acao"],
-          additionalProperties: false,
-        },
-      },
+      ...ferramentasCrmPorEntidade(),
       {
         ferramenta_key: "hub_int_crm_atualizar_lead",
         titulo: "Actualizar ficha do lead",

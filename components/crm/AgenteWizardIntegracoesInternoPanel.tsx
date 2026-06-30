@@ -106,8 +106,6 @@ export function AgenteWizardIntegracoesInternoPanel({
         agenteSlug={agenteSlug}
         agenteNome={agenteNome}
         layout="painel"
-        modoInterno
-        usoFerramentas={uso}
         onUsoChange={onUsoChange}
       />
 

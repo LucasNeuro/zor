@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { ChevronRight, Loader2, Plug, Unplug } from "lucide-react";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
-import { CrmToggleSwitch } from "@/components/crm/CrmToggleSwitch";
 import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
+import { crmBtnPrimaryLg } from "@/lib/crm/crm-button-styles";
 import {
   RF_BORDER_STRONG,
   RF_TEXT_MUTED,
@@ -13,9 +13,6 @@ import {
   RF_TEXT_SECONDARY,
   rfInputStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
-import { mergeUsoFerramentasComPadraoPreservandoCustom } from "@/lib/hub/agente-ferramentas-registry";
-import { HUB_INT_CRM_OPERAR } from "@/lib/hub/crm-integrador-constants";
-import { ferramentasDoIntegrador } from "@/lib/hub/integradores-catalogo";
 import { HUB_INT_SUPABASE_EXTERNO_CONSULTAR } from "@/lib/hub/supabase-externo-constants";
 import { mensagemUsuario } from "@/lib/crm/mensagens-usuario";
 import { crmApiHeaders } from "@/lib/internal-api-headers-client";
@@ -23,8 +20,7 @@ import { crmApiHeaders } from "@/lib/internal-api-headers-client";
 export type AgenteSupabaseCrmBlockProps = {
   agenteSlug: string;
   agenteNome?: string;
-  modoInterno?: boolean;
-  usoFerramentas: Record<string, boolean>;
+  /** Desactiva ferramenta externa ao desligar base (opcional). */
   onUsoChange?: (ferramentaKey: string, ativo: boolean) => void;
   layout?: "card" | "painel";
 };
@@ -38,97 +34,20 @@ type StatusPayload = {
   };
 };
 
-const FERRAMENTAS_WAJE = ferramentasDoIntegrador("waje_crm");
-const FERRAMENTA_EXTERNA = ferramentasDoIntegrador("supabase_externo")[0];
-
-function toolRow(
-  key: string,
-  titulo: string,
-  descricao: string,
-  checked: boolean,
-  onChange: (v: boolean) => void,
-  disabled?: boolean,
-  badge?: string
-) {
-  const labelId = `supabase-tool-${key}`;
-  return (
-    <div
-      key={key}
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 12,
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: `1px solid ${checked ? "rgba(62, 207, 142, 0.35)" : RF_BORDER_STRONG}`,
-        background: checked ? "rgba(62, 207, 142, 0.07)" : "rgba(6, 13, 8, 0.72)",
-        opacity: disabled ? 0.65 : 1,
-      }}
-    >
-      <div
-        style={{
-          width: 42,
-          height: 42,
-          borderRadius: 10,
-          background: checked ? "rgba(62, 207, 142, 0.14)" : "rgba(11, 31, 16, 0.9)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          marginTop: 2,
-        }}
-      >
-        <IntegracaoMarcaIcon variant="supabase" size={24} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-          <span id={labelId} style={{ color: RF_TEXT_PRIMARY, fontSize: 13, fontWeight: 700 }}>
-            {titulo}
-          </span>
-          {badge ? (
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 800,
-                letterSpacing: 0.06,
-                color: "#3ECF8E",
-                border: "1px solid rgba(62, 207, 142, 0.35)",
-                borderRadius: 4,
-                padding: "2px 6px",
-              }}
-            >
-              {badge}
-            </span>
-          ) : null}
-        </div>
-        <p style={{ margin: "6px 0 0", fontSize: 12, color: RF_TEXT_SECONDARY, lineHeight: 1.45 }}>{descricao}</p>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: checked ? "#3fb950" : RF_TEXT_MUTED }}>
-          {checked ? "ACTIVO" : "INACTIVO"}
-        </span>
-        <CrmToggleSwitch
-          checked={checked}
-          onCheckedChange={onChange}
-          disabled={disabled}
-          labelledBy={labelId}
-          variant="dark"
-        />
-      </div>
-    </div>
-  );
+function supabaseBadge(ligado: boolean): { bg: string; fg: string; rotulo: string } {
+  if (ligado) {
+    return { bg: "#23863633", fg: "#3fb950", rotulo: "LIGADO" };
+  }
+  return { bg: "#dcebd8", fg: "#5d7a67", rotulo: "NÃO LIGADO" };
 }
 
 export function AgenteSupabaseCrmBlock({
   agenteSlug,
   agenteNome,
-  modoInterno = false,
-  usoFerramentas,
   onUsoChange,
   layout = "card",
 }: AgenteSupabaseCrmBlockProps) {
   const isCard = layout === "card";
-  const uso = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentas);
 
   const [sideoverOpen, setSideoverOpen] = useState(false);
   const [status, setStatus] = useState<StatusPayload | null>(null);
@@ -141,6 +60,7 @@ export function AgenteSupabaseCrmBlock({
 
   const wajeOk = status?.waje_crm?.configurado !== false;
   const externoOk = status?.supabase_externo?.configurado === true;
+  const badge = supabaseBadge(wajeOk);
 
   const refreshStatus = useCallback(async () => {
     setCarregando(true);
@@ -205,7 +125,7 @@ export function AgenteSupabaseCrmBlock({
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Falha ao desligar.");
       }
-      if (onUsoChange) onUsoChange(HUB_INT_SUPABASE_EXTERNO_CONSULTAR, false);
+      onUsoChange?.(HUB_INT_SUPABASE_EXTERNO_CONSULTAR, false);
       await refreshStatus();
     } catch (e) {
       setErro(mensagemUsuario(e instanceof Error ? e.message : "Erro ao desligar."));
@@ -231,10 +151,21 @@ export function AgenteSupabaseCrmBlock({
     color: busy ? "#c8dcc8" : BRAND_GREEN_BRIGHT,
   };
 
-  const ferramentasVisiveis = FERRAMENTAS_WAJE.filter((f) => {
-    if (f.ferramenta_key === HUB_INT_CRM_OPERAR && !modoInterno) return false;
-    return true;
-  });
+  const btnSecondaryDark: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    minHeight: 40,
+    padding: "9px 14px",
+    borderRadius: 8,
+    border: `1px solid ${RF_BORDER_STRONG}`,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    background: "transparent",
+    color: RF_TEXT_PRIMARY,
+  };
 
   const painelConfig = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -273,8 +204,8 @@ export function AgenteSupabaseCrmBlock({
           </span>
         </div>
         <p style={{ margin: 0, fontSize: 11, color: RF_TEXT_MUTED, lineHeight: 1.5 }}>
-          Leads, negócios, financeiro e views <code>vw_rel_*</code> do seu tenant. Escrita validada no CRM — sem SQL
-          livre.
+          A base Waje fica sempre activa para o tenant. Active ou restrinja cada operação CRM na secção{" "}
+          <strong>Integrações ligadas</strong> abaixo.
         </p>
       </div>
 
@@ -303,8 +234,7 @@ export function AgenteSupabaseCrmBlock({
         ) : (
           <>
             <p style={{ margin: "0 0 12px", fontSize: 11, color: RF_TEXT_SECONDARY, lineHeight: 1.5 }}>
-              Ligue outro projecto Supabase para o agente <strong>consultar</strong> tabelas/views e comparar com o CRM
-              Waje. Use chave <code>service_role</code> ou <code>anon</code> com RLS que permita leitura.
+              Ligue outro projecto Supabase para o agente consultar tabelas/views e comparar com o CRM Waje.
             </p>
             <label style={{ display: "block", marginBottom: 10 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: RF_TEXT_MUTED }}>Rótulo</span>
@@ -354,80 +284,8 @@ export function AgenteSupabaseCrmBlock({
           {erro}
         </p>
       ) : null}
-
-      <div>
-        <p
-          style={{
-            margin: "0 0 10px",
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 0.04,
-            color: RF_TEXT_MUTED,
-            textTransform: "uppercase",
-          }}
-        >
-          Funções — base Waje
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {ferramentasVisiveis.map((f) =>
-            toolRow(
-              f.ferramenta_key,
-              f.titulo,
-              f.descricao_curta,
-              uso[f.ferramenta_key] === true,
-              (v) => onUsoChange?.(f.ferramenta_key, v),
-              !onUsoChange,
-              "CRM Waje"
-            )
-          )}
-        </div>
-      </div>
-
-      {FERRAMENTA_EXTERNA ? (
-        <div>
-          <p
-            style={{
-              margin: "8px 0 10px",
-              fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: 0.04,
-              color: RF_TEXT_MUTED,
-              textTransform: "uppercase",
-            }}
-          >
-            Funções — base externa
-          </p>
-          {toolRow(
-            FERRAMENTA_EXTERNA.ferramenta_key,
-            FERRAMENTA_EXTERNA.titulo,
-            externoOk
-              ? FERRAMENTA_EXTERNA.descricao_curta
-              : `${FERRAMENTA_EXTERNA.descricao_curta} (ligue a base externa acima primeiro)`,
-            uso[FERRAMENTA_EXTERNA.ferramenta_key] === true,
-            (v) => onUsoChange?.(FERRAMENTA_EXTERNA.ferramenta_key, v),
-            !externoOk || !onUsoChange,
-            "Supabase externo"
-          )}
-        </div>
-      ) : null}
     </div>
   );
-
-  const btnSecondaryDark: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    minHeight: 40,
-    padding: "9px 14px",
-    borderRadius: 8,
-    border: `1px solid ${RF_BORDER_STRONG}`,
-    fontSize: 12,
-    fontWeight: 700,
-    cursor: "pointer",
-    background: "transparent",
-    color: RF_TEXT_PRIMARY,
-  };
 
   const sideoverFooter = (
     <button type="button" style={btnSecondaryDark} onClick={() => setSideoverOpen(false)}>
@@ -439,68 +297,106 @@ export function AgenteSupabaseCrmBlock({
     return painelConfig;
   }
 
-  const subtitulo =
-    externoOk && status?.supabase_externo?.project_host
-      ? `Waje + ${status.supabase_externo.project_host}`
-      : "CRM Waje · Supabase da plataforma";
+  const subtituloCard = externoOk
+    ? `CRM Waje · + externo ${status?.supabase_externo?.project_host ?? ""}`
+    : "CRM Waje · Supabase da plataforma";
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setSideoverOpen(true)}
+      <div
         style={{
-          width: "100%",
-          textAlign: "left",
-          cursor: "pointer",
-          border: `1px solid ${RF_BORDER_STRONG}`,
+          marginBottom: 18,
           borderRadius: 14,
-          padding: "14px 16px",
-          background: "rgba(6, 13, 8, 0.72)",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
+          border: "1px solid #dcebd8",
+          background: "#ffffff",
+          boxShadow: "0 4px 16px rgba(11, 31, 16, 0.06)",
+          overflow: "hidden",
         }}
       >
         <div
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 12,
-            background: "rgba(62, 207, 142, 0.12)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
+            height: 3,
+            background: "linear-gradient(90deg, #249361, #3ecf8e)",
+            opacity: 0.95,
           }}
-        >
-          <IntegracaoMarcaIcon variant="supabase" size={28} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: RF_TEXT_PRIMARY }}>
-            Base de dados CRM (Supabase)
-          </p>
-          <p style={{ margin: "4px 0 0", fontSize: 12, color: RF_TEXT_SECONDARY }}>{subtitulo}</p>
-          {agenteNome ? (
-            <p style={{ margin: "4px 0 0", fontSize: 11, color: RF_TEXT_MUTED }}>Agente: {agenteNome}</p>
-          ) : null}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-          <span
+          aria-hidden
+        />
+        <div style={{ padding: "14px 16px 16px" }}>
+          <div
             style={{
-              fontSize: 10,
-              fontWeight: 800,
-              color: wajeOk ? "#3fb950" : RF_TEXT_MUTED,
-              border: `1px solid ${wajeOk ? "rgba(63, 185, 80, 0.35)" : RF_BORDER_STRONG}`,
-              borderRadius: 4,
-              padding: "2px 8px",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
             }}
           >
-            {carregando ? "…" : wajeOk ? "WAJE OK" : "CRM"}
-          </span>
-          <ChevronRight size={20} color={RF_TEXT_MUTED} aria-hidden />
+            <div style={{ display: "flex", gap: 12, minWidth: 0, alignItems: "center" }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: "linear-gradient(145deg, rgba(62,207,142,0.14), rgba(36,147,97,0.1))",
+                  border: "1px solid rgba(62,207,142,0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <IntegracaoMarcaIcon variant="supabase" size={22} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, color: "#0b2210", fontSize: 14, fontWeight: 800 }}>
+                  Base de dados CRM (Supabase)
+                </p>
+                <p style={{ margin: "4px 0 0", color: "#5d7a67", fontSize: 12, lineHeight: 1.45 }}>
+                  {subtituloCard} ·{" "}
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      background: badge.bg,
+                      color: badge.fg,
+                    }}
+                  >
+                    {carregando ? "…" : badge.rotulo}
+                  </span>
+                </p>
+                {wajeOk && status?.waje_crm?.project_url_mascarado ? (
+                  <p style={{ margin: "6px 0 0", color: "#6e7681", fontSize: 11 }}>
+                    Projecto: <strong style={{ color: "#2d4a38" }}>{status.waje_crm.project_url_mascarado}</strong>
+                  </p>
+                ) : null}
+                {externoOk && status?.supabase_externo?.project_host ? (
+                  <p style={{ margin: "4px 0 0", color: "#6e7681", fontSize: 11 }}>
+                    Externo: <strong style={{ color: "#2d4a38" }}>{status.supabase_externo.project_host}</strong>
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSideoverOpen(true)}
+              style={{
+                ...crmBtnPrimaryLg(false),
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                flex: "none",
+                padding: "9px 14px",
+              }}
+            >
+              Configurar ligação
+              <ChevronRight size={16} aria-hidden />
+            </button>
+          </div>
         </div>
-      </button>
+      </div>
 
       <CrmIntegracaoSideoverShell
         open={sideoverOpen}

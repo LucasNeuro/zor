@@ -19,12 +19,15 @@ export type OperacaoEmpresaEntidade =
   | "lead"
   | "negocio"
   | "pessoa"
+  | "empresa"
   | "nota"
   | "conta_receber"
   | "conta_pagar"
   | "atividade"
   | "aprovacao"
   | "alerta"
+  | "conversa"
+  | "servico_catalogo"
   | "parceiro"
   | "servico"
   | "proposta"
@@ -107,6 +110,13 @@ const ENTIDADES: Record<OperacaoEmpresaEntidade, EntidadeConfig> = {
     camposCriar: ["nome", "telefone", "email", "origem", "cidade", "estado"],
     camposAtualizar: ["nome", "telefone", "email", "origem", "cidade", "estado", "tags"],
   },
+  empresa: {
+    tabela: "hub_empresas",
+    label: "Empresa",
+    camposLeitura: ["id", "codigo", "nome", "cnpj", "email", "telefone", "cidade", "estado", "ativo", "criado_em"],
+    camposCriar: ["nome", "cnpj", "email", "telefone", "cidade", "estado"],
+    camposAtualizar: ["nome", "cnpj", "email", "telefone", "cidade", "estado", "ativo"],
+  },
   nota: {
     tabela: "hub_notas",
     view: "vw_rel_notas_crm",
@@ -153,6 +163,28 @@ const ENTIDADES: Record<OperacaoEmpresaEntidade, EntidadeConfig> = {
     camposLeitura: ["id", "titulo", "severidade", "status", "criado_em"],
     camposAtualizar: ["status"],
     statusArquivar: "resolvido",
+  },
+  conversa: {
+    tabela: "hub_conversas",
+    label: "Conversa",
+    camposLeitura: [
+      "id",
+      "lead_id",
+      "canal",
+      "status",
+      "ia_ativa",
+      "total_mensagens",
+      "ultima_mensagem_em",
+      "criado_em",
+    ],
+    camposAtualizar: ["status", "ia_ativa", "ia_pausada_motivo"],
+  },
+  servico_catalogo: {
+    tabela: "hub_tenant_servicos_catalogo",
+    label: "Catálogo de serviços",
+    camposLeitura: ["id", "slug", "nome", "descricao", "preco_referencia", "tipo", "ativo", "criado_em"],
+    camposCriar: ["slug", "nome", "descricao", "preco_referencia", "tipo", "ativo"],
+    camposAtualizar: ["nome", "descricao", "preco_referencia", "tipo", "ativo"],
   },
   parceiro: {
     tabela: "hub_parceiros",

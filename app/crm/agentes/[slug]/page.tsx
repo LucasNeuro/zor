@@ -1178,8 +1178,6 @@ export default function AgentePage() {
                   agenteSlug={slug}
                   agenteNome={agente.nome}
                   layout="card"
-                  modoInterno={agente.modo_operacao === "jobs_internos"}
-                  usoFerramentas={usoFerramentasIa}
                   onUsoChange={(id, ativo) =>
                     setUsoFerramentasIa((prev) => ({
                       ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),

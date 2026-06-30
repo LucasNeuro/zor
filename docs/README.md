@@ -6,6 +6,7 @@ Toda a documentação Markdown do produto está nesta pasta **`escritorio-virtua
 
 | Ficheiro | Conteúdo |
 |----------|----------|
+| [rfc-harness-interno-v0.1.md](./rfc-harness-interno-v0.1.md) | RFC: hiperagentes empresariais — harness, visão de produto, roadmap |
 | [01_documento_mestre.md](./01_documento_mestre.md) | Documento mestre (export Word / visão e fases) |
 | [UAZAPI_SETUP.md](./UAZAPI_SETUP.md) | UAZAPI, webhook, variáveis WhatsApp |
 | [RENDER_DEPLOY.md](./RENDER_DEPLOY.md) | Deploy no Render + webhook global UAZAPI |

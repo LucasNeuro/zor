@@ -110,11 +110,7 @@ function toolRow(
         <CrmToggleSwitch
           checked={checked}
           onCheckedChange={onChange}
-<<<<<<< HEAD
           disabled={disabled}
-=======
-          disabled={disabled || !onUsoChange}
->>>>>>> cd2a919fbad5b416254771deb318fa71c2b90dea
           labelledBy={labelId}
           variant="dark"
         />
@@ -380,11 +376,7 @@ export function AgenteSupabaseCrmBlock({
               f.descricao_curta,
               uso[f.ferramenta_key] === true,
               (v) => onUsoChange?.(f.ferramenta_key, v),
-<<<<<<< HEAD
               !onUsoChange,
-=======
-              false,
->>>>>>> cd2a919fbad5b416254771deb318fa71c2b90dea
               "CRM Waje"
             )
           )}
@@ -413,11 +405,7 @@ export function AgenteSupabaseCrmBlock({
               : `${FERRAMENTA_EXTERNA.descricao_curta} (ligue a base externa acima primeiro)`,
             uso[FERRAMENTA_EXTERNA.ferramenta_key] === true,
             (v) => onUsoChange?.(FERRAMENTA_EXTERNA.ferramenta_key, v),
-<<<<<<< HEAD
             !externoOk || !onUsoChange,
-=======
-            !externoOk,
->>>>>>> cd2a919fbad5b416254771deb318fa71c2b90dea
             "Supabase externo"
           )}
         </div>
@@ -425,7 +413,6 @@ export function AgenteSupabaseCrmBlock({
     </div>
   );
 
-<<<<<<< HEAD
   const btnSecondaryDark: CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
@@ -448,8 +435,6 @@ export function AgenteSupabaseCrmBlock({
     </button>
   );
 
-=======
->>>>>>> cd2a919fbad5b416254771deb318fa71c2b90dea
   if (!isCard) {
     return painelConfig;
   }
@@ -520,7 +505,6 @@ export function AgenteSupabaseCrmBlock({
       <CrmIntegracaoSideoverShell
         open={sideoverOpen}
         onClose={() => setSideoverOpen(false)}
-<<<<<<< HEAD
         title={agenteNome?.trim() || agenteSlug}
         subtitle="Supabase — CRM Waje e bases externas"
         footer={sideoverFooter}
@@ -528,10 +512,6 @@ export function AgenteSupabaseCrmBlock({
         sectionLabel="Supabase"
         loading={sideoverOpen && carregando}
         loadingLabel="A carregar…"
-=======
-        titulo="Supabase — CRM Waje e bases externas"
-        subtitulo={agenteSlug}
->>>>>>> cd2a919fbad5b416254771deb318fa71c2b90dea
       >
         {painelConfig}
       </CrmIntegracaoSideoverShell>

@@ -71,9 +71,10 @@ function trunc(s: string, n: number): string {
 
 const BLOCO_SUPERAGENTE = `### SUPERAGENTE (canvas + Mistral)
 - **hub_superagente_dados** — catálogo completo vw_rel_* e consultas com filtros.
-- **hub_superagente_artefato** — página HTML com gráficos (Chart.js); devolve url_publica para partilhar no WhatsApp gestor.
+- **hub_superagente_artefato** — página HTML com gráficos reais (Chart.js); a ferramenta devolve **url_publica** (ex.: https://synkronia.com.br/artefato/{uuid}).
 - **hub_mistral_percepcao** — OCR, transcrição de áudio, visão de imagens (Mistral).
-- Quando gerar relatório visual, use hub_superagente_artefato e inclua o link na resposta.`;
+- Para relatório visual: **sempre** chame hub_superagente_artefato e cite **apenas** a url_publica devolvida pela ferramenta.
+- **Nunca** invente URLs (ex.: artefato.waje.com.br, ficheiros .html fictícios). Sem url_publica da ferramenta, diga que o relatório não foi publicado.`;
 
 function extrairUrlsPublicasDeResultadoFerramenta(result: string): string[] {
   try {

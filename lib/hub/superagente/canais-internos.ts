@@ -1,3 +1,5 @@
+import { isUrlArtefatoApp } from "@/lib/hub/superagente/artefato-public-url";
+
 /** Canais que partilham o mesmo motor superagente (ferramentas, skills, artefactos). */
 export type SuperagenteCanalInterno = "copiloto_crm" | "whatsapp_gestor" | "ciclo_programado";
 
@@ -17,5 +19,10 @@ export function linhaCanalSuperagente(canal: SuperagenteCanalInterno, briefCiclo
 }
 
 export function formatarLinksArtefactosParaTexto(urls: string[]): string {
-  return urls.map((u, i) => `📊 Relatório ${i + 1}: ${u}`).join("\n");
+  return urls
+    .map((u, i) => {
+      const label = isUrlArtefatoApp(u) ? "Relatório interativo" : "Relatório";
+      return `📊 ${label} ${i + 1}:\n${u}`;
+    })
+    .join("\n\n");
 }

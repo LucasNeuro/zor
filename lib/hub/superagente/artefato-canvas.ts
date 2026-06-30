@@ -1,5 +1,5 @@
 import type { ArtefatoCanvasSpec, GraficoArtefatoSpec, SecaoArtefatoSpec } from "@/lib/hub/superagente/types";
-import { uploadArquivo } from "@/lib/ia/storage";
+import { publicarArtefatoHtml } from "@/lib/hub/superagente/publicar-artefato-html";
 
 function escapeHtml(s: string): string {
   return s
@@ -40,6 +40,7 @@ function renderGraficoHtml(grafico: GraficoArtefatoSpec, idx: number): string {
     },
     options: {
       responsive: true,
+      maintainAspectRatio: true,
       plugins: { title: { display: Boolean(grafico.titulo), text: grafico.titulo || "" } },
     },
   });
@@ -116,43 +117,19 @@ export async function publicarArtefatoCanvas(
   }
 
   const html = gerarHtmlArtefatoCanvas(spec);
-  const buffer = Buffer.from(html, "utf-8");
-  const salvo = await uploadArquivo({
-    arquivo: buffer,
-    nome: `artefato_${Date.now()}.html`,
-    tipo: "relatorio",
-    origem: "ia_gerado",
+  const pub = await publicarArtefatoHtml(html, {
+    titulo: spec.titulo,
     agenteSlug: meta.agenteSlug,
-    contentType: "text/html; charset=utf-8",
+    tenantId: meta.tenantId,
+    telefoneGestor: meta.telefoneGestor,
     metadata: {
       ferramenta: "hub_superagente_artefato",
-      tenant_id: meta.tenantId,
-      telefone_gestor: meta.telefoneGestor ?? null,
-      titulo: spec.titulo.slice(0, 200),
+      tema: spec.tema ?? "escuro",
+      secoes: spec.secoes.length,
     },
   });
 
-  if (!salvo) return { ok: false, erro: "upload_falhou" };
+  if (!pub.ok) return { ok: false, erro: pub.erro };
 
-  try {
-    const { createClient } = await import("@supabase/supabase-js");
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-    if (url && key) {
-      const db = createClient(url, key, { auth: { persistSession: false } });
-      await db.from("hub_superagente_artefatos").insert({
-        tenant_id: meta.tenantId,
-        agente_slug: meta.agenteSlug,
-        titulo: spec.titulo.slice(0, 240),
-        url_publica: salvo.url,
-        arquivo_id: salvo.id,
-        telefone_gestor: meta.telefoneGestor ?? null,
-        metadata: { tema: spec.tema ?? "escuro", secoes: spec.secoes.length },
-      });
-    }
-  } catch {
-    /* tabela opcional até migração aplicada */
-  }
-
-  return { ok: true, url: salvo.url, arquivo_id: salvo.id };
+  return { ok: true, url: pub.url, arquivo_id: pub.artefato_id };
 }

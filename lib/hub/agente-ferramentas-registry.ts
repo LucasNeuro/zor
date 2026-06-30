@@ -296,7 +296,7 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
     mistralFunction: {
       name: "hub_superagente_artefato",
       description:
-        "Cria artefacto canvas HTML com gráficos e texto. Devolve url_publica para o empresário abrir e partilhar.",
+        "Cria página HTML com gráficos Chart.js reais. Devolve url_publica em /artefato/{id} no domínio da app (synkronia.com.br). Nunca invente outro domínio.",
       parameters: {
         type: "object",
         properties: {

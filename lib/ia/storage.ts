@@ -54,6 +54,7 @@ const BUCKETS = {
   videos: "hub-videos",
   audios: "hub-audios",
   documentos: "hub-documentos",
+  artefatos: "hub-superagente-artefatos",
   criativos: "hub-criativos",
   conversas: "hub-conversas",
 };
@@ -73,7 +74,7 @@ export async function uploadArquivo(dados: {
   contentType?: string;
 }): Promise<ArquivoMidia | null> {
   const db = supabase();
-  const bucket = selecionarBucket(dados.tipo);
+  const bucket = selecionarBucket(dados.tipo, dados.origem, dados.metadata);
   const caminhoArquivo = gerarCaminho(dados);
 
   const { error: uploadError } = await db.storage
@@ -205,10 +206,23 @@ export async function buscarArquivosLead(leadId: string): Promise<ArquivoMidia[]
 }
 
 // ── HELPERS ───────────────────────────────────────────────────
-function selecionarBucket(tipo: TipoMidia): string {
+function selecionarBucket(
+  tipo: TipoMidia,
+  origem?: OrigemMidia,
+  metadata?: Record<string, unknown>
+): string {
   if (tipo === "imagem" || tipo === "criativo") return BUCKETS.imagens;
   if (tipo === "video") return BUCKETS.videos;
   if (tipo === "audio") return BUCKETS.audios;
+  if (tipo === "relatorio" && origem === "ia_gerado") {
+    const ferramenta = String(metadata?.ferramenta ?? "").trim();
+    if (
+      ferramenta === "hub_superagente_artefato" ||
+      ferramenta === "hub_relatorio_html_simples"
+    ) {
+      return BUCKETS.artefatos;
+    }
+  }
   return BUCKETS.documentos;
 }
 

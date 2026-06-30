@@ -8,7 +8,6 @@ import {
 } from "@/lib/hub/ferramentas-externas-db";
 import { executarFerramentaHttp } from "@/lib/hub/executar-ferramenta-http";
 import { smartPosProcessarResultadoFerramenta } from "@/lib/hub/smart-pos-ferramenta";
-import { uploadArquivo } from "@/lib/ia/storage";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
@@ -294,6 +293,7 @@ async function executarFerramentaHubBuiltin(
       if (!titulo || !textoPlano) {
         return JSON.stringify({ erro: "titulo_e_texto_plano_obrigatorios" });
       }
+      const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
       const tituloEsc = escapeHtml(titulo.slice(0, 240));
       const body = textoPlano
         .slice(0, 50_000)
@@ -301,22 +301,19 @@ async function executarFerramentaHubBuiltin(
         .map((linha) => `<p>${escapeHtml(linha)}</p>`)
         .join("");
       const html = `<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${tituloEsc}</title><style>body{font-family:system-ui,sans-serif;padding:1.25rem;line-height:1.5;color:#111}h1{font-size:1.25rem}</style></head><body><h1>${tituloEsc}</h1>${body}</body></html>`;
-      const buffer = Buffer.from(html, "utf-8");
-      const salvo = await uploadArquivo({
-        arquivo: buffer,
-        nome: `relatorio_ia_${Date.now()}.html`,
-        tipo: "relatorio",
-        origem: "ia_gerado",
-        leadId: ctx.leadId ?? undefined,
+      const { publicarArtefatoHtml } = await import("@/lib/hub/superagente/publicar-artefato-html");
+      const pub = await publicarArtefatoHtml(html, {
+        titulo,
         agenteSlug: ctx.agenteSlug,
-        contentType: "text/html; charset=utf-8",
+        tenantId: tenant,
+        telefoneGestor: ctx.telefoneSessao ?? null,
         metadata: { ferramenta: "hub_relatorio_html_simples" },
       });
-      if (!salvo) return JSON.stringify({ erro: "upload_ou_gravacao_falhou" });
+      if (!pub.ok) return JSON.stringify({ erro: pub.erro });
       return JSON.stringify({
         ok: true,
-        url_publica: salvo.url,
-        arquivo_id: salvo.id,
+        url_publica: pub.url,
+        arquivo_id: pub.artefato_id,
       });
     }
     case "hub_superagente_dados": {

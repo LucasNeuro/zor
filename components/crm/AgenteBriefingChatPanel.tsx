@@ -12,6 +12,7 @@ import {
   type ModoOperacaoAgente,
 } from "@/lib/hub/agente-modo-operacao";
 import { agenteEhPerfilAnalistaCrm } from "@/lib/hub/copiloto-interno-escopo";
+import { isUrlArtefatoApp } from "@/lib/hub/superagente/artefato-public-url";
 import {
   RF_ACCENT,
   RF_BORDER,
@@ -411,7 +412,7 @@ export function AgenteBriefingDrawer({
                       (m.metadata.tipo === "artefato_link" ||
                         (Array.isArray(m.metadata.urls_publicas) &&
                           (m.metadata.urls_publicas as string[]).length > 0)) ? (
-                        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
                           {(
                             (Array.isArray(m.metadata.urls)
                               ? (m.metadata.urls as string[])
@@ -419,20 +420,36 @@ export function AgenteBriefingDrawer({
                                 ? (m.metadata.urls_publicas as string[])
                                 : []) as string[]
                           ).map((url) => (
-                            <a
-                              key={url}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 700,
-                                color: RF_ACCENT,
-                                wordBreak: "break-all",
-                              }}
-                            >
-                              Abrir relatório / canvas →
-                            </a>
+                            <div key={url} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: RF_ACCENT,
+                                  wordBreak: "break-all",
+                                }}
+                              >
+                                Abrir relatório / canvas →
+                              </a>
+                              {isUrlArtefatoApp(url) ? (
+                                <iframe
+                                  src={url}
+                                  title="Relatório gerado pelo superagente"
+                                  sandbox="allow-scripts allow-same-origin"
+                                  style={{
+                                    width: "100%",
+                                    minHeight: 360,
+                                    maxHeight: 520,
+                                    border: `1px solid ${RF_BORDER}`,
+                                    borderRadius: 12,
+                                    background: "#0d1117",
+                                  }}
+                                />
+                              ) : null}
+                            </div>
                           ))}
                         </div>
                       ) : null}

@@ -5,6 +5,7 @@ export type SendGmailEmailInput = {
   to: string;
   subject: string;
   text: string;
+  html?: string | null;
   from?: string | null;
   fromName?: string | null;
   inReplyTo?: string | null;
@@ -29,26 +30,64 @@ function foldHeaderValue(value: string): string {
   return value.replace(/\r?\n/g, " ").trim();
 }
 
-/** Envia e-mail via Gmail API (OAuth bearer). Suporta threading RFC + threadId Gmail. */
+function montarCorpoMime(text: string, html?: string | null): { contentType: string; body: string } {
+  const plain = (text || "").trim();
+  const rich = (html || "").trim();
+  if (!rich) {
+    return {
+      contentType: "Content-Type: text/plain; charset=utf-8",
+      body: plain,
+    };
+  }
+
+  const boundary = `waje_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  const parts = [
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    plain,
+    `--${boundary}`,
+    "Content-Type: text/html; charset=utf-8",
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    rich,
+    `--${boundary}--`,
+    "",
+  ];
+  return {
+    contentType: `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    body: parts.join("\r\n"),
+  };
+}
+
+/** Envia e-mail via Gmail API (OAuth bearer). Suporta HTML multipart + threading RFC. */
 export async function sendGmailEmail(input: SendGmailEmailInput): Promise<SendGmailEmailResult> {
   const token = input.bearerToken.trim();
   const to = input.to.trim();
   const subject = foldHeaderValue(input.subject || "");
   const text = (input.text || "").trim();
+  const html = input.html?.trim() || "";
 
   if (!token) return { ok: false, error: "gmail_sem_token" };
   if (!to) return { ok: false, error: "Destinatário (to) obrigatório" };
   if (!subject) return { ok: false, error: "Assunto (subject) obrigatório" };
-  if (!text) return { ok: false, error: "Corpo (text) obrigatório" };
+  if (!text && !html) return { ok: false, error: "Corpo (text ou html) obrigatório" };
 
   const fromLine = montarFromLine(input.from, input.fromName);
   if (!fromLine) return { ok: false, error: "Remetente (from) obrigatório para Gmail OAuth" };
 
-  const lines = [`From: ${fromLine}`, `To: ${to}`, "MIME-Version: 1.0", "Content-Type: text/plain; charset=utf-8"];
-  lines.push(`Subject: ${subject}`);
+  const mime = montarCorpoMime(text || html.replace(/<[^>]+>/g, " "), html || null);
+  const lines = [
+    `From: ${fromLine}`,
+    `To: ${to}`,
+    "MIME-Version: 1.0",
+    mime.contentType,
+    `Subject: ${subject}`,
+  ];
   if (input.inReplyTo?.trim()) lines.push(`In-Reply-To: ${foldHeaderValue(input.inReplyTo.trim())}`);
   if (input.references?.trim()) lines.push(`References: ${foldHeaderValue(input.references.trim())}`);
-  lines.push("", text);
+  lines.push("", mime.body);
 
   const raw = Buffer.from(lines.join("\r\n"), "utf-8").toString("base64url");
   const body: Record<string, unknown> = { raw };

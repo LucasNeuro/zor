@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         threadId: gmailThreadId,
         replyTo: agenteRow.email_inbound,
       },
-      { origin }
+      { origin, agenteSlug }
     );
 
     if (!send.ok) {

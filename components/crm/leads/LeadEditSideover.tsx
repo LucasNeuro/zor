@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Briefcase, History, MessageSquare, UserRound } from "lucide-react";
+import { ArrowLeft, History, MessageSquare, UserRound } from "lucide-react";
 import { crmRetrofitPageXClass } from "@/components/crm/CrmRetrofitTablePanel";
 import {
   CrmSideoverActionBtn,
@@ -19,6 +19,7 @@ import { LeadChatTab } from "@/components/crm/leads/LeadChatTab";
 import { LeadEmailChatTab } from "@/components/crm/leads/LeadEmailChatTab";
 import { LeadNegocioPanel } from "@/components/crm/leads/LeadNegocioPanel";
 import { LeadNegociosListPanel } from "@/components/crm/leads/LeadNegociosListPanel";
+import { LeadNegocioToolbarBtns } from "@/components/crm/leads/LeadNegocioToolbarBtns";
 import { LeadSideoverChatToggle } from "@/components/crm/leads/LeadSideoverChatRail";
 import {
   LeadSideoverNavRail,
@@ -28,7 +29,8 @@ import { LeadObservacoesTab, type CrmNota } from "@/components/crm/leads/LeadObs
 import { LeadTimelineTab } from "@/components/crm/leads/LeadTimelineTab";
 import { LeadStatusTimelineTab } from "@/components/crm/leads/LeadStatusTimelineTab";
 import { LEAD_ORIGENS } from "@/lib/crm/lead-cadastro";
-import { estagioParaColunaKanban } from "@/lib/crm/estagio-map";
+import { estagioParaColunaKanban, buildLeadEstagioPatch } from "@/lib/crm/estagio-map";
+import { LeadFunilEstagioPicker } from "@/components/crm/leads/LeadFunilEstagioPicker";
 import {
   RF_LIGHT_INPUT_STYLE,
   RF_LIGHT_LABEL_STYLE,
@@ -136,6 +138,7 @@ export function LeadEditSideover({
   const [notas, setNotas] = useState<CrmNota[]>([]);
   const [leadMetadata, setLeadMetadata] = useState<unknown>(null);
   const [timelineEvents, setTimelineEvents] = useState<LeadTimelineEvent[]>([]);
+  const [movendoEstagio, setMovendoEstagio] = useState(false);
   const [novaNota, setNovaNota] = useState("");
   const [adicionandoNota, setAdicionandoNota] = useState(false);
   const [erroObservacao, setErroObservacao] = useState("");
@@ -155,7 +158,7 @@ export function LeadEditSideover({
   });
 
   const navActive: LeadSideoverNavId | null =
-    screen === "negocio" || screen === "status_timeline" ? null : screen;
+    screen === "status_timeline" ? null : screen === "negocio" ? "negocios" : screen;
 
   const canalLead = useMemo(() => {
     if (!lead) return { showWhatsapp: true, showEmail: false };
@@ -305,12 +308,27 @@ export function LeadEditSideover({
   }
 
   async function moverEstagio(novoEstagio: string) {
-    if (!lead) return;
+    if (!lead || movendoEstagio) return;
+    const colunaAtual =
+      context === "atendimento"
+        ? lead.estagio_atendimento || "novo"
+        : estagioParaColunaKanban(lead, estagios.map((e) => e.id));
+    if (colunaAtual === novoEstagio) return;
+
+    setMovendoEstagio(true);
+    setErro("");
     const patch =
       context === "atendimento"
-        ? { estagio_atendimento: novoEstagio }
-        : { estagio: novoEstagio, _estagio_anterior: lead.estagio };
+        ? {
+            estagio_atendimento: novoEstagio,
+            _estagio_anterior: lead.estagio_atendimento ?? "novo",
+          }
+        : {
+            ...buildLeadEstagioPatch(novoEstagio),
+            _estagio_anterior: lead.estagio ?? lead.estagio_funil ?? "novo",
+          };
     const res = await patchLeadCrm(lead.id, patch);
+    setMovendoEstagio(false);
     if (!res.ok) {
       setErro(res.error);
       return;
@@ -327,7 +345,7 @@ export function LeadEditSideover({
       const est = String(data.estagio_funil ?? data.estagio ?? novoEstagio);
       onUpdated?.({ ...lead, estagio: est, estagio_funil: est });
     }
-    void carregarDetalhe(lead.id);
+    await carregarDetalhe(lead.id);
   }
 
   function toggleScreen(next: ScreenId) {
@@ -340,7 +358,7 @@ export function LeadEditSideover({
   const estagioAtual =
     context === "atendimento"
       ? lead.estagio_atendimento || "novo"
-      : estagioParaColunaKanban(lead.estagio);
+      : estagioParaColunaKanban(lead, estagios.map((e) => e.id));
   const subtitleParts = [
     lead.telefone,
     lead.email,
@@ -351,15 +369,19 @@ export function LeadEditSideover({
     <CrmSideoverToolbarRow>
       <CrmSideoverActionGroup theme={LEAD_SIDEOVER_THEME}>
         {onNegocioCreated ? (
-          <CrmSideoverActionBtn
-            active={screen === "negocio"}
-            onClick={() => toggleScreen("negocio")}
-            title="Criar negócio"
+          <LeadNegocioToolbarBtns
             theme={LEAD_SIDEOVER_THEME}
-          >
-            <Briefcase size={14} />
-            Negócio
-          </CrmSideoverActionBtn>
+            listaActive={screen === "negocios"}
+            criarActive={screen === "negocio"}
+            onVerNegocios={() => {
+              setScreen((p) => (p === "negocios" ? "timeline" : "negocios"));
+              setErro("");
+            }}
+            onNovoNegocio={() => {
+              setScreen("negocio");
+              setErro("");
+            }}
+          />
         ) : null}
         <CrmSideoverActionBtn
           active={screen === "status_timeline"}
@@ -372,26 +394,36 @@ export function LeadEditSideover({
         </CrmSideoverActionBtn>
       </CrmSideoverActionGroup>
 
-      <CrmSideoverActionGroup className="min-w-max" theme={LEAD_SIDEOVER_THEME}>
-        {estagios.map((e) => (
-          <CrmSideoverActionBtn
-            key={e.id}
-            active={estagioAtual === e.id}
-            onClick={() => void moverEstagio(e.id)}
-            title={
-              context === "atendimento"
-                ? `Atendimento: ${e.label}`
-                : `Funil comercial: ${e.label}`
-            }
-            theme={LEAD_SIDEOVER_THEME}
-          >
-            {e.label}
-          </CrmSideoverActionBtn>
-        ))}
-      </CrmSideoverActionGroup>
+      {context === "atendimento" ? (
+        <CrmSideoverActionGroup className="min-w-max" theme={LEAD_SIDEOVER_THEME}>
+          {estagios.map((e) => (
+            <CrmSideoverActionBtn
+              key={e.id}
+              active={estagioAtual === e.id}
+              onClick={() => void moverEstagio(e.id)}
+              title={`Atendimento: ${e.label}`}
+              theme={LEAD_SIDEOVER_THEME}
+              disabled={movendoEstagio}
+            >
+              {e.label}
+            </CrmSideoverActionBtn>
+          ))}
+        </CrmSideoverActionGroup>
+      ) : null}
 
     </CrmSideoverToolbarRow>
   );
+
+  const pickerFunil =
+    context === "vendas" ? (
+      <LeadFunilEstagioPicker
+        estagios={estagios}
+        estagioAtual={estagioAtual}
+        onMover={(id) => void moverEstagio(id)}
+        theme={LEAD_SIDEOVER_THEME}
+        disabled={movendoEstagio}
+      />
+    ) : null;
 
   const workspaceBody = (
     <div className="flex min-h-0 min-w-0 flex-1">
@@ -406,6 +438,19 @@ export function LeadEditSideover({
           showWhatsappTab={!hideChat && canalLead.showWhatsapp}
           showEmailTab={!hideChat && canalLead.showEmail}
           showNegociosTab={context === "atendimento" || Boolean(onNegocioCreated)}
+          theme={LEAD_SIDEOVER_THEME}
+        />
+      ) : onNegocioCreated ? (
+        <LeadSideoverNavRail
+          active={navActive === "negocios" || navActive === "timeline" ? navActive : "timeline"}
+          onChange={(id) => {
+            if (id === "negocios" || id === "timeline") {
+              setScreen(id);
+              setErro("");
+            }
+          }}
+          minimal
+          showNegociosTab
           theme={LEAD_SIDEOVER_THEME}
         />
       ) : null}
@@ -463,9 +508,9 @@ export function LeadEditSideover({
               leadCodigo={lead.codigo}
               valorEstimadoLead={lead.valor_estimado}
               theme={LEAD_SIDEOVER_THEME}
-              onCancel={() => setScreen(context === "atendimento" ? "negocios" : "timeline")}
+              onCancel={() => setScreen("negocios")}
               onSuccess={(negocioId) => {
-                setScreen(context === "atendimento" ? "negocios" : "timeline");
+                setScreen("negocios");
                 void carregarDetalhe(lead.id);
                 onNegocioCreated(lead, negocioId);
               }}
@@ -482,23 +527,30 @@ export function LeadEditSideover({
           ) : null}
 
           {screen === "status_timeline" ? (
-            <LeadStatusTimelineTab
-              leadNome={lead.nome}
-              events={timelineEvents}
-              theme={LEAD_SIDEOVER_THEME}
-              compact
-            />
+            <>
+              {pickerFunil}
+              <LeadStatusTimelineTab
+                leadNome={lead.nome}
+                events={timelineEvents}
+                theme={LEAD_SIDEOVER_THEME}
+                compact
+              />
+            </>
           ) : null}
 
           {screen === "timeline" ? (
-            <LeadTimelineTab
-              leadId={lead.id}
-              leadNome={lead.nome}
-              metadata={leadMetadata}
-              theme={LEAD_SIDEOVER_THEME}
-              compact
-              initialEvents={timelineEvents}
-            />
+            <>
+              {pickerFunil}
+              <LeadTimelineTab
+                leadId={lead.id}
+                leadNome={lead.nome}
+                metadata={leadMetadata}
+                theme={LEAD_SIDEOVER_THEME}
+                compact
+                initialEvents={timelineEvents}
+                timelineKey={`${lead.id}:${lead.estagio_funil ?? lead.estagio}:${timelineEvents.length}`}
+              />
+            </>
           ) : null}
 
           {screen === "dados" && !salesTimelineOnly ? (

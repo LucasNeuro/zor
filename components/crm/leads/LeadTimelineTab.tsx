@@ -21,6 +21,8 @@ type Props = {
   className?: string;
   /** Eventos pré-carregados (evita fetch duplicado) */
   initialEvents?: LeadTimelineEvent[];
+  /** Força re-sync quando o estágio ou timeline mudam */
+  timelineKey?: string;
 };
 
 export function LeadTimelineTab({
@@ -31,6 +33,7 @@ export function LeadTimelineTab({
   compact = false,
   className = "",
   initialEvents,
+  timelineKey,
 }: Props) {
   const [events, setEvents] = useState<LeadTimelineEvent[]>(initialEvents ?? []);
   const [loading, setLoading] = useState(!initialEvents);
@@ -109,7 +112,7 @@ export function LeadTimelineTab({
       return;
     }
     void carregar();
-  }, [carregar, initialEvents]);
+  }, [carregar, initialEvents, timelineKey]);
 
   const flow = useMemo(
     () => (

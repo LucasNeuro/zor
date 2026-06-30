@@ -10,7 +10,12 @@ import {
   montarSnapshotOperacionalReadOnly,
   type BriefingMensagemLinha,
 } from "@/lib/agente-briefing-chat";
-import { formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
+import {
+  extrairESalvarMemoriasAgente,
+  formatarBlocoMemoriasAgente,
+  listarMemoriasAgente,
+} from "@/lib/ia/memoria-agente";
+import { formatarLinksArtefactosParaTexto } from "@/lib/hub/superagente/canais-internos";
 import { prepararTextoIaParaWhatsapp } from "@/lib/whatsapp/formatar-texto-whatsapp";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 import {
@@ -18,7 +23,8 @@ import {
   gestorTelefoneAutorizado,
   telefonesAutorizadosGestor,
 } from "@/lib/whatsapp/gestor-linha-db";
-import { isMissingPgColumn } from "@/lib/tenant-default";
+import { isMissingPgColumn, tenantScopeOrFilter } from "@/lib/tenant-default";
+import { modoOperacaoFromAgenteRow } from "@/lib/hub/agente-modo-operacao";
 
 const MAX_HISTORICO = 24;
 const MODELO_FALLBACK = "mistral";
@@ -29,7 +35,58 @@ type AgenteInternoRow = {
   cargo?: string | null;
   modelo?: string | null;
   motor_ferramentas_habilitado?: boolean | null;
+  modo_operacao?: string | null;
+  ciclo_execucao_padrao?: string | null;
 };
+
+function ehAgenteInternoListavel(row: AgenteInternoRow): boolean {
+  const modo = modoOperacaoFromAgenteRow(row);
+  if (modo === "canal_whatsapp" || modo === "canal_email") return false;
+  if (modo === "jobs_internos") return true;
+  if (row.modo_operacao === "jobs_internos") return true;
+  const ciclo = String(row.ciclo_execucao_padrao || "").trim();
+  return ciclo === "agenda" || ciclo === "tempo_real";
+}
+
+async function listarAgentesInternos(
+  supabase: SupabaseClient,
+  tenantId: string
+): Promise<AgenteInternoRow[]> {
+  const tenantFilter = tenantScopeOrFilter(tenantId);
+  const selectCols =
+    "agente_slug, nome, cargo, modelo, motor_ferramentas_habilitado, modo_operacao, ciclo_execucao_padrao";
+
+  const { data, error } = await supabase
+    .from("hub_agente_identidade")
+    .select(selectCols)
+    .or(tenantFilter)
+    .eq("ativo", true)
+    .is("arquivado_em", null)
+    .order("nome");
+
+  if (error) {
+    if (isMissingPgColumn(error, "arquivado_em")) {
+      const fb = await supabase
+        .from("hub_agente_identidade")
+        .select(selectCols)
+        .or(tenantFilter)
+        .eq("ativo", true)
+        .order("nome");
+      return ((fb.data ?? []) as AgenteInternoRow[]).filter(ehAgenteInternoListavel);
+    }
+    if (isMissingPgColumn(error, "modo_operacao") || isMissingPgColumn(error, "ciclo_execucao_padrao")) {
+      const fb = await supabase
+        .from("hub_agente_identidade")
+        .select("agente_slug, nome, cargo, modelo, motor_ferramentas_habilitado")
+        .or(tenantFilter)
+        .eq("ativo", true)
+        .order("nome");
+      return (fb.data ?? []) as AgenteInternoRow[];
+    }
+    return [];
+  }
+  return ((data ?? []) as AgenteInternoRow[]).filter(ehAgenteInternoListavel);
+}
 
 function normalizarTextoMenu(s: string): string {
   return s
@@ -41,41 +98,14 @@ function normalizarTextoMenu(s: string): string {
 
 function pedeMenu(texto: string): boolean {
   const t = normalizarTextoMenu(texto);
-  return /^(menu|lista|assistentes|funcionarios|ajuda|help|oi|ola|inicio|start)$/.test(t);
+  return /^(menu|lista|assistentes|funcionarios|agentes|ajuda|help|oi|ola|inicio|start|\/agentes|\/menu)$/.test(
+    t
+  );
 }
 
 function pedeTrocar(texto: string): boolean {
   const t = normalizarTextoMenu(texto);
   return /^(trocar|mudar|outro|sair|voltar)$/.test(t) || t.includes("trocar assistente");
-}
-
-async function listarAgentesInternos(
-  supabase: SupabaseClient,
-  tenantId: string
-): Promise<AgenteInternoRow[]> {
-  const { data, error } = await supabase
-    .from("hub_agente_identidade")
-    .select("agente_slug, nome, cargo, modelo, motor_ferramentas_habilitado")
-    .eq("tenant_id", tenantId)
-    .eq("modo_operacao", "jobs_internos")
-    .eq("ativo", true)
-    .is("arquivado_em", null)
-    .order("nome");
-
-  if (error) {
-    if (isMissingPgColumn(error, "arquivado_em")) {
-      const fb = await supabase
-        .from("hub_agente_identidade")
-        .select("agente_slug, nome, cargo, modelo, motor_ferramentas_habilitado")
-        .eq("tenant_id", tenantId)
-        .eq("modo_operacao", "jobs_internos")
-        .eq("ativo", true)
-        .order("nome");
-      return (fb.data ?? []) as AgenteInternoRow[];
-    }
-    return [];
-  }
-  return (data ?? []) as AgenteInternoRow[];
 }
 
 function formatarMenuAgentes(agentes: AgenteInternoRow[]): string {
@@ -298,14 +328,13 @@ export async function processarMensagemGestorWhatsapp(
   const { data: agenteFull } = await params.supabase
     .from("hub_agente_identidade")
     .select(
-      "agente_slug, nome, cargo, area, bio, modelo, system_prompt_base, motor_ferramentas_habilitado, playbook_generated_at, playbook_object_path, playbook_public_url, playbook_source_hash"
+      "agente_slug, nome, cargo, area, bio, modelo, system_prompt_base, motor_ferramentas_habilitado, modo_operacao, ciclo_execucao_padrao, playbook_generated_at, playbook_object_path, playbook_public_url, playbook_source_hash"
     )
     .eq("agente_slug", agenteAtivoSlug)
-    .eq("tenant_id", params.tenantId)
-    .eq("modo_operacao", "jobs_internos")
+    .or(tenantScopeOrFilter(params.tenantId))
     .maybeSingle();
 
-  if (!agenteFull) {
+  if (!agenteFull || !ehAgenteInternoListavel(agenteFull as AgenteInternoRow)) {
     return { ok: false, motivo: "agente_nao_encontrado" };
   }
 
@@ -362,8 +391,20 @@ export async function processarMensagemGestorWhatsapp(
       mensagemUsuario: mensagem,
       memoriasAgenteBloco,
       trigger: "copiloto",
+      canalInterno: "whatsapp_gestor",
+      telefoneSessao: params.telefone,
     });
     textoResposta = resultado.texto.trim() || "Não consegui gerar resposta agora. Tente reformular a pergunta.";
+
+    if (resultado.urls_publicas?.length) {
+      const links = formatarLinksArtefactosParaTexto(resultado.urls_publicas);
+      await whatsappSendText(telefone, prepararTextoIaParaWhatsapp(links), waOpts);
+      await gravarMensagemSessao(params.supabase, sessao.id, "assistant", links, {
+        agente_slug: agenteAtivoSlug,
+        tipo: "artefato_link",
+        urls: resultado.urls_publicas,
+      });
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "erro_ia";
     textoResposta = `Desculpe, ocorreu um erro ao processar (${msg.slice(0, 120)}). Tente de novo ou escreva *menu*.`;
@@ -375,6 +416,17 @@ export async function processarMensagemGestorWhatsapp(
     agente_slug: agenteAtivoSlug,
     whatsapp_ok: envio.ok,
   });
+
+  try {
+    await extrairESalvarMemoriasAgente(params.supabase, {
+      agenteSlug: agenteAtivoSlug,
+      mensagemUsuario: mensagem,
+      respostaIA: textoResposta,
+      origem: "gestor_whatsapp",
+    });
+  } catch {
+    /* opcional */
+  }
 
   return { ok: true, respostaEnviada: envio.ok };
 }

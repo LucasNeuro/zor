@@ -66,11 +66,10 @@ export function copilotoInternoPreamble(
 ${cargoLinha}
 Regras:
 - Converse com um colega humano (gestor, operador ou admin): tom natural, claro e útil.
-- Explique a **função real deste agente** conforme o escopo oficial abaixo — não invente encaminhamentos nem atendimento WhatsApp.
+- Explique a **função real deste agente** conforme o escopo oficial abaixo — não invente encaminhamentos nem atendimento a cliente final.
 - Use as **memórias deste agente** (só de ${agenteNome}), cargo, playbook e extractos operacionais quando relevante — nunca misture contexto de outro assistente.
-- Este agente **não atende cliente final** e **não simula WhatsApp/Hub** neste painel.
-- Com o **motor de funções activo**, use hub_dados_empresa e integrações ligadas para factos reais; sem motor, interprete só os extractos.
-- Se faltar dado nos extractos ou nas consultas, diga que não há registro — não invente.
+- Este agente **não atende cliente final no canal comercial**; no copiloto CRM, WhatsApp gestor e ciclos programados usa o **mesmo motor superagente** (dados, artefactos, OCR).
+- Use ferramentas hub_superagente_* e hub_operacao_empresa para factos reais; se faltar dado, diga que não há registro — não invente.
 ${escopoExtra?.trim() ? `\n${escopoExtra.trim()}` : ""}`;
 }
 
@@ -227,6 +226,8 @@ export type BriefingChatReplyResult = {
   custo_brl: number;
   motor?: "briefing_interno" | "playbook_ia" | "llm_prompt";
   flow_state?: SimFlowState;
+  /** Links públicos de artefactos/relatórios gerados por ferramentas no turno. */
+  urls_publicas?: string[];
 };
 
 export async function executarBriefingReply(params: {
@@ -252,31 +253,24 @@ export async function executarBriefingReply(params: {
   );
 
   if (ehCopilotoInterno && params.supabase) {
-    const { data: ferrRow } = await params.supabase
-      .from("hub_agente_identidade")
-      .select("motor_ferramentas_habilitado")
-      .eq("agente_slug", params.agenteSlug)
-      .maybeSingle();
-
-    if (ferrRow?.motor_ferramentas_habilitado === true) {
-      return executarAgenteInterno({
-        supabase: params.supabase,
-        modelo: params.modelo,
-        agenteNome: params.agenteNome,
-        agenteSlug: params.agenteSlug,
-        tenantId: params.tenantId,
-        cargo: params.cargo,
-        area: params.area,
-        bio: params.bio,
-        promptBaseTrecho: params.promptBaseTrecho,
-        playbookTrecho: params.playbookTrecho,
-        snapshot: params.snapshot,
-        historico: params.historico,
-        mensagemUsuario: params.mensagemUsuario,
-        memoriasAgenteBloco: params.memoriasAgenteBloco,
-        trigger: "copiloto",
-      });
-    }
+    return executarAgenteInterno({
+      supabase: params.supabase,
+      modelo: params.modelo,
+      agenteNome: params.agenteNome,
+      agenteSlug: params.agenteSlug,
+      tenantId: params.tenantId,
+      cargo: params.cargo,
+      area: params.area,
+      bio: params.bio,
+      promptBaseTrecho: params.promptBaseTrecho,
+      playbookTrecho: params.playbookTrecho,
+      snapshot: params.snapshot,
+      historico: params.historico,
+      mensagemUsuario: params.mensagemUsuario,
+      memoriasAgenteBloco: params.memoriasAgenteBloco,
+      trigger: "copiloto",
+      canalInterno: "copiloto_crm",
+    });
   }
 
   const limitePromptBase = ehCopilotoInterno ? 3_200 : 1_200;

@@ -31,6 +31,11 @@ import {
   avisoTelefoneBrPareamento,
   UAZAPI_PAIRCODE_VALID_MS,
 } from "@/lib/whatsapp/uazapi-proxy-connect";
+import {
+  formatarTelefoneGestorExibicao,
+  normalizarTelefoneGestorLista,
+  parseTelefonesGestorInput,
+} from "@/lib/whatsapp/gestor-telefones-format";
 
 const UAZAPI_QR_VALID_MS = 120_000;
 
@@ -92,7 +97,10 @@ export function GestorWhatsappIntegracaoBlock({
   const [carregando, setCarregando] = useState(true);
   const [loading, setLoading] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [telefones, setTelefones] = useState("");
+  const [telefoneInput, setTelefoneInput] = useState("");
+  const [listaTelefones, setListaTelefones] = useState<string[]>([]);
+  const [telefonesSalvos, setTelefonesSalvos] = useState<string[]>([]);
+  const saveTelefonesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [qrcode, setQrcode] = useState<string | null>(null);
   const [paircode, setPaircode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState("");
@@ -148,8 +156,9 @@ export function GestorWhatsappIntegracaoBlock({
           "A ligação cria-se na nuvem UAZAPI; o aviso de localhost só afecta receber mensagens em desenvolvimento. Para testar webhooks em local, defina WHATSAPP_WEBHOOK_PUBLIC_ORIGIN com o domínio público."
         );
       }
-      const tels = json.linha?.telefones_autorizados ?? [];
-      setTelefones(tels.join("\n"));
+      const tels = (json.linha?.telefones_autorizados ?? []).map((t) => normalizarTelefoneGestorLista(String(t)));
+      setListaTelefones(tels);
+      setTelefonesSalvos(tels);
       setProxyCity(json.linha?.uazapi_proxy_city?.trim() || "");
       setProxyState(json.linha?.uazapi_proxy_state?.trim() || "");
     } catch (e) {
@@ -167,12 +176,7 @@ export function GestorWhatsappIntegracaoBlock({
     (action: string, extra?: Record<string, unknown>, opts?: { silent?: boolean }) => Promise<Record<string, unknown> | null>
   >(() => Promise.resolve(null));
 
-  const telefonesAutorizadosVazios = useMemo(() => {
-    return !telefones
-      .split(/[\n,;]+/)
-      .map((t) => t.replace(/\D/g, ""))
-      .some((t) => t.length >= 10);
-  }, [telefones]);
+  const telefonesAutorizadosVazios = listaTelefones.length === 0;
 
   const aplicarStatusLinha = useCallback((status?: string) => {
     if (!status) return;
@@ -367,14 +371,10 @@ export function GestorWhatsappIntegracaoBlock({
 
   postActionRef.current = postAction;
 
-  async function guardarTelefones() {
-    setLoading("telefones");
+  async function guardarTelefones(lista: string[], opts?: { silencioso?: boolean }) {
+    if (!opts?.silencioso) setLoading("telefones");
     setErro(null);
     try {
-      const lista = telefones
-        .split(/[\n,;]+/)
-        .map((t) => t.replace(/\D/g, ""))
-        .filter((t) => t.length >= 10);
       const res = await fetch("/api/hub/gestor-whatsapp", {
         method: "PATCH",
         headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
@@ -382,12 +382,67 @@ export function GestorWhatsappIntegracaoBlock({
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error || `Erro ${res.status}`);
-      await carregar();
+      setTelefonesSalvos(lista);
+      if (!opts?.silencioso) await carregar();
     } catch (e) {
       setErro(erroUiAmigavel(e instanceof Error ? e.message : "Falha ao guardar telefones"));
     } finally {
-      setLoading(null);
+      if (!opts?.silencioso) setLoading(null);
     }
+  }
+
+  const agendarSalvarTelefones = useCallback((lista: string[]) => {
+    if (saveTelefonesTimer.current) clearTimeout(saveTelefonesTimer.current);
+    saveTelefonesTimer.current = setTimeout(() => {
+      void guardarTelefones(lista, { silencioso: true });
+    }, 700);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (saveTelefonesTimer.current) clearTimeout(saveTelefonesTimer.current);
+    };
+  }, []);
+
+  function aplicarListaTelefones(nova: string[]) {
+    setListaTelefones(nova);
+    const mudou =
+      nova.length !== telefonesSalvos.length || nova.some((t, i) => t !== telefonesSalvos[i]);
+    if (mudou) agendarSalvarTelefones(nova);
+  }
+
+  function adicionarTelefoneLista(raw?: string) {
+    const entrada = (raw ?? telefoneInput).trim();
+    if (!entrada) return;
+    const novos = parseTelefonesGestorInput(entrada);
+    if (!novos.length) {
+      setErro("Telefone inválido — use DDI + número (ex.: 5511999999999).");
+      return;
+    }
+    setErro(null);
+    const merged = [...listaTelefones];
+    for (const n of novos) {
+      if (!merged.includes(n)) merged.push(n);
+    }
+    setTelefoneInput("");
+    aplicarListaTelefones(merged);
+  }
+
+  function removerTelefoneLista(tel: string) {
+    aplicarListaTelefones(listaTelefones.filter((t) => t !== tel));
+  }
+
+  function formatarInputTelefone(valor: string) {
+    const digits = valor.replace(/\D/g, "");
+    if (digits.length <= 2) return digits ? `+${digits}` : "";
+    if (digits.length <= 4) return `+${digits.slice(0, 2)} (${digits.slice(2)}`;
+    if (digits.length <= 6) {
+      return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4)}`;
+    }
+    if (digits.length <= 11) {
+      return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+    }
+    return formatarTelefoneGestorExibicao(digits);
   }
 
   const proxyConnectExtra = useCallback((): Record<string, unknown> => {
@@ -898,29 +953,94 @@ export function GestorWhatsappIntegracaoBlock({
                 TELEFONES AUTORIZADOS
               </p>
               <p style={{ margin: "0 0 10px", color: RF_TEXT_MUTED, fontSize: 11, lineHeight: 1.45 }}>
-                Só estes números podem usar a linha (DDI + número, um por linha).
+                Celular <strong>de quem envia</strong> os comandos (seu WhatsApp pessoal). Não é o número da linha
+                conectada — use «Mensagens para você» no WhatsApp ou outro aparelho autorizado.
               </p>
               {telefonesAutorizadosVazios ? (
                 <p style={{ margin: "0 0 10px", color: "#e6c06a", fontSize: 11, lineHeight: 1.45 }}>
-                  Adicione o seu telefone antes de testar — sem número autorizado o assistente responde com aviso de
+                  Adicione o seu celular antes de testar — sem número autorizado o assistente responde com aviso de
                   acesso negado.
                 </p>
               ) : null}
-              <textarea
-                value={telefones}
-                onChange={(e) => setTelefones(e.target.value)}
-                placeholder="5511999999999"
-                rows={3}
-                style={{ ...fieldStyle, fontFamily: "inherit", resize: "vertical" }}
-              />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="tel"
+                  value={telefoneInput}
+                  onChange={(e) => setTelefoneInput(formatarInputTelefone(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      adicionarTelefoneLista();
+                    }
+                  }}
+                  placeholder="+55 (11) 99999-9999"
+                  style={{ ...fieldStyle, flex: "1 1 200px", fontFamily: "inherit" }}
+                />
+                <button
+                  type="button"
+                  disabled={loading !== null}
+                  onClick={() => adicionarTelefoneLista()}
+                  style={btnBase(loading !== null, "primary")}
+                >
+                  Adicionar
+                </button>
+              </div>
+              {listaTelefones.length > 0 ? (
+                <ul
+                  style={{
+                    margin: "12px 0 0",
+                    padding: 0,
+                    listStyle: "none",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {listaTelefones.map((tel) => (
+                    <li
+                      key={tel}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: `1px solid ${RF_BORDER_STRONG}`,
+                        background: "#0d111788",
+                        fontSize: 13,
+                        color: RF_TEXT_PRIMARY,
+                      }}
+                    >
+                      <span>{formatarTelefoneGestorExibicao(tel)}</span>
+                      <button
+                        type="button"
+                        disabled={loading !== null}
+                        onClick={() => removerTelefoneLista(tel)}
+                        style={{
+                          ...btnBase(loading !== null, "default"),
+                          padding: "4px 8px",
+                          color: RF_TEXT_MUTED,
+                        }}
+                        aria-label="Remover telefone"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <button
                 type="button"
-                disabled={loading !== null}
-                onClick={() => void guardarTelefones()}
-                style={{ ...btnBase(loading !== null, "primary"), marginTop: 10 }}
+                disabled={loading !== null || listaTelefones.length === 0}
+                onClick={() => void guardarTelefones(listaTelefones)}
+                style={{ ...btnBase(loading !== null, "primary"), marginTop: 12 }}
               >
                 {loading === "telefones" ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                Guardar telefones
+                {telefonesSalvos.length === listaTelefones.length &&
+                listaTelefones.every((t, i) => t === telefonesSalvos[i])
+                  ? "Guardado"
+                  : "Guardar telefones"}
               </button>
             </div>
           ) : null}

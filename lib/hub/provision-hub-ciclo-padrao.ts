@@ -16,7 +16,8 @@ export async function provisionHubCicloPadrao(
   nomeAgente: string,
   modo: CicloExecucaoCliente,
   agendaIntervalMinutes: number,
-  tenantId: string
+  tenantId: string,
+  opts?: { cronExpressao?: string | null }
 ): Promise<{ aviso?: string; erro?: string }> {
   const rotulo = nomeAgente.trim().slice(0, 80) || agenteSlug;
   let nomeLinha = "Operação do agente";
@@ -38,7 +39,13 @@ export async function provisionHubCicloPadrao(
   } else {
     nomeLinha = "Cadência na agenda";
     tipo = "programado";
-    intervalo = agendaIntervalMinutes;
+    const cronFixo = String(opts?.cronExpressao ?? "").trim();
+    if (cronFixo) {
+      intervalo = null;
+      baseCfg.cron_origem = "wizard_hora_local_br";
+    } else {
+      intervalo = agendaIntervalMinutes;
+    }
     ativo = false;
     baseCfg.ciclo_origem_provisionamento = "wizard_agente_v1";
     baseCfg.dispatch_pendente = true;
@@ -49,12 +56,17 @@ export async function provisionHubCicloPadrao(
       "Ciclo interno: dispatch api=agente. Active o ciclo e o motor de ferramentas no agente.";
   }
 
+  const cronExpressao =
+    modo === "agenda" ? String(opts?.cronExpressao ?? "").trim() || null : null;
+
   const descricao =
     modo === "interacao"
       ? "Dispara com interação no canal (mensagem do utilizador / webhook)."
       : modo === "tempo_real"
         ? "Atrelado ao motor em tempo real (sem ciclo cron dedicado)."
-        : `Cadência definida ao criar o agente (≈ cada ${intervalo} min após dispatch e ativação).`;
+        : cronExpressao
+          ? `Execução diária programada (cron UTC no ciclo; hora local definida no wizard).`
+          : `Cadência definida ao criar o agente (≈ cada ${intervalo} min após dispatch e ativação).`;
 
   const parsedCfg = validateAndNormalizeCicloConfiguracoes(baseCfg);
   if (!parsedCfg.ok) {
@@ -66,7 +78,7 @@ export async function provisionHubCicloPadrao(
     nome: nomeLinha,
     descricao: `${descricao} — Agente «${rotulo}»`,
     tipo,
-    cron_expressao: null,
+    cron_expressao: cronExpressao,
     intervalo_minutos: intervalo,
     ativo,
     configuracoes: parsedCfg.value,

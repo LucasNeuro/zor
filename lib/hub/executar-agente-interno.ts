@@ -27,6 +27,15 @@ import { ferramentasIntegradorAtivasParaTenant } from "@/lib/hub/integradores-ru
 import type { FerramentaIntegradorDefMistral } from "@/lib/hub/agente-ferramentas-registry";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { agenteEhCopilotoInterno, isModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
+import {
+  formatarBlocoSkillsHarness,
+  gerarSkillsSuperagenteFromCargo,
+} from "@/lib/hub/superagente/skills-from-cargo";
+import {
+  BLOCO_CANAIS_SUPERAGENTE_EQUIVALENTES,
+  linhaCanalSuperagente,
+  type SuperagenteCanalInterno,
+} from "@/lib/hub/superagente/canais-internos";
 import { blocoEscopoFuncaoCopilotoInterno } from "@/lib/hub/copiloto-interno-escopo";
 import { copilotoInternoPreamble } from "@/lib/agente-briefing-chat";
 import type { BriefingChatReplyResult, BriefingMensagemLinha } from "@/lib/agente-briefing-chat";
@@ -51,10 +60,31 @@ function calcularCustoBrl(modelo: string, input: number, output: number): { brl:
 
 export type AgenteInternoTrigger = "copiloto" | "ciclo";
 
+/** @deprecated Preferir `canalInterno`. */
+export type AgenteInternoTriggerLegacy = AgenteInternoTrigger;
+
 function trunc(s: string, n: number): string {
   const t = (s || "").trim();
   if (t.length <= n) return t;
   return `${t.slice(0, n)}…`;
+}
+
+const BLOCO_SUPERAGENTE = `### SUPERAGENTE (canvas + Mistral)
+- **hub_superagente_dados** — catálogo completo vw_rel_* e consultas com filtros.
+- **hub_superagente_artefato** — página HTML com gráficos (Chart.js); devolve url_publica para partilhar no WhatsApp gestor.
+- **hub_mistral_percepcao** — OCR, transcrição de áudio, visão de imagens (Mistral).
+- Quando gerar relatório visual, use hub_superagente_artefato e inclua o link na resposta.`;
+
+function extrairUrlsPublicasDeResultadoFerramenta(result: string): string[] {
+  try {
+    const p = JSON.parse(result) as Record<string, unknown>;
+    const urls: string[] = [];
+    if (typeof p.url_publica === "string" && p.url_publica.trim()) urls.push(p.url_publica.trim());
+    if (typeof p.url === "string" && p.url.trim()) urls.push(p.url.trim());
+    return urls;
+  } catch {
+    return [];
+  }
 }
 
 const BLOCO_FERRAMENTAS_INTERNAS = `### FERRAMENTAS INTERNAS (function calling)
@@ -83,6 +113,10 @@ export async function executarAgenteInterno(params: {
   mensagemUsuario: string;
   memoriasAgenteBloco?: string;
   trigger: AgenteInternoTrigger;
+  /** Canal concreto — alinha copiloto, gestor WA e ciclo. */
+  canalInterno?: SuperagenteCanalInterno;
+  /** Telefone do gestor (WhatsApp) — metadata em artefactos. */
+  telefoneSessao?: string | null;
   briefCiclo?: string;
 }): Promise<BriefingChatReplyResult> {
   const tenantForTools = (params.tenantId && params.tenantId.trim()) || defaultTenantId();
@@ -93,7 +127,11 @@ export async function executarAgenteInterno(params: {
     .eq("agente_slug", params.agenteSlug)
     .maybeSingle();
 
-  const motorFerramentas = ferrIaRow?.motor_ferramentas_habilitado === true;
+  const motorFerramentas =
+    ferrIaRow?.motor_ferramentas_habilitado !== false &&
+    (ferrIaRow?.motor_ferramentas_habilitado === true ||
+      ferrIaRow?.modo_operacao === "jobs_internos" ||
+      !ferrIaRow?.modo_operacao);
   const usoMap = mergeUsoFerramentasJobsInternos(
     mergeUsoFerramentasComPadraoPreservandoCustom(ferrIaRow?.uso_ferramentas_ia ?? {}),
     "jobs_internos"
@@ -119,17 +157,25 @@ export async function executarAgenteInterno(params: {
     .filter(Boolean)
     .join("\n");
 
-  const triggerLinha =
-    params.trigger === "ciclo"
-      ? `Modo: **ciclo programado** (execução automática). Brief: ${params.briefCiclo?.trim() || "Análise operacional conforme cargo."}`
-      : "Modo: **copiloto** (conversa com colega humano no CRM).";
+  const canalInterno: SuperagenteCanalInterno =
+    params.canalInterno ??
+    (params.trigger === "ciclo" ? "ciclo_programado" : "copiloto_crm");
+
+  const triggerLinha = linhaCanalSuperagente(canalInterno, params.briefCiclo);
 
   const preamble = copilotoInternoPreamble(params.agenteNome, params.cargo, escopoInterno);
+
+  const skillsHarness = formatarBlocoSkillsHarness(
+    gerarSkillsSuperagenteFromCargo(params.cargo, params.area)
+  );
 
   const system = [
     preamble,
     triggerLinha,
+    BLOCO_CANAIS_SUPERAGENTE_EQUIVALENTES,
     BLOCO_FERRAMENTAS_INTERNAS,
+    BLOCO_SUPERAGENTE,
+    skillsHarness || null,
     identity,
     params.memoriasAgenteBloco?.trim() || null,
     params.snapshot?.trim() || null,
@@ -186,6 +232,8 @@ export async function executarAgenteInterno(params: {
     | Awaited<ReturnType<typeof completarChatPreferindoMistral>>
     | null = null;
 
+  let urlsPublicasColetadas: string[] = [];
+
   if (podeToolsMistral) {
     out = await completarChatComFerramentasMistral({
       systemPrompt: system,
@@ -194,13 +242,22 @@ export async function executarAgenteInterno(params: {
       tools: mistralTools,
       maxTokens: 2048,
       agentReasoningEnabled,
-      executarTool: (nome, argumentosSerializados) =>
-        executarFerramentaHub(nome, argumentosSerializados, {
+      executarTool: async (nome, argumentosSerializados) => {
+        const result = await executarFerramentaHub(nome, argumentosSerializados, {
           agenteSlug: params.agenteSlug,
           tenantId: tenantForTools,
           modoOperacao: "jobs_internos",
           agenteInterno: true,
-        }),
+          telefoneSessao: params.telefoneSessao ?? null,
+        });
+        if (
+          nome === "hub_superagente_artefato" ||
+          nome === "hub_relatorio_html_simples"
+        ) {
+          urlsPublicasColetadas.push(...extrairUrlsPublicasDeResultadoFerramenta(result));
+        }
+        return result;
+      },
     });
   }
 
@@ -227,6 +284,9 @@ export async function executarAgenteInterno(params: {
     tokens_output: out.tokensSaida,
     custo_brl: brl,
     motor: params.trigger === "ciclo" ? "briefing_interno" : "briefing_interno",
+    urls_publicas: urlsPublicasColetadas.length
+      ? [...new Set(urlsPublicasColetadas)]
+      : undefined,
   };
 }
 

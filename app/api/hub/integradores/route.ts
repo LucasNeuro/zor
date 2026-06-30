@@ -5,6 +5,7 @@ import { requireInternalApiKey } from "@/lib/crm/crm-api-auth";
 import { mistralApiKey, pingMistralApi } from "@/lib/ia/mistral-health";
 import { HUB_INTEGRADORES_CATALOGO } from "@/lib/hub/integradores-catalogo";
 import { mem0PlataformaConfigurada } from "@/lib/hub/mem0-env";
+import { mistralIntegracaoDisponivel } from "@/lib/hub/mistral-integracao";
 import { tenantIdFromRequest } from "@/lib/tenant-default";
 
 export type IntegracaoAmbienteStatus = {
@@ -101,6 +102,17 @@ export async function GET(request: NextRequest) {
     }
     if (entry.id === "mem0") {
       const plataformaOk = mem0PlataformaConfigurada();
+      conexoes[entry.id] = {
+        hub_id: "",
+        configurado: plataformaOk,
+        ativo: plataformaOk,
+        plataforma_ok: plataformaOk,
+        oauth_email: null,
+      };
+      continue;
+    }
+    if (entry.id === "mistral") {
+      const plataformaOk = mistralIntegracaoDisponivel();
       conexoes[entry.id] = {
         hub_id: "",
         configurado: plataformaOk,

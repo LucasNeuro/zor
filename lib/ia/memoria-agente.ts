@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { extrairMemoriasAgenteViaLlm } from "@/lib/ia/memoria-llm";
 import { defaultTenantId } from "@/lib/tenant-default";
 
-export type MemoriaAgenteOrigem = "ia_engine" | "briefing" | "whatsapp" | "manual";
+export type MemoriaAgenteOrigem = "ia_engine" | "briefing" | "whatsapp" | "gestor_whatsapp" | "manual";
 
 export type MemoriaAgenteLinha = {
   chave: string;

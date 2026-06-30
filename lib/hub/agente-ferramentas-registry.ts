@@ -16,6 +16,9 @@ export type HubAgenteFerramentaId =
   | "hub_operacao_empresa"
   | "hub_raciocinio_avancado"
   | "hub_relatorio_html_simples"
+  | "hub_superagente_dados"
+  | "hub_superagente_artefato"
+  | "hub_mistral_percepcao"
   | "hub_registar_nota_lead"
   | "hub_whatsapp_menu"
   | "hub_atualizar_lead"
@@ -252,6 +255,87 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
           },
         },
         required: ["titulo", "texto_plano"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    id: "hub_superagente_dados",
+    categoria: "empresa",
+    titulo: "Superagente — catálogo e dados",
+    descricao:
+      "Lista todas as views vw_rel_* do tenant e consulta dados (leitura). Escrita via hub_operacao_empresa.",
+    recomendadoWhatsApp: false,
+    mistralFunction: {
+      name: "hub_superagente_dados",
+      description:
+        "Superagente: catalogar views de relatório ou consultar vw_rel_* com filtros. Use antes de relatórios executivos.",
+      parameters: {
+        type: "object",
+        properties: {
+          acao: { type: "string", enum: ["catalogar", "consultar"], description: "catalogar lista views; consultar executa query" },
+          view: { type: "string", description: "Id vw_rel_* para consultar" },
+          colunas: { type: "array", items: { type: "string" } },
+          limite: { type: "integer", minimum: 1, maximum: 80 },
+          filtro_coluna: { type: "string" },
+          filtro_texto: { type: "string" },
+          categoria: { type: "string", description: "Filtrar catálogo: comercial, financeiro, ia_agentes, etc." },
+        },
+        required: ["acao"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    id: "hub_superagente_artefato",
+    categoria: "analise",
+    titulo: "Canvas — relatório com gráficos",
+    descricao:
+      "Gera página HTML interativa (Chart.js) com texto, tabelas e gráficos; devolve URL público para WhatsApp gestor.",
+    recomendadoWhatsApp: false,
+    mistralFunction: {
+      name: "hub_superagente_artefato",
+      description:
+        "Cria artefacto canvas HTML com gráficos e texto. Devolve url_publica para o empresário abrir e partilhar.",
+      parameters: {
+        type: "object",
+        properties: {
+          titulo: { type: "string" },
+          subtitulo: { type: "string" },
+          tema: { type: "string", enum: ["claro", "escuro"] },
+          secoes: {
+            type: "array",
+            description: "Secções: {tipo:texto,markdown} | {tipo:grafico,grafico:{tipo,labels,datasets}} | {tipo:tabela,colunas,linhas}",
+            items: { type: "object" },
+          },
+        },
+        required: ["titulo", "secoes"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    id: "hub_mistral_percepcao",
+    categoria: "analise",
+    titulo: "Mistral — OCR, áudio, visão",
+    descricao: "OCR de PDF/imagem, transcrição de áudio e análise visual via API Mistral.",
+    recomendadoWhatsApp: false,
+    mistralFunction: {
+      name: "hub_mistral_percepcao",
+      description: "Processa documentos, áudio ou imagens com Mistral (ocr, transcrever_audio, descrever_imagem, perguntar_documento).",
+      parameters: {
+        type: "object",
+        properties: {
+          modo: {
+            type: "string",
+            enum: ["ocr", "transcrever_audio", "descrever_imagem", "perguntar_documento"],
+          },
+          url: { type: "string", description: "URL pública do ficheiro" },
+          base64: { type: "string", description: "Alternativa a url" },
+          mime: { type: "string" },
+          pergunta: { type: "string" },
+        },
+        required: ["modo"],
         additionalProperties: false,
       },
     },
@@ -662,6 +746,9 @@ export function mergeUsoFerramentasComPadrao(
     hub_operacao_empresa: false,
     hub_raciocinio_avancado: false,
     hub_relatorio_html_simples: false,
+    hub_superagente_dados: false,
+    hub_superagente_artefato: false,
+    hub_mistral_percepcao: false,
     hub_registar_nota_lead: false,
     hub_whatsapp_menu: false,
     hub_atualizar_lead: false,
@@ -738,6 +825,11 @@ export function mergeUsoFerramentasJobsInternos(
     merged.hub_int_gcal_listar_reservas_lead = true;
   }
 
+  if (coalesceFerramentaBool(uso.hub_relatorio_html_simples) !== false) merged.hub_relatorio_html_simples = true;
+  if (coalesceFerramentaBool(uso.hub_superagente_dados) !== false) merged.hub_superagente_dados = true;
+  if (coalesceFerramentaBool(uso.hub_superagente_artefato) !== false) merged.hub_superagente_artefato = true;
+  if (coalesceFerramentaBool(uso.hub_mistral_percepcao) !== false) merged.hub_mistral_percepcao = true;
+
   merged.hub_lead_resumo = coalesceFerramentaBool(uso.hub_lead_resumo) === true;
   merged.hub_lead_memorias = coalesceFerramentaBool(uso.hub_lead_memorias) === true;
   merged.hub_lead_lookup_por_telefone = coalesceFerramentaBool(uso.hub_lead_lookup_por_telefone) === true;
@@ -747,6 +839,38 @@ export function mergeUsoFerramentasJobsInternos(
   merged.hub_whatsapp_menu = coalesceFerramentaBool(uso.hub_whatsapp_menu) === true;
 
   return merged;
+}
+
+/** Ferramentas sempre activas em agentes internos (funcionário IA / superagente). */
+export const HUB_FERRAMENTAS_FUNCIONARIO_IA_OBRIGATORIAS: HubAgenteFerramentaId[] = [
+  "hub_operacao_empresa",
+  "hub_dados_empresa",
+  "hub_metricas_escritorio",
+  "hub_raciocinio_avancado",
+  "hub_relatorio_html_simples",
+  "hub_superagente_dados",
+  "hub_superagente_artefato",
+];
+
+export function ferramentaObrigatoriaFuncionarioIa(id: string): boolean {
+  return (HUB_FERRAMENTAS_FUNCIONARIO_IA_OBRIGATORIAS as readonly string[]).includes(id);
+}
+
+/** Pacote completo para assistente interno / superagente (wizard e CRM). */
+export function pacoteUsoFerramentasSuperagenteInterno(): Record<string, boolean> {
+  return mergeUsoFerramentasJobsInternos(
+    {
+      hub_operacao_empresa: true,
+      hub_dados_empresa: true,
+      hub_metricas_escritorio: true,
+      hub_raciocinio_avancado: true,
+      hub_relatorio_html_simples: true,
+      hub_superagente_dados: true,
+      hub_superagente_artefato: true,
+      hub_mistral_percepcao: true,
+    },
+    "jobs_internos"
+  );
 }
 
 /** Escolhe defaults de ferramentas conforme modo_operacao do agente. */
@@ -779,6 +903,9 @@ export const HUB_FERRAMENTA_ACESSO: Record<HubAgenteFerramentaId, HubFerramentaN
   hub_operacao_empresa: "escrita",
   hub_raciocinio_avancado: "leitura",
   hub_relatorio_html_simples: "escrita",
+  hub_superagente_dados: "leitura",
+  hub_superagente_artefato: "escrita",
+  hub_mistral_percepcao: "leitura",
   hub_registar_nota_lead: "escrita",
   hub_whatsapp_menu: "escrita",
   hub_atualizar_lead: "escrita",

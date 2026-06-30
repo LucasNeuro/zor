@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveValidatedTenantId } from "@/lib/crm/resolve-tenant-from-caller";
 import { defaultTenantId } from "@/lib/tenant-default";
 import { telefonesAutorizadosGestor } from "@/lib/whatsapp/gestor-linha-db";
+import { parseTelefonesGestorInput } from "@/lib/whatsapp/gestor-telefones-format";
 import { extrairPaircodeDePayloadUazapi } from "@/lib/whatsapp/qr-uazapi";
 import { uazapiFetchJson } from "@/lib/whatsapp/uazapi-http";
 import {
@@ -275,7 +276,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const telefones = Array.isArray(body.telefones_autorizados)
-    ? body.telefones_autorizados.map((t) => String(t).replace(/\D/g, "")).filter((t) => t.length >= 10)
+    ? parseTelefonesGestorInput(body.telefones_autorizados.join("\n"))
     : undefined;
 
   const patch: Record<string, unknown> = { atualizado_em: new Date().toISOString() };

@@ -39,6 +39,8 @@ export type AgenteGoogleWorkspaceBlockProps = {
   secaoIndice?: number;
   /** Retorno OAuth após autorizar (ficha do agente). */
   returnToPath?: string;
+  /** Passo do wizard a restaurar após OAuth (ex.: 7 = Integrações interno). */
+  wizardOAuthResumePasso?: number;
   /** `card` — resumo + sideover (ficha). `painel` — bloco completo inline (wizard). */
   layout?: "card" | "painel";
 };
@@ -76,6 +78,7 @@ export function AgenteGoogleWorkspaceBlock({
   contexto = "padrao",
   secaoIndice,
   returnToPath,
+  wizardOAuthResumePasso,
   layout = "painel",
 }: AgenteGoogleWorkspaceBlockProps) {
   const isCard = layout === "card";
@@ -290,7 +293,10 @@ export function AgenteGoogleWorkspaceBlock({
     setBusy(true);
     setErro("");
     try {
-      saveWizardOAuthResume({ passo: secaoIndice != null ? 8 : 9, agenteSlug });
+      saveWizardOAuthResume({
+        passo: wizardOAuthResumePasso ?? (secaoIndice != null ? 8 : 9),
+        agenteSlug,
+      });
       const headers = await crmApiHeaders();
       const returnTo =
         returnToPath?.trim() ||
@@ -308,7 +314,7 @@ export function AgenteGoogleWorkspaceBlock({
       setErro(e instanceof Error ? e.message : "Erro ao ligar Google");
       setBusy(false);
     }
-  }, [agenteSlug, returnToPath, secaoIndice]);
+  }, [agenteSlug, returnToPath, secaoIndice, wizardOAuthResumePasso]);
 
   const testarIntegracao = useCallback(async () => {
     setBusy(true);

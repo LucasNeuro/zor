@@ -31,6 +31,7 @@ import { insertHubAgenteIdentidadeCompat } from "@/lib/hub/hub-agente-schema-com
 import { sanitizarAgenteHubParaCliente } from "@/lib/hub/sanitize-agente-hub-public";
 import { PROMPT_BASE_PLAYBOOK_ONLY, CARGO_LABEL_PLAYBOOK_ONLY } from "@/lib/hub/agente-instrucao-modo";
 import { slugifyCargoSlug } from "@/lib/hub/cargo-slug";
+import { cronDiarioUtcFromHoraLocalBr } from "@/lib/hub/ciclo-agenda-cron";
 import { MERCADO_PREFIXO_PADRAO } from "@/lib/crm/negocio-cadastro";
 import { gerarAvatarAgenteUrl } from "@/lib/crm/agente-avatar-gen";
 import {
@@ -42,6 +43,7 @@ import {
 import { mergeUsoFerramentasWhatsappCanal, mergeUsoFerramentasComPadraoPreservandoCustom } from "@/lib/hub/agente-ferramentas-registry";
 import { patchFerramentasGoogleAgendamento } from "@/lib/hub/agente-wizard-google";
 import { applyCargoTenantFilter } from "@/lib/hub/cargo-catalogo-tenant";
+import { montarPromptBaseInternoDoCargo } from "@/lib/hub/superagente/prompt-interno-cargo";
 import {
   EMAIL_CHANNEL_DISABLED_CODE,
   EMAIL_CHANNEL_DISABLED_MESSAGE,
@@ -457,19 +459,32 @@ export async function POST(request: NextRequest) {
   }
 
   const nivel = typeof cat.nivel === "number" ? cat.nivel : Number(cat.nivel) || 3;
+  const modoOperacaoPre =
+    isModoOperacaoAgente(body.modo_operacao) ? (body.modo_operacao as ModoOperacaoAgente) : null;
+  const agenteInterno = modoOperacaoPre === "jobs_internos";
   const promptBase =
     (system_prompt_base && String(system_prompt_base).trim()) ||
-    montarPromptBaseDoCargo({
-      nomeAgente: nomeTrim,
-      tituloCargo: String(cat.titulo ?? "").trim(),
-      promptTemplate: cat.prompt_template,
-      descricao: cat.descricao,
-      saudacaoCliente: cat.saudacao_cliente,
-      usarPerguntasEssenciais: cat.usar_perguntas_essenciais,
-      ordemPerguntasEssenciais: cat.ordem_perguntas_essenciais,
-      perguntasEssenciais: cat.perguntas_essenciais,
-      comprimentoPadrao: cat.comprimento_padrao,
-    });
+    (agenteInterno
+      ? montarPromptBaseInternoDoCargo({
+          tituloCargo: String(cat.titulo ?? "").trim(),
+          area: cat.area,
+          promptTemplate: cat.prompt_template,
+          descricao: cat.descricao,
+          descricaoCurta: cat.descricao_curta,
+          podeFazer: cat.pode_fazer_padrao,
+          naoPodeFazer: cat.nao_pode_fazer_padrao,
+        })
+      : montarPromptBaseDoCargo({
+          nomeAgente: nomeTrim,
+          tituloCargo: String(cat.titulo ?? "").trim(),
+          promptTemplate: cat.prompt_template,
+          descricao: cat.descricao,
+          saudacaoCliente: cat.saudacao_cliente,
+          usarPerguntasEssenciais: cat.usar_perguntas_essenciais,
+          ordemPerguntasEssenciais: cat.ordem_perguntas_essenciais,
+          perguntasEssenciais: cat.perguntas_essenciais,
+          comprimentoPadrao: cat.comprimento_padrao,
+        }));
 
   const podeFazer = Array.isArray(cat.pode_fazer_padrao) ? cat.pode_fazer_padrao : [];
   const naoPode = Array.isArray(cat.nao_pode_fazer_padrao) ? cat.nao_pode_fazer_padrao : [];
@@ -543,6 +558,14 @@ export async function POST(request: NextRequest) {
   let agendaMinutes = Number.parseInt(String(body.ciclo_intervalo_minutos ?? ""), 10);
   if (!Number.isFinite(agendaMinutes) || agendaMinutes <= 0) agendaMinutes = 60;
   if (agendaMinutes > 10080) agendaMinutes = 10080;
+
+  let cicloCronExpressao: string | null = null;
+  const cronBody = typeof body.ciclo_cron_expressao === "string" ? body.ciclo_cron_expressao.trim() : "";
+  if (cronBody) {
+    cicloCronExpressao = cronBody;
+  } else if (typeof body.ciclo_hora_local_br === "string" && body.ciclo_hora_local_br.trim()) {
+    cicloCronExpressao = cronDiarioUtcFromHoraLocalBr(body.ciclo_hora_local_br.trim());
+  }
 
   const motorFerramentasHub = parseBoolFerr(
     body.motor_ferramentas_habilitado,
@@ -703,7 +726,8 @@ export async function POST(request: NextRequest) {
       String(body.nome || "").trim() || created.agente_slug,
       modoProvisionar,
       agendaMinutes,
-      tenantCiclo
+      tenantCiclo,
+      { cronExpressao: modoProvisionar === "agenda" ? cicloCronExpressao : null }
     );
     ciclo_aviso = out.aviso;
     ciclo_erro = out.erro;

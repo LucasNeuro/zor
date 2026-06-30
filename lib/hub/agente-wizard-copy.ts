@@ -1,18 +1,32 @@
 import type { ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { MODO_OPERACAO_LABEL } from "@/lib/hub/agente-modo-operacao";
 
+/** Ramo do wizard — escolhido no passo 0 antes do cargo. */
+export type WizardTipoAgente = "canal" | "interno";
+
+export const WIZARD_TIPO_LABEL: Record<WizardTipoAgente, string> = {
+  canal: "Agente de atendimento",
+  interno: "Assistente interno",
+};
+
+export const AGENTE_WIZARD_PASSO_0 = {
+  titulo: "Que tipo de IA vai criar?",
+  descricao:
+    "Ambos usam um cargo do catálogo como base (persona, modelo e harness). O que muda é como operam: canal ao vivo com clientes ou copiloto interno da empresa.",
+};
+
 export const AGENTE_WIZARD_STEP_INTRO: Record<
   1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
   { titulo: string; descricao: string }
 > = {
   1: {
-    titulo: "Como instruir este agente?",
+    titulo: "Cargo do catálogo",
     descricao:
-      "Escolha um cargo do catálogo e/ou carregue um playbook (.md). Pode usar os dois juntos.",
+      "Escolha o cargo que define a função (base do harness). Opcionalmente combine com playbook (.md).",
   },
   2: {
     titulo: "Identidade do agente",
-    descricao: "Nome do assistente e tipo de operação: atendimento ao cliente ou agente interno.",
+    descricao: "Nome do assistente. O tipo (atendimento ou interno) foi definido no passo anterior.",
   },
   3: {
     titulo: "Personalidade",
@@ -27,7 +41,7 @@ export const AGENTE_WIZARD_STEP_INTRO: Record<
   5: {
     titulo: "Revisão e ciclos",
     descricao:
-      "Confira cargo, playbook e tipo de agente. Configure o ciclo padrão e crie o agente no Hub.",
+      "Confira cargo e tipo de agente. Para internos: escolha interação (copiloto/gestor) ou ciclo programado com horário.",
   },
   6: {
     titulo: "Ferramentas Hub",

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { defaultTenantId } from "@/lib/tenant-default";
+import { telefonesConversaEquivalentes } from "@/lib/crm/isolamento-conversa-lead";
 import { WA_LIVE_STATUSES } from "@/lib/whatsapp/resolver-linha-whatsapp";
+import { normalizarTelefoneGestorLista } from "@/lib/whatsapp/gestor-telefones-format";
 
 export type LinhaGestorWhatsappRow = {
   tenant_id: string;
@@ -18,19 +20,39 @@ const GESTOR_SELECT =
 export function telefonesAutorizadosGestor(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .map((t) => String(t ?? "").replace(/\D/g, ""))
-    .filter((t) => t.length >= 10);
+    .map((t) => normalizarTelefoneGestorLista(String(t ?? "")))
+    .filter((t) => t.length >= 12);
 }
 
 export function gestorTelefoneAutorizado(telefone: string, autorizados: string[]): boolean {
-  const tel = telefone.replace(/\D/g, "");
-  if (tel.length < 10) return false;
+  const tel = normalizarTelefoneGestorLista(telefone);
+  if (tel.length < 12) return false;
   if (!autorizados.length) return false;
-  return autorizados.some((a) => {
-    if (a === tel) return true;
-    if (tel.endsWith(a) || a.endsWith(tel)) return true;
-    return false;
-  });
+  return autorizados.some((a) => telefonesConversaEquivalentes(tel, a));
+}
+
+/** Telefone da sessão gestor a partir do chat fromMe (ex.: «mensagens para você»). */
+export function resolverTelefoneGestorFromMe(
+  destinoChat: string,
+  autorizados: string[]
+): string | null {
+  const dest = normalizarTelefoneGestorLista(destinoChat);
+  if (dest.length >= 12) {
+    const match = autorizados.find((a) => telefonesConversaEquivalentes(dest, a));
+    if (match) return match;
+  }
+  if (autorizados.length === 1) return autorizados[0]!;
+  if (autorizados.length > 1 && dest.length >= 12) {
+    return autorizados.find((a) => telefonesConversaEquivalentes(dest, a)) ?? null;
+  }
+  return autorizados[0] ?? null;
+}
+
+export function ehGestorChatInternoFromMe(destinoChat: string, autorizados: string[]): boolean {
+  if (!autorizados.length) return false;
+  const dest = normalizarTelefoneGestorLista(destinoChat);
+  if (dest.length < 12) return autorizados.length === 1;
+  return autorizados.some((a) => telefonesConversaEquivalentes(dest, a));
 }
 
 export function validarLinhaGestorRow(r: LinhaGestorWhatsappRow): {

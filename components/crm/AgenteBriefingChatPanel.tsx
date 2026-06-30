@@ -405,6 +405,37 @@ export function AgenteBriefingDrawer({
                       >
                         {m.conteudo}
                       </div>
+                      {!isUser &&
+                      m.metadata &&
+                      typeof m.metadata === "object" &&
+                      (m.metadata.tipo === "artefato_link" ||
+                        (Array.isArray(m.metadata.urls_publicas) &&
+                          (m.metadata.urls_publicas as string[]).length > 0)) ? (
+                        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                          {(
+                            (Array.isArray(m.metadata.urls)
+                              ? (m.metadata.urls as string[])
+                              : Array.isArray(m.metadata.urls_publicas)
+                                ? (m.metadata.urls_publicas as string[])
+                                : []) as string[]
+                          ).map((url) => (
+                            <a
+                              key={url}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: RF_ACCENT,
+                                wordBreak: "break-all",
+                              }}
+                            >
+                              Abrir relatório / canvas →
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
                       {!isUser && m.metadata && typeof m.metadata === "object" && m.metadata.modelo ? (
                         <div style={{ fontSize: 10, color: "#484f58", marginTop: 6, paddingLeft: 2 }}>
                           {String(m.metadata.modelo)} · {String(m.metadata.tokens_input ?? "—")}/

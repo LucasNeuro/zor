@@ -15,10 +15,9 @@ import {
   AgenteFerramentasIaBlock,
   type CatalogoFerramentaCustomLite,
   type CatalogoFerramentaExternaLite,
-  type CatalogoFerramentaIntegradorLite,
 } from "@/components/crm/AgenteFerramentasIaBlock";
 import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-externas";
-import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
+import { buildCatalogoIntegradorFerramentasCompleto } from "@/lib/hub/integrador-catalogo-ui";
 import {
   AgenteEmailConnectBlock,
   type AgenteEmailSnapshot,
@@ -30,8 +29,15 @@ import {
 import {
   mergeUsoFerramentasComPadraoPreservandoCustom,
   mergeUsoFerramentasWhatsappCanal,
+  pacoteUsoFerramentasSuperagenteInterno,
 } from "@/lib/hub/agente-ferramentas-registry";
+import type { SuperagenteSkill } from "@/lib/hub/superagente/types";
 import { WA_PRESET_CARGO_SLUG } from "@/lib/hub/presets/wa-conversacao-preset-shared";
+import {
+  AGENDA_INTERVALO_OPCOES,
+  cronDiarioUtcFromHoraLocalBr,
+  type AgendaCicloModo,
+} from "@/lib/hub/ciclo-agenda-cron";
 import { hubModeloExibicaoProduto, isHubModeloIdDbCompatible } from "@/lib/ia/hub-model-defaults";
 import {
   PlaybookUploadAnalisePanel,
@@ -56,11 +62,14 @@ import {
 import { CONHECIMENTO_TITULO_INSERT } from "@/lib/hub/conhecimento-secoes";
 import { prefixoMercadoParaGravacao } from "@/lib/crm/mercado-agente";
 import {
+  AGENTE_WIZARD_PASSO_0,
   AGENTE_WIZARD_STEP_INTRO,
   agenteWizardPasso8Descricao,
   agenteWizardPasso8Intro,
   modoInstrucaoWizardResumo,
   modoOperacaoWizardResumo,
+  WIZARD_TIPO_LABEL,
+  type WizardTipoAgente,
 } from "@/lib/hub/agente-wizard-copy";
 import { CARGO_LABEL_PLAYBOOK_ONLY } from "@/lib/hub/agente-instrucao-modo";
 import { CRM_ACCENT } from "@/lib/crm/crm-button-styles";
@@ -69,11 +78,11 @@ import { createAgenteWizardTheme } from "@/lib/crm/agente-wizard-theme";
 import { gerarPersonalidadeAgente } from "@/lib/hub/agente-personalidade-eixos";
 import { AgentePersonalidadeEixosPanel } from "@/components/crm/AgentePersonalidadeEixosPanel";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
+import { AgenteWizardIntegracoesInternoPanel } from "@/components/crm/AgenteWizardIntegracoesInternoPanel";
 import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
 import {
   agenteUsaFerramentasGoogle,
   agentePrecisaGoogleWorkspace,
-  buildGoogleIntegradorCatalogLite,
   cargoRecomendaGoogleWorkspace,
   patchFerramentasGoogleAgendamento,
   readWizardOAuthResume,
@@ -95,6 +104,17 @@ const WIZARD_STEP_LABELS = [
   "Canal",
   "Google",
 ] as const;
+
+/** Passo 4 (playbook + RAG) só existe no fluxo de atendimento/canal. */
+function wizardPassoAnterior(passo: number, interno: boolean): number {
+  if (interno && passo === 5) return 3;
+  return passo - 1;
+}
+
+function wizardPassoProximo(passo: number, interno: boolean): number {
+  if (interno && passo === 3) return 5;
+  return passo + 1;
+}
 
 const WIZARD_CONHECIMENTO_SECOES = ["empresa", "servicos", "atendimento", "proibicoes"] as const;
 type WizardConhecimentoSecaoId = (typeof WIZARD_CONHECIMENTO_SECOES)[number];
@@ -338,9 +358,17 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [passo, setPasso] = useState(1);
+  const [passo, setPasso] = useState(0);
+  const [tipoWizard, setTipoWizard] = useState<WizardTipoAgente | null>(null);
   const [dialogFecharAssistente, setDialogFecharAssistente] = useState(false);
   const [cargoSelecionado, setCargoSelecionado] = useState<Cargo | null>(null);
+  /** Harness interno: prompt + skills gerados a partir do cargo (sem playbook). */
+  const [harnessPromptGerado, setHarnessPromptGerado] = useState("");
+  const [harnessSkills, setHarnessSkills] = useState<SuperagenteSkill[]>([]);
+  const [harnessGerando, setHarnessGerando] = useState(false);
+  const [harnessGeradoComIa, setHarnessGeradoComIa] = useState(false);
+  const [harnessErro, setHarnessErro] = useState("");
+  const harnessReqRef = useRef(0);
   /** Sem cargo no catálogo — instruções só do playbook publicado no bucket. */
   const [somentePlaybook, setSomentePlaybook] = useState(false);
   /** Preset universal conversação WhatsApp (playbook + cargo + ciclos). */
@@ -358,11 +386,47 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [filtroEspecialidade, setFiltroEspecialidade] = useState<string>("");
 
 
-  /** Padrão recomendado: copiloto interno. */
+  const wizardInterno = tipoWizard === "interno";
+  const wizardCanal = tipoWizard === "canal";
+
+  function aplicarTipoWizard(tipo: WizardTipoAgente) {
+    setTipoWizard(tipo);
+    setUsarPresetWa(false);
+    if (tipo === "canal") {
+      setModoOperacao("canal_whatsapp");
+      setModoExecucao("interacao");
+      setMotorFerramentasHub(true);
+      setUsoFerramentasIa(mergeUsoFerramentasWhatsappCanal({}, "canal_whatsapp"));
+      setFiltroSegmento("");
+    } else {
+      setModoOperacao("jobs_internos");
+      setModoExecucao("interacao");
+      setMotorFerramentasHub(true);
+      setMistralProvisionar(true);
+      setUsoFerramentasIa(pacoteUsoFerramentasSuperagenteInterno());
+      setSomentePlaybook(false);
+      if (!filtroSegmento) setFiltroSegmento("Operações");
+    }
+  }
+
+  useEffect(() => {
+    const resume = readWizardOAuthResume();
+    if (resume?.agenteSlug) return;
+    const wt = searchParams.get("wizard_tipo")?.trim().toLowerCase();
+    if (wt === "canal" || wt === "interno") {
+      aplicarTipoWizard(wt);
+      setPasso(1);
+    }
+  }, [searchParams]);
+
+  /** Padrão recomendado: copiloto interno (após escolha no passo 0). */
   const [modoOperacao, setModoOperacao] = useState<ModoOperacaoAgente>("jobs_internos");
   /** Onde/quando opera: gravado como hub_ciclos_ia. */
-  const [modoExecucao, setModoExecucao] = useState<"interacao" | "tempo_real" | "agenda">("agenda");
+  const [modoExecucao, setModoExecucao] = useState<"interacao" | "tempo_real" | "agenda">("interacao");
   const [agendaIntervalMin, setAgendaIntervalMin] = useState<15 | 60 | 360 | 1440>(60);
+  /** Ciclo programado: horário fixo diário (BR) ou intervalo em minutos. */
+  const [agendaModo, setAgendaModo] = useState<AgendaCicloModo>("horario_fixo");
+  const [agendaHoraLocal, setAgendaHoraLocal] = useState("08:00");
 
   /** `provisionar`: cria linha padrão + opcional vincular mais; `somente_vincular`: só atualiza slugs em hub_ciclos_ia. */
   const [hubCicloEstrategia, setHubCicloEstrategia] = useState<"provisionar" | "somente_vincular">(
@@ -385,9 +449,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [catalogoExternaFerramentasWizard, setCatalogoExternaFerramentasWizard] = useState<
     CatalogoFerramentaExternaLite[]
   >([]);
-  const [catalogoIntegradorFerramentasWizard, setCatalogoIntegradorFerramentasWizard] = useState<
-    CatalogoFerramentaIntegradorLite[]
-  >([]);
+  const [integradorConexoesWizard, setIntegradorConexoesWizard] = useState<
+    Record<string, { configurado?: boolean; plataforma_ok?: boolean }>
+  >({});
   const [googleOauthEmail, setGoogleOauthEmail] = useState<string | null>(null);
 
   const [erroCargos, setErroCargos] = useState(false);
@@ -476,23 +540,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         );
         if (resInt?.ok) {
           const j = (await resInt.json()) as {
-            catalogo?: IntegradorCatalogoEntry[];
-            conexoes?: Record<string, { configurado?: boolean }>;
+            conexoes?: Record<string, { configurado?: boolean; plataforma_ok?: boolean }>;
           };
-          const lista: CatalogoFerramentaIntegradorLite[] = [];
-          for (const entry of j.catalogo ?? []) {
-            if (j.conexoes?.[entry.id]?.configurado !== true) continue;
-            for (const f of entry.ferramentas) {
-              lista.push({
-                ferramenta_key: f.ferramenta_key,
-                titulo: f.titulo,
-                integrador_nome: entry.nome,
-                politica: f.politica,
-                descricao_curta: f.descricao_curta ?? null,
-              });
-            }
-          }
-          setCatalogoIntegradorFerramentasWizard(lista);
+          setIntegradorConexoesWizard(
+            j.conexoes && typeof j.conexoes === "object" ? j.conexoes : {}
+          );
         }
       } catch {
         /* ignore */
@@ -506,23 +558,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       const resInt = await fetch("/api/hub/integradores", { headers });
       if (!resInt.ok) return;
       const j = (await resInt.json()) as {
-        catalogo?: IntegradorCatalogoEntry[];
-        conexoes?: Record<string, { configurado?: boolean }>;
+        conexoes?: Record<string, { configurado?: boolean; plataforma_ok?: boolean }>;
       };
-      const lista: CatalogoFerramentaIntegradorLite[] = [];
-      for (const entry of j.catalogo ?? []) {
-        if (j.conexoes?.[entry.id]?.configurado !== true) continue;
-        for (const f of entry.ferramentas) {
-          lista.push({
-            ferramenta_key: f.ferramenta_key,
-            titulo: f.titulo,
-            integrador_nome: entry.nome,
-            politica: f.politica,
-            descricao_curta: f.descricao_curta ?? null,
-          });
-        }
-      }
-      setCatalogoIntegradorFerramentasWizard(lista);
+      setIntegradorConexoesWizard(j.conexoes && typeof j.conexoes === "object" ? j.conexoes : {});
     } catch {
       /* ignore */
     }
@@ -672,7 +710,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   }, [passo, agenteSlugCriado, modoOperacao, modoExecucao, refreshSnapshotEmail, refreshSnapshotUazapi]);
 
   useEffect(() => {
-    if (passo !== 7 || !agenteSlugCriado) return;
+    if (passo !== 7 || !agenteSlugCriado || wizardInterno) return;
     let cancel = false;
     setPlaybookMetaLoading(true);
     setPlaybookErro("");
@@ -703,7 +741,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     return () => {
       cancel = true;
     };
-  }, [passo, agenteSlugCriado]);
+  }, [passo, agenteSlugCriado, wizardInterno]);
 
   function adicionarRagPendente(file: File | null | undefined) {
     if (!file) return;
@@ -1282,11 +1320,14 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     modoCanal: precisaPassoCanal,
   });
   const googleNoPassoCanal = precisaPassoCanal && precisaGoogleWorkspace;
-  const precisaPassoGoogle = precisaGoogleWorkspace && !precisaPassoCanal;
+  const precisaPassoGoogle = precisaGoogleWorkspace && !precisaPassoCanal && !wizardInterno;
   const wizardPassosVisiveis = useMemo(() => {
-    const items: { id: number; label: string }[] = [];
+    const items: { id: number; label: string }[] = [{ id: 0, label: "Tipo" }];
     for (let i = 0; i < 7; i += 1) {
-      items.push({ id: i + 1, label: WIZARD_STEP_LABELS[i] });
+      if (wizardInterno && i === 3) continue;
+      const label =
+        wizardInterno && i === 6 ? "Integrações" : WIZARD_STEP_LABELS[i];
+      items.push({ id: i + 1, label });
     }
     if (precisaPassoCanal) {
       items.push({
@@ -1296,15 +1337,12 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     }
     if (precisaPassoGoogle) items.push({ id: 9, label: "Agenda Google" });
     return items;
-  }, [precisaPassoCanal, precisaPassoGoogle, googleNoPassoCanal]);
+  }, [wizardInterno, precisaPassoCanal, precisaPassoGoogle, googleNoPassoCanal]);
 
-  const integradorCatalogWizard = useMemo(() => {
-    const keys = new Set(catalogoIntegradorFerramentasWizard.map((x) => x.ferramenta_key));
-    const pendentes = buildGoogleIntegradorCatalogLite({ requerConexao: true }).filter(
-      (x) => !keys.has(x.ferramenta_key)
-    );
-    return [...catalogoIntegradorFerramentasWizard, ...pendentes];
-  }, [catalogoIntegradorFerramentasWizard]);
+  const integradorCatalogWizard = useMemo(
+    () => buildCatalogoIntegradorFerramentasCompleto(integradorConexoesWizard),
+    [integradorConexoesWizard]
+  );
 
   const playbookDropzoneBorder =
     playbookUploadStatus === "hover"
@@ -1338,7 +1376,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     ? !playbookConteudoAnalise.trim() ||
       !playbookAnaliseResultado ||
       (whatsappFlowAgent && !playbookFlowReady(playbookFlowStatus))
-    : !cargoSelecionado;
+    : wizardInterno
+      ? !cargoSelecionado || harnessGerando || !harnessPromptGerado.trim()
+      : !cargoSelecionado;
 
   useEffect(() => {
     if (passo !== 6) {
@@ -1390,6 +1430,62 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   useEffect(() => {
     carregarCargos();
   }, [carregarCargos]);
+
+  const gerarHarnessInterno = useCallback(async (cargo: Cargo) => {
+    const reqId = ++harnessReqRef.current;
+    setHarnessGerando(true);
+    setHarnessErro("");
+    setHarnessPromptGerado("");
+    setHarnessSkills([]);
+    setHarnessGeradoComIa(false);
+    try {
+      const res = await fetch("/api/hub/agentes/gerar-harness-interno", {
+        method: "POST",
+        headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify({ cargo_slug: cargo.slug }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        harness?: {
+          system_prompt_base?: string;
+          skills?: SuperagenteSkill[];
+          gerado_com_ia?: boolean;
+        };
+      };
+      if (reqId !== harnessReqRef.current) return;
+      if (!res.ok) {
+        setHarnessErro(data.error || `Falha ao gerar harness (HTTP ${res.status}).`);
+        return;
+      }
+      const prompt = String(data.harness?.system_prompt_base ?? "").trim();
+      if (!prompt) {
+        setHarnessErro("Resposta sem prompt base.");
+        return;
+      }
+      setHarnessPromptGerado(prompt);
+      setHarnessSkills(Array.isArray(data.harness?.skills) ? data.harness!.skills! : []);
+      setHarnessGeradoComIa(data.harness?.gerado_com_ia === true);
+    } catch {
+      if (reqId === harnessReqRef.current) {
+        setHarnessErro("Falha de rede ao gerar prompt e skills.");
+      }
+    } finally {
+      if (reqId === harnessReqRef.current) setHarnessGerando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!wizardInterno || !cargoSelecionado) {
+      harnessReqRef.current += 1;
+      setHarnessPromptGerado("");
+      setHarnessSkills([]);
+      setHarnessGerando(false);
+      setHarnessErro("");
+      setHarnessGeradoComIa(false);
+      return;
+    }
+    void gerarHarnessInterno(cargoSelecionado);
+  }, [wizardInterno, cargoSelecionado?.slug, gerarHarnessInterno]);
 
   const segmentos = Array.from(new Set(cargos.map((c) => c.segmento).filter(Boolean))) as string[];
 
@@ -1497,8 +1593,8 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         nome,
         prefixo_mercado: prefixoMercadoParaGravacao([]),
         personalidade: gerarPersonalidadeAgente(valores),
-        system_prompt_base: "",
-        conhecimento_secoes: conhecimentoSecoesParaPayload(),
+        system_prompt_base: wizardInterno && harnessPromptGerado.trim() ? harnessPromptGerado.trim() : "",
+        conhecimento_secoes: wizardInterno ? {} : conhecimentoSecoesParaPayload(),
         bio: null,
         horario_inicio: "08:00",
         horario_fim: "22:00",
@@ -1518,13 +1614,24 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         payload.modo_operacao = modoOperacao;
         payload.ciclo_execucao = agenteEhModoCanal(modoOperacao) ? "interacao" : modoExecucao;
         if (modoExecucao === "agenda" && !agenteEhModoCanal(modoOperacao)) {
-          payload.ciclo_intervalo_minutos = agendaIntervalMin;
+          payload.ciclo_intervalo_minutos = agendaModo === "intervalo" ? agendaIntervalMin : undefined;
+          if (agendaModo === "horario_fixo") payload.ciclo_hora_local_br = agendaHoraLocal;
         }
       } else {
         payload.modo_operacao = modoOperacao;
         payload.ciclo_execucao = agenteEhModoCanal(modoOperacao) ? "interacao" : modoExecucao;
+        if (
+          modoOperacao === "jobs_internos" &&
+          modoExecucao === "interacao" &&
+          hubCicloEstrategia === "provisionar"
+        ) {
+          payload.omit_hub_ciclo_padrao = true;
+        }
         payload.ciclo_intervalo_minutos =
-          modoExecucao === "agenda" ? agendaIntervalMin : undefined;
+          modoExecucao === "agenda" && agendaModo === "intervalo" ? agendaIntervalMin : undefined;
+        if (modoExecucao === "agenda" && agendaModo === "horario_fixo") {
+          payload.ciclo_hora_local_br = agendaHoraLocal;
+        }
         if (hubCiclosVincularIds.length > 0) {
           payload.ciclos_vincular_ids = hubCiclosVincularIds;
         }
@@ -1558,17 +1665,19 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         }
 
         if (slug) {
-          const temPlaybookPendente = Boolean(playbookArquivoPendente || playbookConteudoAnalise.trim());
-          if (temPlaybookPendente && (somentePlaybook || cargoSelecionado)) {
-            const pub = await publicarPlaybookPendenteAposCriar(slug);
-            if (!pub.ok) {
-              setRagPosCriacaoAviso(
-                `Agente criado, mas o playbook não foi gravado na pasta do agente: ${pub.error ?? "erro desconhecido"}. ` +
-                  "Reenvie no passo Materiais."
-              );
+          if (!wizardInterno) {
+            const temPlaybookPendente = Boolean(playbookArquivoPendente || playbookConteudoAnalise.trim());
+            if (temPlaybookPendente && (somentePlaybook || cargoSelecionado)) {
+              const pub = await publicarPlaybookPendenteAposCriar(slug);
+              if (!pub.ok) {
+                setRagPosCriacaoAviso(
+                  `Agente criado, mas o playbook não foi gravado na pasta do agente: ${pub.error ?? "erro desconhecido"}. ` +
+                    "Reenvie no passo Materiais."
+                );
+              }
             }
+            await processarFilaRagNoAgente(slug);
           }
-          await processarFilaRagNoAgente(slug);
           const noServidor = mergeUsoFerramentasComPadraoPreservandoCustom(data.uso_ferramentas_ia);
           const noWizard = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentasIa);
           const chaves = new Set([...Object.keys(noServidor), ...Object.keys(noWizard)]);
@@ -1674,7 +1783,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         <p style={{ margin: 0, color: wizardDark ? RF.texto2 : undefined }}>
           {precisaPassoCanal
             ? "Depois: Materiais (playbook) e Canal (WhatsApp)."
-            : "Depois: Materiais (playbook). Agente interno — sem configuração de canal."}
+            : "Depois: Integrações (Google, Mistral e catálogo). Sem playbook nem canal."}
         </p>
         {erro ? <p style={{ color: "#ef4444", fontSize: 12, margin: "12px 0 0" }}>{erro}</p> : null}
       </CrmConfirmDialog>
@@ -1705,9 +1814,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               }}
             >←</button>
           </div>
-          {nome.trim() && (cargoSelecionado || somentePlaybook) ? (
+          {tipoWizard || (nome.trim() && (cargoSelecionado || somentePlaybook)) ? (
             <p style={{ color: wizardDark ? "#7a9a7e" : "#5d7a67", fontSize: 12, margin: 0 }}>
-              {nome} · {cargoSelecionado?.titulo ?? CARGO_LABEL_PLAYBOOK_ONLY}
+              {tipoWizard ? WIZARD_TIPO_LABEL[tipoWizard] : null}
+              {tipoWizard && nome.trim() && (cargoSelecionado || somentePlaybook) ? " · " : null}
+              {nome.trim() && (cargoSelecionado || somentePlaybook)
+                ? `${nome} · ${cargoSelecionado?.titulo ?? CARGO_LABEL_PLAYBOOK_ONLY}`
+                : null}
             </p>
           ) : null}
         </div>
@@ -1731,7 +1844,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 <div
                   style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 1 }}
                 >
-                  <div style={stepCircle(ativo, passado)}>{passado ? "✓" : num}</div>
+                  <div style={stepCircle(ativo, passado)}>{passado ? "✓" : num === 0 ? "•" : num}</div>
                   <span
                     style={{
                       ...stepLabel(ativo),
@@ -1777,60 +1890,141 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             boxSizing: "border-box",
           }}
         >
-          {passo === 1 && (
+          {passo === 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div>
+                <h2 style={wzH2}>{AGENTE_WIZARD_PASSO_0.titulo}</h2>
+                <p style={wzP}>{AGENTE_WIZARD_PASSO_0.descricao}</p>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {(
+                  [
+                    {
+                      id: "canal" as const,
+                      Icon: MessageSquare,
+                      titulo: WIZARD_TIPO_LABEL.canal,
+                      texto:
+                        "Atende clientes e leads no WhatsApp (ou e-mail). Cargo do catálogo + playbook de fluxo. Liga instância UAZAPI no final.",
+                    },
+                    {
+                      id: "interno" as const,
+                      Icon: Zap,
+                      titulo: WIZARD_TIPO_LABEL.interno,
+                      texto:
+                        "Copiloto e superagente da empresa: CRM, relatórios com gráficos, Mistral OCR. Cargo do catálogo como base do harness. Disponível no WhatsApp do gestor.",
+                    },
+                  ] as const
+                ).map((opt) => {
+                  const Ico = opt.Icon;
+                  const ativo = tipoWizard === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => aplicarTipoWizard(opt.id)}
+                      style={wizardChoiceCard(ativo)}
+                    >
+                      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", textAlign: "left" }}>
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: ativo
+                              ? wizardDark
+                                ? "rgba(146, 255, 0, 0.14)"
+                                : "rgba(56,139,253,0.12)"
+                              : wizardDark
+                                ? "rgba(11, 31, 16, 0.9)"
+                                : "#eef7eb",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Ico size={18} color={ativo ? (wizardDark ? "#92ff00" : "#2d6a4f") : wzMuted} />
+                        </span>
+                        <div>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: wzStrong }}>{opt.titulo}</p>
+                          <p style={{ margin: "6px 0 0", fontSize: 12, color: wzMuted, lineHeight: 1.5 }}>
+                            {opt.texto}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {passo === 1 && tipoWizard && (
             <div>
               <h2 style={{ ...wzH2, margin: "0 0 4px" }}>{AGENTE_WIZARD_STEP_INTRO[1].titulo}</h2>
               <p style={{ ...wzP, margin: "0 0 16px" }}>
                 {AGENTE_WIZARD_STEP_INTRO[1].descricao}
               </p>
 
-              <div
-                style={{
-                  marginBottom: 16,
-                  padding: "12px 14px",
-                  borderRadius: 10,
-                  border: `1px solid ${wizardDark ? "rgba(146, 255, 0, 0.28)" : "#2d6a4f44"}`,
-                  background: wizardDark ? "rgba(146, 255, 0, 0.06)" : "#2d6a4f0c",
-                }}
-              >
-                <p style={{ margin: "0 0 10px", fontSize: 12, color: wzMuted, lineHeight: 1.5 }}>
-                  <strong style={{ color: wzStrong }}>Preset conversação WhatsApp</strong> — playbook com fluxo
-                  dinâmico, cargo de atendimento, ferramentas CRM, ciclo sob interação e follow-up proativo.
-                </p>
-                <button
-                  type="button"
-                  onClick={aplicarPresetWaNoWizard}
-                  disabled={playbookUploadStatus === "enviando" || playbookAnaliseLoading || criando}
-                  style={wizardOutline(playbookUploadStatus === "enviando" || playbookAnaliseLoading || criando)}
-                >
-                  {usarPresetWa ? "✓ Preset WA activo" : "Aplicar preset conversação WA"}
-                </button>
-              </div>
+              {wizardInterno ? (
+                <div style={{ ...wizardInfoBox(), marginBottom: 16 }}>
+                  <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Assistente interno:</strong> o cargo
+                  do catálogo define persona, modelo e harness (skills). As ferramentas de superagente (CRM,
+                  relatórios, OCR Mistral) já vêm pré-activadas no passo Ferramentas.
+                </div>
+              ) : null}
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSomentePlaybook(false);
-                    setUsarPresetWa(false);
+              {wizardCanal ? (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: "12px 14px",
+                    borderRadius: 10,
+                    border: `1px solid ${wizardDark ? "rgba(146, 255, 0, 0.28)" : "#2d6a4f44"}`,
+                    background: wizardDark ? "rgba(146, 255, 0, 0.06)" : "#2d6a4f0c",
                   }}
-                  style={chip(!somentePlaybook && !usarPresetWa)}
                 >
-                  Cargo do catálogo (recomendado)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSomentePlaybook(true);
-                    setCargoSelecionado(null);
-                  }}
-                  style={chip(somentePlaybook, "#c9a24a")}
-                >
-                  Só playbook (sem cargo)
-                </button>
-              </div>
+                  <p style={{ margin: "0 0 10px", fontSize: 12, color: wzMuted, lineHeight: 1.5 }}>
+                    <strong style={{ color: wzStrong }}>Preset conversação WhatsApp</strong> — playbook com fluxo
+                    dinâmico, cargo de atendimento, ferramentas CRM, ciclo sob interação e follow-up proativo.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={aplicarPresetWaNoWizard}
+                    disabled={playbookUploadStatus === "enviando" || playbookAnaliseLoading || criando}
+                    style={wizardOutline(playbookUploadStatus === "enviando" || playbookAnaliseLoading || criando)}
+                  >
+                    {usarPresetWa ? "✓ Preset WA activo" : "Aplicar preset conversação WA"}
+                  </button>
+                </div>
+              ) : null}
 
-              {somentePlaybook ? (
+              {!wizardInterno ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSomentePlaybook(false);
+                      setUsarPresetWa(false);
+                    }}
+                    style={chip(!somentePlaybook && !usarPresetWa)}
+                  >
+                    Cargo do catálogo (recomendado)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSomentePlaybook(true);
+                      setCargoSelecionado(null);
+                    }}
+                    style={chip(somentePlaybook, "#c9a24a")}
+                  >
+                    Só playbook (sem cargo)
+                  </button>
+                </div>
+              ) : null}
+
+              {!wizardInterno && somentePlaybook ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
@@ -1874,7 +2068,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   />
                 </div>
               ) : null}
-              {somentePlaybook && playbookConteudoAnalise.trim() && whatsappFlowAgent ? (
+              {!wizardInterno && somentePlaybook && playbookConteudoAnalise.trim() && whatsappFlowAgent ? (
                 <PlaybookFlowStatusBanner status={playbookFlowStatus} compact />
               ) : null}
 
@@ -2025,59 +2219,166 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                         gap: 12,
                       }}
                     >
-                      <div>
-                        <p style={{ color: wzStrong, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>
-                          Playbook opcional
-                        </p>
-                        <p style={{ color: wzMuted, fontSize: 12, margin: 0, lineHeight: 1.55 }}>
-                          Combine cargo + playbook: o cargo orienta a conversa e o playbook publica o fluxo no Storage.
-                          Pode carregar agora ou no passo <strong style={{ color: wzStrong }}>Materiais</strong>.
-                        </p>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                        <button
-                          type="button"
-                          onClick={() => void aplicarTemplateWajeV1NoWizard()}
-                          disabled={playbookUploadStatus === "enviando" || playbookAnaliseLoading}
-                          style={wizardOutline(
-                            playbookUploadStatus === "enviando" || playbookAnaliseLoading
-                          )}
-                        >
-                          Aplicar template Waje v1
-                        </button>
-                      </div>
-                      <PlaybookUploadAnalisePanel
-                        inputId={`${PLAYBOOK_INPUT_PRE}-cargo`}
-                        modoPreCriacao
-                        analiseObrigatoria={false}
-                        theme={playbookPanelTheme}
-                        introPreCriacao="Opcional: carregue um playbook para publicar junto com o cargo ao criar o agente. A análise de qualidade é recomendada, mas não bloqueia o avanço."
-                        uploadStatus={playbookUploadStatus}
-                        uploadMensagem={playbookUploadMensagem}
-                        uploadPct={playbookUploadPct}
-                        arquivoNome={playbookArquivoNome}
-                        conteudoPreview={playbookConteudoPreview}
-                        conteudoCarregado={!!playbookConteudoAnalise.trim()}
-                        analiseLoading={playbookAnaliseLoading}
-                        analisePct={playbookAnalisePct}
-                        analiseErro={playbookAnaliseErro}
-                        analiseResultado={playbookAnaliseResultado}
-                        dropzoneBorder={playbookDropzoneBorder}
-                        dropzoneBg={playbookDropzoneBg}
-                        progressoContexto={playbookArquivoNome || cargoSelecionado?.titulo}
-                        onHoverChange={(hover) => {
-                          if (playbookUploadStatus !== "enviando") {
-                            setPlaybookUploadStatus(hover ? "hover" : "idle");
-                          }
-                        }}
-                        onFileSelect={(file) => void carregarPlaybookLocal(file)}
-                        onAnalisar={() => void analisarPlaybookComMistral()}
-                        onCancelarAnalise={cancelarAnalisePlaybook}
-                        onLimparArquivo={limparPlaybookCarregado}
-                      />
-                      {playbookConteudoAnalise.trim() && whatsappFlowAgent ? (
-                        <PlaybookFlowStatusBanner status={playbookFlowStatus} compact />
-                      ) : null}
+                      {wizardInterno ? (
+                        <>
+                          <div>
+                            <p style={{ color: wzStrong, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>
+                              Prompt e skills (gerados do cargo)
+                            </p>
+                            <p style={{ color: wzMuted, fontSize: 12, margin: 0, lineHeight: 1.55 }}>
+                              A IA lê o cargo do catálogo e monta o <strong style={{ color: wzStrong }}>system prompt</strong>{" "}
+                              e as <strong style={{ color: wzStrong }}>skills</strong> do harness superagente — sem playbook
+                              manual. O motor reforça skills em runtime; o prompt fica gravado no agente.
+                            </p>
+                          </div>
+                          {harnessGerando ? (
+                            <p style={{ color: wzMuted, fontSize: 13, margin: 0 }}>Gerando prompt e skills…</p>
+                          ) : null}
+                          {harnessErro ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              <p style={{ color: "#ef4444", fontSize: 12, margin: 0 }}>{harnessErro}</p>
+                              <button
+                                type="button"
+                                onClick={() => cargoSelecionado && void gerarHarnessInterno(cargoSelecionado)}
+                                style={wizardOutline(false)}
+                              >
+                                Tentar novamente
+                              </button>
+                            </div>
+                          ) : null}
+                          {harnessPromptGerado && !harnessGerando ? (
+                            <>
+                              <p style={{ color: wizardDark ? "#92ff00" : "#2d6a4f", fontSize: 11, margin: 0 }}>
+                                {harnessGeradoComIa
+                                  ? "✓ Prompt refinado com IA"
+                                  : "✓ Prompt base do catálogo (IA indisponível ou em fallback)"}
+                              </p>
+                              {harnessSkills.length > 0 ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                  <p style={{ color: wzMuted, fontSize: 11, fontWeight: 700, margin: 0 }}>
+                                    Skills derivadas
+                                  </p>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                    {harnessSkills.map((s) => (
+                                      <span
+                                        key={s.id}
+                                        title={s.descricao}
+                                        style={{
+                                          fontSize: 10,
+                                          padding: "4px 10px",
+                                          borderRadius: 20,
+                                          border: `1px solid ${wizardDark ? "rgba(146,255,0,0.35)" : "#2d6a4f44"}`,
+                                          background: wizardDark ? "rgba(146,255,0,0.08)" : "#2d6a4f0c",
+                                          color: wzStrong,
+                                        }}
+                                      >
+                                        {s.titulo}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                              <details>
+                                <summary
+                                  style={{
+                                    cursor: "pointer",
+                                    fontSize: 12,
+                                    color: wzMuted,
+                                    userSelect: "none",
+                                  }}
+                                >
+                                  Ver prompt gerado
+                                </summary>
+                                <pre
+                                  style={{
+                                    marginTop: 8,
+                                    padding: 12,
+                                    borderRadius: 8,
+                                    fontSize: 11,
+                                    lineHeight: 1.45,
+                                    maxHeight: 220,
+                                    overflow: "auto",
+                                    whiteSpace: "pre-wrap",
+                                    wordBreak: "break-word",
+                                    background: wizardDark ? "rgba(0,0,0,0.35)" : "#f4f7f5",
+                                    border: `1px solid ${wzDivider}`,
+                                    color: wzStrong,
+                                  }}
+                                >
+                                  {harnessPromptGerado}
+                                </pre>
+                              </details>
+                              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => cargoSelecionado && void gerarHarnessInterno(cargoSelecionado)}
+                                  disabled={harnessGerando}
+                                  style={wizardOutline(harnessGerando)}
+                                >
+                                  Regenerar com IA
+                                </button>
+                              </div>
+                            </>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <p style={{ color: wzStrong, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>
+                              Playbook opcional
+                            </p>
+                            <p style={{ color: wzMuted, fontSize: 12, margin: 0, lineHeight: 1.55 }}>
+                              Combine cargo + playbook: o cargo orienta a conversa e o playbook publica o fluxo no
+                              Storage. Pode carregar agora ou no passo{" "}
+                              <strong style={{ color: wzStrong }}>Materiais</strong>.
+                            </p>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              onClick={() => void aplicarTemplateWajeV1NoWizard()}
+                              disabled={playbookUploadStatus === "enviando" || playbookAnaliseLoading}
+                              style={wizardOutline(
+                                playbookUploadStatus === "enviando" || playbookAnaliseLoading
+                              )}
+                            >
+                              Aplicar template Waje v1
+                            </button>
+                          </div>
+                          <PlaybookUploadAnalisePanel
+                            inputId={`${PLAYBOOK_INPUT_PRE}-cargo`}
+                            modoPreCriacao
+                            analiseObrigatoria={false}
+                            theme={playbookPanelTheme}
+                            introPreCriacao="Opcional: carregue um playbook para publicar junto com o cargo ao criar o agente. A análise de qualidade é recomendada, mas não bloqueia o avanço."
+                            uploadStatus={playbookUploadStatus}
+                            uploadMensagem={playbookUploadMensagem}
+                            uploadPct={playbookUploadPct}
+                            arquivoNome={playbookArquivoNome}
+                            conteudoPreview={playbookConteudoPreview}
+                            conteudoCarregado={!!playbookConteudoAnalise.trim()}
+                            analiseLoading={playbookAnaliseLoading}
+                            analisePct={playbookAnalisePct}
+                            analiseErro={playbookAnaliseErro}
+                            analiseResultado={playbookAnaliseResultado}
+                            dropzoneBorder={playbookDropzoneBorder}
+                            dropzoneBg={playbookDropzoneBg}
+                            progressoContexto={playbookArquivoNome || cargoSelecionado?.titulo}
+                            onHoverChange={(hover) => {
+                              if (playbookUploadStatus !== "enviando") {
+                                setPlaybookUploadStatus(hover ? "hover" : "idle");
+                              }
+                            }}
+                            onFileSelect={(file) => void carregarPlaybookLocal(file)}
+                            onAnalisar={() => void analisarPlaybookComMistral()}
+                            onCancelarAnalise={cancelarAnalisePlaybook}
+                            onLimparArquivo={limparPlaybookCarregado}
+                          />
+                          {playbookConteudoAnalise.trim() && whatsappFlowAgent ? (
+                            <PlaybookFlowStatusBanner status={playbookFlowStatus} compact />
+                          ) : null}
+                        </>
+                      )}
                     </div>
                   ) : null}
                 </>
@@ -2091,11 +2392,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 <h2 style={wzH2}>{AGENTE_WIZARD_STEP_INTRO[2].titulo}</h2>
                 <p style={wzP}>
                   {AGENTE_WIZARD_STEP_INTRO[2].descricao}
-                  {somentePlaybook
-                    ? " Comportamento operacional: playbook no Storage."
-                    : playbookConteudoAnalise.trim()
-                      ? " Playbook carregado no passo Cargo será publicado ao criar o agente."
-                      : ""}
+                  {wizardInterno
+                    ? " O prompt e as skills já foram gerados a partir do cargo no passo anterior."
+                    : somentePlaybook
+                      ? " Comportamento operacional: playbook no Storage."
+                      : playbookConteudoAnalise.trim()
+                        ? " Playbook carregado no passo Cargo será publicado ao criar o agente."
+                        : ""}
                 </p>
               </div>
 
@@ -2128,12 +2431,6 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       <span style={{ color: wzMuted, fontSize: 13 }}>—</span>
                     )}
                   </div>
-                  <p style={{ fontSize: 12, color: wzMuted, margin: 0, lineHeight: 1.5 }}>
-                    Modelo:{" "}
-                    <strong style={{ color: wizardDark ? RF.texto2 : "#2d4a38" }}>
-                      {hubModeloExibicaoProduto(cargoSelecionado?.modelo_padrao)}
-                    </strong>
-                  </p>
                 </div>
               </div>
               ) : null}
@@ -2151,77 +2448,107 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               </div>
 
               <div>
-                <label style={{ ...wzLabel, marginBottom: 6 }}>
-                  Tipo de agente <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <p style={{ color: wzMuted, fontSize: 12, margin: "0 0 12px", lineHeight: 1.5 }}>
-                  Atendimento fala com clientes no WhatsApp
-                  {isEmailChannelEnabledClient() ? " ou e-mail" : ""}. Interno executa tarefas e ciclos no escritório,
-                  sem fila ao vivo.
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {(
-                    [
-                      {
-                        id: "canal_whatsapp" as const,
-                        Icon: MessageSquare,
-                        titulo: MODO_OPERACAO_LABEL.canal_whatsapp,
-                        texto: MODO_OPERACAO_DESCRICAO.canal_whatsapp,
-                        badge: null,
-                      },
-                      ...(isEmailChannelEnabledClient()
-                        ? [
-                            {
-                              id: "canal_email" as const,
-                              Icon: Mail,
-                              titulo: MODO_OPERACAO_LABEL.canal_email,
-                              texto: MODO_OPERACAO_DESCRICAO.canal_email,
-                              badge: null,
-                            },
-                          ]
-                        : []),
-                      {
-                        id: "jobs_internos" as const,
-                        Icon: Zap,
-                        titulo: MODO_OPERACAO_LABEL.jobs_internos,
-                        texto: MODO_OPERACAO_DESCRICAO.jobs_internos,
-                        badge: null,
-                      },
-                    ] as const
-                  ).map((opt) => {
-                    const Ico = opt.Icon;
-                    const ativo = modoOperacao === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => selecionarModoOperacao(opt.id)}
-                        style={wizardChoiceCard(ativo)}
+                <label style={{ ...wzLabel, marginBottom: 6 }}>Tipo de agente</label>
+                {tipoWizard ? (
+                  <div style={{ ...wzCard(), padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "4px 12px",
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          background: wizardDark ? "rgba(146, 255, 0, 0.14)" : "rgba(56,139,253,0.12)",
+                          color: wizardDark ? "#92ff00" : "#2d6a4f",
+                          border: `1px solid ${wizardDark ? "rgba(146, 255, 0, 0.35)" : "#2d6a4f44"}`,
+                        }}
                       >
-                        <Ico
-                          size={20}
-                          color={ativo ? (wizardDark ? RF.limao : CRM_ACCENT) : wzMuted}
-                          strokeWidth={2}
-                          aria-hidden
-                        />
-                        <span style={{ minWidth: 0 }}>
-                          <span
-                            style={{
-                              display: "block",
-                              color: wzStrong,
-                              fontWeight: 700,
-                              fontSize: 13,
-                              marginBottom: 4,
-                            }}
+                        {WIZARD_TIPO_LABEL[tipoWizard]}
+                      </span>
+                      <span style={{ color: wzMuted, fontSize: 12 }}>
+                        {modoOperacaoWizardResumo(modoOperacao)}
+                      </span>
+                    </div>
+                    {wizardInterno ? (
+                      <p style={{ margin: 0, fontSize: 12, color: wzMuted, lineHeight: 1.5 }}>
+                        Sem instância UAZAPI por agente — o assistente fica disponível no{" "}
+                        <strong style={{ color: wzStrong }}>WhatsApp do gestor</strong> (hub central).
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ color: wzMuted, fontSize: 12, margin: "0 0 12px", lineHeight: 1.5 }}>
+                      Atendimento fala com clientes no WhatsApp
+                      {isEmailChannelEnabledClient() ? " ou e-mail" : ""}. Interno executa tarefas e ciclos no
+                      escritório, sem fila ao vivo.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {(
+                        [
+                          {
+                            id: "canal_whatsapp" as const,
+                            Icon: MessageSquare,
+                            titulo: MODO_OPERACAO_LABEL.canal_whatsapp,
+                            texto: MODO_OPERACAO_DESCRICAO.canal_whatsapp,
+                            badge: null,
+                          },
+                          ...(isEmailChannelEnabledClient()
+                            ? [
+                                {
+                                  id: "canal_email" as const,
+                                  Icon: Mail,
+                                  titulo: MODO_OPERACAO_LABEL.canal_email,
+                                  texto: MODO_OPERACAO_DESCRICAO.canal_email,
+                                  badge: null,
+                                },
+                              ]
+                            : []),
+                          {
+                            id: "jobs_internos" as const,
+                            Icon: Zap,
+                            titulo: MODO_OPERACAO_LABEL.jobs_internos,
+                            texto: MODO_OPERACAO_DESCRICAO.jobs_internos,
+                            badge: null,
+                          },
+                        ] as const
+                      ).map((opt) => {
+                        const Ico = opt.Icon;
+                        const ativo = modoOperacao === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => selecionarModoOperacao(opt.id)}
+                            style={wizardChoiceCard(ativo)}
                           >
-                            {opt.titulo}
-                          </span>
-                          <span style={{ color: wzMuted, fontSize: 12, lineHeight: 1.5 }}>{opt.texto}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                            <Ico
+                              size={20}
+                              color={ativo ? (wizardDark ? RF.limao : CRM_ACCENT) : wzMuted}
+                              strokeWidth={2}
+                              aria-hidden
+                            />
+                            <span style={{ minWidth: 0 }}>
+                              <span
+                                style={{
+                                  display: "block",
+                                  color: wzStrong,
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  marginBottom: 4,
+                                }}
+                              >
+                                {opt.titulo}
+                              </span>
+                              <span style={{ color: wzMuted, fontSize: 12, lineHeight: 1.5 }}>{opt.texto}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -2241,7 +2568,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             </div>
           )}
 
-          {passo === 4 && (
+          {passo === 4 && !wizardInterno && (
             <div style={wzPanelWrap()}>
               <div>
                 <h2 style={{ ...wzH2, margin: "0 0 6px" }}>{AGENTE_WIZARD_STEP_INTRO[4].titulo}</h2>
@@ -2616,7 +2943,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <h2 style={wzH2}>{AGENTE_WIZARD_STEP_INTRO[6].titulo}</h2>
-                <p style={wzP}>{AGENTE_WIZARD_STEP_INTRO[6].descricao}</p>
+                <p style={wzP}>
+                  {wizardInterno
+                    ? "Funcionário IA com harness superagente: dados da empresa, relatórios canvas e Mistral já vêm incluídos. O cargo define o que pode fazer; abaixo pode activar funções custom do escritório."
+                    : AGENTE_WIZARD_STEP_INTRO[6].descricao}
+                </p>
               </div>
               <AgenteFerramentasIaBlock
                 theme={wizardDark ? "dark" : "light"}
@@ -2634,14 +2965,21 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 customCatalog={catalogoCustomFerramentasWizard}
                 externaCatalog={catalogoExternaFerramentasWizard}
                 integradorCatalog={integradorCatalogWizard}
-                destacarWhatsApp={agenteEhModoCanal(modoOperacao)}
+                modoInterno={wizardInterno}
+                destacarWhatsApp={wizardCanal && agenteEhModoCanal(modoOperacao)}
               />
-              {precisaGoogleWorkspace ? (
+              {precisaGoogleWorkspace && !wizardInterno ? (
                 <div style={{ ...wizardInfoBox(), marginTop: 4 }}>
                   <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Agenda Google:</strong>{" "}
                   {googleNoPassoCanal
                     ? "no passo Canal + Agenda, ligue a conta Google da empresa (secção 2)."
                     : "no passo Agenda Google, autorize Gmail + Calendar."}
+                </div>
+              ) : wizardInterno ? (
+                <div style={{ ...wizardInfoBox(), marginTop: 4 }}>
+                  <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Integrações:</strong> no passo seguinte
+                  ligue <strong style={{ color: wzStrong }}>Google</strong> (agenda/e-mail) e confirme{" "}
+                  <strong style={{ color: wzStrong }}>Mistral</strong> (OCR e multimodal) para o funcionário IA.
                 </div>
               ) : null}
               {erro && (
@@ -2661,11 +2999,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
 
               {agenteSlugCriado ? (
                 <p style={{ color: "#3fb950", fontSize: 12, margin: "0 0 10px", lineHeight: 1.5 }}>
-                  Agente <strong style={{ color: wzStrong }}>{agenteSlugCriado}</strong> já foi criado (ex.: ao
-                  processar documentos RAG). Grave as ferramentas abaixo e continue para Materiais
+                  Agente <strong style={{ color: wzStrong }}>{agenteSlugCriado}</strong> já foi criado. Grave as
+                  ferramentas abaixo e continue para{" "}
+                  <strong style={{ color: wzStrong }}>{wizardInterno ? "Integrações" : "Materiais"}</strong>
                   {precisaPassoCanal ? ", Canal" : ""}
-                  {googleNoPassoCanal ? " + Agenda Google" : precisaPassoGoogle ? " e Agenda Google" : ""}
-                  {precisaPassoCanal || precisaGoogleWorkspace ? "." : "."}
+                  {googleNoPassoCanal ? " + Agenda Google" : precisaPassoGoogle ? " e Agenda Google" : ""}.
                 </p>
               ) : null}
 
@@ -2699,7 +3037,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 {criando
                   ? "A gravar…"
                   : agenteSlugCriado
-                    ? "Continuar → Materiais"
+                    ? wizardInterno
+                      ? "Continuar → Integrações"
+                      : "Continuar → Materiais"
                     : "Criar agente"}
               </button>
             </div>
@@ -2710,28 +3050,40 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               <div>
                 <h2 style={wzH2}>{AGENTE_WIZARD_STEP_INTRO[5].titulo}</h2>
                 <p style={wzP}>{AGENTE_WIZARD_STEP_INTRO[5].descricao}</p>
-                {ragPendentes.some((i) => i.status === "na_fila" || i.status === "preparado") ? (
-                  <p style={{ color: "#c9a24a", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
-                    Documentos RAG pendentes:{" "}
-                    <strong style={{ color: wzStrong }}>
-                      {ragPendentes.filter((i) => i.status !== "concluido").length}
-                    </strong>{" "}
-                    (serão indexados ao confirmar a criação do agente, se ainda não processou no passo Conhecimento).
+                {wizardInterno ? (
+                  <p style={{ color: wzMuted, fontSize: 12, margin: "10px 0 0", lineHeight: 1.55 }}>
+                    <strong style={{ color: wzStrong }}>Conhecimento:</strong> vem do cargo (skills e prompt gerado),
+                    dados operacionais via views <code style={{ fontSize: 11 }}>vw_rel_*</code> e base partilhada em{" "}
+                    <strong style={{ color: wzStrong }}>CRM → Conhecimento</strong>. Sem playbook nem documentos por
+                    agente.
                   </p>
-                ) : ragPendentes.some((i) => i.status === "concluido") ? (
-                  <p style={{ color: "#3fb950", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
-                    Documentos RAG já indexados nesta sessão.
-                  </p>
-                ) : null}
-                {WIZARD_CONHECIMENTO_SECOES.some((k) => conhecimentoSecoes[k].trim()) ? (
-                  <p style={{ color: "#3fb950", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
-                    Conhecimento estruturado:{" "}
-                    <strong style={{ color: wzStrong }}>
-                      {WIZARD_CONHECIMENTO_SECOES.filter((k) => conhecimentoSecoes[k].trim()).length}
-                    </strong>{" "}
-                    seção(ões) preenchida(s) — irão para o playbook ao criar o agente.
-                  </p>
-                ) : null}
+                ) : (
+                  <>
+                    {ragPendentes.some((i) => i.status === "na_fila" || i.status === "preparado") ? (
+                      <p style={{ color: "#c9a24a", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
+                        Documentos RAG pendentes:{" "}
+                        <strong style={{ color: wzStrong }}>
+                          {ragPendentes.filter((i) => i.status !== "concluido").length}
+                        </strong>{" "}
+                        (serão indexados ao confirmar a criação do agente, se ainda não processou no passo
+                        Conhecimento).
+                      </p>
+                    ) : ragPendentes.some((i) => i.status === "concluido") ? (
+                      <p style={{ color: "#3fb950", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
+                        Documentos RAG já indexados nesta sessão.
+                      </p>
+                    ) : null}
+                    {WIZARD_CONHECIMENTO_SECOES.some((k) => conhecimentoSecoes[k].trim()) ? (
+                      <p style={{ color: "#3fb950", fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
+                        Conhecimento estruturado:{" "}
+                        <strong style={{ color: wzStrong }}>
+                          {WIZARD_CONHECIMENTO_SECOES.filter((k) => conhecimentoSecoes[k].trim()).length}
+                        </strong>{" "}
+                        seção(ões) preenchida(s) — irão para o playbook ao criar o agente.
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </div>
 
               {somentePlaybook ? (
@@ -2819,6 +3171,21 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     }),
                   },
                   { label: "Tipo de agente", value: modoOperacaoWizardResumo(modoOperacao) },
+                  ...(!agenteEhModoCanal(modoOperacao)
+                    ? [
+                        {
+                          label: "Modo de operação",
+                          value:
+                            modoExecucao === "interacao"
+                              ? "Sob interação (copiloto / gestor)"
+                              : modoExecucao === "agenda"
+                                ? agendaModo === "horario_fixo"
+                                  ? `Ciclo programado — diário às ${agendaHoraLocal} (BR)`
+                                  : `Ciclo programado — a cada ${agendaIntervalMin} min`
+                                : "Automático contínuo",
+                        },
+                      ]
+                    : []),
                   ...(playbookConteudoAnalise.trim()
                     ? [
                         {
@@ -2886,8 +3253,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 >
                   {modoOperacao === "jobs_internos" ? (
                     <>
-                      O modelo será salvo como <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>agente interno</strong>{" "}
-                      e já provisiona um ciclo de trabalho automático.
+                      O assistente interno partilha o <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>mesmo superagente</strong> no copiloto CRM, WhatsApp gestor e ciclos programados (dados, relatórios canvas, OCR). Escolha{" "}
+                      <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>sob interação</strong> ou{" "}
+                      <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>ciclo programado</strong> abaixo.
                     </>
                   ) : agenteEhModoCanal(modoOperacao) ? (
                     <>
@@ -2964,18 +3332,18 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                               ] as const)
                             : ([
                                 {
-                                  id: "tempo_real" as const,
-                                  Icon: Zap,
-                                  titulo: "Automático contínuo",
+                                  id: "interacao" as const,
+                                  Icon: MessageSquare,
+                                  titulo: "Sob interação",
                                   texto:
-                                    "Motor interno em ciclo contínuo. Útil para supervisão e rotinas sem horário fixo.",
+                                    "Activa quando alguém envia mensagem no copiloto CRM ou no WhatsApp do gestor. Sem execução automática por horário.",
                                 },
                                 {
                                   id: "agenda" as const,
                                   Icon: Clock,
-                                  titulo: "Horário fixo / recorrente",
+                                  titulo: "Ciclo programado",
                                   texto:
-                                    "Ciclo programado (inicia em pausa) com intervalo abaixo; depois configure cron/dispatch e ative.",
+                                    "Rotina automática (relatórios, análises). Defina horário ou intervalo abaixo. O ciclo é criado em pausa — active depois em Operação.",
                                 },
                               ] as const)),
                         ] as const
@@ -3017,37 +3385,114 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                     </div>
 
                     {modoExecucao === "agenda" ? (
-                      <div style={{ marginTop: 14 }}>
-                        <label
-                          htmlFor="ciclo-intervalo-agenda"
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: wizardDark ? RF.limao : wzMuted,
-                            display: "block",
-                            marginBottom: 8,
-                          }}
-                        >
-                          REPETIR A CADA (minutos)
-                        </label>
-                        <select
-                          id="ciclo-intervalo-agenda"
-                          value={agendaIntervalMin}
-                          onChange={(e) =>
-                            setAgendaIntervalMin(Number(e.target.value) as 15 | 60 | 360 | 1440)
-                          }
-                          style={{
-                            ...wzInput,
-                            padding: "10px 12px",
-                            fontSize: 13,
-                          }}
-                        >
-                          <option value={15}>15 minutos</option>
-                          <option value={60}>1 hora</option>
-                          <option value={360}>6 horas</option>
-                          <option value={1440}>â‰ˆ 1 vez por dia</option>
-                        </select>
+                      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+                        <p style={{ ...wizardSectionLabel, margin: 0 }}>CADÊNCIA DO CICLO</p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {(
+                            [
+                              { id: "horario_fixo" as const, label: "Horário fixo (diário)" },
+                              { id: "intervalo" as const, label: "Repetir a cada…" },
+                            ] as const
+                          ).map((opt) => (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => setAgendaModo(opt.id)}
+                              style={wizardChoicePill(agendaModo === opt.id)}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                        {agendaModo === "horario_fixo" ? (
+                          <div>
+                            <label
+                              htmlFor="ciclo-hora-local-br"
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: wizardDark ? RF.limao : wzMuted,
+                                display: "block",
+                                marginBottom: 8,
+                              }}
+                            >
+                              HORÁRIO (Brasil — America/Sao_Paulo)
+                            </label>
+                            <input
+                              id="ciclo-hora-local-br"
+                              type="time"
+                              value={agendaHoraLocal}
+                              onChange={(e) => setAgendaHoraLocal(e.target.value)}
+                              style={{
+                                ...wzInput,
+                                padding: "10px 12px",
+                                fontSize: 13,
+                                maxWidth: 160,
+                              }}
+                            />
+                            <p style={{ margin: "8px 0 0", fontSize: 11, color: wzMuted, lineHeight: 1.45 }}>
+                              Ex.: 08:00 — o agente roda uma vez por dia nesse horário (após activar o ciclo).
+                              {cronDiarioUtcFromHoraLocalBr(agendaHoraLocal) ? (
+                                <>
+                                  {" "}
+                                  Cron UTC:{" "}
+                                  <code style={{ fontSize: 10 }}>{cronDiarioUtcFromHoraLocalBr(agendaHoraLocal)}</code>
+                                </>
+                              ) : null}
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <label
+                              htmlFor="ciclo-intervalo-agenda"
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: wizardDark ? RF.limao : wzMuted,
+                                display: "block",
+                                marginBottom: 8,
+                              }}
+                            >
+                              REPETIR A CADA
+                            </label>
+                            <select
+                              id="ciclo-intervalo-agenda"
+                              value={agendaIntervalMin}
+                              onChange={(e) =>
+                                setAgendaIntervalMin(Number(e.target.value) as 15 | 60 | 360 | 1440)
+                              }
+                              style={{
+                                ...wzInput,
+                                padding: "10px 12px",
+                                fontSize: 13,
+                              }}
+                            >
+                              {AGENDA_INTERVALO_OPCOES.map((o) => (
+                                <option key={o.min} value={o.min}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                       </div>
+                    ) : modoExecucao === "interacao" && modoOperacao === "jobs_internos" ? (
+                      <p
+                        style={{
+                          marginTop: 14,
+                          fontSize: 12,
+                          color: wzMuted,
+                          lineHeight: 1.5,
+                          padding: "12px 14px",
+                          borderRadius: 10,
+                          border: `1px solid ${wzDivider}`,
+                          background: wizardDark ? "rgba(6, 13, 8, 0.72)" : "#f8fcf6",
+                        }}
+                      >
+                        Nenhum ciclo cron será criado — o agente fica disponível para conversa no{" "}
+                        <strong style={{ color: wzStrong }}>briefing / copiloto</strong> e no menu do{" "}
+                        <strong style={{ color: wzStrong }}>WhatsApp gestor</strong>.
+                      </p>
                     ) : null}
                   </>
                 ) : null}
@@ -3218,7 +3663,62 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             </div>
           )}
 
-          {passo === 7 && agenteSlugCriado && (
+          {passo === 7 && agenteSlugCriado && wizardInterno && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <h2 style={wzH2}>Integrações</h2>
+                <p style={wzP}>
+                  Ligue as contas que o funcionário IA usa nas ferramentas:{" "}
+                  <strong style={{ color: wzStrong }}>Google</strong> (Gmail + Agenda) e{" "}
+                  <strong style={{ color: wzStrong }}>Mistral</strong> (OCR, áudio e visão). Abaixo vê o estado de
+                  todas as integrações do escritório.
+                </p>
+              </div>
+
+              <div style={{ ...wzCard(), padding: 16 }}>
+                <p style={{ ...wizardSectionLabel, marginBottom: 10 }}>AGENTE CRIADO</p>
+                <p style={{ color: wzStrong, fontSize: 14, fontWeight: 700, margin: "0 0 8px", wordBreak: "break-all" }}>
+                  {nome || agenteSlugCriado}{" "}
+                  <span style={{ color: wzMuted, fontWeight: 600, fontSize: 12 }}>({agenteSlugCriado})</span>
+                </p>
+                <a
+                  href={`/crm/agentes/${encodeURIComponent(agenteSlugCriado)}`}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: wizardDark ? RF.limao : "#2d6a4f",
+                    textDecoration: "none",
+                  }}
+                >
+                  Abrir ficha do agente →
+                </a>
+              </div>
+
+              <AgenteWizardIntegracoesInternoPanel
+                agenteSlug={agenteSlugCriado}
+                agenteNome={nome}
+                theme={wizardDark ? "dark" : "light"}
+                contextoGoogle={recomendaGoogleWorkspace ? "agendamento" : "padrao"}
+                usoFerramentas={mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentasIa)}
+                onUsoChange={(id, ativo) =>
+                  setUsoFerramentasIa((prev) => ({
+                    ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                    [id]: ativo,
+                  }))
+                }
+                onUsoSynced={(patch) =>
+                  setUsoFerramentasIa((prev) => ({
+                    ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                    ...patch,
+                  }))
+                }
+                googleOauthEmail={googleOauthEmail}
+                onOauthEmail={setGoogleOauthEmail}
+              />
+            </div>
+          )}
+
+          {passo === 7 && agenteSlugCriado && !wizardInterno && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <h2 style={wzH2}>{AGENTE_WIZARD_STEP_INTRO[7].titulo}</h2>
@@ -3226,7 +3726,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   {AGENTE_WIZARD_STEP_INTRO[7].descricao}
                   {precisaPassoCanal
                     ? " Use ← Anterior no passo Canal para voltar antes de concluir."
-                    : " Agente interno: conclua aqui — não há passo de canal."}
+                    : ""}
                 </p>
               </div>
 
@@ -3566,10 +4066,10 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           ) : null}
 
           <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
-            {passo > 1 && (
+            {passo > 0 && (
               <button
                 type="button"
-                onClick={() => setPasso((p) => p - 1)}
+                onClick={() => setPasso((p) => wizardPassoAnterior(p, wizardInterno))}
                 style={wizardBtnSecondary()}
               >← Anterior
               </button>
@@ -3577,12 +4077,20 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
             {passo < 6 && (
               <button
                 type="button"
-                onClick={() => setPasso((p) => p + 1)}
+                onClick={() => setPasso((p) => wizardPassoProximo(p, wizardInterno))}
                 disabled={
-                  passo === 1 ? passo1AvancarBloqueado : passo === 2 ? !nome.trim() : false
+                  passo === 0
+                    ? !tipoWizard
+                    : passo === 1
+                      ? passo1AvancarBloqueado
+                      : passo === 2
+                        ? !nome.trim()
+                        : false
                 }
                 style={wizardBtnPrimary(
-                  (passo === 1 && passo1AvancarBloqueado) || (passo === 2 && !nome.trim())
+                  (passo === 0 && !tipoWizard) ||
+                    (passo === 1 && passo1AvancarBloqueado) ||
+                    (passo === 2 && !nome.trim())
                 )}
               >
                 Próximo →
@@ -3651,7 +4159,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         <p style={{ margin: 0, color: "#9cb0c9", fontSize: 13, lineHeight: 1.55 }}>
           {precisaPassoCanal
             ? `O agente já foi criado. Pode configurar o canal (WhatsApp${isEmailChannelEnabledClient() ? " ou e-mail" : ""}), gerar playbook e ajustar integrações mais tarde na ficha do modelo.`
-            : "O agente já foi criado. Pode gerar o playbook e ajustar ciclos mais tarde na ficha do modelo."}
+            : "O agente já foi criado. Pode ajustar integrações e ciclos mais tarde na ficha do modelo."}
         </p>
       </CrmConfirmDialog>
     </div>

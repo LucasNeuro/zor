@@ -319,6 +319,148 @@ async function executarFerramentaHubBuiltin(
         arquivo_id: salvo.id,
       });
     }
+    case "hub_superagente_dados": {
+      const ehInterno = ctx.agenteInterno === true || ctx.modoOperacao === "jobs_internos";
+      if (!ehInterno) {
+        return JSON.stringify({
+          erro: "ferramenta_apenas_agente_interno",
+          detalhe: "hub_superagente_dados só está disponível para agentes internos.",
+        });
+      }
+      const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      const { executarSuperagenteDados } = await import("@/lib/hub/superagente/dados-unificado");
+      const acaoRaw = args.acao;
+      const acao =
+        typeof acaoRaw === "string" && acaoRaw.trim().toLowerCase() === "consultar"
+          ? "consultar"
+          : "catalogar";
+      const colunas = Array.isArray(args.colunas)
+        ? args.colunas.map((c) => String(c).trim()).filter(Boolean)
+        : undefined;
+      return executarSuperagenteDados(
+        supabase,
+        tenant,
+        {
+          acao,
+          view: typeof args.view === "string" ? args.view : undefined,
+          colunas,
+          limite: typeof args.limite === "number" ? args.limite : Number(args.limite) || undefined,
+          filtro_texto: typeof args.filtro_texto === "string" ? args.filtro_texto : undefined,
+          filtro_coluna: typeof args.filtro_coluna === "string" ? args.filtro_coluna : undefined,
+          categoria: typeof args.categoria === "string" ? args.categoria : undefined,
+        },
+        { agenteSlug: ctx.agenteSlug }
+      );
+    }
+    case "hub_superagente_artefato": {
+      const ehInterno = ctx.agenteInterno === true || ctx.modoOperacao === "jobs_internos";
+      if (!ehInterno) {
+        return JSON.stringify({
+          erro: "ferramenta_apenas_agente_interno",
+          detalhe: "hub_superagente_artefato só está disponível para agentes internos.",
+        });
+      }
+      const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      const { publicarArtefatoCanvas } = await import("@/lib/hub/superagente/artefato-canvas");
+      const titulo = typeof args.titulo === "string" ? args.titulo.trim() : "";
+      const subtitulo = typeof args.subtitulo === "string" ? args.subtitulo.trim() : undefined;
+      const temaRaw = typeof args.tema === "string" ? args.tema.trim().toLowerCase() : "";
+      const tema = temaRaw === "claro" ? "claro" : "escuro";
+      const secoesRaw = args.secoes;
+      if (!titulo || !Array.isArray(secoesRaw) || secoesRaw.length === 0) {
+        return JSON.stringify({ erro: "titulo_e_secoes_obrigatorios" });
+      }
+
+      const secoes = secoesRaw.slice(0, 12).map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+        const o = item as Record<string, unknown>;
+        const tipo = String(o.tipo || "texto").trim().toLowerCase();
+        if (tipo === "grafico" && o.grafico && typeof o.grafico === "object") {
+          const g = o.grafico as Record<string, unknown>;
+          const labels = Array.isArray(g.labels) ? g.labels.map((l) => String(l)) : [];
+          const datasets = Array.isArray(g.datasets)
+            ? g.datasets
+                .map((d) => {
+                  if (!d || typeof d !== "object") return null;
+                  const ds = d as Record<string, unknown>;
+                  return {
+                    label: String(ds.label || "Série"),
+                    data: Array.isArray(ds.data) ? ds.data.map((n) => Number(n) || 0) : [],
+                    cor: typeof ds.cor === "string" ? ds.cor : undefined,
+                  };
+                })
+                .filter(Boolean)
+            : [];
+          const tipoGraf = String(g.tipo || "bar").trim().toLowerCase();
+          const tipos = new Set(["bar", "line", "pie", "doughnut"]);
+          return {
+            tipo: "grafico" as const,
+            grafico: {
+              tipo: tipos.has(tipoGraf) ? (tipoGraf as "bar" | "line" | "pie" | "doughnut") : "bar",
+              titulo: typeof g.titulo === "string" ? g.titulo : undefined,
+              labels,
+              datasets: datasets as Array<{ label: string; data: number[]; cor?: string }>,
+            },
+          };
+        }
+        if (tipo === "tabela") {
+          const colunas = Array.isArray(o.colunas) ? o.colunas.map((c) => String(c)) : [];
+          const linhas = Array.isArray(o.linhas)
+            ? o.linhas.map((row) =>
+                Array.isArray(row) ? row.map((c) => String(c ?? "")) : []
+              )
+            : [];
+          return { tipo: "tabela" as const, colunas, linhas };
+        }
+        return {
+          tipo: "texto" as const,
+          markdown: typeof o.markdown === "string" ? o.markdown : String(o.texto || ""),
+        };
+      }).filter(Boolean);
+
+      if (!secoes.length) {
+        return JSON.stringify({ erro: "secoes_invalidas" });
+      }
+
+      const pub = await publicarArtefatoCanvas(
+        { titulo, subtitulo, tema, secoes: secoes as import("@/lib/hub/superagente/types").SecaoArtefatoSpec[] },
+        {
+          agenteSlug: ctx.agenteSlug,
+          tenantId: tenant,
+          telefoneGestor: ctx.telefoneSessao ?? null,
+        }
+      );
+      if (!pub.ok) return JSON.stringify({ erro: pub.erro });
+      return JSON.stringify({
+        ok: true,
+        url_publica: pub.url,
+        arquivo_id: pub.arquivo_id,
+        tipo: "artefato_canvas",
+      });
+    }
+    case "hub_mistral_percepcao": {
+      const { mistralIntegracaoDisponivel } = await import("@/lib/hub/mistral-integracao");
+      if (!mistralIntegracaoDisponivel()) {
+        return JSON.stringify({
+          erro: "mistral_nao_configurado",
+          detalhe:
+            "Configure MISTRAL_API_KEY na plataforma e active «Percepção multimodal» em Integrações deste agente.",
+        });
+      }
+      const { executarMistralPercepcao } = await import("@/lib/ia/mistral-multimodal");
+      const modoRaw = typeof args.modo === "string" ? args.modo.trim().toLowerCase() : "";
+      const modos = new Set(["ocr", "transcrever_audio", "descrever_imagem", "perguntar_documento"]);
+      if (!modos.has(modoRaw)) {
+        return JSON.stringify({ erro: "modo_invalido", modos: [...modos] });
+      }
+      return executarMistralPercepcao({
+        modo: modoRaw as "ocr" | "transcrever_audio" | "descrever_imagem" | "perguntar_documento",
+        url: typeof args.url === "string" ? args.url : undefined,
+        base64: typeof args.base64 === "string" ? args.base64 : undefined,
+        mime: typeof args.mime === "string" ? args.mime : undefined,
+        pergunta: typeof args.pergunta === "string" ? args.pergunta : undefined,
+      });
+    }
     case "hub_atualizar_lead": {
       if (ctx.modoOperacao !== "canal_whatsapp") {
         return JSON.stringify({

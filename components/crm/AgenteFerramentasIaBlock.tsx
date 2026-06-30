@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -9,10 +10,11 @@ import {
   Cloud,
   Cpu,
   Database,
+  Eye,
   FileCode2,
   Globe,
+  LayoutDashboard,
   ListOrdered,
-  Plug,
   PieChart,
   Sparkles,
   StickyNote,
@@ -23,12 +25,18 @@ import {
   ClipboardPenLine,
   Wrench,
 } from "lucide-react";
+import { IntegradorFerramentaMarcaIcon } from "@/components/crm/IntegradorFerramentaMarcaIcon";
 import type { HubAgenteFerramentaId, HubFerramentaCategoria } from "@/lib/hub/agente-ferramentas-registry";
 import {
+  ferramentaObrigatoriaFuncionarioIa,
   HUB_AGENTE_FERRAMENTAS_CATALOGO,
   HUB_FERRAMENTA_SECAO_LABEL,
   mergeUsoFerramentasComPadraoPreservandoCustom,
+  pacoteUsoFerramentasSuperagenteInterno,
 } from "@/lib/hub/agente-ferramentas-registry";
+import { MISTRAL_PERCEPCAO_KEY } from "@/lib/hub/mistral-integracao-constants";
+import type { CatalogoFerramentaIntegradorLite } from "@/lib/hub/integrador-catalogo-ui";
+export type { CatalogoFerramentaIntegradorLite } from "@/lib/hub/integrador-catalogo-ui";
 import {
   RF_ACCENT,
   RF_BORDER,
@@ -106,6 +114,9 @@ const ICONE_FERRAMENTA: Record<HubAgenteFerramentaId, LucideIcon> = {
   hub_operacao_empresa: BriefcaseBusiness,
   hub_raciocinio_avancado: Sparkles,
   hub_relatorio_html_simples: FileCode2,
+  hub_superagente_dados: Database,
+  hub_superagente_artefato: LayoutDashboard,
+  hub_mistral_percepcao: Eye,
   hub_registar_nota_lead: StickyNote,
   hub_whatsapp_menu: ListOrdered,
   hub_atualizar_lead: UserPen,
@@ -184,15 +195,6 @@ export type CatalogoFerramentaExternaLite = {
   descricao_curta?: string | null;
 };
 
-export type CatalogoFerramentaIntegradorLite = {
-  ferramenta_key: string;
-  titulo: string;
-  integrador_nome: string;
-  politica: string;
-  descricao_curta?: string | null;
-  requerConexao?: boolean;
-};
-
 export type AgenteFerramentasIaBlockProps = {
   motorHabilitado: boolean;
   onMotorChange: (v: boolean) => void;
@@ -251,13 +253,18 @@ export function AgenteFerramentasIaBlock({
     }
   }
 
-  function activarPacoteInterno() {
-    onMotorChange(true);
-    onUsoChange("hub_operacao_empresa", true);
-    onUsoChange("hub_dados_empresa", true);
-    onUsoChange("hub_metricas_escritorio", true);
-    onUsoChange("hub_raciocinio_avancado", true);
-    onUsoChange("hub_relatorio_html_simples", true);
+  useEffect(() => {
+    if (!modoInterno) return;
+    const pacote = pacoteUsoFerramentasSuperagenteInterno();
+    if (!motorHabilitado) onMotorChange(true);
+    for (const [id, ativo] of Object.entries(pacote)) {
+      if (ativo && uso[id] !== true) onUsoChange(id, true);
+    }
+  }, [modoInterno, motorHabilitado, uso, onMotorChange, onUsoChange]);
+
+  function handleUsoChange(id: string, ativo: boolean) {
+    if (modoInterno && !ativo && ferramentaObrigatoriaFuncionarioIa(id)) return;
+    onUsoChange(id, ativo);
   }
 
   const ordemSecoes = modoInterno ? ORDEM_SECOES_INTERNO : ORDEM_SECOES_CANAL;
@@ -309,26 +316,23 @@ export function AgenteFerramentasIaBlock({
       ) : null}
 
       {modoInterno ? (
-        <div style={{ marginBottom: 12 }}>
-          <button
-            type="button"
-            onClick={activarPacoteInterno}
-            style={{
-              cursor: "pointer",
-              borderRadius: 8,
-              border: "1px solid #3f984866",
-              background: "#3f984822",
-              color: "#2f7a43",
-              fontSize: 12,
-              fontWeight: 700,
-              padding: "8px 12px",
-            }}
-          >
-            Activar pacote recomendado (agente interno)
-          </button>
-          <p style={{ margin: "8px 0 0", fontSize: 11, color: t.muted, lineHeight: 1.45 }}>
-            Dados da empresa, métricas e relatórios — para copiloto e ciclos programados.
-          </p>
+        <div
+          role="status"
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid rgba(56,139,253,0.35)",
+            background: "rgba(56,139,253,0.08)",
+            color: t.body,
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          <strong style={{ color: t.title }}>Funcionário IA (superagente):</strong> acesso total aos dados da
+          empresa (<code style={{ fontSize: 11 }}>vw_rel_*</code>), relatórios com gráficos (canvas) e percepção
+          Mistral. O <strong style={{ color: t.title }}>cargo</strong> define persona, skills e limites — não há
+          pacotes alternativos.
         </div>
       ) : null}
 
@@ -383,7 +387,8 @@ export function AgenteFerramentasIaBlock({
           </span>
           <ToggleSwitch
             checked={motorHabilitado}
-            onCheckedChange={onMotorChange}
+            onCheckedChange={modoInterno ? () => {} : onMotorChange}
+            disabled={modoInterno}
             labelledBy="label-motor-hub"
             offBg={t.toggleOff}
           />
@@ -434,7 +439,9 @@ export function AgenteFerramentasIaBlock({
       <>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {ordemSecoes.map((cat) => {
-              const tools = HUB_AGENTE_FERRAMENTAS_CATALOGO.filter((t) => t.categoria === cat);
+              const tools = HUB_AGENTE_FERRAMENTAS_CATALOGO.filter(
+                (t) => t.categoria === cat && t.id !== MISTRAL_PERCEPCAO_KEY
+              );
               if (!tools.length) return null;
               const SecIcon = ICONE_SECAO[cat];
               return (
@@ -463,7 +470,8 @@ export function AgenteFerramentasIaBlock({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {tools.map((tool) => {
-                      const ligado = uso[tool.id] === true;
+                      const obrigatoriaInterno = modoInterno && ferramentaObrigatoriaFuncionarioIa(tool.id);
+                      const ligado = obrigatoriaInterno || uso[tool.id] === true;
                       const ToolIcon = ICONE_FERRAMENTA[tool.id];
                       const labelId = `tool-label-${tool.id}`;
                       return (
@@ -535,12 +543,19 @@ export function AgenteFerramentasIaBlock({
                               paddingTop: 4,
                             }}
                           >
-                            <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : t.muted }}>
-                              {ligado ? "ACTIVO" : "INACTIVO"}
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: ligado ? "#3fb950" : t.muted,
+                              }}
+                            >
+                              {obrigatoriaInterno ? "INCLUÍDO" : ligado ? "ACTIVO" : "INACTIVO"}
                             </span>
                             <ToggleSwitch
                               checked={ligado}
-                              onCheckedChange={(v) => onUsoChange(tool.id, v)}
+                              onCheckedChange={(v) => handleUsoChange(tool.id, v)}
+                              disabled={obrigatoriaInterno}
                               labelledBy={labelId}
                               offBg={t.toggleOff}
                             />
@@ -804,15 +819,24 @@ export function AgenteFerramentasIaBlock({
                   letterSpacing: 0.04,
                 }}
               >
-                {integradorActivos.some((tool) => tool.requerConexao) && !integradorActivos.some((tool) => !tool.requerConexao)
-                  ? "GOOGLE WORKSPACE (LIGAR NO PASSO SEGUINTE)"
-                  : "INTEGRAÇÕES LIGADAS"}
+                {(() => {
+                  const soRequer = integradorActivos.every((tool) => tool.requerConexao);
+                  const algumRequer = integradorActivos.some((tool) => tool.requerConexao);
+                  if (soRequer) {
+                    return modoInterno
+                      ? "INTEGRAÇÕES (LIGAR CONTAS ACIMA)"
+                      : "INTEGRAÇÕES (LIGAR CONTAS ACIMA)";
+                  }
+                  if (algumRequer) return "INTEGRAÇÕES";
+                  return "INTEGRAÇÕES LIGADAS";
+                })()}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {integradorActivos.map((tool) => {
                   const ligado = uso[tool.ferramenta_key] === true;
                   const labelId = `tool-label-${tool.ferramenta_key}`;
                   const escrita = tool.politica === "escrita";
+                  const toggleDisabled = tool.emBreve === true;
                   return (
                     <div
                       key={tool.ferramenta_key}
@@ -825,6 +849,7 @@ export function AgenteFerramentasIaBlock({
                         border: "1px solid",
                         borderColor: ligado ? "rgba(146,255,0,0.35)" : t.rowBorder,
                         background: ligado ? "rgba(146,255,0,0.07)" : t.rowBg,
+                        opacity: toggleDisabled ? 0.72 : 1,
                       }}
                     >
                       <div
@@ -837,11 +862,17 @@ export function AgenteFerramentasIaBlock({
                           alignItems: "center",
                           justifyContent: "center",
                           flexShrink: 0,
-                          color: ligado ? RF_ACCENT : t.body,
                           marginTop: 2,
                         }}
                       >
-                        <Plug size={21} strokeWidth={2} aria-hidden />
+                        <IntegradorFerramentaMarcaIcon
+                          ferramentaKey={tool.ferramenta_key}
+                          integradorId={tool.integrador_id}
+                          integradorNome={tool.integrador_nome}
+                          size={22}
+                          ligado={ligado}
+                          mutedColor={t.body}
+                        />
                       </div>
                       <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
@@ -853,17 +884,25 @@ export function AgenteFerramentasIaBlock({
                               fontSize: 9,
                               fontWeight: 800,
                               letterSpacing: 0.06,
-                              color: tool.requerConexao ? "#c9a24a" : RF_ACCENT,
-                              border: `1px solid ${tool.requerConexao ? "rgba(201,162,74,0.45)" : "rgba(146,255,0,0.35)"}`,
+                              color: tool.emBreve ? "#d4a72c" : tool.requerConexao ? "#c9a24a" : RF_ACCENT,
+                              border: `1px solid ${
+                                tool.emBreve
+                                  ? "rgba(212,167,44,0.45)"
+                                  : tool.requerConexao
+                                    ? "rgba(201,162,74,0.45)"
+                                    : "rgba(146,255,0,0.35)"
+                              }`,
                               borderRadius: 4,
                               padding: "2px 6px",
                             }}
                           >
-                            {tool.requerConexao
-                              ? tool.ferramenta_key.startsWith("hub_int_mem0")
-                                ? "CONFIGURAR MEMÓRIA"
-                                : "REQUER OAUTH"
-                              : tool.integrador_nome}
+                            {tool.emBreve
+                              ? "EM BREVE"
+                              : tool.requerConexao
+                                ? tool.integrador_id === "mem0"
+                                  ? "CONFIGURAR MEMÓRIA"
+                                  : "REQUER LIGAÇÃO"
+                                : tool.integrador_nome}
                           </span>
                         </div>
                         <span
@@ -889,6 +928,7 @@ export function AgenteFerramentasIaBlock({
                         <ToggleSwitch
                           checked={ligado}
                           onCheckedChange={(v) => onUsoChange(tool.ferramenta_key, v)}
+                          disabled={toggleDisabled}
                           labelledBy={labelId}
                           offBg={t.toggleOff}
                         />

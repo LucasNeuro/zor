@@ -16,6 +16,7 @@ import {
 } from "@/lib/hub/agente-ferramentas-registry";
 import { extrairESalvarMemoriasAgente, formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
+import { formatarLinksArtefactosParaTexto } from "@/lib/hub/superagente/canais-internos";
 import { registrarInteracaoPainelAgente } from "@/lib/hub/registrar-interacao-painel";
 
 function erroBriefingJson(message: string, status: number) {
@@ -362,9 +363,25 @@ export async function POST(
       modo,
       motor: resultado.motor ?? "llm_prompt",
       ...(resultado.flow_state ? { flow_state: resultado.flow_state } : {}),
+      ...(resultado.urls_publicas?.length ? { urls_publicas: resultado.urls_publicas } : {}),
     },
   });
   if (aErr) return erroBriefingJson(aErr.message, 500);
+
+  if (resultado.urls_publicas?.length) {
+    const linksTexto = formatarLinksArtefactosParaTexto(resultado.urls_publicas);
+    await supabase.from("hub_crm_agente_briefing_mensagem").insert({
+      sessao_id: sessaoId,
+      papel: "assistant",
+      conteudo: linksTexto,
+      metadata: {
+        modo,
+        tipo: "artefato_link",
+        urls: resultado.urls_publicas,
+        motor: resultado.motor ?? "llm_prompt",
+      },
+    });
+  }
 
   try {
     await extrairESalvarMemoriasAgente(supabase, {
@@ -420,6 +437,7 @@ export async function POST(
       tokens_input: resultado.tokens_input,
       tokens_output: resultado.tokens_output,
       custo_brl: resultado.custo_brl,
+      urls_publicas: resultado.urls_publicas ?? [],
     },
   };
   cacheSetBriefingGet(slug, sessaoId, payload);

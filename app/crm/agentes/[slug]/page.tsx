@@ -41,10 +41,11 @@ import {
   AgenteFerramentasIaBlock,
   type CatalogoFerramentaCustomLite,
   type CatalogoFerramentaExternaLite,
-  type CatalogoFerramentaIntegradorLite,
 } from "@/components/crm/AgenteFerramentasIaBlock";
+import {
+  buildCatalogoIntegradorFerramentasCompleto,
+} from "@/lib/hub/integrador-catalogo-ui";
 import { fetchHubFerramentasExternas } from "@/lib/hub/fetch-hub-ferramentas-externas";
-import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
 import type { FollowupOperacaoSnapshot } from "@/lib/hub/followup-operacao";
 import {
   AgenteEmailConnectBlock,
@@ -55,8 +56,7 @@ import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
 import Link from "next/link";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
 import { AgenteMem0Block } from "@/components/crm/AgenteMem0Block";
-import { MEM0_FERRAMENTA_KEYS } from "@/lib/hub/mem0-constants";
-import { buildGoogleIntegradorCatalogLite } from "@/lib/hub/agente-wizard-google";
+import { AgenteMistralBlock } from "@/components/crm/AgenteMistralBlock";
 import { agenteEhModoCanal, type ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
 import { hubModeloExibicaoProduto } from "@/lib/ia/hub-model-defaults";
 import {
@@ -175,9 +175,9 @@ export default function AgentePage() {
   );
   const [catalogoCustomFerramentas, setCatalogoCustomFerramentas] = useState<CatalogoFerramentaCustomLite[]>([]);
   const [catalogoExternaFerramentas, setCatalogoExternaFerramentas] = useState<CatalogoFerramentaExternaLite[]>([]);
-  const [catalogoIntegradorFerramentas, setCatalogoIntegradorFerramentas] = useState<
-    CatalogoFerramentaIntegradorLite[]
-  >([]);
+  const [integradorConexoes, setIntegradorConexoes] = useState<
+    Record<string, { configurado?: boolean; plataforma_ok?: boolean }>
+  >({});
   const [syncMistralLoading, setSyncMistralLoading] = useState(false);
 
   // UI state
@@ -250,23 +250,9 @@ export default function AgentePage() {
       const resInt = await fetch("/api/hub/integradores", { headers }).catch(() => null);
       if (!resInt?.ok) return;
       const j = (await resInt.json()) as {
-        catalogo?: IntegradorCatalogoEntry[];
         conexoes?: Record<string, { configurado?: boolean; plataforma_ok?: boolean }>;
       };
-      const lista: CatalogoFerramentaIntegradorLite[] = [];
-      for (const entry of j.catalogo ?? []) {
-        if (j.conexoes?.[entry.id]?.configurado !== true) continue;
-        for (const f of entry.ferramentas) {
-          lista.push({
-            ferramenta_key: f.ferramenta_key,
-            titulo: f.titulo,
-            integrador_nome: entry.nome,
-            politica: f.politica,
-            descricao_curta: f.descricao_curta ?? null,
-          });
-        }
-      }
-      setCatalogoIntegradorFerramentas(lista);
+      setIntegradorConexoes(j.conexoes && typeof j.conexoes === "object" ? j.conexoes : {});
     } catch {
       /* ignore */
     }
@@ -372,16 +358,10 @@ export default function AgentePage() {
     return typeof v === "string" && v.trim() ? v.trim() : null;
   }, [agente?.avatar_url]);
 
-  const integradorCatalogFicha = useMemo(() => {
-    const mem0Keys = new Set<string>(MEM0_FERRAMENTA_KEYS);
-    const keys = new Set(catalogoIntegradorFerramentas.map((x) => x.ferramenta_key));
-    const pendentesGoogle = buildGoogleIntegradorCatalogLite({ requerConexao: true }).filter(
-      (x) => !keys.has(x.ferramenta_key)
-    );
-    return [...catalogoIntegradorFerramentas, ...pendentesGoogle].filter(
-      (x) => !mem0Keys.has(x.ferramenta_key)
-    );
-  }, [catalogoIntegradorFerramentas]);
+  const integradorCatalogFicha = useMemo(
+    () => buildCatalogoIntegradorFerramentasCompleto(integradorConexoes),
+    [integradorConexoes]
+  );
 
   const agenteModoCanal = agente
     ? agenteEhModoCanal(agente.modo_operacao as ModoOperacaoAgente)
@@ -1224,6 +1204,18 @@ export default function AgentePage() {
                     }
                   />
                 ) : null}
+                <AgenteMistralBlock
+                  agenteSlug={slug}
+                  agenteNome={agente.nome}
+                  layout="card"
+                  usoFerramentas={usoFerramentasIa}
+                  onUsoChange={(id, ativo) =>
+                    setUsoFerramentasIa((prev) => ({
+                      ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                      [id]: ativo,
+                    }))
+                  }
+                />
                 <AgenteFerramentasIaBlock
                   motorHabilitado={motorFerramentasHub}
                   onMotorChange={setMotorFerramentasHub}

@@ -787,9 +787,13 @@ export async function POST(request: NextRequest) {
 
     const inbound = parseWhatsappWebhookBody(body);
     if (inbound.kind === "outgoing_human") {
+      const gestorFromMe = await processarGestorWebhookInbound(supabase, body, log);
+      if (gestorFromMe.handled) {
+        return trace.json(gestorFromMe.body, gestorFromMe.status, gestorFromMe.outcome);
+      }
       if (await eventoEhDaLinhaGestor(supabase, body)) {
         log.info("wa.webhook.gestor_outgoing_ignored", {
-          reason: "gestor_line_from_me",
+          reason: "gestor_line_from_me_client_chat",
         });
         return trace.json(
           { status: "ignored", reason: "gestor_line_from_me" },

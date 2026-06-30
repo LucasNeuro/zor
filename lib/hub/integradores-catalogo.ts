@@ -11,7 +11,8 @@ export type HubIntegradorId =
   | "meta_ads"
   | "google_ads"
   | "ga4"
-  | "mem0";
+  | "mem0"
+  | "mistral";
 
 export type IntegradorAuthModo = "bearer" | "api_key" | "zendesk" | "none";
 
@@ -193,6 +194,7 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
     nome: "Zendesk",
     descricao: "Abrir e consultar tickets de suporte.",
     categoria: "agente",
+    emBreve: true,
     authModo: "zendesk",
     authLabels: {
       principal: "API Token",
@@ -314,6 +316,43 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
             limite: { type: "number", description: "Máximo de memórias (1–12, padrão 6)" },
           },
           required: ["query"],
+          additionalProperties: false,
+        },
+      },
+    ],
+  },
+  {
+    id: "mistral",
+    nome: "Mistral — Document AI & Multimodal",
+    descricao:
+      "OCR, transcrição de áudio, visão e Q&A em documentos via API Mistral da plataforma (MISTRAL_API_KEY).",
+    categoria: "agente",
+    authModo: "none",
+    authLabels: {
+      principal: "Chave API da plataforma",
+      principalPlaceholder: "MISTRAL_API_KEY no servidor — não editável por agente",
+    },
+    ferramentas: [
+      {
+        ferramenta_key: "hub_mistral_percepcao",
+        titulo: "Percepção multimodal (OCR, áudio, visão)",
+        descricao_curta: "Processa PDF, imagem e áudio com Mistral Document AI.",
+        descricao_modelo:
+          "Usa quando precisar extrair texto de documento/imagem, transcrever áudio ou responder perguntas sobre um ficheiro (modos: ocr, transcrever_audio, descrever_imagem, perguntar_documento).",
+        politica: "leitura",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            modo: {
+              type: "string",
+              enum: ["ocr", "transcrever_audio", "descrever_imagem", "perguntar_documento"],
+            },
+            url: { type: "string", description: "URL pública do ficheiro" },
+            base64: { type: "string" },
+            mime: { type: "string" },
+            pergunta: { type: "string" },
+          },
+          required: ["modo"],
           additionalProperties: false,
         },
       },

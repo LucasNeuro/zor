@@ -81,9 +81,6 @@ export async function POST(request: NextRequest) {
     if (inbound.kind === "unknown_event") {
       return trace.json({ status: "ignored", event: inbound.event }, 200, "unknown_event");
     }
-    if (inbound.kind === "outgoing_human") {
-      return trace.json({ status: "ignored", reason: "outgoing_not_handled_gestor" }, 200, "outgoing_ignored");
-    }
 
     const gestorOut = await processarGestorWebhookInbound(supabase, body, log);
     if (gestorOut.handled) {

@@ -192,6 +192,7 @@ export async function GET(request: NextRequest) {
       mensagemUsuario: briefCiclo,
       memoriasAgenteBloco,
       trigger: "ciclo",
+      canalInterno: "ciclo_programado",
       briefCiclo,
     });
 
@@ -204,6 +205,7 @@ export async function GET(request: NextRequest) {
       status: statusExec,
       resumo: resultado.texto.slice(0, 400),
       tokens_output: resultado.tokens_output,
+      urls_publicas: resultado.urls_publicas ?? [],
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "erro_execucao";

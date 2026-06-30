@@ -29,10 +29,14 @@ export function integradorMarcaIconVariant(
   if (id === "google_docs") return "google";
   if (id === "mem0") return "mem0";
   if (id === "mistral") return "mistral";
+  if (id === "waje_crm") return "supabase";
+  if (id === "supabase_externo") return "supabase";
 
   if (ferramentaKey.startsWith("hub_int_gcal_")) return "google-calendar";
   if (ferramentaKey.startsWith("hub_int_gmail_")) return "gmail";
   if (ferramentaKey.startsWith("hub_int_mem0_")) return "mem0";
+  if (ferramentaKey.startsWith("hub_int_crm_")) return "supabase";
+  if (ferramentaKey.startsWith("hub_int_supabase_externo_")) return "supabase";
   if (ferramentaKey === "hub_mistral_percepcao") return "mistral";
 
   return null;
@@ -47,7 +51,7 @@ export function buildCatalogoIntegradorFerramentasCompleto(
   for (const entry of HUB_INTEGRADORES_CATALOGO) {
     if (entry.emBreve && !opts?.incluirEmBreve) continue;
     const cx = conexoes[entry.id];
-    const ligado = cx?.configurado === true || (entry.id === "mistral" && cx?.plataforma_ok === true);
+    const ligado = cx?.configurado === true || (entry.id === "mistral" && cx?.plataforma_ok === true) || entry.id === "waje_crm";
     for (const f of entry.ferramentas) {
       if (f.exportarMistral === false) continue;
       lista.push({

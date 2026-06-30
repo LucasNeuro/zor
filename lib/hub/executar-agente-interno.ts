@@ -36,6 +36,10 @@ import {
   linhaCanalSuperagente,
   type SuperagenteCanalInterno,
 } from "@/lib/hub/superagente/canais-internos";
+import {
+  montarBlocoMemoriaSuperagenteInterno,
+  persistirMemoriaSuperagenteInterno,
+} from "@/lib/hub/superagente/memoria-superagente";
 import { blocoEscopoFuncaoCopilotoInterno } from "@/lib/hub/copiloto-interno-escopo";
 import { copilotoInternoPreamble } from "@/lib/agente-briefing-chat";
 import type { BriefingChatReplyResult, BriefingMensagemLinha } from "@/lib/agente-briefing-chat";
@@ -71,10 +75,11 @@ function trunc(s: string, n: number): string {
 
 const BLOCO_SUPERAGENTE = `### SUPERAGENTE (canvas + Mistral)
 - **hub_superagente_dados** — catálogo completo vw_rel_* e consultas com filtros.
-- **hub_superagente_artefato** — página HTML com gráficos reais (Chart.js); a ferramenta devolve **url_publica** (ex.: https://synkronia.com.br/artefato/{uuid}).
+- **hub_superagente_artefato** — relatório canvas com UI Synkron.IA, avatar e nome do agente, tabelas e gráficos Chart.js (inclua seções tipo grafico; tabelas numéricas geram gráfico automático).
 - **hub_mistral_percepcao** — OCR, transcrição de áudio, visão de imagens (Mistral).
 - Para relatório visual: **sempre** chame hub_superagente_artefato e cite **apenas** a url_publica devolvida pela ferramenta.
-- **Nunca** invente URLs (ex.: artefato.waje.com.br, ficheiros .html fictícios). Sem url_publica da ferramenta, diga que o relatório não foi publicado.`;
+- **Nunca** invente URLs (ex.: artefato.waje.com.br, ficheiros .html fictícios). Sem url_publica da ferramenta, diga que o relatório não foi publicado.
+- **Memória de dias**: use o bloco MEMÓRIAS DO AGENTE e SUPER MEMÓRIA (Mem0) no prompt; grave preferências e decisões importantes para os próximos dias.`;
 
 function extrairUrlsPublicasDeResultadoFerramenta(result: string): string[] {
   try {
@@ -89,14 +94,22 @@ function extrairUrlsPublicasDeResultadoFerramenta(result: string): string[] {
 }
 
 const BLOCO_FERRAMENTAS_INTERNAS = `### FERRAMENTAS INTERNAS (function calling)
-- **hub_operacao_empresa** — interface conversacional do CRM: consultar, obter, criar, actualizar e notas (leads, negócios, financeiro, KPIs, etc.). Prefira esta ferramenta para alterações.
-- **hub_dados_empresa** — leitura rápida em views vw_rel_* (listas e números).
+- **hub_int_crm_consultar** — leitura em views vw_rel_* (ex.: vw_rel_leads_enriquecidos com filtro_texto no nome).
+- **hub_int_crm_operar** — CRUD do CRM: consultar, obter, criar, actualizar e notas (leads, negócios, pessoas, financeiro, KPIs).
+- **hub_int_crm_atualizar_lead** — atalho para gravar telefone, e-mail, estágio, score, etc. (exige lead_id no copiloto).
 - Entidades operáveis:
 ${HUB_OPERACAO_EMPRESA_ENTIDADES_PROMPT}
 - Views de consulta (vw_rel_*):
 ${HUB_DADOS_EMPRESA_VIEWS_PROMPT}
-- **hub_metricas_escritorio** para contagens rápidas; integrações Google/HTTP se estiverem activas.
-- Confirme ids reais com obter/consultar antes de gravar. Não invente números nem simule WhatsApp comercial.`;
+- **hub_int_supabase_externo_consultar** — leitura em Supabase externo ligado pelo tenant (comparar com CRM Waje).
+- **hub_metricas_escritorio** para contagens rápidas; integrações Google/Mem0/Mistral/Supabase externo se estiverem activas.
+
+### REGRAS DE GRAVAÇÃO (obrigatório)
+1. **Nunca** diga que gravou sem ter chamado a ferramenta e recebido \`ok: true\` no JSON.
+2. Antes de criar/actualizar: resuma o que vai mudar e peça confirmação, **excepto** se o utilizador já deu os valores exactos (ex.: «actualize o telefone para X»).
+3. Depois de gravar: chame **obter** ou **consultar** de novo e mostre os dados **da resposta da ferramenta** — não invente.
+4. Para procurar clientes por nome: \`hub_int_crm_consultar\` com acao=consultar, view=vw_rel_leads_enriquecidos, filtro_texto=Mateus (ou variação).
+5. Telefone e e-mail gravam em hub_leads_crm (e sincronizam hub_pessoas quando existir pessoa_id).`;
 
 export async function executarAgenteInterno(params: {
   supabase: SupabaseClient;
@@ -118,6 +131,8 @@ export async function executarAgenteInterno(params: {
   canalInterno?: SuperagenteCanalInterno;
   /** Telefone do gestor (WhatsApp) — metadata em artefactos. */
   telefoneSessao?: string | null;
+  /** Utilizador CRM (copiloto) — memória Mem0 por pessoa. */
+  usuarioCrmId?: string | null;
   briefCiclo?: string;
 }): Promise<BriefingChatReplyResult> {
   const tenantForTools = (params.tenantId && params.tenantId.trim()) || defaultTenantId();
@@ -164,6 +179,23 @@ export async function executarAgenteInterno(params: {
 
   const triggerLinha = linhaCanalSuperagente(canalInterno, params.briefCiclo);
 
+  let blocoMemoria = params.memoriasAgenteBloco?.trim() || "";
+  try {
+    const montado = await montarBlocoMemoriaSuperagenteInterno(params.supabase, {
+      tenantId: tenantForTools,
+      agenteSlug: params.agenteSlug,
+      mensagemUsuario: params.mensagemUsuario,
+      telefoneSessao: params.telefoneSessao,
+      usuarioCrmId: params.usuarioCrmId,
+      usoFerramentas: usoMap,
+    });
+    if (montado) {
+      blocoMemoria = blocoMemoria ? `${blocoMemoria}\n\n${montado}` : montado;
+    }
+  } catch {
+    /* memória opcional */
+  }
+
   const preamble = copilotoInternoPreamble(params.agenteNome, params.cargo, escopoInterno);
 
   const skillsHarness = formatarBlocoSkillsHarness(
@@ -178,7 +210,7 @@ export async function executarAgenteInterno(params: {
     BLOCO_SUPERAGENTE,
     skillsHarness || null,
     identity,
-    params.memoriasAgenteBloco?.trim() || null,
+    params.memoriasAgenteBloco?.trim() || blocoMemoria || null,
     params.snapshot?.trim() || null,
   ]
     .filter(Boolean)
@@ -250,6 +282,7 @@ export async function executarAgenteInterno(params: {
           modoOperacao: "jobs_internos",
           agenteInterno: true,
           telefoneSessao: params.telefoneSessao ?? null,
+          usuarioCrmId: params.usuarioCrmId ?? null,
         });
         if (
           nome === "hub_superagente_artefato" ||
@@ -275,6 +308,21 @@ export async function executarAgenteInterno(params: {
   }
 
   if (!out?.ok) throw new Error(out?.erro || "Falha ao gerar resposta do agente interno");
+
+  try {
+    await persistirMemoriaSuperagenteInterno(params.supabase, {
+      tenantId: tenantForTools,
+      agenteSlug: params.agenteSlug,
+      mensagemUsuario: params.mensagemUsuario,
+      respostaIA: out.texto,
+      telefoneSessao: params.telefoneSessao,
+      usuarioCrmId: params.usuarioCrmId,
+      canalInterno,
+      usoFerramentas: usoMap,
+    });
+  } catch {
+    /* memória opcional */
+  }
 
   const { brl } = calcularCustoBrl(out.modeloLog, out.tokensEntrada, out.tokensSaida);
 

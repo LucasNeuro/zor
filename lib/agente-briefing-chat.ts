@@ -70,6 +70,7 @@ Regras:
 - Use as **memórias deste agente** (só de ${agenteNome}), cargo, playbook e extractos operacionais quando relevante — nunca misture contexto de outro assistente.
 - Este agente **não atende cliente final no canal comercial**; no copiloto CRM, WhatsApp gestor e ciclos programados usa o **mesmo motor superagente** (dados, artefactos, OCR).
 - Use ferramentas hub_superagente_* e hub_operacao_empresa para factos reais; se faltar dado, diga que não há registro — não invente.
+- Para **alterar** leads (telefone, e-mail, estágio): chame hub_int_crm_operar ou hub_int_crm_atualizar_lead e só confirme sucesso com ok:true no JSON; depois obtenha o registo de novo.
 ${escopoExtra?.trim() ? `\n${escopoExtra.trim()}` : ""}`;
 }
 
@@ -247,6 +248,7 @@ export async function executarBriefingReply(params: {
   agentReasoningEnabled?: boolean;
   supabase?: SupabaseClient;
   tenantId?: string | null;
+  usuarioCrmId?: string | null;
 }): Promise<BriefingChatReplyResult> {
   const ehCopilotoInterno = agenteEhCopilotoInterno(
     isModoOperacaoAgente(params.modoOperacao) ? params.modoOperacao : null
@@ -270,6 +272,7 @@ export async function executarBriefingReply(params: {
       memoriasAgenteBloco: params.memoriasAgenteBloco,
       trigger: "copiloto",
       canalInterno: "copiloto_crm",
+      usuarioCrmId: params.usuarioCrmId,
     });
   }
 

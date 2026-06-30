@@ -55,6 +55,7 @@ import { AgenteUazapiBlock, type AgenteUazapiSnapshot } from "@/components/crm/A
 import { AgenteFollowupBlock } from "@/components/crm/AgenteFollowupBlock";
 import Link from "next/link";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
+import { AgenteSupabaseCrmBlock } from "@/components/crm/AgenteSupabaseCrmBlock";
 import { AgenteMem0Block } from "@/components/crm/AgenteMem0Block";
 import { AgenteMistralBlock } from "@/components/crm/AgenteMistralBlock";
 import { agenteEhModoCanal, type ModoOperacaoAgente } from "@/lib/hub/agente-modo-operacao";
@@ -1173,6 +1174,19 @@ export default function AgentePage() {
                     }}
                   />
                 ) : null}
+                <AgenteSupabaseCrmBlock
+                  agenteSlug={slug}
+                  agenteNome={agente.nome}
+                  layout="card"
+                  modoInterno={agente.modo_operacao === "jobs_internos"}
+                  usoFerramentas={usoFerramentasIa}
+                  onUsoChange={(id, ativo) =>
+                    setUsoFerramentasIa((prev) => ({
+                      ...mergeUsoFerramentasComPadraoPreservandoCustom(prev),
+                      [id]: ativo,
+                    }))
+                  }
+                />
                 {agenteModoCanal || agente.modo_operacao === "jobs_internos" ? (
                   <AgenteGoogleWorkspaceBlock
                     agenteSlug={slug}
@@ -1190,7 +1204,7 @@ export default function AgentePage() {
                     }
                   />
                 ) : null}
-                {agenteModoCanal ? (
+                {agenteModoCanal || agente.modo_operacao === "jobs_internos" ? (
                   <AgenteMem0Block
                     agenteSlug={slug}
                     agenteNome={agente.nome}

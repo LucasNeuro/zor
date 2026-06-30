@@ -16,6 +16,8 @@ import {
   type CrmSideoverTheme,
 } from "@/lib/crm/crm-retrofit-dark-theme";
 
+export type { CrmSideoverTheme };
+
 /** Grupo segmentado — tema escuro (padrão CRM) ou claro (lead / conversas Waje). */
 export function CrmSideoverActionGroup({
   children,

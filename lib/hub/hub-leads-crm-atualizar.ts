@@ -1,6 +1,7 @@
 /** Valores e patch seguro para `hub_atualizar_lead` (alinhado a CHECKs em hub_leads_crm). */
 
 import { nomeCandidatoEhValido } from "@/lib/crm/extrair-nome-cliente";
+import { normalizarTelefoneLead } from "@/lib/crm/lead-cadastro";
 import { nomeLeadEhPlaceholder } from "@/lib/crm/sincronizar-contato-whatsapp";
 
 export const HUB_LEADS_CRM_ESTAGIOS = [
@@ -138,7 +139,21 @@ export function buildHubLeadsCrmPatch(
   }
 
   const email = normStr(args.email, 320);
-  if (email) patch.email = email;
+  if (email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { ok: false, erro: "email_invalido", codigo: "email_invalido" };
+    }
+    patch.email = email;
+  }
+
+  const telefoneRaw = normStr(args.telefone, 32);
+  if (telefoneRaw) {
+    const tel = normalizarTelefoneLead(telefoneRaw);
+    if (tel.length < 10 || tel.length > 13) {
+      return { ok: false, erro: "telefone_invalido", codigo: "telefone_invalido" };
+    }
+    patch.telefone = tel;
+  }
 
   const interesse = normStr(args.interesse_principal, 500);
   if (interesse) patch.interesse_principal = interesse;

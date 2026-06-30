@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -28,12 +27,16 @@ import {
 import { IntegradorFerramentaMarcaIcon } from "@/components/crm/IntegradorFerramentaMarcaIcon";
 import type { HubAgenteFerramentaId, HubFerramentaCategoria } from "@/lib/hub/agente-ferramentas-registry";
 import {
-  ferramentaObrigatoriaFuncionarioIa,
   HUB_AGENTE_FERRAMENTAS_CATALOGO,
   HUB_FERRAMENTA_SECAO_LABEL,
   mergeUsoFerramentasComPadraoPreservandoCustom,
-  pacoteUsoFerramentasSuperagenteInterno,
 } from "@/lib/hub/agente-ferramentas-registry";
+import {
+  FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR,
+  HUB_INT_CRM_KEYS,
+} from "@/lib/hub/crm-integrador-constants";
+import { HUB_INT_SUPABASE_EXTERNO_CONSULTAR } from "@/lib/hub/supabase-externo-constants";
+import { MEM0_BUSCAR_KEY, MEM0_SUPER_MEMORIA_KEY } from "@/lib/hub/mem0-constants";
 import { MISTRAL_PERCEPCAO_KEY } from "@/lib/hub/mistral-integracao-constants";
 import type { CatalogoFerramentaIntegradorLite } from "@/lib/hub/integrador-catalogo-ui";
 export type { CatalogoFerramentaIntegradorLite } from "@/lib/hub/integrador-catalogo-ui";
@@ -238,7 +241,13 @@ export function AgenteFerramentasIaBlock({
   const nAtivas = Object.entries(uso).filter(([, on]) => on === true).length;
   const customActivos = customCatalog.filter((c) => c.ativo);
   const externaActivos = externaCatalog.filter((c) => c.ativo);
-  const integradorActivos = integradorCatalog;
+  const integradorActivos = integradorCatalog.filter(
+    (tool) =>
+      tool.ferramenta_key !== MEM0_SUPER_MEMORIA_KEY &&
+      tool.ferramenta_key !== MEM0_BUSCAR_KEY &&
+      !(HUB_INT_CRM_KEYS as readonly string[]).includes(tool.ferramenta_key) &&
+      tool.ferramenta_key !== HUB_INT_SUPABASE_EXTERNO_CONSULTAR
+  );
   const nSlots =
     HUB_AGENTE_FERRAMENTAS_CATALOGO.length +
     customActivos.length +
@@ -253,17 +262,7 @@ export function AgenteFerramentasIaBlock({
     }
   }
 
-  useEffect(() => {
-    if (!modoInterno) return;
-    const pacote = pacoteUsoFerramentasSuperagenteInterno();
-    if (!motorHabilitado) onMotorChange(true);
-    for (const [id, ativo] of Object.entries(pacote)) {
-      if (ativo && uso[id] !== true) onUsoChange(id, true);
-    }
-  }, [modoInterno, motorHabilitado, uso, onMotorChange, onUsoChange]);
-
   function handleUsoChange(id: string, ativo: boolean) {
-    if (modoInterno && !ativo && ferramentaObrigatoriaFuncionarioIa(id)) return;
     onUsoChange(id, ativo);
   }
 
@@ -329,10 +328,9 @@ export function AgenteFerramentasIaBlock({
             lineHeight: 1.5,
           }}
         >
-          <strong style={{ color: t.title }}>Funcionário IA (superagente):</strong> acesso total aos dados da
-          empresa (<code style={{ fontSize: 11 }}>vw_rel_*</code>), relatórios com gráficos (canvas) e percepção
-          Mistral. O <strong style={{ color: t.title }}>cargo</strong> define persona, skills e limites — não há
-          pacotes alternativos.
+          <strong style={{ color: t.title }}>Funcionário IA (superagente):</strong> active ou desactive cada
+          função abaixo conforme o papel deste agente. O <strong style={{ color: t.title }}>cargo</strong> define
+          persona e limites; as ferramentas são configuráveis.
         </div>
       ) : null}
 
@@ -387,8 +385,7 @@ export function AgenteFerramentasIaBlock({
           </span>
           <ToggleSwitch
             checked={motorHabilitado}
-            onCheckedChange={modoInterno ? () => {} : onMotorChange}
-            disabled={modoInterno}
+            onCheckedChange={onMotorChange}
             labelledBy="label-motor-hub"
             offBg={t.toggleOff}
           />
@@ -440,7 +437,10 @@ export function AgenteFerramentasIaBlock({
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {ordemSecoes.map((cat) => {
               const tools = HUB_AGENTE_FERRAMENTAS_CATALOGO.filter(
-                (t) => t.categoria === cat && t.id !== MISTRAL_PERCEPCAO_KEY
+                (t) =>
+                  t.categoria === cat &&
+                  t.id !== MISTRAL_PERCEPCAO_KEY &&
+                  !(FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR as readonly string[]).includes(t.id)
               );
               if (!tools.length) return null;
               const SecIcon = ICONE_SECAO[cat];
@@ -470,8 +470,7 @@ export function AgenteFerramentasIaBlock({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {tools.map((tool) => {
-                      const obrigatoriaInterno = modoInterno && ferramentaObrigatoriaFuncionarioIa(tool.id);
-                      const ligado = obrigatoriaInterno || uso[tool.id] === true;
+                      const ligado = uso[tool.id] === true;
                       const ToolIcon = ICONE_FERRAMENTA[tool.id];
                       const labelId = `tool-label-${tool.id}`;
                       return (
@@ -550,12 +549,11 @@ export function AgenteFerramentasIaBlock({
                                 color: ligado ? "#3fb950" : t.muted,
                               }}
                             >
-                              {obrigatoriaInterno ? "INCLUÍDO" : ligado ? "ACTIVO" : "INACTIVO"}
+                              {ligado ? "ACTIVO" : "INACTIVO"}
                             </span>
                             <ToggleSwitch
                               checked={ligado}
                               onCheckedChange={(v) => handleUsoChange(tool.id, v)}
-                              disabled={obrigatoriaInterno}
                               labelledBy={labelId}
                               offBg={t.toggleOff}
                             />
@@ -927,7 +925,7 @@ export function AgenteFerramentasIaBlock({
                         </span>
                         <ToggleSwitch
                           checked={ligado}
-                          onCheckedChange={(v) => onUsoChange(tool.ferramenta_key, v)}
+                          onCheckedChange={(v) => handleUsoChange(tool.ferramenta_key, v)}
                           disabled={toggleDisabled}
                           labelledBy={labelId}
                           offBg={t.toggleOff}

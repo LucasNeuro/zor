@@ -115,7 +115,7 @@ export async function POST(
   const subject =
     (typeof body.subject === "string" && body.subject.trim()) ||
     `[Teste] Canal e-mail — ${nomeAgente}`;
-  const text =
+  const textRaw =
     (typeof body.text === "string" && body.text.trim()) ||
     `Olá!\n\nEste é um e-mail de teste do agente «${nomeAgente}» via Gmail (OAuth).\n\nSe recebeu esta mensagem, o envio pela caixa ligada está a funcionar.`;
 
@@ -144,13 +144,17 @@ export async function POST(
     );
   }
 
+  const { prepararEmailAgente } = await import("@/lib/email/preparar-email-agente");
+  const emailFmt = await prepararEmailAgente(supabase, tenantId, slug, textRaw);
+
   const gmailResult = await sendGmailEmail({
     bearerToken: token,
     to,
     subject,
-    text,
+    text: emailFmt.text,
+    html: emailFmt.html,
     from: emailFrom,
-    fromName: typeof agente.email_from_name === "string" ? agente.email_from_name : nomeAgente,
+    fromName: typeof agente.email_from_name === "string" ? agente.email_from_name : emailFmt.fromName,
   });
 
   if (!gmailResult.ok) {

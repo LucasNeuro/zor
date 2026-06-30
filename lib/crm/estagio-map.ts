@@ -5,6 +5,27 @@ import {
 } from "@/lib/crm/pipelines";
 import { crmFeatureFlags } from "@/lib/crm/feature-flags";
 
+/** Sinónimos entre slugs PDF, legado e pipelines customizados do tenant. */
+const COLUNA_KANBAN_SINONIMOS: Record<string, string[]> = {
+  qualificando: ["qualificado", "qualificando"],
+  qualificado: ["qualificado", "qualificando"],
+  convertido_negocio: ["ganho", "convertido_negocio"],
+  ganho: ["ganho", "convertido_negocio"],
+  encaminhado: ["qualificado", "proposta", "encaminhado"],
+  aguardando_resposta: ["em_atendimento", "aguardando", "aguardando_resposta"],
+  em_atendimento: ["em_atendimento", "negociando", "em_andamento"],
+  negociando: ["negociando", "em_atendimento"],
+  proposta: ["proposta", "qualificado", "encaminhado"],
+  fechamento: ["fechamento", "qualificado", "negociando"],
+  spam_invalido: ["perdido", "spam_invalido"],
+  perdido: ["perdido", "spam_invalido"],
+};
+
+export type LeadEstagioFonte = {
+  estagio?: string | null;
+  estagio_funil?: string | null;
+};
+
 /** Slug canônico do funil PDF para exibição/agrupamento. */
 export function legacyToFunil(estagio: string | null | undefined): FunilLeadSlug | string {
   const s = (estagio ?? "").trim();
@@ -40,10 +61,44 @@ export function buildLeadEstagioPatch(novoFunilOuLegado: string): LeadEstagioPat
   };
 }
 
-/** Agrupa lead no kanban pela coluna ativa (slug do estágio na BD). */
-export function estagioParaColunaKanban(estagio: string | null | undefined): string {
-  const s = (estagio ?? "").trim();
-  if (!s) return "novo";
-  if (crmFeatureFlags.pipelineV2()) return s;
-  return legacyToFunil(s) as string;
+/** Preferência: `estagio_funil` (PDF) e depois `estagio` (legado). */
+export function estagioBrutoLead(lead: LeadEstagioFonte): string {
+  return (lead.estagio_funil ?? lead.estagio ?? "").trim();
+}
+
+function normalizarSlugKanban(raw: string): string {
+  if (!raw) return "novo";
+  return legacyToFunil(raw) as string;
+}
+
+function encaixarEmColunas(slug: string, colunasIds: readonly string[]): string {
+  if (!colunasIds.length) return slug;
+  if (colunasIds.includes(slug)) return slug;
+
+  const candidatos = [slug, ...(COLUNA_KANBAN_SINONIMOS[slug] ?? [])];
+  for (const c of candidatos) {
+    if (colunasIds.includes(c)) return c;
+  }
+
+  return colunasIds.includes("novo") ? "novo" : colunasIds[0]!;
+}
+
+/**
+ * Agrupa lead no kanban pela coluna ativa.
+ * Aceita string (legado) ou lead com `estagio_funil` + `estagio`.
+ * Com `colunasIds`, encaixa slugs órfãos (ex.: qualificando → qualificado).
+ */
+export function estagioParaColunaKanban(
+  estagioOuLead: string | LeadEstagioFonte | null | undefined,
+  colunasIds?: readonly string[]
+): string {
+  let raw = "";
+  if (estagioOuLead != null && typeof estagioOuLead === "object") {
+    raw = estagioBrutoLead(estagioOuLead);
+  } else {
+    raw = (estagioOuLead ?? "").trim();
+  }
+
+  const slug = normalizarSlugKanban(raw);
+  return colunasIds?.length ? encaixarEmColunas(slug, colunasIds) : slug;
 }

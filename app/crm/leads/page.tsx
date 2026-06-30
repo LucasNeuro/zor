@@ -310,6 +310,16 @@ export default function LeadsPage() {
     setEstagiosKanban(cols.length ? cols : ESTAGIOS_FALLBACK);
   }, [pipelineAtivo]);
 
+  const estagiosKanbanIds = useMemo(
+    () => estagiosKanban.map((e) => e.id),
+    [estagiosKanban]
+  );
+
+  const colunaKanbanLead = useCallback(
+    (lead: Lead) => estagioParaColunaKanban(lead, estagiosKanbanIds),
+    [estagiosKanbanIds]
+  );
+
   useEffect(() => {
     const ch = supabase.channel("leads_rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "hub_leads_crm" }, (payload) => {
@@ -333,6 +343,20 @@ export default function LeadsPage() {
     setEditLead(lead);
   }, []);
 
+  useEffect(() => {
+    if (!editLead) return;
+    const fresh = leads.find((l) => l.id === editLead.id);
+    if (!fresh) return;
+    if (
+      fresh.estagio !== editLead.estagio ||
+      fresh.estagio_funil !== editLead.estagio_funil ||
+      fresh.estagio_atendimento !== editLead.estagio_atendimento ||
+      fresh.atualizado_em !== editLead.atualizado_em
+    ) {
+      setEditLead((prev) => (prev?.id === fresh.id ? { ...prev, ...fresh } : prev));
+    }
+  }, [leads, editLead?.id, editLead?.estagio, editLead?.estagio_funil, editLead?.estagio_atendimento, editLead?.atualizado_em]);
+
   async function moverEstagio(
     leadId: string,
     novoEstagio: string,
@@ -343,7 +367,7 @@ export default function LeadsPage() {
     const estagioAnterior = leadAtual?.estagio;
 
     if (options?.optimistic) {
-      if (estagioAnterior && estagioParaColunaKanban(estagioAnterior) === novoEstagio) {
+      if (estagioAnterior && estagioParaColunaKanban(estagioAnterior, estagiosKanbanIds) === novoEstagio) {
         return true;
       }
       pendingStageMovesRef.current.add(leadId);
@@ -393,10 +417,8 @@ export default function LeadsPage() {
     return true;
   }
 
-  async function onNegocioCreated(lead: Lead, negocioId: string) {
-    await moverEstagio(lead.id, "convertido_negocio");
+  function onNegocioCreated(lead: Lead, negocioId: string) {
     refreshLeads();
-    setEditLead(null);
     setSelectedNegocioId(negocioId);
   }
 
@@ -423,7 +445,7 @@ export default function LeadsPage() {
     ) {
       return false;
     }
-    if (filtroEstagio && estagioParaColunaKanban(l.estagio) !== filtroEstagio) return false;
+    if (filtroEstagio && colunaKanbanLead(l) !== filtroEstagio) return false;
         if (filtroOrigem && l.origem !== filtroOrigem) return false;
         if (filtroScoreMin && l.score < Number(filtroScoreMin)) return false;
         if (filtroScoreMax && l.score > Number(filtroScoreMax)) return false;
@@ -448,6 +470,7 @@ export default function LeadsPage() {
       filtroScoreMax,
       filtroDataInicio,
       filtroDataFim,
+      colunaKanbanLead,
     ]
   );
 
@@ -487,7 +510,7 @@ export default function LeadsPage() {
   ).length;
   const stageSparkline = useMemo(() => {
     const buckets = estagiosKanban.slice(0, 5).map(
-      (est) => leadsDoPipeline.filter((l) => estagioParaColunaKanban(l.estagio) === est.id).length
+      (est) => leadsDoPipeline.filter((l) => colunaKanbanLead(l) === est.id).length
     );
     return sparklineFromCounts(buckets);
   }, [estagiosKanban, leadsDoPipeline]);
@@ -532,7 +555,7 @@ export default function LeadsPage() {
 
   const colunasLeads = useMemo((): CrmResizableColumn<Lead>[] => {
     const estagioInfo = (lead: Lead) =>
-      estagiosKanban.find((e) => e.id === estagioParaColunaKanban(lead.estagio));
+      estagiosKanban.find((e) => e.id === colunaKanbanLead(lead));
     const estagioAtendimentoInfo = (lead: Lead) =>
       estagiosAtendimento.find((e) => e.id === (lead.estagio_atendimento || "novo"));
 
@@ -669,9 +692,7 @@ export default function LeadsPage() {
         "Criado em",
       ],
       rowValues: (lead: Lead) => {
-        const est = estagiosKanban.find(
-          (e) => e.id === estagioParaColunaKanban(lead.estagio)
-        );
+        const est = estagiosKanban.find((e) => e.id === colunaKanbanLead(lead));
         return [
           lead.nome,
           lead.origem ? ORIGENS_LABEL[lead.origem] || lead.origem : "",
@@ -824,7 +845,7 @@ export default function LeadsPage() {
           /* KANBAN */
           <CrmKanbanBoardScroll isMobile={isMobile}>
             {estagiosKanban.map(est => {
-              const col = filtrados.filter((l) => estagioParaColunaKanban(l.estagio) === est.id);
+              const col = filtrados.filter((l) => colunaKanbanLead(l) === est.id);
               const total = col.reduce((s, l) => s + l.valor_estimado, 0);
               return (
                 <CrmKanbanColumn

@@ -425,13 +425,17 @@ export async function processOAuthInboundEmail(
 
   const refs = [inboundMsg.references, inboundMsg.messageId].filter(Boolean).join(" ").trim() || undefined;
 
+  const { prepararEmailAgente } = await import("@/lib/email/preparar-email-agente");
+  const emailFmt = await prepararEmailAgente(supabase, tenantId, agenteSlug, resultado.resposta);
+
   const send = await sendGmailEmail({
     bearerToken: opts.bearerToken,
     to: inboundMsg.fromEmail,
     subject: replySubject,
-    text: resultado.resposta,
+    text: emailFmt.text,
+    html: emailFmt.html,
     from: fromEmail,
-    fromName: agente.email_from_name,
+    fromName: agente.email_from_name?.trim() || emailFmt.fromName,
     inReplyTo: inboundMsg.messageId,
     references: refs,
     threadId: inboundMsg.gmailThreadId,

@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Briefcase,
   ExternalLink,
+  FileText,
   History,
   StickyNote,
   UserRound,
@@ -20,6 +21,7 @@ import { LeadChatTab } from "@/components/crm/leads/LeadChatTab";
 import { LeadEmailChatTab } from "@/components/crm/leads/LeadEmailChatTab";
 import { LeadNegocioPanel } from "@/components/crm/leads/LeadNegocioPanel";
 import { LeadNegociosListPanel } from "@/components/crm/leads/LeadNegociosListPanel";
+import { LeadNegocioToolbarBtns } from "@/components/crm/leads/LeadNegocioToolbarBtns";
 import { LeadObservacoesTab, type CrmNota } from "@/components/crm/leads/LeadObservacoesTab";
 import { LeadStatusTimelineTab } from "@/components/crm/leads/LeadStatusTimelineTab";
 import { LeadTimelineTab } from "@/components/crm/leads/LeadTimelineTab";
@@ -64,7 +66,7 @@ type Props = {
   onOpenNegocio?: (negocioId: string) => void;
 };
 
-type SidebarTab = "timeline" | "notas";
+type SidebarTab = "dados" | "timeline" | "notas";
 
 export function AtendimentoWorkspace360({
   leadId,
@@ -88,7 +90,7 @@ export function AtendimentoWorkspace360({
   const [timelineEvents, setTimelineEvents] = useState<LeadTimelineEvent[]>([]);
   const [novaNota, setNovaNota] = useState("");
   const [adicionandoNota, setAdicionandoNota] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("timeline");
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("dados");
   const [painel, setPainel] = useState<PainelAtendimento>("chat");
 
   const canal = useMemo(() => {
@@ -288,6 +290,18 @@ export function AtendimentoWorkspace360({
           <div className="flex gap-1">
             <button
               type="button"
+              onClick={() => setSidebarTab("dados")}
+              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-bold ${
+                sidebarTab === "dados"
+                  ? "bg-[#166534] text-white"
+                  : "bg-[#f8fcf6] text-[#374151]"
+              }`}
+            >
+              <FileText size={13} />
+              Dados
+            </button>
+            <button
+              type="button"
               onClick={() => setSidebarTab("timeline")}
               className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-bold ${
                 sidebarTab === "timeline"
@@ -313,7 +327,69 @@ export function AtendimentoWorkspace360({
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          {sidebarTab === "timeline" ? (
+          {sidebarTab === "dados" ? (
+            <div className="flex flex-col gap-2 text-[12px] text-[#2d4a35]">
+              <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-[#6b8a76]">
+                Ficha do lead
+              </p>
+              <div className="rounded-lg border border-[#dcebd8] bg-[#f8fcf6] p-3">
+                <dl className="m-0 grid gap-2">
+                  <div>
+                    <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">Nome</dt>
+                    <dd className="m-0 font-semibold text-[#0b2210]">{lead.nome}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">Telefone</dt>
+                    <dd className="m-0">{lead.telefone || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">E-mail</dt>
+                    <dd className="m-0 break-all">{lead.email || lead._email_exibicao || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">Origem</dt>
+                    <dd className="m-0">{origemLabel || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">Estágio funil</dt>
+                    <dd className="m-0">{lead.estagio_funil || lead.estagio || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">Atendimento</dt>
+                    <dd className="m-0">{estagioInfo?.label || lead.estagio_atendimento || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">Score</dt>
+                    <dd className="m-0">{lead.score ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">Valor estimado</dt>
+                    <dd className="m-0">
+                      {lead.valor_estimado > 0
+                        ? new Intl.NumberFormat("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                          }).format(lead.valor_estimado)
+                        : "—"}
+                    </dd>
+                  </div>
+                  {codigo ? (
+                    <div>
+                      <dt className="text-[9px] font-bold uppercase text-[#6b8a76]">Código</dt>
+                      <dd className="m-0 font-mono text-[11px]">#{codigo}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </div>
+              <Link
+                href={`/crm/leads?lead=${encodeURIComponent(lead.id)}`}
+                className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#dcebd8] bg-white px-2 py-2 text-[11px] font-semibold text-[#166534] hover:bg-[#f0fdf4]"
+              >
+                Abrir no funil
+                <ExternalLink size={11} />
+              </Link>
+            </div>
+          ) : sidebarTab === "timeline" ? (
             <LeadTimelineTab
               leadId={lead.id}
               leadNome={lead.nome}
@@ -381,15 +457,15 @@ export function AtendimentoWorkspace360({
             <CrmSideoverToolbarRow>
               <CrmSideoverActionGroup className="min-w-max" theme="light">
                 {onNegocioCreated ? (
-                  <CrmSideoverActionBtn
-                    active={painel === "negocio" || painel === "negocios"}
-                    onClick={() => setPainel((p) => (p === "negocios" ? "chat" : "negocios"))}
-                    title="Negócios do lead"
+                  <LeadNegocioToolbarBtns
                     theme="light"
-                  >
-                    <Briefcase size={14} />
-                    Negócio
-                  </CrmSideoverActionBtn>
+                    listaActive={painel === "negocios"}
+                    criarActive={painel === "negocio"}
+                    onVerNegocios={() =>
+                      setPainel((p) => (p === "negocios" ? "chat" : "negocios"))
+                    }
+                    onNovoNegocio={() => setPainel("negocio")}
+                  />
                 ) : null}
                 <CrmSideoverActionBtn
                   active={painel === "historico"}

@@ -139,7 +139,7 @@ export function LeadNegociosListPanel({
           <CrmSideoverActionGroup theme={theme}>
             <CrmSideoverActionBtn onClick={onCreateNegocio} title="Criar negócio" theme={theme}>
               <Plus size={14} />
-              Novo
+              Novo negócio
             </CrmSideoverActionBtn>
           </CrmSideoverActionGroup>
         ) : null}
@@ -168,8 +168,16 @@ export function LeadNegociosListPanel({
             Nenhum negócio vinculado
           </p>
           <p className="m-0 max-w-xs text-xs leading-relaxed" style={{ color: muted }}>
-            Negócios criados a partir deste lead aparecem aqui — abertos e encerrados.
+            Um cliente pode ter vários negócios ao longo do tempo. Crie o primeiro aqui.
           </p>
+          {onCreateNegocio ? (
+            <CrmSideoverActionGroup theme={theme}>
+              <CrmSideoverActionBtn onClick={onCreateNegocio} title="Criar negócio" theme={theme}>
+                <Plus size={14} />
+                Novo negócio
+              </CrmSideoverActionBtn>
+            </CrmSideoverActionGroup>
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-5">

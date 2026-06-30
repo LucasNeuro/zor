@@ -45,6 +45,8 @@ type Props = {
   showWhatsappTab?: boolean;
   showEmailTab?: boolean;
   showNegociosTab?: boolean;
+  /** Só Resumo + Negócios (funil vendas sem chat). */
+  minimal?: boolean;
   theme?: CrmSideoverTheme;
 };
 
@@ -55,26 +57,34 @@ export function LeadSideoverNavRail({
   showWhatsappTab = true,
   showEmailTab = false,
   showNegociosTab = false,
+  minimal = false,
   theme = "light",
 }: Props) {
   const isLight = theme === "light";
-  const items: NavItem[] = [
-    { id: "timeline", label: "Resumo", icon: LayoutDashboard },
-    ...(showNegociosTab
-      ? [{ id: "negocios" as const, label: "Negócios", icon: Briefcase }]
-      : []),
-    { id: "dados", label: "Dados", icon: FileText },
-    ...(showWhatsappTab
-      ? [{ id: "conversas" as const, label: "WhatsApp", icon: MessageSquare }]
-      : []),
-    ...(showEmailTab ? [{ id: "conversas_email" as const, label: "E-mail", icon: Mail }] : []),
-    {
-      id: "observacoes",
-      label: "Observações",
-      icon: StickyNote,
-      badge: observacoesCount > 0 ? observacoesCount : undefined,
-    },
-  ];
+  const items: NavItem[] = minimal
+    ? [
+        { id: "timeline", label: "Resumo", icon: LayoutDashboard },
+        ...(showNegociosTab
+          ? [{ id: "negocios" as const, label: "Negócios", icon: Briefcase }]
+          : []),
+      ]
+    : [
+        { id: "timeline", label: "Resumo", icon: LayoutDashboard },
+        ...(showNegociosTab
+          ? [{ id: "negocios" as const, label: "Negócios", icon: Briefcase }]
+          : []),
+        { id: "dados", label: "Dados", icon: FileText },
+        ...(showWhatsappTab
+          ? [{ id: "conversas" as const, label: "WhatsApp", icon: MessageSquare }]
+          : []),
+        ...(showEmailTab ? [{ id: "conversas_email" as const, label: "E-mail", icon: Mail }] : []),
+        {
+          id: "observacoes",
+          label: "Observações",
+          icon: StickyNote,
+          badge: observacoesCount > 0 ? observacoesCount : undefined,
+        },
+      ];
 
   return (
     <nav

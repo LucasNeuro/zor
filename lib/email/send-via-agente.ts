@@ -12,6 +12,7 @@ export type SendViaAgenteInput = {
   to: string;
   subject: string;
   text: string;
+  html?: string | null;
   inReplyTo?: string | null;
   references?: string | null;
   threadId?: string | null;
@@ -37,7 +38,7 @@ export async function sendEmailViaAgente(
   tenantId: string,
   agente: AgenteSendFields,
   input: SendViaAgenteInput,
-  opts?: { origin?: string; mailboxEmail?: string | null }
+  opts?: { origin?: string; mailboxEmail?: string | null; agenteSlug?: string | null }
 ): Promise<SendViaAgenteResult> {
   const provider = resolveEmailProviderForAgente(agente);
 
@@ -56,6 +57,19 @@ export async function sendEmailViaAgente(
     agente.email_inbound?.trim() ||
     null;
   const fromName = agente.email_from_name?.trim() || null;
+
+  let text = input.text;
+  let html = input.html?.trim() || null;
+  let fromNameFinal = fromName;
+
+  const agenteSlug = opts?.agenteSlug?.trim();
+  if (agenteSlug && !html) {
+    const { prepararEmailAgente } = await import("@/lib/email/preparar-email-agente");
+    const prep = await prepararEmailAgente(supabase, tenantId, agenteSlug, input.text);
+    text = prep.text;
+    html = prep.html;
+    if (!fromNameFinal) fromNameFinal = prep.fromName;
+  }
 
   const integracaoId =
     typeof agente.email_integracao_id === "string" ? agente.email_integracao_id.trim() : "";
@@ -83,9 +97,10 @@ export async function sendEmailViaAgente(
     bearerToken: token,
     to: input.to,
     subject: input.subject,
-    text: input.text,
+    text,
+    html,
     from,
-    fromName,
+    fromName: fromNameFinal,
     inReplyTo: input.inReplyTo,
     references: input.references,
     threadId: input.threadId,

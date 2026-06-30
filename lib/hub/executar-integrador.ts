@@ -1,5 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  consultarSupabaseExterno,
+  credenciaisSupabaseExternoDeRow,
+} from "@/lib/hub/supabase-externo-query";
+import { HUB_INT_SUPABASE_EXTERNO_CONSULTAR } from "@/lib/hub/supabase-externo-constants";
+import {
+  CRM_INTEGRADOR_BUILTIN_MAP,
+  WAJE_CRM_INTEGRADOR_ID,
+  type HubIntCrmKey,
+} from "@/lib/hub/crm-integrador-constants";
+import {
   ferramentaIntegradorPorKey,
   type HubIntegradorId,
 } from "@/lib/hub/integradores-catalogo";
@@ -33,6 +43,10 @@ import { lerTenantAgendaConfig } from "@/lib/hub/tenant-agenda-config";
 export type GcalFerramentaContexto = {
   leadId?: string;
   telefone?: string | null;
+  agenteSlug?: string;
+  agenteInterno?: boolean;
+  usuarioCrmId?: string | null;
+  tenantId?: string;
 };
 
 const HTTP_TIMEOUT_MS = 30_000;
@@ -336,7 +350,8 @@ async function executarGmail(
   supabase: SupabaseClient,
   tenantId: string,
   integracaoRowId: string,
-  integracao?: HubIntegracaoRow
+  integracao?: HubIntegracaoRow,
+  gcalCtx?: GcalFerramentaContexto
 ): Promise<string> {
   let token = bearerToken(cred);
   const storedOAuth = readStoredGoogleOAuthCredentials(cred);
@@ -369,12 +384,26 @@ async function executarGmail(
       });
     }
 
+    let text = corpo;
+    let html: string | null = null;
+    let fromName: string | null = null;
+    const agenteSlug = gcalCtx?.agenteSlug?.trim();
+    if (agenteSlug) {
+      const { prepararEmailAgente } = await import("@/lib/email/preparar-email-agente");
+      const prep = await prepararEmailAgente(supabase, tenantId, agenteSlug, corpo);
+      text = prep.text;
+      html = prep.html;
+      fromName = prep.fromName;
+    }
+
     const enviado = await sendGmailEmail({
       bearerToken: token,
       to: para,
       subject: assunto,
-      text: corpo,
+      text,
+      html,
       from,
+      fromName,
     });
 
     if (!enviado.ok) {
@@ -495,16 +524,31 @@ async function executarMem0(
     if (!query) {
       return JSON.stringify({ erro: "parametros_invalidos", campos: ["query"] });
     }
-    const leadId = gcalCtx?.leadId?.trim();
-    if (!leadId) {
-      return JSON.stringify({ erro: "mem0_sem_lead", detalhe: "Só disponível com lead na sessão." });
-    }
     const limite = typeof args.limite === "number" ? args.limite : 6;
     const { mem0SearchMemories } = await import("@/lib/hub/mem0-api");
+
+    let userId = gcalCtx?.leadId?.trim();
+    if (!userId && gcalCtx?.agenteInterno && gcalCtx.agenteSlug && gcalCtx.tenantId) {
+      const { mem0UserIdSuperagenteInterno } = await import("@/lib/hub/superagente/memoria-superagente");
+      userId = mem0UserIdSuperagenteInterno({
+        tenantId: gcalCtx.tenantId,
+        agenteSlug: gcalCtx.agenteSlug,
+        telefoneSessao: gcalCtx.telefone,
+        usuarioCrmId: gcalCtx.usuarioCrmId,
+      });
+    }
+    if (!userId) {
+      return JSON.stringify({
+        erro: "mem0_sem_contexto",
+        detalhe: "Superagente interno ou lead na sessão necessário para buscar memórias.",
+      });
+    }
+
     const res = await mem0SearchMemories({
       apiKey: token,
       query,
-      userId: leadId,
+      userId,
+      agentId: gcalCtx?.agenteSlug,
       limit: limite,
     });
     if (!res.ok) {
@@ -522,6 +566,37 @@ async function executarMem0(
   }
 
   return JSON.stringify({ erro: "ferramenta_integrador_desconhecida", tool: toolName });
+}
+
+async function executarCrmIntegrador(
+  toolName: string,
+  args: Record<string, unknown>,
+  gcalCtx?: GcalFerramentaContexto
+): Promise<string> {
+  const builtin = CRM_INTEGRADOR_BUILTIN_MAP[toolName as HubIntCrmKey];
+  if (!builtin) {
+    return JSON.stringify({ erro: "ferramenta_crm_desconhecida", chave: toolName });
+  }
+
+  const { executarFerramentaHub } = await import("@/lib/hub/executar-ferramenta-ia");
+  const modoOperacao =
+    gcalCtx?.agenteInterno === true
+      ? "jobs_internos"
+      : gcalCtx?.leadId
+        ? "canal_whatsapp"
+        : gcalCtx?.agenteInterno
+          ? "jobs_internos"
+          : null;
+
+  return executarFerramentaHub(builtin, JSON.stringify(args), {
+    leadId: gcalCtx?.leadId,
+    agenteSlug: gcalCtx?.agenteSlug ?? "",
+    tenantId: gcalCtx?.tenantId,
+    telefoneSessao: gcalCtx?.telefone,
+    modoOperacao,
+    agenteInterno: gcalCtx?.agenteInterno === true,
+    usuarioCrmId: gcalCtx?.usuarioCrmId,
+  });
 }
 
 export async function fetchIntegracaoTenantPorTipo(
@@ -566,6 +641,10 @@ export async function executarFerramentaIntegrador(
     return executarMem0(toolName, args, null, supabase, tenantId, gcalCtx);
   }
 
+  if (ref.integrador.id === WAJE_CRM_INTEGRADOR_ID) {
+    return executarCrmIntegrador(toolName, args, gcalCtx);
+  }
+
   const pack = await fetchIntegracaoTenantPorTipo(supabase, tenantId, ref.integrador.id);
   if (!pack) {
     return JSON.stringify({
@@ -581,9 +660,41 @@ export async function executarFerramentaIntegrador(
     case "google_calendar":
       return executarGoogleCalendar(toolName, args, credenciais, supabase, tenantId, String(integracao.id), gcalCtx);
     case "gmail":
-      return executarGmail(toolName, args, credenciais, supabase, tenantId, String(integracao.id), integracao);
+      return executarGmail(
+        toolName,
+        args,
+        credenciais,
+        supabase,
+        tenantId,
+        String(integracao.id),
+        integracao,
+        gcalCtx
+      );
     case "zendesk":
       return executarZendesk(toolName, args, integracao, credenciais);
+    case "supabase_externo": {
+      const credObj =
+        credenciais?.credenciais && typeof credenciais.credenciais === "object"
+          ? (credenciais.credenciais as Record<string, unknown>)
+          : {};
+      const extCred = credenciaisSupabaseExternoDeRow(credObj);
+      if (!extCred) {
+        return JSON.stringify({
+          erro: "supabase_externo_sem_credenciais",
+          detalhe: "Configure URL e chave API em Integrações → Supabase.",
+        });
+      }
+      if (toolName === HUB_INT_SUPABASE_EXTERNO_CONSULTAR) {
+        return await consultarSupabaseExterno(extCred, {
+          tabela: String(args.tabela ?? ""),
+          colunas: Array.isArray(args.colunas) ? (args.colunas as string[]) : undefined,
+          limite: typeof args.limite === "number" ? args.limite : undefined,
+          filtro_coluna: typeof args.filtro_coluna === "string" ? args.filtro_coluna : undefined,
+          filtro_texto: typeof args.filtro_texto === "string" ? args.filtro_texto : undefined,
+        });
+      }
+      return JSON.stringify({ erro: "ferramenta_supabase_externo_desconhecida", tool: toolName });
+    }
     default:
       return JSON.stringify({ erro: "integrador_nao_implementado", id: ref.integrador.id });
   }

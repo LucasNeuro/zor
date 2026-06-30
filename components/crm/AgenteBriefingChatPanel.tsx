@@ -12,7 +12,11 @@ import {
   type ModoOperacaoAgente,
 } from "@/lib/hub/agente-modo-operacao";
 import { agenteEhPerfilAnalistaCrm } from "@/lib/hub/copiloto-interno-escopo";
-import { isUrlArtefatoApp } from "@/lib/hub/superagente/artefato-public-url";
+import {
+  extrairIdArtefatoDaUrl,
+  isUrlArtefatoApp,
+  pathArtefatoRelativo,
+} from "@/lib/hub/superagente/artefato-public-url";
 import {
   RF_ACCENT,
   RF_BORDER,
@@ -419,10 +423,17 @@ export function AgenteBriefingDrawer({
                               : Array.isArray(m.metadata.urls_publicas)
                                 ? (m.metadata.urls_publicas as string[])
                                 : []) as string[]
-                          ).map((url) => (
+                          ).map((url) => {
+                            const artefatoId = extrairIdArtefatoDaUrl(url);
+                            const href =
+                              artefatoId && typeof window !== "undefined"
+                                ? `${window.location.origin}${pathArtefatoRelativo(artefatoId)}`
+                                : url;
+                            const iframeSrc = artefatoId ? pathArtefatoRelativo(artefatoId) : null;
+                            return (
                             <div key={url} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                               <a
-                                href={url}
+                                href={href}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{
@@ -434,9 +445,9 @@ export function AgenteBriefingDrawer({
                               >
                                 Abrir relatório / canvas →
                               </a>
-                              {isUrlArtefatoApp(url) ? (
+                              {iframeSrc && isUrlArtefatoApp(url) ? (
                                 <iframe
-                                  src={url}
+                                  src={iframeSrc}
                                   title="Relatório gerado pelo superagente"
                                   sandbox="allow-scripts allow-same-origin"
                                   style={{
@@ -450,7 +461,8 @@ export function AgenteBriefingDrawer({
                                 />
                               ) : null}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : null}
                       {!isUser && m.metadata && typeof m.metadata === "object" && m.metadata.modelo ? (

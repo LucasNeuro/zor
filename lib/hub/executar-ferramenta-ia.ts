@@ -34,6 +34,8 @@ export type FerramentaHubContexto = {
   simulacaoCanal?: boolean;
   /** Agente interno (copiloto/ciclo) — permite hub_dados_empresa. */
   agenteInterno?: boolean;
+  /** Utilizador CRM — memória Mem0 do superagente interno. */
+  usuarioCrmId?: string | null;
 };
 
 const FERRAMENTAS_CRM_LEAD_ESCRITA: HubAgenteFerramentaId[] = [
@@ -294,13 +296,20 @@ async function executarFerramentaHubBuiltin(
         return JSON.stringify({ erro: "titulo_e_texto_plano_obrigatorios" });
       }
       const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
-      const tituloEsc = escapeHtml(titulo.slice(0, 240));
       const body = textoPlano
         .slice(0, 50_000)
         .split(/\r?\n/)
         .map((linha) => `<p>${escapeHtml(linha)}</p>`)
         .join("");
-      const html = `<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${tituloEsc}</title><style>body{font-family:system-ui,sans-serif;padding:1.25rem;line-height:1.5;color:#111}h1{font-size:1.25rem}</style></head><body><h1>${tituloEsc}</h1>${body}</body></html>`;
+      const { carregarBrandingAgenteArtefato } = await import("@/lib/hub/superagente/artefato-branding");
+      const { gerarHtmlArtefatoSimples } = await import("@/lib/hub/superagente/artefato-canvas");
+      const { createClient } = await import("@supabase/supabase-js");
+      const dbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+      const dbKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+      if (!dbUrl || !dbKey) return JSON.stringify({ erro: "supabase_nao_configurado" });
+      const db = createClient(dbUrl, dbKey, { auth: { persistSession: false } });
+      const branding = await carregarBrandingAgenteArtefato(db, tenant, ctx.agenteSlug);
+      const html = gerarHtmlArtefatoSimples(titulo, body, branding);
       const { publicarArtefatoHtml } = await import("@/lib/hub/superagente/publicar-artefato-html");
       const pub = await publicarArtefatoHtml(html, {
         titulo,
@@ -459,25 +468,40 @@ async function executarFerramentaHubBuiltin(
       });
     }
     case "hub_atualizar_lead": {
-      if (ctx.modoOperacao !== "canal_whatsapp") {
+      const ehInterno = ctx.agenteInterno === true || ctx.modoOperacao === "jobs_internos";
+      if (!ehInterno && ctx.modoOperacao !== "canal_whatsapp") {
         return JSON.stringify({
           erro: "ferramenta_apenas_modo_atendimento_canal_whatsapp",
           modo_actual: ctx.modoOperacao ?? null,
         });
       }
 
+      const leadIdArg = typeof args.lead_id === "string" ? args.lead_id.trim() : "";
+      const leadId = ehInterno ? leadIdArg || ctx.leadId?.trim() || "" : ctx.leadId?.trim() || "";
+      if (!leadId) {
+        return JSON.stringify({
+          erro: "lead_id_obrigatorio",
+          detalhe: ehInterno
+            ? "Informe lead_id (UUID) obtido com hub_operacao_empresa consultar/obter."
+            : "Sem lead na sessão.",
+        });
+      }
+
+      const tenantId = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+
       const { data: leadAtual, error: errLead } = await supabase
         .from("hub_leads_crm")
         .select(
-          "id, estagio, score, valor_estimado, tags, metadata, preferencias, nome, telefone, interesse_principal"
+          "id, pessoa_id, estagio, score, valor_estimado, tags, metadata, preferencias, nome, telefone, email, interesse_principal, tenant_id"
         )
-        .eq("id", ctx.leadId)
+        .eq("id", leadId)
         .maybeSingle();
 
       if (errLead) return JSON.stringify({ erro: "supabase", detalhe: errLead.message });
-      if (!leadAtual) return JSON.stringify({ erro: "lead_nao_encontrado", lead_id: ctx.leadId });
-
-      const tenantId = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
+      if (!leadAtual) return JSON.stringify({ erro: "lead_nao_encontrado", lead_id: leadId });
+      if (String(leadAtual.tenant_id) !== tenantId) {
+        return JSON.stringify({ erro: "lead_fora_do_tenant" });
+      }
       let estagiosPipeline: { slug: string; tipo_fecho: string }[] = [];
       try {
         const refs = await listarEstagiosPipelineParaIa(supabase, tenantId, "lead");
@@ -496,14 +520,25 @@ async function executarFerramentaHubBuiltin(
       const { data: updated, error: errUp } = await supabase
         .from("hub_leads_crm")
         .update(built.patch)
-        .eq("id", ctx.leadId)
+        .eq("id", leadId)
         .select(
-          "id, nome, estagio, score, valor_estimado, interesse_principal, proxima_acao, data_proxima_acao, tags, atualizado_em"
+          "id, nome, telefone, email, estagio, score, valor_estimado, interesse_principal, proxima_acao, data_proxima_acao, tags, atualizado_em"
         )
         .maybeSingle();
 
       if (errUp) return JSON.stringify({ erro: "supabase", detalhe: errUp.message });
       if (!updated) return JSON.stringify({ erro: "lead_nao_atualizado" });
+
+      const pessoaId =
+        leadAtual.pessoa_id != null && String(leadAtual.pessoa_id).trim()
+          ? String(leadAtual.pessoa_id).trim()
+          : null;
+      if (pessoaId && (built.patch.telefone || built.patch.email)) {
+        const pessoaPatch: Record<string, unknown> = {};
+        if (typeof built.patch.telefone === "string") pessoaPatch.telefone = built.patch.telefone;
+        if (typeof built.patch.email === "string") pessoaPatch.email = built.patch.email;
+        await supabase.from("hub_pessoas").update(pessoaPatch).eq("id", pessoaId);
+      }
 
       if (
         built.estagioNovo &&
@@ -511,7 +546,7 @@ async function executarFerramentaHubBuiltin(
         built.estagioNovo !== built.estagioAnterior
       ) {
         await supabase.from("hub_atividades").insert({
-          lead_id: ctx.leadId,
+          lead_id: leadId,
           tipo: "status_change",
           descricao: `Estágio: ${built.estagioAnterior} → ${built.estagioNovo}`,
           feito_por: ctx.agenteSlug,
@@ -528,7 +563,7 @@ async function executarFerramentaHubBuiltin(
         agente_slug: ctx.agenteSlug,
         tipo: "memoria_salva",
         descricao: "Lead actualizado via hub_atualizar_lead",
-        lead_id: ctx.leadId,
+        lead_id: leadId,
         sucesso: true,
         metadata: {
           ferramenta: "hub_atualizar_lead",
@@ -539,9 +574,12 @@ async function executarFerramentaHubBuiltin(
       return JSON.stringify({
         ok: true,
         lead: updated,
+        lead_id: leadId,
         campos_alterados: Object.keys(built.patch).filter(
           (k) => k !== "atualizado_em" && k !== "ultimo_contato"
         ),
+        instrucao_agente:
+          "Confirme ao utilizador os campos gravados com base neste JSON. Se pedirem para rever, chame hub_operacao_empresa obter com o mesmo lead_id.",
       });
     }
     case "hub_criar_negocio": {
@@ -858,6 +896,10 @@ export async function executarFerramentaHub(
       return executarFerramentaIntegrador(supabase, tenant, toolName, args, {
         leadId: ctx.leadId ?? undefined,
         telefone: ctx.telefoneSessao,
+        agenteSlug: ctx.agenteSlug,
+        agenteInterno: ctx.agenteInterno === true,
+        usuarioCrmId: ctx.usuarioCrmId,
+        tenantId: tenant,
       });
     }
 

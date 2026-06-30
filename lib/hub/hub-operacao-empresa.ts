@@ -50,20 +50,24 @@ const ENTIDADES: Record<OperacaoEmpresaEntidade, EntidadeConfig> = {
       "id",
       "nome",
       "telefone",
+      "email",
       "estagio",
+      "estagio_funil",
       "score",
       "valor_estimado",
       "interesse_principal",
       "agente_responsavel",
       "humano_responsavel",
       "origem",
+      "pessoa_id",
       "criado_em",
       "atualizado_em",
     ],
-    camposCriar: ["nome", "telefone", "estagio", "valor_estimado", "interesse_principal", "origem", "tags"],
+    camposCriar: ["nome", "telefone", "email", "estagio", "valor_estimado", "interesse_principal", "origem", "tags"],
     camposAtualizar: [
       "nome",
       "telefone",
+      "email",
       "estagio",
       "score",
       "valor_estimado",
@@ -414,7 +418,7 @@ export async function executarHubOperacaoEmpresa(
       const { data: leadAtual, error: errLead } = await supabase
         .from("hub_leads_crm")
         .select(
-          "id, estagio, score, valor_estimado, tags, metadata, preferencias, nome, telefone, interesse_principal"
+          "id, pessoa_id, estagio, score, valor_estimado, tags, metadata, preferencias, nome, telefone, email, interesse_principal"
         )
         .eq("id", recordId)
         .eq("tenant_id", tenant)
@@ -446,6 +450,17 @@ export async function executarHubOperacaoEmpresa(
         .eq("id", recordId)
         .eq("tenant_id", tenant);
       if (error) return JSON.stringify({ erro: "supabase", detalhe: error.message });
+
+      const pessoaId =
+        leadAtual.pessoa_id != null && String(leadAtual.pessoa_id).trim()
+          ? String(leadAtual.pessoa_id).trim()
+          : null;
+      if (pessoaId && (built.patch.telefone || built.patch.email)) {
+        const pessoaPatch: Record<string, unknown> = {};
+        if (typeof built.patch.telefone === "string") pessoaPatch.telefone = built.patch.telefone;
+        if (typeof built.patch.email === "string") pessoaPatch.email = built.patch.email;
+        await supabase.from("hub_pessoas").update(pessoaPatch).eq("id", pessoaId);
+      }
 
       await auditar(
         supabase,

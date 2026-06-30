@@ -14,10 +14,10 @@ import {
   agenteRaciocinioAvancadoAtivo,
   mergeUsoFerramentasComPadraoPreservandoCustom,
 } from "@/lib/hub/agente-ferramentas-registry";
-import { extrairESalvarMemoriasAgente, formatarBlocoMemoriasAgente, listarMemoriasAgente } from "@/lib/ia/memoria-agente";
+import { registrarInteracaoPainelAgente } from "@/lib/hub/registrar-interacao-painel";
+import { CRM_ACCESS_COOKIE, fetchAuthUserFromAccessToken } from "@/lib/auth/crm-session";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
 import { formatarLinksArtefactosParaTexto } from "@/lib/hub/superagente/canais-internos";
-import { registrarInteracaoPainelAgente } from "@/lib/hub/registrar-interacao-painel";
 
 function erroBriefingJson(message: string, status: number) {
   return NextResponse.json({ error: mensagemErroBriefingChat(message) }, { status });
@@ -283,12 +283,15 @@ export async function POST(
 
   const historicoParaModelo = historico.slice(0, -1);
 
-  let memoriasAgenteBloco = "";
+  let usuarioCrmId: string | null = null;
   try {
-    const memAgente = await listarMemoriasAgente(supabase, slug, 6);
-    memoriasAgenteBloco = formatarBlocoMemoriasAgente(memAgente);
+    const token = request.cookies.get(CRM_ACCESS_COOKIE)?.value;
+    if (token) {
+      const authUser = await fetchAuthUserFromAccessToken(token);
+      usuarioCrmId = authUser?.id ?? null;
+    }
   } catch {
-    memoriasAgenteBloco = "";
+    usuarioCrmId = null;
   }
 
   let resultado: BriefingChatReplyResult;
@@ -337,13 +340,13 @@ export async function POST(
         snapshot,
         historico: historicoParaModelo,
         mensagemUsuario: textoUser,
-        memoriasAgenteBloco,
         modoOperacao,
         agentReasoningEnabled: agenteRaciocinioAvancadoAtivo(
           mergeUsoFerramentasComPadraoPreservandoCustom(agente.uso_ferramentas_ia)
         ),
         supabase,
         tenantId: typeof agente.tenant_id === "string" ? agente.tenant_id : null,
+        usuarioCrmId,
       });
     }
   } catch (e) {
@@ -381,17 +384,6 @@ export async function POST(
         motor: resultado.motor ?? "llm_prompt",
       },
     });
-  }
-
-  try {
-    await extrairESalvarMemoriasAgente(supabase, {
-      agenteSlug: slug,
-      mensagemUsuario: textoUser,
-      respostaIA: resultado.texto,
-      origem: "briefing",
-    });
-  } catch {
-    /* hub_memorias_agente opcional até migração aplicada */
   }
 
   try {

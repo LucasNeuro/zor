@@ -4,6 +4,16 @@
  */
 
 import type { MistralChatToolDefinition } from "@/lib/ia/mistral-chat-tools";
+import { MEM0_BUSCAR_KEY, MEM0_SUPER_MEMORIA_KEY } from "@/lib/hub/mem0-constants";
+import {
+  FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR,
+  HUB_INT_CRM_ATUALIZAR_LEAD,
+  HUB_INT_CRM_CONSULTAR,
+  HUB_INT_CRM_CRIAR_NEGOCIO,
+  HUB_INT_CRM_OPERAR,
+  HUB_INT_CRM_REGISTAR_NOTA,
+  sincronizarUsoCrmIntegrador,
+} from "@/lib/hub/crm-integrador-constants";
 
 export type HubFerramentaCategoria = "cliente" | "analise" | "registos" | "empresa";
 
@@ -296,7 +306,7 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
     mistralFunction: {
       name: "hub_superagente_artefato",
       description:
-        "Cria página HTML com gráficos Chart.js reais. Devolve url_publica em /artefato/{id} no domínio da app (synkronia.com.br). Nunca invente outro domínio.",
+        "Cria relatório canvas com UI Synkron.IA (avatar e nome do agente), tabelas e gráficos Chart.js. Inclua seções tipo grafico; tabelas com valores numéricos ganham gráfico automático. Devolve url_publica em /artefato/{id}.",
       parameters: {
         type: "object",
         properties: {
@@ -371,7 +381,16 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
             minimum: 0,
           },
           nome: { type: "string", description: "Nome completo se o cliente informou." },
+          telefone: {
+            type: "string",
+            description: "Telefone com DDD (só dígitos ou formatado). Grava em hub_leads_crm.",
+          },
           email: { type: "string", description: "E-mail se informado." },
+          lead_id: {
+            type: "string",
+            description:
+              "UUID do lead (obrigatório no copiloto interno / superagente). No WhatsApp omita — usa o lead da conversa.",
+          },
           interesse_principal: {
             type: "string",
             description: "Resumo curto do interesse (ex.: reforma cozinha, apto 3 quartos).",
@@ -603,6 +622,7 @@ export function ferramentasMistralParaAgente(
   }> = [];
   for (const item of HUB_AGENTE_FERRAMENTAS_CATALOGO) {
     if (item.metaCapacidade || !item.mistralFunction) continue;
+    if ((FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR as readonly string[]).includes(item.id)) continue;
     if (uso[item.id] === true) {
       out.push({ type: "function", function: item.mistralFunction });
     }
@@ -655,7 +675,7 @@ export function mergeUsoFerramentasComPadraoPreservandoCustom(raw: unknown): Rec
   const custom = extrairUsoFerramentasCustomIa(raw);
   const ext = extrairUsoFerramentasExtIa(raw);
   const integ = extrairUsoFerramentasIntIa(raw);
-  return { ...base, ...custom, ...ext, ...integ };
+  return sincronizarUsoCrmIntegrador({ ...base, ...custom, ...ext, ...integ });
 }
 
 export type FerramentaCustomDefMistral = {
@@ -678,6 +698,7 @@ export function ferramentasMistralListaParaAgente(
   const out: MistralChatToolDefinition[] = [];
   for (const item of HUB_AGENTE_FERRAMENTAS_CATALOGO) {
     if (item.metaCapacidade || !item.mistralFunction) continue;
+    if ((FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR as readonly string[]).includes(item.id)) continue;
     if (uso[item.id] === true) {
       out.push({ type: "function", function: item.mistralFunction });
     }
@@ -781,6 +802,16 @@ export function mergeUsoFerramentasWhatsappCanal(
     if (coalesceFerramentaBool(uso.hub_registar_nota_lead) !== false) merged.hub_registar_nota_lead = true;
     if (coalesceFerramentaBool(uso.hub_criar_negocio) !== false) merged.hub_criar_negocio = true;
 
+    if (coalesceFerramentaBool(uso[HUB_INT_CRM_ATUALIZAR_LEAD]) !== false) {
+      merged[HUB_INT_CRM_ATUALIZAR_LEAD] = true;
+    }
+    if (coalesceFerramentaBool(uso[HUB_INT_CRM_REGISTAR_NOTA]) !== false) {
+      merged[HUB_INT_CRM_REGISTAR_NOTA] = true;
+    }
+    if (coalesceFerramentaBool(uso[HUB_INT_CRM_CRIAR_NEGOCIO]) !== false) {
+      merged[HUB_INT_CRM_CRIAR_NEGOCIO] = true;
+    }
+
     // Google Workspace (agenda + e-mail) — activo por defeito em agentes de canal salvo desligado.
     if (coalesceFerramentaBool(uso.hub_int_gmail_enviar) !== false) merged.hub_int_gmail_enviar = true;
     if (coalesceFerramentaBool(uso.hub_int_gcal_criar_evento) !== false) {
@@ -801,7 +832,8 @@ export function mergeUsoFerramentasWhatsappCanal(
 }
 
 /**
- * Agentes internos (jobs_internos): dados da empresa + integrações; sem pacote WhatsApp/lead.
+ * Agentes internos (jobs_internos): respeita só o que está gravado em uso_ferramentas_ia.
+ * Defaults completos ficam no wizard (`pacoteUsoFerramentasSuperagenteInterno`), não aqui.
  */
 export function mergeUsoFerramentasJobsInternos(
   uso: Partial<Record<string, boolean>>,
@@ -813,64 +845,32 @@ export function mergeUsoFerramentasJobsInternos(
     return merged;
   }
 
-  if (coalesceFerramentaBool(uso.hub_dados_empresa) !== false) merged.hub_dados_empresa = true;
-  if (coalesceFerramentaBool(uso.hub_operacao_empresa) !== false) merged.hub_operacao_empresa = true;
-  if (coalesceFerramentaBool(uso.hub_metricas_escritorio) !== false) merged.hub_metricas_escritorio = true;
-  if (coalesceFerramentaBool(uso.hub_raciocinio_avancado) !== false) merged.hub_raciocinio_avancado = true;
-
-  if (coalesceFerramentaBool(uso.hub_int_gcal_listar_eventos) !== false) {
-    merged.hub_int_gcal_listar_eventos = true;
-  }
-  if (coalesceFerramentaBool(uso.hub_int_gcal_listar_reservas_lead) !== false) {
-    merged.hub_int_gcal_listar_reservas_lead = true;
-  }
-
-  if (coalesceFerramentaBool(uso.hub_relatorio_html_simples) !== false) merged.hub_relatorio_html_simples = true;
-  if (coalesceFerramentaBool(uso.hub_superagente_dados) !== false) merged.hub_superagente_dados = true;
-  if (coalesceFerramentaBool(uso.hub_superagente_artefato) !== false) merged.hub_superagente_artefato = true;
-  if (coalesceFerramentaBool(uso.hub_mistral_percepcao) !== false) merged.hub_mistral_percepcao = true;
-
-  merged.hub_lead_resumo = coalesceFerramentaBool(uso.hub_lead_resumo) === true;
-  merged.hub_lead_memorias = coalesceFerramentaBool(uso.hub_lead_memorias) === true;
-  merged.hub_lead_lookup_por_telefone = coalesceFerramentaBool(uso.hub_lead_lookup_por_telefone) === true;
-  merged.hub_atualizar_lead = coalesceFerramentaBool(uso.hub_atualizar_lead) === true;
-  merged.hub_criar_negocio = coalesceFerramentaBool(uso.hub_criar_negocio) === true;
-  merged.hub_registar_nota_lead = coalesceFerramentaBool(uso.hub_registar_nota_lead) === true;
-  merged.hub_whatsapp_menu = coalesceFerramentaBool(uso.hub_whatsapp_menu) === true;
-
-  return merged;
+  return sincronizarUsoCrmIntegrador(merged);
 }
 
-/** Ferramentas sempre activas em agentes internos (funcionário IA / superagente). */
-export const HUB_FERRAMENTAS_FUNCIONARIO_IA_OBRIGATORIAS: HubAgenteFerramentaId[] = [
-  "hub_operacao_empresa",
-  "hub_dados_empresa",
-  "hub_metricas_escritorio",
-  "hub_raciocinio_avancado",
-  "hub_relatorio_html_simples",
-  "hub_superagente_dados",
-  "hub_superagente_artefato",
-];
+/** @deprecated Nenhuma ferramenta é forçada na UI — o gestor activa/desactiva livremente. */
+export const HUB_FERRAMENTAS_FUNCIONARIO_IA_OBRIGATORIAS: HubAgenteFerramentaId[] = [];
 
-export function ferramentaObrigatoriaFuncionarioIa(id: string): boolean {
-  return (HUB_FERRAMENTAS_FUNCIONARIO_IA_OBRIGATORIAS as readonly string[]).includes(id);
+export function ferramentaObrigatoriaFuncionarioIa(_id: string): boolean {
+  return false;
 }
 
-/** Pacote completo para assistente interno / superagente (wizard e CRM). */
+/** Pacote inicial ao criar funcionário IA no wizard (tudo ligado por defeito; editável depois). */
 export function pacoteUsoFerramentasSuperagenteInterno(): Record<string, boolean> {
-  return mergeUsoFerramentasJobsInternos(
-    {
-      hub_operacao_empresa: true,
-      hub_dados_empresa: true,
-      hub_metricas_escritorio: true,
-      hub_raciocinio_avancado: true,
-      hub_relatorio_html_simples: true,
-      hub_superagente_dados: true,
-      hub_superagente_artefato: true,
-      hub_mistral_percepcao: true,
-    },
-    "jobs_internos"
-  );
+  return {
+    [HUB_INT_CRM_CONSULTAR]: true,
+    [HUB_INT_CRM_OPERAR]: true,
+    [HUB_INT_CRM_ATUALIZAR_LEAD]: true,
+    [HUB_INT_CRM_REGISTAR_NOTA]: true,
+    [HUB_INT_CRM_CRIAR_NEGOCIO]: true,
+    hub_metricas_escritorio: true,
+    hub_raciocinio_avancado: true,
+    hub_relatorio_html_simples: true,
+    hub_superagente_artefato: true,
+    hub_mistral_percepcao: true,
+    [MEM0_SUPER_MEMORIA_KEY]: true,
+    [MEM0_BUSCAR_KEY]: true,
+  };
 }
 
 /** Escolhe defaults de ferramentas conforme modo_operacao do agente. */

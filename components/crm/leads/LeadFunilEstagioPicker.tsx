@@ -3,8 +3,14 @@
 import {
   CrmSideoverActionBtn,
   CrmSideoverActionGroup,
+<<<<<<< HEAD
 } from "@/components/crm/CrmSideoverActionGroup";
 import { RF_LIGHT_TEXT_MUTED, RF_TEXT_MUTED, type CrmSideoverTheme } from "@/lib/crm/crm-retrofit-dark-theme";
+=======
+  type CrmSideoverTheme,
+} from "@/components/crm/CrmSideoverActionGroup";
+import { RF_LIGHT_TEXT_MUTED, RF_TEXT_MUTED } from "@/lib/crm/crm-retrofit-dark-theme";
+>>>>>>> cd2a919fbad5b416254771deb318fa71c2b90dea
 
 export type LeadFunilEstagioUi = {
   id: string;

@@ -1,0 +1,15 @@
+<svg width="109" height="113" viewBox="0 0 109 113" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Supabase">
+  <path d="M63.7076 110.284C60.8481 113.885 55.0502 111.912 55.0502 107.314V82.8026H97.7656C101.745 82.8026 103.965 87.0466 101.809 90.4746L63.7076 110.284Z" fill="url(#supabase_paint0)"/>
+  <path d="M63.7076 2.71564C60.8481 -0.885364 55.0502 1.08764 55.0502 5.68564V30.1971H97.7656C101.745 30.1971 103.965 25.9531 101.809 22.5251L63.7076 2.71564Z" fill="url(#supabase_paint1)" fill-opacity="0.2"/>
+  <path d="M45.1424 0H11.0502C4.94642 0 0.0501709 4.89625 0.0501709 11V102C0.0501709 108.104 4.94642 113 11.0502 113H45.1424C51.2462 113 56.1424 108.104 56.1424 102V11C56.1424 4.89625 51.2462 0 45.1424 0Z" fill="#3ECF8E"/>
+  <defs>
+    <linearGradient id="supabase_paint0" x1="53.9738" y1="54.974" x2="94.1635" y2="71.8295" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#249361"/>
+      <stop offset="1" stop-color="#3ECF8E"/>
+    </linearGradient>
+    <linearGradient id="supabase_paint1" x1="36.1558" y1="9.01613" x2="54.4844" y2="42.7738" gradientUnits="userSpaceOnUse">
+      <stop/>
+      <stop offset="1" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+</svg>

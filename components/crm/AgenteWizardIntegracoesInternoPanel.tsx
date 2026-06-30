@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { IntegracaoAmbienteStatus } from "@/app/api/hub/integradores/route";
 import { AgenteGoogleWorkspaceBlock } from "@/components/crm/AgenteGoogleWorkspaceBlock";
+import { AgenteSupabaseCrmBlock } from "@/components/crm/AgenteSupabaseCrmBlock";
 import { AgenteMistralBlock } from "@/components/crm/AgenteMistralBlock";
 import { IntegracaoMarcaIcon, type IntegracaoMarcaIconVariant } from "@/components/crm/IntegracaoMarcaIcon";
 import type { IntegradorCatalogoEntry } from "@/lib/hub/integradores-catalogo";
@@ -35,6 +36,7 @@ function integradorIconVariant(id: string): IntegracaoMarcaIconVariant | null {
   if (id === "google_calendar") return "google-calendar";
   if (id === "mistral") return "mistral";
   if (id === "mem0") return "mem0";
+  if (id === "waje_crm" || id === "supabase_externo") return "supabase";
   if (id === "google_docs") return "google";
   return null;
 }
@@ -100,6 +102,15 @@ export function AgenteWizardIntegracoesInternoPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <AgenteSupabaseCrmBlock
+        agenteSlug={agenteSlug}
+        agenteNome={agenteNome}
+        layout="painel"
+        modoInterno
+        usoFerramentas={uso}
+        onUsoChange={onUsoChange}
+      />
+
       <AgenteGoogleWorkspaceBlock
         agenteSlug={agenteSlug}
         agenteNome={agenteNome}

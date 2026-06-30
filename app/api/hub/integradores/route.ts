@@ -122,6 +122,16 @@ export async function GET(request: NextRequest) {
       };
       continue;
     }
+    if (entry.id === "waje_crm") {
+      conexoes[entry.id] = {
+        hub_id: "",
+        configurado: true,
+        ativo: true,
+        plataforma_ok: true,
+        oauth_email: null,
+      };
+      continue;
+    }
     const row = (rows ?? []).find((r) => r.integracao_id === entry.id);
     if (!row) {
       conexoes[entry.id] = { hub_id: "", configurado: false, ativo: false, oauth_email: null };
@@ -154,6 +164,15 @@ export async function GET(request: NextRequest) {
       configurado =
         (credObj._enc === true && typeof credObj.access_token === "string" && Boolean(credObj.access_token)) ||
         Boolean(typeof credObj.bearer_token === "string" && credObj.bearer_token);
+    } else if (entry.id === "supabase_externo") {
+      const url =
+        typeof credObj.project_url === "string"
+          ? credObj.project_url.trim()
+          : typeof credObj.url === "string"
+            ? credObj.url.trim()
+            : "";
+      const key = typeof credObj.api_key === "string" ? credObj.api_key.trim() : "";
+      configurado = Boolean(url && key);
     } else {
       configurado = Boolean(typeof credObj.bearer_token === "string" && credObj.bearer_token);
     }

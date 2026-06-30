@@ -62,6 +62,21 @@ function integracaoConfigurada(
     return mem0PlataformaConfigurada();
   }
 
+  if (integracaoId === "waje_crm") {
+    return true;
+  }
+
+  if (integracaoId === "supabase_externo") {
+    const url =
+      typeof credObj.project_url === "string"
+        ? credObj.project_url.trim()
+        : typeof credObj.url === "string"
+          ? credObj.url.trim()
+          : "";
+    const key = typeof credObj.api_key === "string" ? credObj.api_key.trim() : "";
+    return Boolean(url && key);
+  }
+
   return credenciaisIntegradorProntas(integracaoId, credObj);
 }
 
@@ -82,6 +97,13 @@ export async function ferramentasIntegradorAtivasParaTenant(
   for (const entry of HUB_INTEGRADORES_CATALOGO) {
     if (entry.id === "mem0") {
       if (!mem0PlataformaConfigurada()) continue;
+      for (const f of entry.ferramentas) {
+        if (f.exportarMistral === false) continue;
+        out.push(ferramentaIntegradorParaMistral(entry.id, f));
+      }
+      continue;
+    }
+    if (entry.id === "waje_crm") {
       for (const f of entry.ferramentas) {
         if (f.exportarMistral === false) continue;
         out.push(ferramentaIntegradorParaMistral(entry.id, f));

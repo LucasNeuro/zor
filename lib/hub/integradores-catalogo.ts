@@ -12,9 +12,11 @@ export type HubIntegradorId =
   | "google_ads"
   | "ga4"
   | "mem0"
-  | "mistral";
+  | "mistral"
+  | "waje_crm"
+  | "supabase_externo";
 
-export type IntegradorAuthModo = "bearer" | "api_key" | "zendesk" | "none";
+export type IntegradorAuthModo = "bearer" | "api_key" | "zendesk" | "supabase" | "none";
 
 export type IntegradorFerramentaDef = {
   ferramenta_key: string;
@@ -161,7 +163,7 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
         titulo: "Enviar e-mail",
         descricao_curta: "Envia e-mail via Gmail API.",
         descricao_modelo:
-          "Usa quando o utilizador pedir para enviar e-mail, confirmar por correio ou notificar alguém por Gmail. Exige destinatário, assunto e corpo. Confirme o e-mail exato (ex.: hotmail.com, não hotmail.com.br salvo se o cliente disser .com.br).",
+          "Usa quando o utilizador pedir para enviar e-mail, confirmar por correio ou notificar alguém por Gmail. Exige destinatário, assunto e corpo em texto simples (pode usar **negrito** e listas com -). Não envie HTML — a plataforma aplica automaticamente a marca Waje e a assinatura do agente IA. Confirme o e-mail exato (ex.: hotmail.com, não hotmail.com.br salvo se o cliente disser .com.br).",
         politica: "escrita",
         parametros_schema: {
           type: "object",
@@ -353,6 +355,170 @@ export const HUB_INTEGRADORES_CATALOGO: IntegradorCatalogoEntry[] = [
             pergunta: { type: "string" },
           },
           required: ["modo"],
+          additionalProperties: false,
+        },
+      },
+    ],
+  },
+  {
+    id: "waje_crm",
+    nome: "Base de dados CRM (Supabase)",
+    descricao:
+      "Leitura e escrita no CRM do tenant (leads, negócios, financeiro, KPIs) via views vw_rel_* e operações validadas — sem SQL livre. Credencial da plataforma.",
+    categoria: "agente",
+    authModo: "none",
+    authLabels: {
+      principal: "Base de dados do tenant",
+      principalPlaceholder: "Ligada automaticamente — não requer OAuth",
+    },
+    ferramentas: [
+      {
+        ferramenta_key: "hub_int_crm_consultar",
+        titulo: "Consultar dados do CRM",
+        descricao_curta: "Views vw_rel_* — leads, negócios, financeiro, KPIs (só leitura).",
+        descricao_modelo:
+          "Use SEMPRE antes de afirmar factos sobre clientes, valores ou listas. Acções: catalogar (lista views) ou consultar (view + filtros). Ex.: vw_rel_leads_enriquecidos com filtro_texto=Mateus.",
+        politica: "leitura",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            acao: {
+              type: "string",
+              enum: ["catalogar", "consultar"],
+              description: "catalogar lista views; consultar executa query",
+            },
+            view: { type: "string", description: "Id vw_rel_* para consultar" },
+            colunas: { type: "array", items: { type: "string" } },
+            limite: { type: "integer", minimum: 1, maximum: 80 },
+            filtro_coluna: { type: "string" },
+            filtro_texto: { type: "string" },
+            categoria: { type: "string", description: "Filtrar catálogo: comercial, financeiro, etc." },
+          },
+          required: ["acao"],
+          additionalProperties: false,
+        },
+      },
+      {
+        ferramenta_key: "hub_int_crm_operar",
+        titulo: "Operações CRM (criar, actualizar, notas)",
+        descricao_curta: "CRUD validado — leads, negócios, contas, KPIs (agentes internos).",
+        descricao_modelo:
+          "Opera o CRM da empresa. Acções: listar_entidades | consultar | obter | criar | atualizar | nota. Confirme com o utilizador antes de gravar; só afirme sucesso com ok:true; releia com obter depois.",
+        politica: "escrita",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            acao: {
+              type: "string",
+              enum: ["listar_entidades", "consultar", "obter", "criar", "atualizar", "nota"],
+            },
+            entidade: { type: "string" },
+            id: { type: "string", description: "UUID — obrigatório em obter e atualizar" },
+            dados: { type: "object", additionalProperties: true },
+            view: { type: "string" },
+            colunas: { type: "array", items: { type: "string" } },
+            limite: { type: "integer", minimum: 1, maximum: 50 },
+            filtro_coluna: { type: "string" },
+            filtro_texto: { type: "string" },
+            arquivar: { type: "boolean" },
+          },
+          required: ["acao"],
+          additionalProperties: false,
+        },
+      },
+      {
+        ferramenta_key: "hub_int_crm_atualizar_lead",
+        titulo: "Actualizar ficha do lead",
+        descricao_curta: "Telefone, e-mail, estágio, score e metadata do cliente.",
+        descricao_modelo:
+          "Actualiza hub_leads_crm. No copiloto interno passe lead_id (UUID). No WhatsApp omita lead_id. Confirme alterações com o utilizador antes de gravar; só confirme sucesso após ok:true.",
+        politica: "escrita",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            lead_id: { type: "string", description: "UUID do lead (obrigatório no copiloto interno)" },
+            nome: { type: "string" },
+            telefone: { type: "string" },
+            email: { type: "string" },
+            estagio: { type: "string" },
+            score: { type: "integer", minimum: 0, maximum: 100 },
+            valor_estimado: { type: "number", minimum: 0 },
+            interesse_principal: { type: "string" },
+            proxima_acao: { type: "string" },
+            data_proxima_acao: { type: "string" },
+            tags_adicionar: { type: "array", items: { type: "string" } },
+            metadata: { type: "object", additionalProperties: true },
+          },
+          additionalProperties: false,
+        },
+      },
+      {
+        ferramenta_key: "hub_int_crm_registar_nota",
+        titulo: "Registar nota na timeline",
+        descricao_curta: "Nota factual na linha do tempo do lead.",
+        descricao_modelo: "Regista nota na timeline do lead (sem apagar dados). Texto breve e factual.",
+        politica: "escrita",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            texto: { type: "string", description: "Conteúdo da nota" },
+          },
+          required: ["texto"],
+          additionalProperties: false,
+        },
+      },
+      {
+        ferramenta_key: "hub_int_crm_criar_negocio",
+        titulo: "Criar negócio / orçamento",
+        descricao_curta: "Negócio comercial para o lead da sessão.",
+        descricao_modelo:
+          "Cria negócio no CRM para o lead desta conversa. Informe servico_nome ou servico_catalogo_id e valor_estimado em BRL.",
+        politica: "escrita",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            servico_nome: { type: "string" },
+            servico_catalogo_id: { type: "string" },
+            titulo: { type: "string" },
+            valor_estimado: { type: "number" },
+            etapa: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      },
+    ],
+  },
+  {
+    id: "supabase_externo",
+    nome: "Supabase externo",
+    descricao:
+      "Liga outro projecto Supabase do cliente (URL + chave) para o agente consultar tabelas/views e comparar com o CRM Waje. Só leitura na base externa.",
+    categoria: "agente",
+    authModo: "supabase",
+    authLabels: {
+      principal: "URL do projecto Supabase",
+      principalPlaceholder: "https://xxxx.supabase.co",
+      extra: "Chave API (service_role ou anon)",
+      extraPlaceholder: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…",
+    },
+    ferramentas: [
+      {
+        ferramenta_key: "hub_int_supabase_externo_consultar",
+        titulo: "Consultar base Supabase externa",
+        descricao_curta: "Leitura em tabelas/views do projecto ligado (comparar com CRM Waje).",
+        descricao_modelo:
+          "Consulta dados do Supabase externo configurado pelo tenant. Só leitura. Use para comparar com vw_rel_* do Waje antes de actualizar o CRM. Parâmetro tabela obrigatório.",
+        politica: "leitura",
+        parametros_schema: {
+          type: "object",
+          properties: {
+            tabela: { type: "string", description: "Nome da tabela ou view pública" },
+            colunas: { type: "array", items: { type: "string" } },
+            limite: { type: "integer", minimum: 1, maximum: 50 },
+            filtro_coluna: { type: "string" },
+            filtro_texto: { type: "string" },
+          },
+          required: ["tabela"],
           additionalProperties: false,
         },
       },

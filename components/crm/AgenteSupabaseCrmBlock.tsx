@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { ChevronRight, Loader2, Plug, Unplug } from "lucide-react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { ChevronRight, Eye, EyeOff, Loader2, Plug, Unplug } from "lucide-react";
 import { CrmIntegracaoSideoverShell } from "@/components/crm/AgenteUazapiBlock";
 import { IntegracaoMarcaIcon } from "@/components/crm/IntegracaoMarcaIcon";
 import { BRAND_GREEN_BRIGHT, BRAND_TEXT_DARK } from "@/lib/brand";
@@ -33,13 +33,169 @@ export type AgenteSupabaseCrmBlockProps = {
 };
 
 type StatusPayload = {
-  waje_crm?: { configurado?: boolean; project_url_mascarado?: string | null };
+  waje_crm?: { configurado?: boolean; project_host_mascarado?: string | null };
   supabase_externo?: {
     configurado?: boolean;
+    project_host_mascarado?: string | null;
     project_host?: string | null;
     rotulo?: string | null;
   };
 };
+
+function CampoSegredoComOlho({
+  label,
+  value,
+  onChange,
+  mostrar,
+  onToggleMostrar,
+  placeholder,
+  inputClassName,
+  inputStyle,
+  labelColor,
+  autoComplete,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  mostrar: boolean;
+  onToggleMostrar: () => void;
+  placeholder?: string;
+  inputClassName: string;
+  inputStyle: CSSProperties;
+  labelColor: string;
+  autoComplete?: string;
+}) {
+  const labelStyle: CSSProperties = {
+    fontSize: 11,
+    fontWeight: 700,
+    color: labelColor,
+    display: "block",
+    marginBottom: 4,
+  };
+
+  const inputType = mostrar ? "text" : "password";
+
+  return (
+    <label style={{ display: "block", marginBottom: 10 }}>
+      <span style={labelStyle}>{label}</span>
+      <div style={{ position: "relative" }}>
+        <input
+          type={inputType}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputClassName}
+          style={{ ...inputStyle, paddingRight: 40 }}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+        />
+        <button
+          type="button"
+          onClick={onToggleMostrar}
+          aria-label={mostrar ? "Ocultar" : "Mostrar"}
+          title={mostrar ? "Ocultar" : "Mostrar"}
+          style={{
+            position: "absolute",
+            right: 8,
+            top: "50%",
+            transform: "translateY(-50%)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 4,
+            border: "none",
+            background: "transparent",
+            color: RF_TEXT_MUTED,
+            cursor: "pointer",
+          }}
+        >
+          {mostrar ? <EyeOff size={16} strokeWidth={2} /> : <Eye size={16} strokeWidth={2} />}
+        </button>
+      </div>
+    </label>
+  );
+}
+
+function CampoTextoComOlho({
+  label,
+  value,
+  onChange,
+  mostrar,
+  onToggleMostrar,
+  placeholder,
+  inputClassName,
+  inputStyle,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  mostrar: boolean;
+  onToggleMostrar: () => void;
+  placeholder?: string;
+  inputClassName: string;
+  inputStyle: CSSProperties;
+  labelColor: string;
+}) {
+  return (
+    <CampoSegredoComOlho
+      label={label}
+      value={value}
+      onChange={onChange}
+      mostrar={mostrar}
+      onToggleMostrar={onToggleMostrar}
+      placeholder={placeholder}
+      inputClassName={inputClassName}
+      inputStyle={inputStyle}
+      labelColor={labelColor}
+      autoComplete="off"
+    />
+  );
+}
+
+function ValorSensivelComOlho({
+  mascarado,
+  revelado,
+  revelar,
+  onToggle,
+  mutedColor,
+  titleColor,
+  prefixo,
+}: {
+  mascarado: string;
+  revelado?: string | null;
+  revelar: boolean;
+  onToggle: () => void;
+  mutedColor: string;
+  titleColor: string;
+  prefixo?: ReactNode;
+}) {
+  const texto = revelar && revelado ? revelado : mascarado;
+
+  return (
+    <p style={{ margin: "0 0 12px", fontSize: 12, color: mutedColor, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      {prefixo}
+      <strong style={{ color: titleColor, fontFamily: "ui-monospace, monospace", fontSize: 11 }}>{texto}</strong>
+      {revelado ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={revelar ? "Ocultar projecto" : "Mostrar projecto"}
+          title={revelar ? "Ocultar projecto" : "Mostrar projecto"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: 2,
+            border: "none",
+            background: "transparent",
+            color: mutedColor,
+            cursor: "pointer",
+          }}
+        >
+          {revelar ? <EyeOff size={14} strokeWidth={2} /> : <Eye size={14} strokeWidth={2} />}
+        </button>
+      ) : null}
+    </p>
+  );
+}
 
 function supabaseBadge(ligado: boolean, dark: boolean): { bg: string; fg: string; rotulo: string } {
   if (ligado) {
@@ -73,6 +229,10 @@ export function AgenteSupabaseCrmBlock({
   const [projectUrl, setProjectUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [rotulo, setRotulo] = useState("Supabase externo");
+  const [mostrarUrl, setMostrarUrl] = useState(false);
+  const [mostrarChaveApi, setMostrarChaveApi] = useState(false);
+  const [revelarHostExterno, setRevelarHostExterno] = useState(false);
+  const [hostExternoRevelado, setHostExternoRevelado] = useState<string | null>(null);
 
   const wajeOk = status?.waje_crm?.configurado !== false;
   const externoOk = status?.supabase_externo?.configurado === true;
@@ -109,6 +269,11 @@ export function AgenteSupabaseCrmBlock({
       const data = (await res.json().catch(() => ({}))) as StatusPayload;
       setStatus(data);
       if (data.supabase_externo?.rotulo) setRotulo(data.supabase_externo.rotulo);
+      if (data.supabase_externo?.project_host) {
+        setHostExternoRevelado(data.supabase_externo.project_host);
+      } else if (!data.supabase_externo?.configurado) {
+        setHostExternoRevelado(null);
+      }
     } catch (e) {
       setStatus(null);
       const msg = e instanceof Error ? e.message : "";
@@ -142,10 +307,16 @@ export function AgenteSupabaseCrmBlock({
           rotulo: rotulo.trim(),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        project_host?: string;
+      };
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Falha ao ligar Supabase externo.");
       }
+      if (data.project_host) setHostExternoRevelado(data.project_host);
+      setRevelarHostExterno(false);
       setApiKey("");
       await refreshStatus();
     } catch (e) {
@@ -173,6 +344,8 @@ export function AgenteSupabaseCrmBlock({
         throw new Error(data.error || "Falha ao desligar.");
       }
       onUsoChange?.(HUB_INT_SUPABASE_EXTERNO_CONSULTAR, false);
+      setHostExternoRevelado(null);
+      setRevelarHostExterno(false);
       await refreshStatus();
     } catch (e) {
       setErro(mensagemUsuario(e instanceof Error ? e.message : "Erro ao desligar."));
@@ -231,9 +404,7 @@ export function AgenteSupabaseCrmBlock({
               Base CRM Waje (Supabase)
             </p>
             <p style={{ margin: "4px 0 0", fontSize: 11, color: formBody }}>
-              {wajeOk
-                ? `Ligada · ${status?.waje_crm?.project_url_mascarado ?? "projecto da plataforma"}`
-                : "Projecto Supabase da plataforma Waje"}
+              {wajeOk ? "Ligada · base da plataforma Waje" : "Projecto Supabase da plataforma Waje"}
             </p>
           </div>
           <span
@@ -269,10 +440,25 @@ export function AgenteSupabaseCrmBlock({
         </p>
         {externoOk ? (
           <>
-            <p style={{ margin: "0 0 12px", fontSize: 12, color: formBody }}>
-              Ligado a <strong>{status?.supabase_externo?.project_host}</strong>
-              {status?.supabase_externo?.rotulo ? ` · ${status.supabase_externo.rotulo}` : ""}
-            </p>
+            <ValorSensivelComOlho
+              mascarado={status?.supabase_externo?.project_host_mascarado ?? "••••••.supabase.co"}
+              revelado={hostExternoRevelado}
+              revelar={revelarHostExterno}
+              onToggle={() => setRevelarHostExterno((v) => !v)}
+              mutedColor={formBody}
+              titleColor={formTitle}
+              prefixo={
+                <>
+                  Ligado a{" "}
+                  {status?.supabase_externo?.rotulo ? (
+                    <>
+                      <strong>{status.supabase_externo.rotulo}</strong>
+                      {" · "}
+                    </>
+                  ) : null}
+                </>
+              }
+            />
             <button type="button" style={btnPrimary} disabled={busy} onClick={() => void desligarExterno()}>
               {busy ? <Loader2 size={16} className="animate-spin" /> : <Unplug size={16} />}
               Desligar base externa
@@ -293,29 +479,29 @@ export function AgenteSupabaseCrmBlock({
                 placeholder="Ex.: ERP legado"
               />
             </label>
-            <label style={{ display: "block", marginBottom: 10 }}>
-              <span style={formLabel}>URL do projecto</span>
-              <input
-                value={projectUrl}
-                onChange={(e) => setProjectUrl(e.target.value)}
-                className={inputClassName}
-                style={fieldInputStyle()}
-                placeholder="https://xxxx.supabase.co"
-                autoComplete="off"
-              />
-            </label>
-            <label style={{ display: "block", marginBottom: 12 }}>
-              <span style={formLabel}>Chave API</span>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className={inputClassName}
-                style={fieldInputStyle()}
-                placeholder="service_role ou anon"
-                autoComplete="new-password"
-              />
-            </label>
+            <CampoTextoComOlho
+              label="URL do projecto"
+              value={projectUrl}
+              onChange={setProjectUrl}
+              mostrar={mostrarUrl}
+              onToggleMostrar={() => setMostrarUrl((v) => !v)}
+              placeholder="https://xxxx.supabase.co"
+              inputClassName={inputClassName}
+              inputStyle={fieldInputStyle()}
+              labelColor={formMuted}
+            />
+            <CampoSegredoComOlho
+              label="Chave API"
+              value={apiKey}
+              onChange={setApiKey}
+              mostrar={mostrarChaveApi}
+              onToggleMostrar={() => setMostrarChaveApi((v) => !v)}
+              placeholder="service_role ou anon"
+              inputClassName={inputClassName}
+              inputStyle={fieldInputStyle()}
+              labelColor={formMuted}
+              autoComplete="new-password"
+            />
             <button
               type="button"
               style={btnPrimary}
@@ -408,7 +594,7 @@ export function AgenteSupabaseCrmBlock({
   }
 
   const subtituloCard = externoOk
-    ? `CRM Waje · + externo ${status?.supabase_externo?.project_host ?? ""}`
+    ? "CRM Waje · + base externa ligada"
     : "CRM Waje · Supabase da plataforma";
 
   return (
@@ -477,16 +663,6 @@ export function AgenteSupabaseCrmBlock({
                     {carregando ? "…" : badge.rotulo}
                   </span>
                 </p>
-                {wajeOk && status?.waje_crm?.project_url_mascarado ? (
-                  <p style={{ margin: "6px 0 0", color: mutedColor, fontSize: 11 }}>
-                    Projecto: <strong style={{ color: titleColor }}>{status.waje_crm.project_url_mascarado}</strong>
-                  </p>
-                ) : null}
-                {externoOk && status?.supabase_externo?.project_host ? (
-                  <p style={{ margin: "4px 0 0", color: mutedColor, fontSize: 11 }}>
-                    Externo: <strong style={{ color: titleColor }}>{status.supabase_externo.project_host}</strong>
-                  </p>
-                ) : null}
               </div>
             </div>
             <button

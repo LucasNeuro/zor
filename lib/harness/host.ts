@@ -5,6 +5,7 @@ import {
   agenteRaciocinioAvancadoAtivo,
   mergeUsoFerramentasPorModoOperacao,
 } from "@/lib/hub/agente-ferramentas-registry";
+import { toolsetsActivos } from "@/lib/harness/toolsets";
 import {
   fetchFerramentasCustomAtivas,
   rowParaMistralDef,
@@ -49,6 +50,7 @@ import {
   listarSkillsL0Agente,
 } from "@/lib/harness/stores/skills-store";
 import { getOrCreateHarnessSession } from "@/lib/harness/stores/session-store";
+import { resolverPlanKnowledge } from "@/lib/harness/loop/inject-plan-knowledge";
 import type {
   BriefingChatReplyResult,
   ExecutarAgenteInternoParams,
@@ -162,22 +164,6 @@ export async function runHarnessHost(
     /* RAG opcional */
   }
 
-  const systemPrompt = montarSystemPromptHarness({
-    agenteNome: params.agenteNome,
-    agenteSlug: params.agenteSlug,
-    cargo: params.cargo,
-    area: params.area,
-    bio: params.bio,
-    promptBaseTrecho: params.promptBaseTrecho,
-    playbookTrecho: params.playbookTrecho,
-    canalInterno,
-    briefCiclo: params.briefCiclo,
-    memoriasBloco: blocoMemoria,
-    historico: params.historico,
-    snapshot: params.snapshot,
-    skillsBloco: [skillsBloco, blocoRag].filter(Boolean).join("\n\n"),
-  });
-
   const historicoMensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
   for (const m of params.historico) {
     if (m.papel === "user") historicoMensagens.push({ role: "user", content: m.conteudo });
@@ -226,6 +212,27 @@ export async function runHarnessHost(
     intDefs = [];
   }
 
+  const toolsetsAtivos = toolsetsActivos(usoMap).map((ts) => ts.id);
+
+  const systemPrompt = montarSystemPromptHarness({
+    agenteNome: params.agenteNome,
+    agenteSlug: params.agenteSlug,
+    cargo: params.cargo,
+    area: params.area,
+    bio: params.bio,
+    promptBaseTrecho: params.promptBaseTrecho,
+    playbookTrecho: params.playbookTrecho,
+    canalInterno,
+    briefCiclo: params.briefCiclo,
+    memoriasBloco: blocoMemoria,
+    historico: params.historico,
+    snapshot: params.snapshot,
+    skillsBloco: [skillsBloco, blocoRag].filter(Boolean).join("\n\n"),
+    toolsetsAtivos,
+    intDefNomes: intDefs.map((d) => d.ferramenta_key),
+    extDefNomes: extDefs.map((d) => d.ferramenta_key),
+  });
+
   const hostCtx: HarnessHostContext = {
     tenantId: tenantForTools,
     agenteSlug: params.agenteSlug,
@@ -237,6 +244,15 @@ export async function runHarnessHost(
     modoId: sessao?.modo_id ?? "analisar",
     grants: sessao?.grants ?? {},
   };
+
+  const modoIdAtivo = (sessao?.modo_id ?? "analisar") as import("@/lib/harness/types").HarnessModeId;
+  const { planSteps, knowledgeEvents } = await resolverPlanKnowledge(
+    params.supabase,
+    hostCtx,
+    params.mensagemUsuario,
+    modoIdAtivo,
+    skillsL0
+  );
 
   let turn;
   if (params.approvalId && params.approvalDecisao) {
@@ -252,15 +268,17 @@ export async function runHarnessHost(
     });
   } else {
     turn = await runWajeMistralHarnessTurn({
-    hostCtx,
-    systemPrompt,
-    mensagens,
-    modelo: params.modelo,
-    motorFerramentas,
-    agentReasoningEnabled,
-    mistralTools: [],
-    toolDefs: { customDefs, extDefs, intDefs, usoMap },
-    harnessToolsEnabled: motorFerramentas,
+      hostCtx,
+      systemPrompt,
+      mensagens,
+      modelo: params.modelo,
+      motorFerramentas,
+      agentReasoningEnabled,
+      mistralTools: [],
+      toolDefs: { customDefs, extDefs, intDefs, usoMap },
+      harnessToolsEnabled: motorFerramentas,
+      planSteps,
+      knowledgeEvents,
     });
   }
 

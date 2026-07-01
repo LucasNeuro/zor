@@ -24,7 +24,7 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
       function: {
         name: "harness_skills_list",
         description:
-          "Lista skills activas deste agente (índice L0). Use antes de tarefas complexas para saber que runbooks existem.",
+          "List active skills (L0 index) for this agent. Use BEFORE complex multi-step workflows to discover available runbooks. Returns { skill_id, titulo, descricao } for each skill. Do NOT use if you already loaded the skill list this session — prefer harness_skill_view to load the full runbook body.",
         parameters: {
           type: "object",
           properties: {},
@@ -36,7 +36,8 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
       type: "function",
       function: {
         name: "harness_skill_view",
-        description: "Carrega o runbook completo (L1) de uma skill pelo skill_id.",
+        description:
+          "Load the full runbook (L1 body) of a skill by skill_id. Use AFTER harness_skills_list identifies the relevant skill_id. Required param: skill_id (string slug, e.g. 'crm_pipeline'). Returns markdown runbook with step-by-step instructions and suggested tools. Do NOT call without a valid skill_id from the index.",
         parameters: {
           type: "object",
           properties: {
@@ -52,7 +53,7 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
       function: {
         name: "harness_skill_manage",
         description:
-          "Cria, actualiza ou remove skills do agente. Em modo operar pode exigir aprovação humana.",
+          "Create, update (patch), or delete a skill runbook for this agent. Use to persist a new workflow (create), fix/extend an existing runbook (patch), or remove an outdated skill (delete). Required params: acao ('create'|'patch'|'delete') + skill_id. For create/patch also provide titulo, descricao, corpo_md (markdown). May require human approval in 'operar' mode.",
         parameters: {
           type: "object",
           properties: {
@@ -80,7 +81,7 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
       function: {
         name: "harness_memory",
         description:
-          "Actualiza memória curada do agente (operacional, utilizador, atendimento). Efeito no prompt = próxima sessão.",
+          "Write to the agent's curated long-term memory (persists across sessions). Use AFTER a session yields a durable insight, preference or SOP worth remembering. Required params: acao ('add'|'replace'|'remove') + target ('operacional'|'utilizador'|'atendimento'). Provide conteudo for add/replace. Effect is visible from the NEXT session — not the current one. Do NOT use for temporary context; use only for genuinely persistent knowledge.",
         parameters: {
           type: "object",
           properties: {
@@ -105,7 +106,7 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
       function: {
         name: "harness_session_search",
         description:
-          "Pesquisa conversas anteriores do copiloto/briefing deste agente por palavras-chave.",
+          "Search previous copiloto/briefing conversation messages for this agent using full-text keywords. Use when the user refers to a past decision, prior analysis or historical context not in the current window. Required param: query (keyword string). Returns up to `limite` matching messages (default 8). Do NOT use for real-time CRM data — use CRM entity tools instead.",
         parameters: {
           type: "object",
           properties: {
@@ -122,7 +123,7 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
       function: {
         name: "harness_delegate_to_agent",
         description:
-          "Delega uma tarefa a outro agente IA do tenant e devolve a resposta dele. Use para especialistas (financeiro, jurídico, outro SDR).",
+          "Delegate a sub-task to another AI agent of this tenant and return its response. Use when a specialised agent (e.g. financial analyst, legal advisor, SDR) can handle the request better. Required params: agente_destino_slug (target agent slug) + brief (full context and question for the target agent). Do NOT use to transfer ongoing lead attendance — use harness_transfer_lead instead.",
         parameters: {
           type: "object",
           properties: {
@@ -139,7 +140,7 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
       function: {
         name: "harness_transfer_lead",
         description:
-          "Transfere o atendimento deste lead para outro agente de canal. Próximas mensagens do cliente serão tratadas por esse agente.",
+          "Transfer ongoing lead attendance to a different channel agent. All future messages from this lead will be handled by the target agent. Required param: agente_destino_slug (target agent slug). Optionally provide resumo to give the next agent context. Use when the conversation scope changes permanently (e.g. handing off to customer success). Do NOT use for temporary sub-tasks — use harness_delegate_to_agent instead.",
         parameters: {
           type: "object",
           properties: {

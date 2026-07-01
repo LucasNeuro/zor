@@ -1,5 +1,6 @@
 /**
  * Runtime do turno — loop ReAct Mistral + tools + VERIFY (OpenClaw-style executor).
+ * Suporta injecção de eventos Plan e Knowledge antes do turno (estilo Manus event_stream).
  */
 import { completarChatPreferindoMistral } from "@/lib/ia/llm-completion";
 import { completarChatComFerramentasMistral } from "@/lib/ia/llm-completion-tools";
@@ -15,6 +16,7 @@ import {
   NUDGE_ESCRITA_HARNESS,
 } from "@/lib/harness/loop/enforce-write-completion";
 import { mergeHarnessToolsIntoMistral } from "@/lib/harness/tools/harness-tools-defs";
+import { buildInjectMessages } from "@/lib/harness/runtime/event-stream-formatter";
 import type {
   HarnessHostContext,
   HarnessToolDefs,
@@ -23,10 +25,18 @@ import type {
 } from "@/lib/harness/types";
 import { HARNESS_RUNTIME_ID } from "@/lib/harness/types";
 
+const LOOP_COMPLETE_NUDGE =
+  "[System] Loop completo. Responde ao utilizador com base nas Observations acima. " +
+  "Não inventes dados não presentes nas Observations.";
+
 export type RunHarnessTurnParams = HarnessTurnInput & {
   hostCtx: HarnessHostContext;
   toolDefs: HarnessToolDefs;
   harnessToolsEnabled?: boolean;
+  /** Steps do modo planear → evento [Plan] injectado antes do turno. */
+  planSteps?: string[];
+  /** Skills L1 carregadas → eventos [Knowledge: x] injectados antes do turno. */
+  knowledgeEvents?: Array<{ skill_id: string; resumo: string }>;
 };
 
 export async function runWajeMistralHarnessTurn(
@@ -52,6 +62,14 @@ export async function runWajeMistralHarnessTurn(
     isMistralFamilyModelId(modeloResolved);
 
   const urlsPublicasColetadas: string[] = [];
+
+  // Injectar mensagens Plan / Knowledge no início do histórico se presentes.
+  const injectMsgs = buildInjectMessages({
+    planSteps: params.planSteps,
+    knowledgeEvents: params.knowledgeEvents,
+  });
+  const mensagensBase: Array<{ role: "user" | "assistant"; content: string }> =
+    injectMsgs.length > 0 ? [...injectMsgs, ...params.mensagens] : params.mensagens;
 
   let out:
     | Awaited<ReturnType<typeof completarChatComFerramentasMistral>>
@@ -93,7 +111,30 @@ export async function runWajeMistralHarnessTurn(
         executarTool,
       });
 
-    out = await runToolsTurn(params.mensagens);
+    out = await runToolsTurn(mensagensBase);
+
+    // Re-prompt de disciplina de loop: modelo "calado" após tool calls.
+    if (
+      out?.ok &&
+      "toolCallsExecutadas" in out &&
+      out.toolCallsExecutadas.length > 0
+    ) {
+      const outcome = classifyHarnessOutcome({ texto: out.texto });
+      if (outcome === "empty" || outcome === "reasoning_only") {
+        const retry = await runToolsTurn([
+          ...mensagensBase,
+          { role: "assistant", content: out.texto || "" },
+          { role: "user", content: LOOP_COMPLETE_NUDGE },
+        ]);
+        if (retry?.ok) {
+          out = {
+            ...retry,
+            tokensEntrada: out.tokensEntrada + retry.tokensEntrada,
+            tokensSaida: out.tokensSaida + retry.tokensSaida,
+          };
+        }
+      }
+    }
 
     if (
       out?.ok &&
@@ -101,7 +142,7 @@ export async function runWajeMistralHarnessTurn(
       deveReforcarLoopEscrita(out.texto, out.toolCallsExecutadas)
     ) {
       const retry = await runToolsTurn([
-        ...params.mensagens,
+        ...mensagensBase,
         { role: "assistant", content: out.texto },
         { role: "user", content: NUDGE_ESCRITA_HARNESS },
       ]);
@@ -118,7 +159,7 @@ export async function runWajeMistralHarnessTurn(
   if (!out?.ok) {
     const semTools = await completarChatPreferindoMistral({
       systemPrompt: params.systemPrompt,
-      mensagens: params.mensagens,
+      mensagens: mensagensBase,
       modeloFromDb: params.modelo,
       maxTokens: 4096,
       agentReasoningEnabled: params.agentReasoningEnabled,

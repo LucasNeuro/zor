@@ -86,6 +86,23 @@ export function ferramentasDoToolset(toolsetId: HarnessToolsetId): string[] {
   return HARNESS_TOOLSETS.find((t) => t.id === toolsetId)?.ferramentas ?? [];
 }
 
+/**
+ * Devolve os prefixos de namespace (ToolFamily.prefix) que o toolset activa.
+ * Útil para compor blocos <system_capability> apenas com famílias relevantes.
+ */
+export function toolsetIdParaFamilias(toolsetId: HarnessToolsetId): string[] {
+  const map: Record<HarnessToolsetId, string[]> = {
+    crm_operacoes: ["crm_ent"],
+    crm_relatorios: ["crm_rel"],
+    artefatos: ["artefato"],
+    multimodal: ["multimodal"],
+    metricas: ["metricas"],
+    memoria: ["memoria_ext", "harness"],
+    skills_harness: ["harness"],
+  };
+  return map[toolsetId] ?? [];
+}
+
 /** Toolsets com pelo menos uma ferramenta activa. */
 export function toolsetsActivos(
   uso: Record<string, boolean>

@@ -36,6 +36,15 @@ export type FerramentaHubContexto = {
   agenteInterno?: boolean;
   /** Utilizador CRM — memória Mem0 do superagente interno. */
   usuarioCrmId?: string | null;
+  /** Sessão harness (orquestração / aprovações). */
+  sessionId?: string | null;
+  harnessSurface?:
+    | "copiloto_crm"
+    | "ciclo_programado"
+    | "whatsapp_gestor"
+    | "whatsapp_lead"
+    | "email_lead"
+    | "interno";
 };
 
 const FERRAMENTAS_CRM_LEAD_ESCRITA: HubAgenteFerramentaId[] = [
@@ -891,6 +900,11 @@ export async function executarFerramentaHub(
   const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
 
   try {
+    if (toolName.startsWith("harness_")) {
+      const { executarHarnessTool } = await import("@/lib/harness/tools/executar-harness-tool");
+      return executarHarnessTool(supabase, toolName, args, ctx);
+    }
+
     if (toolName.startsWith("hub_int_")) {
       const { executarFerramentaIntegrador } = await import("@/lib/hub/executar-integrador");
       return executarFerramentaIntegrador(supabase, tenant, toolName, args, {

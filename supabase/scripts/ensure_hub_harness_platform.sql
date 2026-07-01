@@ -1,0 +1,2 @@
+-- Execute no SQL Editor Supabase: harness v0.2 (sessões, skills, memória, delegações).
+-- Equivalente a: supabase/migrations/20260801100000_hub_harness_platform.sql

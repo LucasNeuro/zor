@@ -92,6 +92,26 @@ export function gerarSkillsSuperagenteFromCargo(
   });
 }
 
+/** Alinha ferramentas sugeridas das skills com o pacote activo no wizard/agente. */
+export function ajustarSkillsPorFerramentasAtivas(
+  skills: SuperagenteSkill[],
+  uso: Partial<Record<string, boolean>>
+): SuperagenteSkill[] {
+  const ativas = new Set(
+    Object.entries(uso)
+      .filter(([, v]) => v === true)
+      .map(([k]) => k)
+  );
+  if (!ativas.size) return skills;
+
+  return skills.map((s) => ({
+    ...s,
+    ferramentas_sugeridas: s.ferramentas_sugeridas.filter(
+      (f) => ativas.has(f) || f.startsWith("harness_")
+    ),
+  }));
+}
+
 export function formatarBlocoSkillsHarness(skills: SuperagenteSkill[]): string {
   if (!skills.length) return "";
   const linhas = skills.map(

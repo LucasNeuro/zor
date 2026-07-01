@@ -15,7 +15,7 @@ function db() {
 }
 
 /**
- * POST { cargo_slug: string }
+ * POST { cargo_slug: string, uso_ferramentas_ia?: Record<string, boolean> }
  * Devolve system_prompt_base + skills para superagente interno (sem playbook).
  */
 export async function POST(request: NextRequest) {
@@ -71,7 +71,12 @@ export async function POST(request: NextRequest) {
     nao_pode_fazer_padrao: cat.nao_pode_fazer_padrao,
   };
 
-  const out = await gerarHarnessInternoComMistral(cargo);
+  const usoFerramentas =
+    body.uso_ferramentas_ia && typeof body.uso_ferramentas_ia === "object" && !Array.isArray(body.uso_ferramentas_ia)
+      ? (body.uso_ferramentas_ia as Record<string, boolean>)
+      : undefined;
+
+  const out = await gerarHarnessInternoComMistral(cargo, { uso_ferramentas_ia: usoFerramentas });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: 502 });
   }

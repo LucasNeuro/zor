@@ -230,6 +230,8 @@ export type BriefingChatReplyResult = {
   flow_state?: SimFlowState;
   /** Links públicos de artefactos/relatórios gerados por ferramentas no turno. */
   urls_publicas?: string[];
+  /** Presente quando o turno passou pelo harness Waje v0.1+ */
+  harness_version?: string;
 };
 
 export async function executarBriefingReply(params: {

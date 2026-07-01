@@ -45,6 +45,15 @@ import {
   listarEstagiosPipelineParaIa,
 } from "@/lib/crm/pipeline-estagios-ia";
 import {
+  ensureSkillsSeedFromCargo,
+  formatarBlocoSkillsL0,
+  listarSkillsL0Agente,
+} from "@/lib/harness/stores/skills-store";
+import {
+  carregarMemorySnapshot,
+  formatarBlocoMemorySnapshot,
+} from "@/lib/harness/stores/memory-store";
+import {
   blocoRaciocinioAtendimentoFluido,
   carregarContextoLeadCrmParaPrompt,
   clienteExpressouFrustracaoRepeticao,
@@ -170,6 +179,34 @@ export async function construirPrompt(params: PromptParams): Promise<PromptCompl
     memoriasAgenteTexto = formatarBlocoMemoriasAgente(memAgente);
   } catch {
     memoriasAgenteTexto = "";
+  }
+
+  const canalSurface =
+    params.canal === "email" ? "email_lead" : params.canal === "whatsapp" ? "whatsapp_lead" : "whatsapp_lead";
+  try {
+    await ensureSkillsSeedFromCargo(supabase, {
+      tenantId,
+      agenteSlug: params.agenteSlug,
+      cargo: agente.cargo as string | null,
+      area: agente.area as string | null,
+      surface: canalSurface,
+    });
+  } catch {
+    /* skills opcional */
+  }
+
+  let harnessSkillsBloco = "";
+  let harnessMemoryBloco = "";
+  try {
+    const skills = await listarSkillsL0Agente(supabase, tenantId, params.agenteSlug);
+    harnessSkillsBloco = formatarBlocoSkillsL0(skills);
+    const memSnap = await carregarMemorySnapshot(supabase, tenantId, params.agenteSlug, [
+      "operacional",
+      "atendimento",
+    ]);
+    harnessMemoryBloco = formatarBlocoMemorySnapshot(memSnap);
+  } catch {
+    /* harness stores opcional */
   }
 
   let contextoLeadCrm: Awaited<ReturnType<typeof carregarContextoLeadCrmParaPrompt>> = null;
@@ -549,6 +586,18 @@ ${memTexto}
 
   if (memoriasAgenteTexto) {
     secoes.push(memoriasAgenteTexto);
+  }
+
+  if (harnessMemoryBloco) {
+    secoes.push(harnessMemoryBloco);
+  }
+
+  if (harnessSkillsBloco) {
+    secoes.push(harnessSkillsBloco);
+    secoes.push(`═══ ORQUESTRAÇÃO ═══
+- **harness_delegate_to_agent** — consultar outro agente especialista do tenant.
+- **harness_transfer_lead** — passar este cliente para outro agente de atendimento.
+- **harness_skills_list** / **harness_skill_view** — runbooks antes de fluxos complexos.`);
   }
 
   // CAMADA 6 — ETAPA DO FLUXO

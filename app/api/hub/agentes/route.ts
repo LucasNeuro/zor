@@ -44,6 +44,8 @@ import { mergeUsoFerramentasWhatsappCanal, mergeUsoFerramentasComPadraoPreservan
 import { patchFerramentasGoogleAgendamento } from "@/lib/hub/agente-wizard-google";
 import { applyCargoTenantFilter } from "@/lib/hub/cargo-catalogo-tenant";
 import { montarPromptBaseInternoDoCargo } from "@/lib/hub/superagente/prompt-interno-cargo";
+import { sanitizarCatalogoInterno } from "@/lib/hub/superagente/cargo-harness-sanitize";
+import { persistirSkillsHarnessWizard } from "@/lib/harness/stores/skills-store";
 import {
   EMAIL_CHANNEL_DISABLED_CODE,
   EMAIL_CHANNEL_DISABLED_MESSAGE,
@@ -473,6 +475,7 @@ export async function POST(request: NextRequest) {
           descricaoCurta: cat.descricao_curta,
           podeFazer: cat.pode_fazer_padrao,
           naoPodeFazer: cat.nao_pode_fazer_padrao,
+          incluirLimitesCatalogo: false,
         })
       : montarPromptBaseDoCargo({
           nomeAgente: nomeTrim,
@@ -486,8 +489,12 @@ export async function POST(request: NextRequest) {
           comprimentoPadrao: cat.comprimento_padrao,
         }));
 
-  const podeFazer = Array.isArray(cat.pode_fazer_padrao) ? cat.pode_fazer_padrao : [];
-  const naoPode = Array.isArray(cat.nao_pode_fazer_padrao) ? cat.nao_pode_fazer_padrao : [];
+  const catalogoSanitizado = sanitizarCatalogoInterno(
+    cat.pode_fazer_padrao,
+    cat.nao_pode_fazer_padrao
+  );
+  const podeFazer = catalogoSanitizado.podeFazer;
+  const naoPode = catalogoSanitizado.naoPodeFazer;
 
   const modeloCols = modeloColumnsForAgenteIdentidadeInsert(cat as Record<string, unknown>);
 
@@ -646,6 +653,43 @@ export async function POST(request: NextRequest) {
   const created = data as { agente_slug: string; tenant_id?: string | null };
   const tenantCiclo =
     (typeof created.tenant_id === "string" && created.tenant_id.trim()) || tenantId;
+
+  const rawHarnessSkills = body.harness_skills;
+  if (
+    modoFinal === "jobs_internos" &&
+    Array.isArray(rawHarnessSkills) &&
+    rawHarnessSkills.length > 0
+  ) {
+    const skillsWizard = rawHarnessSkills
+      .map((s) => {
+        const o = s as Record<string, unknown>;
+        const id = String(o.id ?? "").trim();
+        if (!id) return null;
+        return {
+          id,
+          titulo: String(o.titulo ?? id).trim(),
+          descricao: String(o.descricao ?? "").trim(),
+          ferramentas_sugeridas: Array.isArray(o.ferramentas_sugeridas)
+            ? o.ferramentas_sugeridas.map((f) => String(f).trim()).filter(Boolean)
+            : [],
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null);
+    if (skillsWizard.length > 0) {
+      const n = await persistirSkillsHarnessWizard(supabase, {
+        tenantId: tenantCiclo,
+        agenteSlug: created.agente_slug,
+        skills: skillsWizard,
+        surface: "interno",
+      });
+      if (n === 0) {
+        console.warn(
+          "[hub/agentes] harness_skills wizard não persistidas:",
+          created.agente_slug
+        );
+      }
+    }
+  }
 
   const rawConhecimentoBase =
     body.conhecimento_secoes && typeof body.conhecimento_secoes === "object" && !Array.isArray(body.conhecimento_secoes)

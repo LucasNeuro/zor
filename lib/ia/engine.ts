@@ -31,6 +31,10 @@ import {
 import { ferramentasIntegradorAtivasParaTenant } from "@/lib/hub/integradores-runtime";
 import type { FerramentaIntegradorDefMistral } from "@/lib/hub/agente-ferramentas-registry";
 import { defaultTenantId } from "@/lib/tenant-default";
+import { executarHarnessBackgroundReview } from "@/lib/harness/background-review";
+import { enriquecerObservationComVerify } from "@/lib/harness/loop/verify-tool-result";
+import { getOrCreateHarnessSession } from "@/lib/harness/stores/session-store";
+import { mergeHarnessToolsIntoMistral } from "@/lib/harness/tools/harness-tools-defs";
 
 function supabase() {
   return createClient(
@@ -380,7 +384,18 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       mergeUsoFerramentasComPadraoPreservandoCustom(ferrIaRow?.uso_ferramentas_ia ?? {}),
       modoOp
     );
-    const mistralTools = ferramentasMistralListaParaAgente(usoMap, customDefs, extDefs, intDefs);
+    const mistralTools = mergeHarnessToolsIntoMistral(
+      ferramentasMistralListaParaAgente(usoMap, customDefs, extDefs, intDefs)
+    );
+    const harnessSurface =
+      ctx.canal === "email" ? "email_lead" : ctx.canal === "whatsapp" ? "whatsapp_lead" : "whatsapp_lead";
+    const harnessSessao = await getOrCreateHarnessSession(db, {
+      tenantId: tenantForTools,
+      agenteSlug: agente.slug,
+      surface: harnessSurface,
+      resourceId: ctx.telefone ?? ctx.leadId,
+      leadId: ctx.leadId,
+    });
     const modeloResolved = resolveInferenceModelId(modelo);
     const playbookIaTurn =
       motorPlaybook === "playbook_ia" || Boolean(blocoContextoFluxoPlaybook?.trim());
@@ -403,15 +418,19 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
           playbookPublicado: promptData.playbookPublicado === true,
           playbookIaTurn,
           agentReasoningEnabled,
-          executarTool: (nome, argumentosSerializados) =>
-            executarFerramentaHub(nome, argumentosSerializados, {
+          executarTool: async (nome, argumentosSerializados) => {
+            const result = await executarFerramentaHub(nome, argumentosSerializados, {
               leadId: ctx.leadId!,
               agenteSlug: agente.slug,
               tenantId: ctx.tenantId,
               telefoneSessao: ctx.telefone,
               modoOperacao:
                 (ferrIaRow as { modo_operacao?: string | null } | null | undefined)?.modo_operacao ?? null,
-            }),
+              sessionId: harnessSessao?.id ?? null,
+              harnessSurface,
+            });
+            return enriquecerObservationComVerify(result, nome);
+          },
         })
       : await completarChatPreferindoMistral({
           systemPrompt,
@@ -537,6 +556,20 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       });
     } catch {
       /* hub_memorias_agente opcional até migração aplicada */
+    }
+
+    try {
+      await executarHarnessBackgroundReview(db, {
+        tenantId: tenantForTools,
+        agenteSlug: agente.slug,
+        surface: harnessSurface,
+        mensagemUsuario: ctx.mensagem,
+        respostaIA: textoResposta,
+        sessionId: harnessSessao?.id ?? null,
+        requireApproval: false,
+      });
+    } catch {
+      /* background review opcional */
     }
 
     const inboundTs =

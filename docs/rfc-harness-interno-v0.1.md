@@ -466,15 +466,15 @@ Tools de toolset desactivado **ausentes** do schema Mistral (economia de tokens 
 
 ---
 
-### Fase 1 — Contrato Runtime (OpenClaw) — ~1 sprint
+### Fase 1 — Contrato Runtime (OpenClaw) — ~1 sprint ✅ (2026-06-25)
 
 **Entregáveis:**
 
-- `lib/harness/types.ts` — contratos acima
-- `lib/harness/runtime/waje-mistral-v1.ts` — extrair loop de `executarAgenteInterno`
-- `lib/harness/host.ts` — montagem de contexto, política tools, auditoria
-- `executarAgenteInterno` → delega para `HarnessHost.run()`
-- Testes unitários: classificação de outcome, política tenant
+- [x] `lib/harness/types.ts` — contratos acima
+- [x] `lib/harness/runtime/waje-mistral-v1.ts` — extrair loop de `executarAgenteInterno`
+- [x] `lib/harness/host.ts` — montagem de contexto, política tools, auditoria
+- [x] `executarAgenteInterno` → delega para `HarnessHost.run()`
+- [x] Testes unitários: `lib/harness/harness.test.ts` (classificação de outcome, URLs, feature-flag, metadata)
 
 **Critério de saída:** comportamento idêntico ao actual em copiloto + ciclos; diff de código isolado em `lib/harness/`.
 
@@ -600,14 +600,14 @@ Tools de toolset desactivado **ausentes** do schema Mistral (economia de tokens 
 
 ## 16. Próximo passo imediato
 
-**Fase 1:** criar `lib/harness/` com types + extrair runtime de `executarAgenteInterno` sem alterar comportamento visível.
+**v0.2 implementada** — migração `20260801100000_hub_harness_platform.sql`:
 
-Checklist para começar:
+- `hub_harness_sessions`, `hub_agente_skills`, `hub_agente_memory`
+- `hub_harness_delegations`, `hub_harness_pending_writes`
+- Tools: `harness_skills_list`, `harness_skill_view`, `harness_delegate_to_agent`, `harness_transfer_lead`
+- Motor interno (`lib/harness`) + externo (`engine.ts`) + webhook handoff
 
-1. Criar branch `feat/harness-v0.1-fase1`
-2. Implementar `HarnessHost` + `WajeMistralRuntimeV1`
-3. Teste de paridade: mesma pergunta “liste os leads” → mesmo JSON tool + resposta
-4. PR com este RFC linkado na descrição
+**Em seguida:** UI modos/aprovações no copiloto; seed skills no wizard; dashboard delegações.
 
 ---
 

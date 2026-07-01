@@ -106,6 +106,7 @@ export function AgenteWizardIntegracoesInternoPanel({
         agenteSlug={agenteSlug}
         agenteNome={agenteNome}
         layout="painel"
+        theme={theme}
         onUsoChange={onUsoChange}
       />
 
@@ -127,6 +128,7 @@ export function AgenteWizardIntegracoesInternoPanel({
         agenteSlug={agenteSlug}
         agenteNome={agenteNome}
         layout="painel"
+        theme={theme}
         usoFerramentas={uso}
         onUsoChange={onUsoChange}
       />

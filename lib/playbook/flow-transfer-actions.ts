@@ -110,6 +110,10 @@ export async function executarAcaoTransferenciaFluxo(
     });
   }
 
+  if (opts.transfer.kind === "agente" && opts.transfer.agent_slug?.trim()) {
+    patchArgs.agente_responsavel = opts.transfer.agent_slug.trim();
+  }
+
   if (leadAtual) {
     const built = buildHubLeadsCrmPatch(patchArgs, leadAtual as Record<string, unknown>);
     if (built.ok) {

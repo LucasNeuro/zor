@@ -369,6 +369,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   const [harnessGeradoComIa, setHarnessGeradoComIa] = useState(false);
   const [harnessErro, setHarnessErro] = useState("");
   const harnessReqRef = useRef(0);
+  const harnessPasso6LoadRef = useRef(false);
   /** Sem cargo no catálogo — instruções só do playbook publicado no bucket. */
   const [somentePlaybook, setSomentePlaybook] = useState(false);
   /** Preset universal conversação WhatsApp (playbook + cargo + ciclos). */
@@ -1377,7 +1378,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       !playbookAnaliseResultado ||
       (whatsappFlowAgent && !playbookFlowReady(playbookFlowStatus))
     : wizardInterno
-      ? !cargoSelecionado || harnessGerando || !harnessPromptGerado.trim()
+      ? !cargoSelecionado
       : !cargoSelecionado;
 
   useEffect(() => {
@@ -1439,10 +1440,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     setHarnessSkills([]);
     setHarnessGeradoComIa(false);
     try {
+      const usoAtivo = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentasIa);
       const res = await fetch("/api/hub/agentes/gerar-harness-interno", {
         method: "POST",
         headers: { ...(await crmApiHeaders()), "Content-Type": "application/json" },
-        body: JSON.stringify({ cargo_slug: cargo.slug }),
+        body: JSON.stringify({ cargo_slug: cargo.slug, uso_ferramentas_ia: usoAtivo }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
@@ -1472,7 +1474,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
     } finally {
       if (reqId === harnessReqRef.current) setHarnessGerando(false);
     }
-  }, []);
+  }, [usoFerramentasIa]);
 
   useEffect(() => {
     if (!wizardInterno || !cargoSelecionado) {
@@ -1482,10 +1484,21 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
       setHarnessGerando(false);
       setHarnessErro("");
       setHarnessGeradoComIa(false);
+      harnessPasso6LoadRef.current = false;
       return;
     }
+  }, [wizardInterno, cargoSelecionado?.slug]);
+
+  useEffect(() => {
+    if (passo !== 6) {
+      harnessPasso6LoadRef.current = false;
+      return;
+    }
+    if (!wizardInterno || !cargoSelecionado) return;
+    if (harnessPasso6LoadRef.current) return;
+    harnessPasso6LoadRef.current = true;
     void gerarHarnessInterno(cargoSelecionado);
-  }, [wizardInterno, cargoSelecionado?.slug, gerarHarnessInterno]);
+  }, [passo, wizardInterno, cargoSelecionado, gerarHarnessInterno]);
 
   const segmentos = Array.from(new Set(cargos.map((c) => c.segmento).filter(Boolean))) as string[];
 
@@ -1594,6 +1607,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
         prefixo_mercado: prefixoMercadoParaGravacao([]),
         personalidade: gerarPersonalidadeAgente(valores),
         system_prompt_base: wizardInterno && harnessPromptGerado.trim() ? harnessPromptGerado.trim() : "",
+        harness_skills: wizardInterno && harnessSkills.length > 0 ? harnessSkills : undefined,
         conhecimento_secoes: wizardInterno ? {} : conhecimentoSecoesParaPayload(),
         bio: null,
         horario_inicio: "08:00",
@@ -2220,107 +2234,13 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                       }}
                     >
                       {wizardInterno ? (
-                        <>
-                          <div>
-                            <p style={{ color: wzStrong, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>
-                              Prompt e skills (gerados do cargo)
-                            </p>
-                            <p style={{ color: wzMuted, fontSize: 12, margin: 0, lineHeight: 1.55 }}>
-                              A IA lê o cargo do catálogo e monta o <strong style={{ color: wzStrong }}>system prompt</strong>{" "}
-                              e as <strong style={{ color: wzStrong }}>skills</strong> do harness superagente — sem playbook
-                              manual. O motor reforça skills em runtime; o prompt fica gravado no agente.
-                            </p>
-                          </div>
-                          {harnessGerando ? (
-                            <p style={{ color: wzMuted, fontSize: 13, margin: 0 }}>Gerando prompt e skills…</p>
-                          ) : null}
-                          {harnessErro ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                              <p style={{ color: "#ef4444", fontSize: 12, margin: 0 }}>{harnessErro}</p>
-                              <button
-                                type="button"
-                                onClick={() => cargoSelecionado && void gerarHarnessInterno(cargoSelecionado)}
-                                style={wizardOutline(false)}
-                              >
-                                Tentar novamente
-                              </button>
-                            </div>
-                          ) : null}
-                          {harnessPromptGerado && !harnessGerando ? (
-                            <>
-                              <p style={{ color: wizardDark ? "#92ff00" : "#2d6a4f", fontSize: 11, margin: 0 }}>
-                                {harnessGeradoComIa
-                                  ? "✓ Prompt refinado com IA"
-                                  : "✓ Prompt base do catálogo (IA indisponível ou em fallback)"}
-                              </p>
-                              {harnessSkills.length > 0 ? (
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                  <p style={{ color: wzMuted, fontSize: 11, fontWeight: 700, margin: 0 }}>
-                                    Skills derivadas
-                                  </p>
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                                    {harnessSkills.map((s) => (
-                                      <span
-                                        key={s.id}
-                                        title={s.descricao}
-                                        style={{
-                                          fontSize: 10,
-                                          padding: "4px 10px",
-                                          borderRadius: 20,
-                                          border: `1px solid ${wizardDark ? "rgba(146,255,0,0.35)" : "#2d6a4f44"}`,
-                                          background: wizardDark ? "rgba(146,255,0,0.08)" : "#2d6a4f0c",
-                                          color: wzStrong,
-                                        }}
-                                      >
-                                        {s.titulo}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : null}
-                              <details>
-                                <summary
-                                  style={{
-                                    cursor: "pointer",
-                                    fontSize: 12,
-                                    color: wzMuted,
-                                    userSelect: "none",
-                                  }}
-                                >
-                                  Ver prompt gerado
-                                </summary>
-                                <pre
-                                  style={{
-                                    marginTop: 8,
-                                    padding: 12,
-                                    borderRadius: 8,
-                                    fontSize: 11,
-                                    lineHeight: 1.45,
-                                    maxHeight: 220,
-                                    overflow: "auto",
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-word",
-                                    background: wizardDark ? "rgba(0,0,0,0.35)" : "#f4f7f5",
-                                    border: `1px solid ${wzDivider}`,
-                                    color: wzStrong,
-                                  }}
-                                >
-                                  {harnessPromptGerado}
-                                </pre>
-                              </details>
-                              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                <button
-                                  type="button"
-                                  onClick={() => cargoSelecionado && void gerarHarnessInterno(cargoSelecionado)}
-                                  disabled={harnessGerando}
-                                  style={wizardOutline(harnessGerando)}
-                                >
-                                  Regenerar com IA
-                                </button>
-                              </div>
-                            </>
-                          ) : null}
-                        </>
+                        <div style={{ ...wizardInfoBox(), marginTop: 4 }}>
+                          <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Harness:</strong>{" "}
+                          no passo <strong style={{ color: wzStrong }}>Ferramentas</strong>, depois de activar o
+                          pacote superagente, o sistema gera a <strong style={{ color: wzStrong }}>identidade</strong>{" "}
+                          (prompt base) e as <strong style={{ color: wzStrong }}>skills</strong>. O motor completo
+                          (ferramentas CRM, orquestração, memória) é injectado em runtime — não fica só neste texto.
+                        </div>
                       ) : (
                         <>
                           <div>
@@ -2968,6 +2888,105 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 modoInterno={wizardInterno}
                 destacarWhatsApp={wizardCanal && agenteEhModoCanal(modoOperacao)}
               />
+              {wizardInterno && cargoSelecionado ? (
+                <div
+                  style={{
+                    ...wzCard(),
+                    padding: 16,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <p style={{ color: wzStrong, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>
+                      Identidade e skills (harness)
+                    </p>
+                    <p style={{ color: wzMuted, fontSize: 12, margin: 0, lineHeight: 1.55 }}>
+                      Gerado <strong style={{ color: wzStrong }}>depois</strong> das ferramentas activas. O{" "}
+                      <code style={{ fontSize: 11 }}>system_prompt_base</code> guarda só a identidade do cargo; o
+                      harness runtime acrescenta CRM, skills L0, memória e orquestração em cada turno.
+                    </p>
+                  </div>
+                  {harnessGerando ? (
+                    <p style={{ color: wzMuted, fontSize: 13, margin: 0 }}>Gerando identidade e skills…</p>
+                  ) : null}
+                  {harnessErro ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <p style={{ color: "#ef4444", fontSize: 12, margin: 0 }}>{harnessErro}</p>
+                      <button
+                        type="button"
+                        onClick={() => void gerarHarnessInterno(cargoSelecionado)}
+                        style={wizardOutline(false)}
+                      >
+                        Tentar novamente
+                      </button>
+                    </div>
+                  ) : null}
+                  {harnessPromptGerado && !harnessGerando ? (
+                    <>
+                      <p style={{ color: wizardDark ? "#92ff00" : "#2d6a4f", fontSize: 11, margin: 0 }}>
+                        {harnessGeradoComIa
+                          ? "✓ Identidade refinada com IA (alinhada às ferramentas activas)"
+                          : "✓ Identidade do catálogo (fallback determinístico)"}
+                      </p>
+                      {harnessSkills.length > 0 ? (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {harnessSkills.map((s) => (
+                            <span
+                              key={s.id}
+                              title={s.descricao}
+                              style={{
+                                fontSize: 10,
+                                padding: "4px 10px",
+                                borderRadius: 20,
+                                border: `1px solid ${wizardDark ? "rgba(146,255,0,0.35)" : "#2d6a4f44"}`,
+                                background: wizardDark ? "rgba(146,255,0,0.08)" : "#2d6a4f0c",
+                                color: wzStrong,
+                              }}
+                            >
+                              {s.titulo}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <details>
+                        <summary style={{ cursor: "pointer", fontSize: 12, color: wzMuted, userSelect: "none" }}>
+                          Ver identidade (prompt base)
+                        </summary>
+                        <pre
+                          style={{
+                            marginTop: 8,
+                            padding: 12,
+                            borderRadius: 8,
+                            fontSize: 11,
+                            lineHeight: 1.45,
+                            maxHeight: 220,
+                            overflow: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            background: wizardDark ? "rgba(0,0,0,0.35)" : "#f4f7f5",
+                            border: `1px solid ${wzDivider}`,
+                            color: wzStrong,
+                          }}
+                        >
+                          {harnessPromptGerado}
+                        </pre>
+                      </details>
+                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <button
+                          type="button"
+                          onClick={() => void gerarHarnessInterno(cargoSelecionado)}
+                          disabled={harnessGerando}
+                          style={wizardOutline(harnessGerando)}
+                        >
+                          Regenerar com ferramentas actuais
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
               {precisaGoogleWorkspace && !wizardInterno ? (
                 <div style={{ ...wizardInfoBox(), marginTop: 4 }}>
                   <strong style={{ color: wizardDark ? RF.limao : CRM_ACCENT }}>Agenda Google:</strong>{" "}
@@ -3022,10 +3041,18 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   }
                   setShowConfirm(true);
                 }}
-                disabled={(!somentePlaybook && !cargoSelecionado) || !nome.trim() || criando}
+                disabled={
+                  (!somentePlaybook && !cargoSelecionado) ||
+                  !nome.trim() ||
+                  criando ||
+                  (wizardInterno && !agenteSlugCriado && (harnessGerando || !harnessPromptGerado.trim()))
+                }
                 style={{
                   ...wizardBtnPrimary(
-                    (!somentePlaybook && !cargoSelecionado) || !nome.trim() || criando,
+                    (!somentePlaybook && !cargoSelecionado) ||
+                      !nome.trim() ||
+                      criando ||
+                      (wizardInterno && !agenteSlugCriado && (harnessGerando || !harnessPromptGerado.trim())),
                     { fullWidth: true }
                   ),
                   padding: "14px 0",
@@ -3036,7 +3063,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
               >
                 {criando
                   ? "A gravar…"
-                  : agenteSlugCriado
+                  : harnessGerando && wizardInterno && !agenteSlugCriado
+                    ? "A gerar harness…"
+                    : agenteSlugCriado
                     ? wizardInterno
                       ? "Continuar → Integrações"
                       : "Continuar → Materiais"
@@ -3052,10 +3081,9 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 <p style={wzP}>{AGENTE_WIZARD_STEP_INTRO[5].descricao}</p>
                 {wizardInterno ? (
                   <p style={{ color: wzMuted, fontSize: 12, margin: "10px 0 0", lineHeight: 1.55 }}>
-                    <strong style={{ color: wzStrong }}>Conhecimento:</strong> vem do cargo (skills e prompt gerado),
-                    dados operacionais via views <code style={{ fontSize: 11 }}>vw_rel_*</code> e base partilhada em{" "}
-                    <strong style={{ color: wzStrong }}>CRM → Conhecimento</strong>. Sem playbook nem documentos por
-                    agente.
+                    <strong style={{ color: wzStrong }}>Conhecimento:</strong> identidade e skills no passo Ferramentas;
+                    dados operacionais via ferramentas CRM e base partilhada em{" "}
+                    <strong style={{ color: wzStrong }}>CRM → Conhecimento</strong>. Sem playbook por agente.
                   </p>
                 ) : (
                   <>

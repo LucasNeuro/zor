@@ -26,6 +26,7 @@ export type AgenteMistralBlockProps = {
   usoFerramentas: Record<string, boolean>;
   onUsoChange?: (ferramentaKey: string, ativo: boolean) => void;
   layout?: "card" | "painel";
+  theme?: "dark" | "light";
 };
 
 function mistralBadge(plataformaOk: boolean, percepcaoOn: boolean) {
@@ -44,9 +45,10 @@ export function AgenteMistralBlock({
   usoFerramentas,
   onUsoChange,
   layout = "card",
+  theme = "light",
 }: AgenteMistralBlockProps) {
   const isCard = layout === "card";
-  const isDark = isCard;
+  const isDark = theme === "dark";
 
   const [sideoverOpen, setSideoverOpen] = useState(false);
   const [plataformaOk, setPlataformaOk] = useState(false);

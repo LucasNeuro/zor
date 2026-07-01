@@ -700,6 +700,24 @@ html[data-white-label="1"] .waje-chat-demo-header {
   border-color: rgba(146, 255, 0, 0.45);
 }
 
+/* Inputs retrofit (sideover escuro / wizard integrações) */
+.waje-rf-input-dark::placeholder {
+  color: #7a9a7e;
+  opacity: 1;
+}
+.waje-rf-input-dark:focus {
+  border-color: rgba(146, 255, 0, 0.55);
+  outline: none;
+}
+.waje-rf-input-light::placeholder {
+  color: #6e7681;
+  opacity: 1;
+}
+.waje-rf-input-light:focus {
+  border-color: #2d6a4f;
+  outline: none;
+}
+
 @keyframes waje-float-bounce {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }

@@ -122,6 +122,10 @@ export function rfInputStyle(): CSSProperties {
   return { ...RF_INPUT_STYLE };
 }
 
+export function rfLightInputStyle(): CSSProperties {
+  return { ...RF_LIGHT_INPUT_STYLE };
+}
+
 export function rfLabelStyle(): CSSProperties {
   return { ...RF_LABEL_STYLE };
 }

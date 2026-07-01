@@ -1,11 +1,9 @@
 /**
- * Prompt base para agentes internos (superagente) — sem regras de canal externo / WhatsApp.
+ * Identidade base (system_prompt_base) para agentes internos.
+ * O harness completo (ferramentas, skills L0, orquestração) é montado em runtime por montarSystemPromptHarness.
  */
 
-function linhasArray(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.map((x) => String(x).trim()).filter(Boolean);
-}
+import { sanitizarCatalogoInterno } from "@/lib/hub/superagente/cargo-harness-sanitize";
 
 export type PromptInternoCargoInput = {
   tituloCargo: string;
@@ -15,6 +13,8 @@ export type PromptInternoCargoInput = {
   descricaoCurta?: unknown;
   podeFazer?: unknown;
   naoPodeFazer?: unknown;
+  /** Quando false, omite listas do catálogo (evita contradizer ferramentas CRM). */
+  incluirLimitesCatalogo?: boolean;
 };
 
 export function montarPromptBaseInternoDoCargo(params: PromptInternoCargoInput): string {
@@ -23,8 +23,11 @@ export function montarPromptBaseInternoDoCargo(params: PromptInternoCargoInput):
   const promptTemplate = String(params.promptTemplate ?? "").trim();
   const descricao = String(params.descricao ?? "").trim();
   const descricaoCurta = String(params.descricaoCurta ?? "").trim();
-  const podeFazer = linhasArray(params.podeFazer);
-  const naoPode = linhasArray(params.naoPodeFazer);
+  const incluirLimites = params.incluirLimitesCatalogo === true;
+  const { podeFazer, naoPodeFazer } = sanitizarCatalogoInterno(
+    params.podeFazer,
+    params.naoPodeFazer
+  );
 
   const secoes: string[] = [];
   secoes.push(
@@ -34,11 +37,9 @@ export function montarPromptBaseInternoDoCargo(params: PromptInternoCargoInput):
     [
       "## Contexto operacional",
       "- Actua apenas com a equipa interna (CRM, ciclos, dados reais da empresa).",
-      "- Não atende cliente final, não simula WhatsApp comercial nem triagem de leads externos.",
-      "- **Listar, criar e actualizar** registos com hub_int_crm_ent_* (tabelas hub_leads_crm, hub_negocios, etc.) — paridade com a interface CRM.",
-      "- Use hub_int_crm_consultar / hub_superagente_dados para relatórios vw_rel_* quando precisar de dados enriquecidos.",
-      "- Artefactos canvas e percepção multimodal (hub_superagente_artefato, hub_mistral_percepcao).",
-      "- Confirme ids reais com consultas antes de alterar registos no CRM.",
+      "- Não atende cliente final nem simula WhatsApp comercial.",
+      "- Dados e gravações no CRM são feitos pelas **ferramentas activas** injectadas pelo harness em runtime (hub_int_crm_ent_*, relatórios, canvas, Mistral).",
+      "- Confirme ids reais com consultas antes de alterar registos.",
     ].join("\n")
   );
 
@@ -50,18 +51,26 @@ export function montarPromptBaseInternoDoCargo(params: PromptInternoCargoInput):
     secoes.push(`## Missão e responsabilidades\n${promptTemplate}`);
   } else if (descricao) {
     secoes.push(`## Missão e responsabilidades\n${descricao}`);
-  }
-
-  if (podeFazer.length) {
-    secoes.push(`## Pode fazer\n${podeFazer.map((x) => `- ${x}`).join("\n")}`);
-  }
-  if (naoPode.length) {
-    secoes.push(`## Não pode fazer\n${naoPode.map((x) => `- ${x}`).join("\n")}`);
-  }
-
-  if (!promptTemplate && !descricao) {
+  } else {
     secoes.push(
-      "Analise dados operacionais, responda com clareza, não invente números e escale decisões críticas para humano."
+      "## Missão e responsabilidades\nAnalise dados operacionais, responda com clareza, não invente números e escale decisões críticas para humano."
+    );
+  }
+
+  secoes.push(
+    [
+      "## Nota harness",
+      "Esta identidade grava-se no agente. O motor Waje acrescenta em cada turno: catálogo de ferramentas activas, skills (harness_skills_*), memória, orquestração multi-agente e regras de gravação CRM.",
+      "Não repita listas de ferramentas nem negue acesso ao banco — isso é definido pelo harness, não por este texto.",
+    ].join("\n")
+  );
+
+  if (incluirLimites && podeFazer.length) {
+    secoes.push(`## Pode fazer (escopo de negócio)\n${podeFazer.map((x) => `- ${x}`).join("\n")}`);
+  }
+  if (incluirLimites && naoPodeFazer.length) {
+    secoes.push(
+      `## Não pode fazer (escopo de negócio)\n${naoPodeFazer.map((x) => `- ${x}`).join("\n")}`
     );
   }
 

@@ -831,12 +831,15 @@ export async function POST(request: NextRequest) {
           instanceName: refs.instanceName,
           escopo: "externo",
         });
+        const { resolverAgenteSlugParaLead } = await import("@/lib/harness/resolve-lead-agente");
+        const agenteFromMetaGrupo = resolverAgenteSlugParaLead(leadGrupo);
         const agenteSlugHint =
           linhaWa.kind === "agent_instance"
             ? linhaWa.agenteSlug
-            : typeof leadGrupo.agente_responsavel === "string" && leadGrupo.agente_responsavel.trim()
-              ? leadGrupo.agente_responsavel.trim()
-              : "sdr";
+            : agenteFromMetaGrupo ??
+              (typeof leadGrupo.agente_responsavel === "string" && leadGrupo.agente_responsavel.trim()
+                ? leadGrupo.agente_responsavel.trim()
+                : "sdr");
         const tenantId = tenantIdFromLinhaWa(linhaWa);
         const redisGuard = await aplicarGuardasRedisWebhook(log, {
           tenantId,
@@ -1060,12 +1063,17 @@ export async function POST(request: NextRequest) {
       }
 
       const mercado = identificarMercado(mensagemFinal);
+      const { resolverAgenteSlugParaLead: resolverAgenteGrupo2 } = await import(
+        "@/lib/harness/resolve-lead-agente"
+      );
+      const agenteMeta2 = resolverAgenteGrupo2(leadGrupo);
       const agenteSlugHint =
         linhaWa.kind === "agent_instance"
           ? linhaWa.agenteSlug
-          : typeof leadGrupo.agente_responsavel === "string" && leadGrupo.agente_responsavel.trim()
-            ? leadGrupo.agente_responsavel.trim()
-            : "sdr";
+          : agenteMeta2 ??
+            (typeof leadGrupo.agente_responsavel === "string" && leadGrupo.agente_responsavel.trim()
+              ? leadGrupo.agente_responsavel.trim()
+              : "sdr");
 
       const enqueuePayload = {
         telefone: telefoneLead,
@@ -1296,6 +1304,10 @@ export async function POST(request: NextRequest) {
       typeof lead.agente_responsavel === "string" && lead.agente_responsavel.trim()
         ? lead.agente_responsavel.trim()
         : "sdr";
+
+    const { resolverAgenteSlugParaLead } = await import("@/lib/harness/resolve-lead-agente");
+    const agenteFromMeta = resolverAgenteSlugParaLead(lead);
+    if (agenteFromMeta) agenteResponsavelLead = agenteFromMeta;
 
     if (linhaWa.kind === "agent_instance") {
       agenteResponsavelLead = linhaWa.agenteSlug;

@@ -111,13 +111,14 @@ function wizardPassoAnterior(passo: number, interno: boolean): number {
   if (interno && passo === 8) return 6;
   if (interno && passo === 5) return 8;
   if (interno && passo === 7) return 5;
-  if (interno && passo === 5) return 3;
   return passo - 1;
 }
 
 function wizardPassoProximo(passo: number, interno: boolean): number {
   if (interno && passo === 2) return 6;
-  if (interno && passo === 3) return 5;
+  if (interno && passo === 6) return 8;
+  if (interno && passo === 8) return 5;
+  if (interno && passo === 5) return 7;
   return passo + 1;
 }
 
@@ -630,10 +631,11 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
   }, [modoOperacao]);
 
   useEffect(() => {
+    if (wizardInterno) return;
     if (passo === 8 && !agenteEhModoCanal(modoOperacao)) {
       setPasso(7);
     }
-  }, [passo, modoOperacao]);
+  }, [passo, modoOperacao, wizardInterno]);
 
   useEffect(() => {
     if (passo !== 9) return;
@@ -1866,15 +1868,15 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
           }}
         >
           {wizardPassosVisiveis.map((item, i) => {
-            const num = item.id;
-            const ativo = passo === num;
-            const passado = passo > num;
+            const passoIdx = wizardPassosVisiveis.findIndex((p) => p.id === passo);
+            const ativo = passo === item.id;
+            const passado = passoIdx >= 0 && i < passoIdx;
             return (
               <div key={item.label} style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 56 }}>
                 <div
                   style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 1 }}
                 >
-                  <div style={stepCircle(ativo, passado)}>{passado ? "✓" : num === 0 ? "•" : num}</div>
+                  <div style={stepCircle(ativo, passado)}>{passado ? "✓" : i + 1}</div>
                   <span
                     style={{
                       ...stepLabel(ativo),
@@ -1889,7 +1891,7 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                 {i < wizardPassosVisiveis.length - 1 && (
                   <div
                     style={{
-                      ...stepConnector(passo > num),
+                      ...stepConnector(passado),
                       flex: 0,
                       width: 12,
                       flexShrink: 0,
@@ -3761,6 +3763,26 @@ export function AgenteNovoWizard({ variant, onClose, onCreated }: AgenteNovoWiza
                   {criando ? "A criar hiperagente…" : "Criar hiperagente empresarial"}
                 </button>
               ) : null}
+            </div>
+          )}
+
+          {passo === 7 && wizardInterno && !agenteSlugCriado && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <h2 style={wzH2}>Integrações</h2>
+                <p style={wzP}>
+                  As integrações ficam disponíveis depois de criar o hiperagente no passo{" "}
+                  <strong style={{ color: wzStrong }}>Revisão</strong>. Volte e conclua a criação ou use{" "}
+                  <strong style={{ color: wzStrong }}>Harness → Revisão</strong> se ainda não aprovou as skills.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasso(5)}
+                style={wizardBtnPrimary()}
+              >
+                Ir para Revisão →
+              </button>
             </div>
           )}
 

@@ -13,6 +13,26 @@ export function valorCelulaDeObjeto(row: Record<string, unknown>, coluna: string
   for (const [k, v] of Object.entries(row)) {
     if (normCol(k) === alvo) return String(v ?? "");
   }
+
+  const ALIAS: Record<string, string[]> = {
+    codigo: ["code", "codigo", "código", "neg", "titulo", "título"],
+    titulo: ["title", "titulo", "título", "nome"],
+    lead: ["lead", "lead_nome", "cliente", "customer"],
+    valor: ["value", "valor", "amount", "valor_estimado", "montante"],
+    status: ["status", "estado", "state", "etapa"],
+    vencimento: ["due", "vencimento", "due_date"],
+  };
+
+  for (const [canon, keys] of Object.entries(ALIAS)) {
+    const bateColuna = alvo.includes(canon) || keys.some((k) => alvo.includes(normCol(k)));
+    if (!bateColuna) continue;
+    for (const k of keys) {
+      for (const [rk, rv] of Object.entries(row)) {
+        if (normCol(rk) === normCol(k)) return String(rv ?? "");
+      }
+    }
+  }
+
   return "";
 }
 
@@ -59,7 +79,8 @@ export function preencherTabelaVaziaDeGrafico(
   linhas: string[][],
   grafico: GraficoArtefatoSpec | undefined
 ): string[][] {
-  if (linhas.length || !grafico?.labels?.length) return linhas;
+  if (!grafico?.labels?.length) return linhas;
+  if (!linhasTabelaPrecisamPreencher(linhas)) return linhas;
   const data = grafico.datasets[0]?.data ?? [];
   if (!data.length) return linhas;
 
@@ -87,13 +108,24 @@ export function preencherTabelaVaziaDeGrafico(
   });
 }
 
+/** Linhas só com placeholders ou vazias — devem ser preenchidas. */
+export function linhasTabelaPrecisamPreencher(linhas: string[][]): boolean {
+  if (!linhas.length) return true;
+  return linhas.every((row) =>
+    row.every((c) => {
+      const t = c.trim();
+      return !t || t === "—" || t === "-" || t === "..." || t === "n/a";
+    })
+  );
+}
+
 export function normalizarSecoesArtefatoEntrada(secoes: SecaoArtefatoSpec[]): SecaoArtefatoSpec[] {
   const graficos = secoes.filter((s): s is Extract<SecaoArtefatoSpec, { tipo: "grafico" }> => s.tipo === "grafico");
 
   return secoes.map((sec) => {
     if (sec.tipo !== "tabela") return sec;
     let linhas = normalizarLinhasTabela(sec.colunas, sec.linhas as unknown[]);
-    if (!linhas.length && graficos.length) {
+    if (linhasTabelaPrecisamPreencher(linhas) && graficos.length) {
       linhas = preencherTabelaVaziaDeGrafico(sec.colunas, linhas, graficos[0]?.grafico);
     }
     return { ...sec, linhas };

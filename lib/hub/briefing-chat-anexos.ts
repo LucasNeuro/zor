@@ -1,6 +1,7 @@
 import "server-only";
 
 import { executarMistralPercepcao, type MistralPercepcaoArgs } from "@/lib/ia/mistral-multimodal";
+import { isMistralRateLimitError } from "@/lib/ia/mistral-rate-limit";
 import {
   MAX_BRIEFING_ANEXO_BYTES,
   MAX_BRIEFING_ANEXOS_POR_MENSAGEM,
@@ -134,6 +135,10 @@ export async function processarAnexosBriefingChat(
           ? "Descreva esta imagem em português para um assistente interno de CRM."
           : undefined,
     });
+
+    if (isMistralRateLimitError(raw)) {
+      throw new Error(`Mistral HTTP 429: rate limit — transcrição de ${tipo}`);
+    }
 
     const resumo = extrairTextoPercepcao(raw, modo);
     if (resumo) meta.resumo = resumo.slice(0, 12_000);

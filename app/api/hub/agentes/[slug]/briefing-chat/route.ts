@@ -17,6 +17,7 @@ import {
 import { registrarInteracaoPainelAgente } from "@/lib/hub/registrar-interacao-painel";
 import { CRM_ACCESS_COOKIE, fetchAuthUserFromAccessToken } from "@/lib/auth/crm-session";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
+import { isMistralRateLimitError } from "@/lib/ia/mistral-rate-limit";
 import {
   montarMensagemComAnexos,
   processarAnexosBriefingChat,
@@ -218,7 +219,8 @@ export async function POST(
       anexosMeta = proc.anexosMeta;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha ao processar anexos.";
-      return NextResponse.json({ error: msg }, { status: 502 });
+      const status = isMistralRateLimitError(msg) ? 429 : 502;
+      return NextResponse.json({ error: mensagemErroBriefingChat(msg) }, { status });
     }
   }
 
@@ -396,8 +398,9 @@ export async function POST(
       });
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha ao gerar resposta";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    const raw = e instanceof Error ? e.message : "Falha ao gerar resposta";
+    const status = isMistralRateLimitError(raw) ? 429 : 502;
+    return NextResponse.json({ error: mensagemErroBriefingChat(raw) }, { status });
   }
 
   const { error: aErr } = await supabase.from("hub_crm_agente_briefing_mensagem").insert({

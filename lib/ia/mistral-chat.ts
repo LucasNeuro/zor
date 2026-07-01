@@ -1,6 +1,7 @@
 /** Chamadas Chat Completions Mistral — alinhado a `lib/playbook/mistral-appendix.ts`. */
 
 import { mistralApiKey } from "@/lib/ia/mistral-health";
+import { delayMsParaRetryMistral } from "@/lib/ia/mistral-rate-limit";
 import {
   extrairTextoRespostaMistral,
   resolveMistralReasoningEffort,
@@ -93,7 +94,7 @@ export async function mistralChatCompletion(params: {
         const t = await res.text().catch(() => "");
         lastError = `Mistral HTTP ${res.status}: ${t.slice(0, 280)}`;
         if (attempt < retries && shouldRetryMistral(res.status, t)) {
-          await new Promise((r) => setTimeout(r, 450 * (attempt + 1)));
+          await new Promise((r) => setTimeout(r, delayMsParaRetryMistral(res.status, attempt)));
           continue;
         }
         return { ok: false, error: lastError };

@@ -6,6 +6,7 @@ import {
   preencherTabelaVaziaDeGrafico,
   normalizarSecoesArtefatoEntrada,
 } from "./artefato-normalizar";
+import { normalizarLinhasTabelaRobusta } from "./artefato-enriquecer-crm";
 import { enriquecerSecoesArtefato } from "./artefato-enriquecer";
 import { gerarHtmlArtefatoCanvas } from "./artefato-canvas";
 import type { ArtefatoBranding } from "./artefato-branding";
@@ -49,7 +50,7 @@ describe("artefato normalizar tabelas", () => {
     expect(linhas[0]![2]).toBe("aberto");
   });
 
-  it("enriquecer preenche tabela vazia quando há gráfico no payload", () => {
+  it("preenche tabela vazia quando há gráfico no payload", () => {
     const secoes = enriquecerSecoesArtefato([
       {
         tipo: "grafico",
@@ -73,6 +74,28 @@ describe("artefato normalizar tabelas", () => {
       expect(tabela.linhas.length).toBe(2);
     }
   });
+
+  it("trata linhas placeholder como vazias", () => {
+    const linhas = preencherTabelaVaziaDeGrafico(
+      ["Código", "Valor"],
+      [["—", "—"]],
+      {
+        tipo: "bar",
+        labels: ["NEG-A"],
+        datasets: [{ label: "V", data: [100] }],
+      }
+    );
+    expect(linhas[0]![0]).toBe("NEG-A");
+  });
+
+  it("mapeia chaves em inglês nas linhas", () => {
+    const linhas = normalizarLinhasTabelaRobusta(
+      ["Código", "Lead", "Valor"],
+      [{ code: "NEG-1", lead: "Renato", value: 5690 }]
+    );
+    expect(linhas[0]![0]).toBe("NEG-1");
+    expect(linhas[0]![1]).toBe("Renato");
+  });
 });
 
 describe("artefato dashboard Waje", () => {
@@ -95,7 +118,10 @@ describe("artefato dashboard Waje", () => {
             tipo: "tabela",
             titulo: "Negócios",
             colunas: ["Código", "Valor"],
-            linhas: [{ Código: "NEG-1", Valor: "R$ 100" }],
+            linhas: normalizarLinhasTabelaRobusta(
+              ["Código", "Valor"],
+              [{ Código: "NEG-1", Valor: "R$ 100" }]
+            ),
           },
         ]),
       },

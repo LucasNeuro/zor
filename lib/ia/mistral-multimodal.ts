@@ -3,7 +3,10 @@
  * Geração de imagem: usar artefactos HTML ou integração externa (Mistral não gera imagens nativamente).
  */
 
+import { delayMsParaRetryMistral, isMistralRateLimitError } from "@/lib/ia/mistral-rate-limit";
+
 const MISTRAL_API = "https://api.mistral.ai/v1";
+const DEFAULT_MISTRAL_MM_RETRIES = 2;
 
 function apiKey(): string | null {
   const k = process.env.MISTRAL_API_KEY?.trim();
@@ -14,24 +17,36 @@ async function mistralFetch<T>(path: string, body: Record<string, unknown>): Pro
   const key = apiKey();
   if (!key) throw new Error("MISTRAL_API_KEY_ausente");
 
-  const res = await fetch(`${MISTRAL_API}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  let lastErr = "mistral_http_error";
 
-  const json = (await res.json().catch(() => ({}))) as T & { message?: string; detail?: string };
-  if (!res.ok) {
+  for (let attempt = 0; attempt <= DEFAULT_MISTRAL_MM_RETRIES; attempt++) {
+    const res = await fetch(`${MISTRAL_API}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const json = (await res.json().catch(() => ({}))) as T & { message?: string; detail?: string };
+    if (res.ok) return json;
+
     const msg =
       (json as { message?: string }).message ||
       (json as { detail?: string }).detail ||
       `mistral_http_${res.status}`;
-    throw new Error(String(msg).slice(0, 400));
+    lastErr = String(msg).slice(0, 400);
+
+    if (attempt < DEFAULT_MISTRAL_MM_RETRIES && (res.status === 429 || res.status >= 500)) {
+      await new Promise((r) => setTimeout(r, delayMsParaRetryMistral(res.status, attempt)));
+      continue;
+    }
+
+    throw new Error(`Mistral HTTP ${res.status}: ${lastErr}`);
   }
-  return json;
+
+  throw new Error(lastErr);
 }
 
 export type MistralPercepcaoArgs = {
@@ -104,18 +119,29 @@ export async function executarMistralPercepcao(args: MistralPercepcaoArgs): Prom
         audioBlob = new Blob([buf], { type: mime || "audio/mpeg" });
       }
 
-      const form = new FormData();
-      form.append("file", audioBlob, "audio.mp3");
-      form.append("model", process.env.MISTRAL_TRANSCRIBE_MODEL?.trim() || "voxtral-mini-latest");
+      let json: { text?: string; error?: { message?: string } } = {};
+      for (let attempt = 0; attempt <= DEFAULT_MISTRAL_MM_RETRIES; attempt++) {
+        const form = new FormData();
+        form.append("file", audioBlob, "audio.mp3");
+        form.append("model", process.env.MISTRAL_TRANSCRIBE_MODEL?.trim() || "voxtral-mini-latest");
 
-      const res = await fetch(`${MISTRAL_API}/audio/transcriptions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}` },
-        body: form,
-      });
-      const json = (await res.json()) as { text?: string; error?: { message?: string } };
-      if (!res.ok) {
-        throw new Error(json.error?.message || `transcribe_${res.status}`);
+        const res = await fetch(`${MISTRAL_API}/audio/transcriptions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}` },
+          body: form,
+        });
+        json = (await res.json()) as { text?: string; error?: { message?: string } };
+        if (res.ok) break;
+        const errMsg = json.error?.message || `transcribe_${res.status}`;
+        if (attempt < DEFAULT_MISTRAL_MM_RETRIES && (res.status === 429 || res.status >= 500)) {
+          await new Promise((r) => setTimeout(r, delayMsParaRetryMistral(res.status, attempt)));
+          continue;
+        }
+        throw new Error(
+          isMistralRateLimitError(errMsg) || res.status === 429
+            ? `Mistral HTTP 429: ${errMsg}`
+            : errMsg
+        );
       }
       return JSON.stringify({
         ok: true,

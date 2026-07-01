@@ -5,8 +5,22 @@ import {
   resolveMistralReasoningEffort,
   type MistralReasoningEffort,
 } from "@/lib/ia/mistral-reasoning";
+import { delayMsParaRetryMistral } from "@/lib/ia/mistral-rate-limit";
 
 const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
+const DEFAULT_MISTRAL_TOOL_RETRIES = 2;
+
+function mistralToolRetries(): number {
+  const raw = Number.parseInt(String(process.env.MISTRAL_CHAT_RETRIES || ""), 10);
+  if (!Number.isFinite(raw) || raw < 0) return DEFAULT_MISTRAL_TOOL_RETRIES;
+  return Math.min(raw, 4);
+}
+
+function shouldRetryMistralTool(status: number, body: string): boolean {
+  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) return true;
+  const b = body.toLowerCase();
+  return b.includes("service unavailable") || b.includes("timeout") || b.includes("overloaded");
+}
 
 export type MistralChatToolDefinition = {
   type: "function";
@@ -89,17 +103,27 @@ export async function mistralChatCompletionToolRound(params: {
     body.reasoning_effort = "high";
   }
 
-  const res = await fetch(MISTRAL_CHAT_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  const retries = mistralToolRetries();
+  let rawText = "";
 
-  const rawText = await res.text();
-  if (!res.ok) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(MISTRAL_CHAT_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    rawText = await res.text();
+    if (res.ok) break;
+
+    if (attempt < retries && shouldRetryMistralTool(res.status, rawText)) {
+      await new Promise((r) => setTimeout(r, delayMsParaRetryMistral(res.status, attempt)));
+      continue;
+    }
+
     return { ok: false, error: `Mistral HTTP ${res.status}: ${rawText.slice(0, 400)}` };
   }
 

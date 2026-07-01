@@ -5,7 +5,7 @@ import type {
   SecaoArtefatoSpec,
 } from "@/lib/hub/superagente/types";
 import type { ArtefatoBranding } from "@/lib/hub/superagente/artefato-branding";
-import { enriquecerSecoesArtefato } from "@/lib/hub/superagente/artefato-enriquecer";
+import { enriquecerSecoesArtefato, filtrarSecoesVazias } from "@/lib/hub/superagente/artefato-enriquecer";
 import { corDatasetGrafico, KPI_CORES, KPI_ORDEM_WAJE, type KpiCorToken } from "@/lib/hub/superagente/artefato-paleta";
 import { montarHtmlArtefatoShell } from "@/lib/hub/superagente/artefato-shell";
 import { publicarArtefatoHtml } from "@/lib/hub/superagente/publicar-artefato-html";
@@ -24,19 +24,33 @@ function markdownSimplesParaHtml(md: string): string {
     return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   };
 
-  return md
-    .split(/\r?\n/)
-    .map((linha) => {
-      const t = linha.trim();
-      if (!t) return "";
-      if (t.startsWith("### ")) return `<h3>${inlineMd(t.slice(4))}</h3>`;
-      if (t.startsWith("## ")) return `<h2>${inlineMd(t.slice(3))}</h2>`;
-      if (t.startsWith("# ")) return `<h2>${inlineMd(t.slice(2))}</h2>`;
-      if (t.startsWith("- ")) return `<li>${inlineMd(t.slice(2))}</li>`;
-      return `<p>${inlineMd(t)}</p>`;
-    })
-    .filter(Boolean)
-    .join("\n");
+  const parts: string[] = [];
+  let listItems: string[] = [];
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    parts.push(`<ul>${listItems.join("")}</ul>`);
+    listItems = [];
+  };
+
+  for (const linha of md.split(/\r?\n/)) {
+    const t = linha.trim();
+    if (!t) {
+      flushList();
+      continue;
+    }
+    if (t.startsWith("- ")) {
+      listItems.push(`<li>${inlineMd(t.slice(2))}</li>`);
+      continue;
+    }
+    flushList();
+    if (t.startsWith("### ")) parts.push(`<h3>${inlineMd(t.slice(4))}</h3>`);
+    else if (t.startsWith("## ")) parts.push(`<h2>${inlineMd(t.slice(3))}</h2>`);
+    else if (t.startsWith("# ")) parts.push(`<h2>${inlineMd(t.slice(2))}</h2>`);
+    else parts.push(`<p>${inlineMd(t)}</p>`);
+  }
+  flushList();
+  return parts.join("\n");
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -221,8 +235,13 @@ function montarMainHtmlOrdenado(secoes: SecaoArtefatoSpec[], tema: "claro" | "es
   return { html: parts.join("\n"), scripts };
 }
 
-export function gerarHtmlArtefatoCanvas(spec: ArtefatoCanvasSpec, branding: ArtefatoBranding): string {
-  const secoes = enriquecerSecoesArtefato(spec.secoes);
+export function gerarHtmlArtefatoCanvas(
+  spec: ArtefatoCanvasSpec,
+  branding: ArtefatoBranding,
+  opts?: { skipEnriquecer?: boolean }
+): string {
+  const secoesBase = opts?.skipEnriquecer ? spec.secoes : enriquecerSecoesArtefato(spec.secoes);
+  const secoes = filtrarSecoesVazias(secoesBase);
   const temaCanvas = spec.tema === "escuro" ? "escuro" : "claro";
   const { html: mainHtml, scripts } = montarMainHtmlOrdenado(secoes, temaCanvas);
 
@@ -269,9 +288,22 @@ export async function publicarArtefatoCanvas(
   }
 
   let branding = meta.branding;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  let secoesFinais = spec.secoes;
+  if (url && key) {
+    const { createClient } = await import("@supabase/supabase-js");
+    const db = createClient(url, key, { auth: { persistSession: false } });
+    const { enriquecerSecoesArtefatoComCrm } = await import(
+      "@/lib/hub/superagente/artefato-enriquecer-crm"
+    );
+    secoesFinais = await enriquecerSecoesArtefatoComCrm(db, meta.tenantId, spec.secoes);
+  } else {
+    secoesFinais = enriquecerSecoesArtefato(spec.secoes);
+  }
+
   if (!branding) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
     if (!url || !key) return { ok: false, erro: "supabase_nao_configurado" };
     const { createClient } = await import("@supabase/supabase-js");
     const { carregarBrandingAgenteArtefato } = await import("@/lib/hub/superagente/artefato-branding");
@@ -282,7 +314,11 @@ export async function publicarArtefatoCanvas(
     );
   }
 
-  const html = gerarHtmlArtefatoCanvas(spec, branding);
+  const html = gerarHtmlArtefatoCanvas(
+    { ...spec, secoes: secoesFinais },
+    branding,
+    { skipEnriquecer: true }
+  );
   const pub = await publicarArtefatoHtml(html, {
     titulo: spec.titulo,
     agenteSlug: meta.agenteSlug,

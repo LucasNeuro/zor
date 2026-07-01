@@ -21,7 +21,7 @@ import {
   telefonesConversaEquivalentes,
   validarLeadTelefoneSessao,
 } from "@/lib/crm/isolamento-conversa-lead";
-import { normalizarLinhasTabela } from "@/lib/hub/superagente/artefato-normalizar";
+import { normalizarLinhasTabelaRobusta } from "@/lib/hub/superagente/artefato-enriquecer-crm";
 
 export type FerramentaHubContexto = {
   leadId?: string | null;
@@ -423,11 +423,14 @@ async function executarFerramentaHubBuiltin(
             itens: itens as import("@/lib/hub/superagente/types").KpiArtefatoItem[],
           };
         }
-        if (tipo === "grafico" && o.grafico && typeof o.grafico === "object") {
-          const g = o.grafico as Record<string, unknown>;
-          const labels = Array.isArray(g.labels) ? g.labels.map((l) => String(l)) : [];
-          const datasets = Array.isArray(g.datasets)
-            ? g.datasets
+        if (tipo === "grafico" || tipo === "chart" || tipo === "graph") {
+          const gSource =
+            o.grafico && typeof o.grafico === "object" && !Array.isArray(o.grafico)
+              ? (o.grafico as Record<string, unknown>)
+              : o;
+          const labels = Array.isArray(gSource.labels) ? gSource.labels.map((l) => String(l)) : [];
+          const datasets = Array.isArray(gSource.datasets)
+            ? gSource.datasets
                 .map((d) => {
                   if (!d || typeof d !== "object") return null;
                   const ds = d as Record<string, unknown>;
@@ -439,29 +442,49 @@ async function executarFerramentaHubBuiltin(
                 })
                 .filter(Boolean)
             : [];
-          const tipoGraf = String(g.tipo || "bar").trim().toLowerCase();
+          const tipoGraf = String(gSource.tipo || gSource.type || "bar").trim().toLowerCase();
           const tipos = new Set(["bar", "line", "pie", "doughnut"]);
           return {
             tipo: "grafico" as const,
             grafico: {
               tipo: tipos.has(tipoGraf) ? (tipoGraf as "bar" | "line" | "pie" | "doughnut") : "bar",
-              titulo: typeof g.titulo === "string" ? g.titulo : undefined,
+              titulo:
+                typeof gSource.titulo === "string"
+                  ? gSource.titulo
+                  : typeof gSource.title === "string"
+                    ? gSource.title
+                    : undefined,
               labels,
               datasets: datasets as Array<{ label: string; data: number[]; cor?: string }>,
             },
           };
         }
-        if (tipo === "tabela") {
-          const colunas = Array.isArray(o.colunas) ? o.colunas.map((c) => String(c)) : [];
-          const linhasRaw = Array.isArray(o.linhas)
-            ? o.linhas
-            : Array.isArray(o.rows)
-              ? o.rows
+        if (tipo === "tabela" || tipo === "table") {
+          const tbSource =
+            o.tabela && typeof o.tabela === "object" && !Array.isArray(o.tabela)
+              ? (o.tabela as Record<string, unknown>)
+              : o;
+          const colunas = Array.isArray(tbSource.colunas)
+            ? tbSource.colunas.map((c) => String(c))
+            : Array.isArray(tbSource.columns)
+              ? tbSource.columns.map((c) => String(c))
               : [];
-          const linhas = normalizarLinhasTabela(colunas, linhasRaw);
+          const linhasRaw = Array.isArray(tbSource.linhas)
+            ? tbSource.linhas
+            : Array.isArray(tbSource.rows)
+              ? tbSource.rows
+              : Array.isArray(tbSource.dados)
+                ? tbSource.dados
+                : [];
+          const linhas = normalizarLinhasTabelaRobusta(colunas, linhasRaw);
           return {
             tipo: "tabela" as const,
-            titulo: typeof o.titulo === "string" ? o.titulo : undefined,
+            titulo:
+              typeof tbSource.titulo === "string"
+                ? tbSource.titulo
+                : typeof tbSource.title === "string"
+                  ? tbSource.title
+                  : undefined,
             colunas,
             linhas,
           };

@@ -1,4 +1,6 @@
 /** Mensagens para utilizadores — sem nomes de variáveis, tabelas ou infraestrutura. */
+import { isMistralRateLimitError, mensagemMistralRateLimitUsuario } from "@/lib/ia/mistral-rate-limit";
+
 export function mensagemUsuario(raw: string): string {
   const m = raw.trim();
   if (!m) return "Ocorreu um erro. Tente novamente.";
@@ -20,6 +22,10 @@ export function mensagemUsuario(raw: string): string {
 
   if (/GOOGLE_OAUTH|MICROSOFT_OAUTH|HUB_CREDENTIALS|WINDSOR_API/i.test(m)) {
     return "Integração ainda não disponível neste ambiente. Contacte o suporte da plataforma.";
+  }
+
+  if (isMistralRateLimitError(m)) {
+    return mensagemMistralRateLimitUsuario();
   }
 
   if (/NEXT_PUBLIC_|SUPABASE_|\.env|Render\b/i.test(m)) {

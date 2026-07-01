@@ -152,10 +152,12 @@ export function cssArtefatoShell(tema: ArtefatoShellTema): string {
     margin:0 0 .65rem;font-size:clamp(.88rem,3.5vw,.95rem);font-weight:800;
     color:var(--heading);word-wrap:break-word
   }
-  .card.prose p,.card.prose li{
+  .card.prose p{
     margin:.35rem 0;font-size:clamp(.82rem,3.2vw,.9rem);color:var(--fg2);
     word-wrap:break-word;overflow-wrap:anywhere
   }
+  .card.prose ul{margin:.5rem 0 .75rem;padding-left:1.25rem}
+  .card.prose li{margin:.35rem 0;font-size:clamp(.82rem,3.2vw,.9rem);color:var(--fg2)}
   .card.prose h2,.card.prose h3{color:var(--heading)}
   .table-card{padding:0;overflow:hidden}
   .table-card .table-title{

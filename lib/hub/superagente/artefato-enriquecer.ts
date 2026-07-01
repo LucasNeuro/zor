@@ -60,33 +60,40 @@ function graficoDeTabela(
   };
 }
 
-function ordenSecao(tipo: SecaoArtefatoSpec["tipo"]): number {
-  if (tipo === "kpi_row") return 0;
-  if (tipo === "grafico") return 1;
-  if (tipo === "tabela") return 2;
-  return 3;
+/** Remove secções vazias que geram barras/cards em branco no relatório. */
+export function filtrarSecoesVazias(secoes: SecaoArtefatoSpec[]): SecaoArtefatoSpec[] {
+  return secoes.filter((sec) => {
+    if (sec.tipo === "kpi_row") return sec.itens.length > 0;
+    if (sec.tipo === "grafico") {
+      const g = sec.grafico;
+      return g.labels.length > 0 && g.datasets.some((d) => d.data.length > 0);
+    }
+    if (sec.tipo === "tabela") return sec.colunas.length > 0 && sec.linhas.length > 0;
+    if (sec.tipo === "texto") {
+      const t = (sec.markdown || sec.html_seguro || "").trim();
+      return t.length > 24;
+    }
+    return true;
+  });
 }
 
-/** Normaliza tabelas, preenche linhas vazias e insere gráficos derivados quando faltar. */
+/** Insere gráficos derivados de tabelas quando o modelo só enviou texto/tabela. Preserva ordem original. */
 export function enriquecerSecoesArtefato(secoes: SecaoArtefatoSpec[]): SecaoArtefatoSpec[] {
   const normalizadas = normalizarSecoesArtefatoEntrada(secoes);
   const temGrafico = normalizadas.some((s) => s.tipo === "grafico");
+  if (temGrafico) return filtrarSecoesVazias(normalizadas);
 
-  let out: SecaoArtefatoSpec[] = temGrafico ? [...normalizadas] : [];
-
-  if (!temGrafico) {
-    for (const sec of normalizadas) {
-      out.push(sec);
-      if (sec.tipo === "tabela" && sec.linhas.length >= 2) {
-        const g = graficoDeTabela(
-          sec.titulo?.trim() || `Distribuição — ${sec.colunas.join(" / ").slice(0, 60)}`,
-          sec.colunas,
-          sec.linhas
-        );
-        if (g) out.push({ tipo: "grafico", grafico: g });
-      }
+  const out: SecaoArtefatoSpec[] = [];
+  for (const sec of normalizadas) {
+    out.push(sec);
+    if (sec.tipo === "tabela" && sec.linhas.length >= 2) {
+      const g = graficoDeTabela(
+        sec.titulo?.trim() || `Gráfico — ${sec.colunas.join(" / ").slice(0, 60)}`,
+        sec.colunas,
+        sec.linhas
+      );
+      if (g) out.push({ tipo: "grafico", grafico: g });
     }
   }
-
-  return [...out].sort((a, b) => ordenSecao(a.tipo) - ordenSecao(b.tipo));
+  return filtrarSecoesVazias(out);
 }

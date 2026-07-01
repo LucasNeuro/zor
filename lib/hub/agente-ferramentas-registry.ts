@@ -308,7 +308,7 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
     mistralFunction: {
       name: "hub_superagente_artefato",
       description:
-        "Publica UM relatório dashboard Waje (tema claro, verdes marca). Secções: kpi_row (cor: verde|azul|laranja|teal|roxo|rosa), grafico, tabela COM linhas preenchidas (array de arrays ou objetos), texto/insights. Consulte CRM antes. Tabela deve listar os mesmos dados do gráfico. Responda só com url_publica.",
+        "Publica UM relatório dashboard (tema claro, degradé verde Waje). Secções: kpi_row (itens: label, valor, delta, cor), grafico (bar|line|pie|doughnut, labels, datasets), tabela (colunas, linhas completas), texto (análise). Consulte dados reais antes. Responda só com url_publica — não duplique conteúdo no chat.",
       parameters: {
         type: "object",
         properties: {
@@ -318,7 +318,7 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
           secoes: {
             type: "array",
             description:
-              "Ordem: kpi_row → grafico → tabela (linhas obrigatórias) → texto insights. Tabela: {tipo,titulo?,colunas,linhas:[[...]] ou linhas:[{Código,Lead,Valor,Status}]}",
+              "Secções: {tipo:kpi_row,itens:[{label,valor,delta,cor}]} | {tipo:grafico,grafico:{tipo,labels,datasets}} | {tipo:tabela,titulo?,colunas,linhas} | {tipo:texto,markdown}",
             items: { type: "object" },
           },
         },

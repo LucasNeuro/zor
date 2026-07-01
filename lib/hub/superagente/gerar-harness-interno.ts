@@ -82,7 +82,9 @@ export function montarHarnessInternoDeterministico(
 
   let skills = gerarSkillsSuperagenteFromCargo(titulo, area);
   if (opts?.uso_ferramentas_ia) {
-    skills = ajustarSkillsPorFerramentasAtivas(skills, opts.uso_ferramentas_ia);
+    skills = ajustarSkillsPorFerramentasAtivas(skills, opts.uso_ferramentas_ia).filter(
+      (s) => s.ferramentas_sugeridas.length > 0
+    );
   }
 
   return { system_prompt_base, skills, gerado_com_ia: false };

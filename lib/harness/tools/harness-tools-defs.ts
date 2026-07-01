@@ -4,6 +4,9 @@ import type { MistralChatToolDefinition } from "@/lib/ia/mistral-chat-tools";
 export const HARNESS_TOOL_NAMES = [
   "harness_skills_list",
   "harness_skill_view",
+  "harness_skill_manage",
+  "harness_memory",
+  "harness_session_search",
   "harness_delegate_to_agent",
   "harness_transfer_lead",
 ] as const;
@@ -40,6 +43,76 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
             skill_id: { type: "string", description: "ID da skill (ex.: crm_pipeline)" },
           },
           required: ["skill_id"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "harness_skill_manage",
+        description:
+          "Cria, actualiza ou remove skills do agente. Em modo operar pode exigir aprovação humana.",
+        parameters: {
+          type: "object",
+          properties: {
+            acao: {
+              type: "string",
+              enum: ["create", "patch", "delete"],
+              description: "Operação na skill",
+            },
+            skill_id: { type: "string", description: "ID único da skill (slug)" },
+            titulo: { type: "string" },
+            descricao: { type: "string" },
+            corpo_md: { type: "string", description: "Corpo markdown do runbook" },
+            ferramentas_sugeridas: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+          required: ["acao", "skill_id"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "harness_memory",
+        description:
+          "Actualiza memória curada do agente (operacional, utilizador, atendimento). Efeito no prompt = próxima sessão.",
+        parameters: {
+          type: "object",
+          properties: {
+            acao: {
+              type: "string",
+              enum: ["add", "replace", "remove"],
+              description: "add=append, replace=substituir target, remove=limpar",
+            },
+            target: {
+              type: "string",
+              enum: ["operacional", "utilizador", "atendimento"],
+            },
+            conteudo: { type: "string", description: "Texto (obrigatório para add/replace)" },
+          },
+          required: ["acao", "target"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "harness_session_search",
+        description:
+          "Pesquisa conversas anteriores do copiloto/briefing deste agente por palavras-chave.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Termos de pesquisa" },
+            limite: { type: "number", description: "Máximo de mensagens (default 8)" },
+          },
+          required: ["query"],
           additionalProperties: false,
         },
       },

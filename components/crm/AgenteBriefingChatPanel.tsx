@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bot, User, X } from "lucide-react";
 import { CopilotoMultimodalComposer } from "@/components/crm/CopilotoMultimodalComposer";
@@ -27,6 +27,11 @@ import {
   RF_TEXT_SECONDARY,
   rfCloseButtonStyle,
 } from "@/lib/crm/crm-retrofit-dark-theme";
+import {
+  HARNESS_DISPLAY_INITIAL,
+  harnessDisplayReducer,
+  pendingToHarnessEvents,
+} from "@/lib/harness/display-state";
 
 type Msg = {
   id: string;
@@ -52,6 +57,22 @@ function anexosDaMensagem(metadata?: Record<string, unknown>): Array<{
 }
 
 const OPTIMISTIC_USER_PREFIX = "optimistic-user-";
+
+const HARNESS_MODOS = [
+  { id: "conversar" as const, label: "Conversar" },
+  { id: "analisar" as const, label: "Analisar" },
+  { id: "operar" as const, label: "Operar" },
+  { id: "planear" as const, label: "Planear" },
+];
+
+type HarnessPendingApproval = {
+  id: string;
+  tool_name: string;
+  resumo_humano: string;
+  nivel?: string;
+};
+
+type HarnessModoId = (typeof HARNESS_MODOS)[number]["id"];
 
 function isOptimisticUserMessage(m: Msg): boolean {
   return m.papel === "user" && m.id.startsWith(OPTIMISTIC_USER_PREFIX);
@@ -86,9 +107,120 @@ export function AgenteBriefingDrawer({
   const [input, setInput] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
+  const [harnessModo, setHarnessModo] = useState<HarnessModoId>("analisar");
+  const [escritaPendente, setEscritaPendente] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState<HarnessPendingApproval[]>([]);
+  const [displayState, dispatchHarness] = useReducer(harnessDisplayReducer, HARNESS_DISPLAY_INITIAL);
   const fimRef = useRef<HTMLDivElement>(null);
 
   const base = `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/briefing-chat`;
+
+  useEffect(() => {
+    if (!open || !agenteSlug || !ehCopilotoInterno) return;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/hub/agentes/${encodeURIComponent(agenteSlug)}/harness/session`,
+          { headers: await hubApiHeaders() }
+        );
+        const data = (await res.json().catch(() => ({}))) as {
+          modo_id?: HarnessModoId;
+          pending_approvals?: HarnessPendingApproval[];
+        };
+        if (data.modo_id && HARNESS_MODOS.some((m) => m.id === data.modo_id)) {
+          setHarnessModo(data.modo_id!);
+        }
+        if (Array.isArray(data.pending_approvals)) {
+          setPendingApprovals(data.pending_approvals);
+          setEscritaPendente(data.pending_approvals.length > 0);
+          for (const ev of pendingToHarnessEvents(data.pending_approvals)) {
+            dispatchHarness(ev);
+          }
+        }
+        dispatchHarness({ type: "mode_changed", modoId: data.modo_id ?? "analisar" });
+      } catch {
+        /* opcional */
+      }
+    })();
+  }, [open, agenteSlug, ehCopilotoInterno]);
+
+  async function mudarHarnessModo(modo: HarnessModoId) {
+    setHarnessModo(modo);
+    dispatchHarness({ type: "mode_changed", modoId: modo });
+    try {
+      await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/harness/session`, {
+        method: "PATCH",
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify({ modo_id: modo }),
+      });
+    } catch {
+      /* UI já reflecte modo local */
+    }
+  }
+
+  async function aprovarEscritaHarness() {
+    try {
+      await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/harness/session`, {
+        method: "PATCH",
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify({ aprovar_escrita_sessao: true }),
+      });
+      setEscritaPendente(false);
+    } catch {
+      setErro("Não foi possível aprovar escrita CRM nesta sessão.");
+    }
+  }
+
+  async function decidirAprovacao(approvalId: string, decisao: "aprovar" | "rejeitar") {
+    setEnviando(true);
+    setErro("");
+    try {
+      const historico = mensagens
+        .filter((m) => m.papel === "user" || m.papel === "assistant")
+        .map((m) => ({
+          role: m.papel,
+          content: m.conteudo,
+        }));
+      const res = await fetch(base, {
+        method: "POST",
+        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessao_id: sessaoId,
+          mensagem: "",
+          modo: "briefing_interno",
+          approval_id: approvalId,
+          approval_decisao: decisao,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sessao_id?: string;
+        mensagens?: Msg[];
+        ultima_resposta_meta?: {
+          pending_approvals?: HarnessPendingApproval[];
+          tokens_input?: number;
+          tokens_output?: number;
+        };
+      };
+      if (!res.ok) {
+        setErro(
+          mensagemErroBriefingChat(
+            typeof data?.error === "string" ? data.error : `Erro ${res.status}`
+          )
+        );
+        return;
+      }
+      if (data.sessao_id) setSessaoId(data.sessao_id);
+      if (Array.isArray(data.mensagens)) setMensagens(data.mensagens);
+      const pending = data.ultima_resposta_meta?.pending_approvals ?? [];
+      setPendingApprovals(pending);
+      setEscritaPendente(pending.length > 0);
+    } catch {
+      setErro("Falha ao processar aprovação.");
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -139,6 +271,7 @@ export function AgenteBriefingDrawer({
     ]);
     setEnviando(true);
     setErro("");
+    dispatchHarness({ type: "turn_start", modoId: harnessModo });
     setInput("");
     try {
       const res = await fetch(base, {
@@ -155,6 +288,11 @@ export function AgenteBriefingDrawer({
         error?: string;
         sessao_id?: string;
         mensagens?: Msg[];
+        ultima_resposta_meta?: {
+          pending_approvals?: HarnessPendingApproval[];
+          tokens_input?: number;
+          tokens_output?: number;
+        };
       };
       if (!res.ok) {
         setMensagens((prev) => prev.filter((m) => m.id !== tempId));
@@ -168,11 +306,34 @@ export function AgenteBriefingDrawer({
         return;
       }
       if (data.sessao_id) setSessaoId(data.sessao_id);
-      if (Array.isArray(data.mensagens)) setMensagens(data.mensagens);
+      if (Array.isArray(data.mensagens)) {
+        setMensagens(data.mensagens);
+        const pending = data.ultima_resposta_meta?.pending_approvals ?? [];
+        setPendingApprovals(pending);
+        setEscritaPendente(
+          pending.length > 0 ||
+            Boolean(
+              data.mensagens
+                .filter((m) => m.papel === "assistant")
+                .pop()
+                ?.conteudo?.includes("requer_aprovacao")
+            )
+        );
+        for (const ev of pendingToHarnessEvents(pending)) {
+          dispatchHarness(ev);
+        }
+        const meta = data.ultima_resposta_meta;
+        dispatchHarness({
+          type: "turn_end",
+          tokensInput: meta?.tokens_input,
+          tokensOutput: meta?.tokens_output,
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: hubQueryKeys.agentes.operacao(agenteSlug) });
     } catch {
       setMensagens((prev) => prev.filter((m) => m.id !== tempId));
       setErro("Falha de rede ao enviar.");
+      dispatchHarness({ type: "error", message: "Falha de rede ao enviar." });
       setInput(t);
     } finally {
       setEnviando(false);
@@ -292,11 +453,42 @@ export function AgenteBriefingDrawer({
                 </button>
               </div>
             ) : null}
+            {ehCopilotoInterno ? (
+              <div
+                style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}
+                role="group"
+                aria-label="Modo harness"
+              >
+                {HARNESS_MODOS.map((m) => {
+                  const at = harnessModo === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      disabled={enviando}
+                      onClick={() => void mudarHarnessModo(m.id)}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        border: `1px solid ${at ? RF_BORDER_STRONG : RF_BORDER}`,
+                        background: at ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
+                        color: at ? RF_ACCENT : RF_TEXT_MUTED,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: enviando ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             <p style={{ fontSize: 10, color: "#6e7681", margin: "8px 0 0", lineHeight: 1.45 }}>
               {ehCopilotoInterno
                 ? ehAnalistaCrm
                   ? "Analista de CRM: organiza e analisa leads no sistema. Não encaminha a parceiros — pergunte sobre status, ciclos e registos."
-                  : "Converse com o copiloto como num chat: função do agente, leads, ciclos e registos. Memórias são guardadas só para este assistente."
+                  : "Converse com o copiloto: função do agente, leads, ciclos e registos. Modos harness governam escrita CRM. Memórias persistem por assistente."
                 : modoChat === "briefing_interno"
                   ? "Consulte o histórico de operação deste assistente. Ações automáticas só funcionam na conversa real com o cliente."
                   : "Espelha o WhatsApp real: conhecimento, RAG e ferramentas — sem criar leads no funil nem enviar mensagens reais."}
@@ -331,6 +523,101 @@ export function AgenteBriefingDrawer({
                 {erro}
               </div>
             )}
+            {ehCopilotoInterno && (displayState.tokenUsage.input > 0 || displayState.isStreaming) ? (
+              <p style={{ fontSize: 10, color: RF_TEXT_MUTED, margin: "0 0 10px" }}>
+                Harness · modo {displayState.modeId}
+                {displayState.isStreaming ? " · a pensar…" : ""}
+                {displayState.tokenUsage.input > 0
+                  ? ` · tokens ${displayState.tokenUsage.input}/${displayState.tokenUsage.output}`
+                  : ""}
+              </p>
+            ) : null}
+            {pendingApprovals.length > 0 && ehCopilotoInterno ? (
+              <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                {pendingApprovals.map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      background: "rgba(248,187,92,0.12)",
+                      border: "1px solid rgba(248,187,92,0.4)",
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 12,
+                      color: RF_TEXT_SECONDARY,
+                    }}
+                  >
+                    <strong style={{ color: RF_ACCENT }}>Aprovação pendente:</strong>{" "}
+                    {p.resumo_humano || p.tool_name}
+                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        disabled={enviando}
+                        onClick={() => void decidirAprovacao(p.id, "aprovar")}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          border: `1px solid ${RF_BORDER_STRONG}`,
+                          background: "rgba(146,255,0,0.12)",
+                          color: RF_ACCENT,
+                          fontWeight: 700,
+                          cursor: enviando ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Aprovar uma vez
+                      </button>
+                      <button
+                        type="button"
+                        disabled={enviando}
+                        onClick={() => void decidirAprovacao(p.id, "rejeitar")}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          border: `1px solid ${RF_BORDER}`,
+                          background: "transparent",
+                          color: RF_TEXT_MUTED,
+                          fontWeight: 600,
+                          cursor: enviando ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Rejeitar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {escritaPendente && ehCopilotoInterno && pendingApprovals.length === 0 ? (
+              <div
+                style={{
+                  background: "rgba(248,187,92,0.12)",
+                  border: "1px solid rgba(248,187,92,0.4)",
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 12,
+                  fontSize: 12,
+                  color: RF_TEXT_SECONDARY,
+                }}
+              >
+                <strong style={{ color: RF_ACCENT }}>Aprovação CRM:</strong> o agente precisa de autorização
+                para gravar.{" "}
+                <button
+                  type="button"
+                  onClick={() => void aprovarEscritaHarness()}
+                  style={{
+                    marginLeft: 6,
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    border: `1px solid ${RF_BORDER_STRONG}`,
+                    background: "rgba(146,255,0,0.12)",
+                    color: RF_ACCENT,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Aprovar escrita nesta sessão
+                </button>
+              </div>
+            ) : null}
             {mensagens.length === 0 && !erro && !enviando && (
               <p style={{ color: RF_TEXT_SECONDARY, fontSize: 13, lineHeight: 1.55, maxWidth: 640 }}>
                 {ehCopilotoInterno ? (

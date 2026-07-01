@@ -83,6 +83,41 @@ export async function upsertMemoryTarget(
   }
 }
 
+const MAX_LINHAS_RESUMO_CONVERSA = 12;
+
+/** Acumula tópicos recentes do copiloto (entre sessões) em target utilizador. */
+export async function appendResumoTurnoCopiloto(
+  supabase: SupabaseClient,
+  params: {
+    tenantId: string;
+    agenteSlug: string;
+    linhaResumo: string;
+  }
+): Promise<void> {
+  const linha = params.linhaResumo.trim();
+  if (!linha) return;
+
+  const snap = await carregarMemorySnapshot(supabase, params.tenantId, params.agenteSlug, [
+    "utilizador",
+  ]);
+  const prev = snap.utilizador?.trim() ?? "";
+  const prefixo = "Últimos tópicos com o gestor:";
+  const existentes = prev
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("- "))
+    .slice(-(MAX_LINHAS_RESUMO_CONVERSA - 1));
+  const novas = [...existentes, `- ${linha.slice(0, 200)}`].slice(-MAX_LINHAS_RESUMO_CONVERSA);
+  const conteudo = `${prefixo}\n${novas.join("\n")}`;
+
+  await upsertMemoryTarget(supabase, {
+    tenantId: params.tenantId,
+    agenteSlug: params.agenteSlug,
+    target: "utilizador",
+    conteudo,
+  });
+}
+
 export async function stagingMemoryPatch(
   supabase: SupabaseClient,
   params: {

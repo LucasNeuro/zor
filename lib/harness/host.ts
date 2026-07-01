@@ -28,8 +28,19 @@ import { montarSystemPromptHarness } from "@/lib/harness/build-system-prompt";
 import { calcularCustoBrl } from "@/lib/harness/calcular-custo-brl";
 import { normalizarEntregaArtefacto } from "@/lib/hub/superagente/entrega-artefato";
 import { runWajeMistralHarnessTurn } from "@/lib/harness/runtime/waje-mistral-v1";
+import { resumoTurnoParaMemoria } from "@/lib/harness/historico-copiloto";
 import {
-  carregarMemorySnapshot,
+  compactarHistoricoHarness,
+  formatarBlocoResumoCompactado,
+} from "@/lib/harness/compaction";
+import { montarBlocoConhecimentoTenantHarness } from "@/lib/harness/tenant-conhecimento-bloco";
+import { listarPendingWritesAgente } from "@/lib/harness/stores/pending-approvals";
+import { resumeHarnessAfterApproval } from "@/lib/harness/resume-after-approval";
+import { obterOuCongelarMemorySnapshotSessao } from "@/lib/harness/stores/session-memory-frozen";
+import { acumularMetricasSessaoHarness } from "@/lib/harness/stores/session-metrics";
+import { carregarHarnessTenantConfig } from "@/lib/harness/tenant-config";
+import {
+  appendResumoTurnoCopiloto,
   formatarBlocoMemorySnapshot,
 } from "@/lib/harness/stores/memory-store";
 import {
@@ -98,15 +109,28 @@ export async function runHarnessHost(
     surface,
   });
 
-  const [skillsL0, memorySnap] = await Promise.all([
+  const [skillsL0, tenantHarnessCfg] = await Promise.all([
     listarSkillsL0Agente(params.supabase, tenantForTools, params.agenteSlug),
-    carregarMemorySnapshot(params.supabase, tenantForTools, params.agenteSlug),
+    carregarHarnessTenantConfig(params.supabase, tenantForTools),
   ]);
 
   let blocoMemoria = params.memoriasAgenteBloco?.trim() || "";
-  const blocoMemoryCurada = formatarBlocoMemorySnapshot(memorySnap);
-  if (blocoMemoryCurada) {
-    blocoMemoria = blocoMemoria ? `${blocoMemoria}\n\n${blocoMemoryCurada}` : blocoMemoryCurada;
+  if (sessao?.id) {
+    const frozen = await obterOuCongelarMemorySnapshotSessao(params.supabase, {
+      sessionId: sessao.id,
+      tenantId: tenantForTools,
+      agenteSlug: params.agenteSlug,
+    });
+    if (frozen.bloco) {
+      blocoMemoria = blocoMemoria ? `${blocoMemoria}\n\n${frozen.bloco}` : frozen.bloco;
+    }
+  } else {
+    const { carregarMemorySnapshot } = await import("@/lib/harness/stores/memory-store");
+    const memorySnap = await carregarMemorySnapshot(params.supabase, tenantForTools, params.agenteSlug);
+    const blocoMemoryCurada = formatarBlocoMemorySnapshot(memorySnap);
+    if (blocoMemoryCurada) {
+      blocoMemoria = blocoMemoria ? `${blocoMemoria}\n\n${blocoMemoryCurada}` : blocoMemoryCurada;
+    }
   }
 
   try {
@@ -127,6 +151,17 @@ export async function runHarnessHost(
 
   const skillsBloco = formatarBlocoSkillsL0(skillsL0);
 
+  let blocoRag = "";
+  try {
+    blocoRag = await montarBlocoConhecimentoTenantHarness(params.supabase, {
+      tenantId: tenantForTools,
+      mensagemUsuario: params.mensagemUsuario,
+      historico: params.historico,
+    });
+  } catch {
+    /* RAG opcional */
+  }
+
   const systemPrompt = montarSystemPromptHarness({
     agenteNome: params.agenteNome,
     agenteSlug: params.agenteSlug,
@@ -138,14 +173,28 @@ export async function runHarnessHost(
     canalInterno,
     briefCiclo: params.briefCiclo,
     memoriasBloco: blocoMemoria,
+    historico: params.historico,
     snapshot: params.snapshot,
-    skillsBloco,
+    skillsBloco: [skillsBloco, blocoRag].filter(Boolean).join("\n\n"),
   });
 
-  const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
+  const historicoMensagens: Array<{ role: "user" | "assistant"; content: string }> = [];
   for (const m of params.historico) {
-    if (m.papel === "user") mensagens.push({ role: "user", content: m.conteudo });
-    else mensagens.push({ role: "assistant", content: m.conteudo });
+    if (m.papel === "user") historicoMensagens.push({ role: "user", content: m.conteudo });
+    else historicoMensagens.push({ role: "assistant", content: m.conteudo });
+  }
+
+  const compactado = await compactarHistoricoHarness(historicoMensagens);
+  const mensagens: Array<{ role: "user" | "assistant"; content: string }> = [...compactado.mensagens];
+  if (compactado.resumoAnterior) {
+    mensagens.unshift({
+      role: "user",
+      content: formatarBlocoResumoCompactado(compactado.resumoAnterior),
+    });
+    mensagens.push({
+      role: "assistant",
+      content: "Entendido. Continuo com o contexto resumido e as mensagens recentes.",
+    });
   }
   mensagens.push({ role: "user", content: params.mensagemUsuario });
 
@@ -185,10 +234,24 @@ export async function runHarnessHost(
     telefoneSessao: params.telefoneSessao ?? null,
     usuarioCrmId: params.usuarioCrmId ?? null,
     sessionId: sessao?.id ?? null,
-    modoId: sessao?.modo_id ?? "operar",
+    modoId: sessao?.modo_id ?? "analisar",
+    grants: sessao?.grants ?? {},
   };
 
-  const turn = await runWajeMistralHarnessTurn({
+  let turn;
+  if (params.approvalId && params.approvalDecisao) {
+    turn = await resumeHarnessAfterApproval({
+      supabase: params.supabase,
+      hostCtx,
+      approvalId: params.approvalId,
+      decisao: params.approvalDecisao,
+      systemPrompt,
+      mensagens: compactado.mensagens,
+      modelo: params.modelo,
+      agentReasoningEnabled,
+    });
+  } else {
+    turn = await runWajeMistralHarnessTurn({
     hostCtx,
     systemPrompt,
     mensagens,
@@ -198,7 +261,22 @@ export async function runHarnessHost(
     mistralTools: [],
     toolDefs: { customDefs, extDefs, intDefs, usoMap },
     harnessToolsEnabled: motorFerramentas,
-  });
+    });
+  }
+
+  if (params.briefingSessaoId && sessao?.id) {
+    try {
+      await params.supabase
+        .from("hub_harness_sessions")
+        .update({
+          thread_id: params.briefingSessaoId,
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq("id", sessao.id);
+    } catch {
+      /* opcional */
+    }
+  }
 
   try {
     await persistirMemoriaSuperagenteInterno(params.supabase, {
@@ -215,6 +293,21 @@ export async function runHarnessHost(
     /* memória opcional */
   }
 
+  if (params.usuarioCrmId?.trim() && canalInterno === "copiloto_crm") {
+    try {
+      const linha = resumoTurnoParaMemoria(params.mensagemUsuario, turn.texto);
+      if (linha) {
+        await appendResumoTurnoCopiloto(params.supabase, {
+          tenantId: tenantForTools,
+          agenteSlug: params.agenteSlug,
+          linhaResumo: linha,
+        });
+      }
+    } catch {
+      /* memória opcional */
+    }
+  }
+
   try {
     await executarHarnessBackgroundReview(params.supabase, {
       tenantId: tenantForTools,
@@ -223,14 +316,40 @@ export async function runHarnessHost(
       mensagemUsuario: params.mensagemUsuario,
       respostaIA: turn.texto,
       sessionId: sessao?.id ?? null,
-      requireApproval: false,
+      requireApproval: tenantHarnessCfg.memory_write_approval,
     });
   } catch {
     /* review opcional */
   }
 
   const { brl } = calcularCustoBrl(turn.modelo, turn.tokensEntrada, turn.tokensSaida);
+
+  if (sessao?.id) {
+    try {
+      await acumularMetricasSessaoHarness(params.supabase, sessao.id, {
+        tokens_input: turn.tokensEntrada,
+        tokens_output: turn.tokensSaida,
+        custo_brl: brl,
+        aprovacao_aprovada: params.approvalDecisao === "aprovar",
+        aprovacao_rejeitada: params.approvalDecisao === "rejeitar",
+      });
+    } catch {
+      /* métricas opcionais */
+    }
+  }
+
   const entrega = normalizarEntregaArtefacto(turn.texto, turn.urlsPublicas);
+
+  let pendingApprovals: Awaited<ReturnType<typeof listarPendingWritesAgente>> = [];
+  try {
+    pendingApprovals = await listarPendingWritesAgente(
+      params.supabase,
+      tenantForTools,
+      params.agenteSlug
+    );
+  } catch {
+    /* opcional */
+  }
 
   return {
     texto: entrega.texto,
@@ -241,6 +360,7 @@ export async function runHarnessHost(
     motor: "briefing_interno",
     urls_publicas: entrega.urls_publicas,
     harness_version: HARNESS_VERSION,
+    pending_approvals: pendingApprovals,
   };
 }
 

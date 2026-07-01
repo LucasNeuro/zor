@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  gerarSkillsSuperagenteFromCargo,
-} from "@/lib/hub/superagente/skills-from-cargo";
+import { montarCorpoSkillMd } from "@/lib/harness/skill-md-builder";
 import type { HarnessSurface } from "@/lib/harness/types";
+import { gerarSkillsSuperagenteFromCargo } from "@/lib/hub/superagente/skills-from-cargo";
 
 export type AgenteSkillRow = {
   skill_id: string;
@@ -72,8 +71,6 @@ export async function ensureSkillsSeedFromCargo(
   if (existentes.length > 0) return 0;
 
   const skills = gerarSkillsSuperagenteFromCargo(params.cargo, params.area);
-  const isExterno =
-    params.surface === "whatsapp_lead" || params.surface === "email_lead";
 
   const rows = skills.map((s) => ({
     tenant_id: params.tenantId,
@@ -81,18 +78,7 @@ export async function ensureSkillsSeedFromCargo(
     skill_id: s.id,
     titulo: s.titulo,
     descricao: s.descricao,
-    corpo_md: [
-      `# ${s.titulo}`,
-      "",
-      s.descricao,
-      "",
-      "## Ferramentas sugeridas",
-      ...s.ferramentas_sugeridas.map((f) => `- \`${f}\``),
-      "",
-      isExterno
-        ? "## Quando usar\nPedidos do cliente final no canal comercial — priorize tom empático e dados do lead."
-        : "## Quando usar\nTarefas internas da equipa — use ferramentas CRM e confirme com JSON `ok: true`.",
-    ].join("\n"),
+    corpo_md: montarCorpoSkillMd(s, { cargoTitulo: params.cargo ?? undefined }),
     ferramentas_sugeridas: s.ferramentas_sugeridas,
     origem: "cargo_seed",
   }));
@@ -122,29 +108,23 @@ export async function persistirSkillsHarnessWizard(
   const existentes = await listarSkillsL0Agente(supabase, params.tenantId, params.agenteSlug);
   if (existentes.length > 0) return 0;
 
-  const isExterno =
-    params.surface === "whatsapp_lead" || params.surface === "email_lead";
-
   const rows = params.skills.map((s) => ({
     tenant_id: params.tenantId,
     agente_slug: params.agenteSlug,
     skill_id: s.id,
     titulo: s.titulo,
     descricao: s.descricao,
-    corpo_md: [
-      `# ${s.titulo}`,
-      "",
-      s.descricao,
-      "",
-      "## Ferramentas sugeridas",
-      ...s.ferramentas_sugeridas.map((f) => `- \`${f}\``),
-      "",
-      isExterno
-        ? "## Quando usar\nPedidos do cliente final no canal comercial — priorize tom empático e dados do lead."
-        : "## Quando usar\nTarefas internas da equipa — use ferramentas CRM e confirme com JSON `ok: true`.",
-    ].join("\n"),
+    corpo_md: montarCorpoSkillMd(
+      {
+        id: s.id,
+        titulo: s.titulo,
+        descricao: s.descricao,
+        ferramentas_sugeridas: s.ferramentas_sugeridas,
+      },
+      { agenteSlug: params.agenteSlug }
+    ),
     ferramentas_sugeridas: s.ferramentas_sugeridas,
-    origem: "wizard_cargo",
+    origem: "wizard",
   }));
 
   const { error } = await supabase.from("hub_agente_skills").insert(rows);
@@ -161,6 +141,54 @@ export function formatarBlocoSkillsL0(skills: AgenteSkillRow[]): string {
     "═══ SKILLS DO AGENTE (índice L0 — use harness_skill_view para o runbook completo) ═══",
     ...linhas,
   ].join("\n");
+}
+
+export async function criarOuAtualizarSkillAgente(
+  supabase: SupabaseClient,
+  params: {
+    tenantId: string;
+    agenteSlug: string;
+    skillId: string;
+    titulo: string;
+    descricao: string;
+    corpoMd: string;
+    ferramentasSugeridas?: string[];
+    origem?: "agente" | "manual" | "wizard";
+  }
+): Promise<boolean> {
+  const { error } = await supabase.from("hub_agente_skills").upsert(
+    {
+      tenant_id: params.tenantId,
+      agente_slug: params.agenteSlug,
+      skill_id: params.skillId,
+      titulo: params.titulo,
+      descricao: params.descricao,
+      corpo_md: params.corpoMd,
+      ferramentas_sugeridas: params.ferramentasSugeridas ?? [],
+      origem: params.origem ?? "agente",
+      ativo: true,
+      atualizado_em: new Date().toISOString(),
+    },
+    { onConflict: "tenant_id,agente_slug,skill_id" }
+  );
+  if (error && !tabelaInexistente(error.message)) return false;
+  return !error;
+}
+
+export async function desactivarSkillAgente(
+  supabase: SupabaseClient,
+  tenantId: string,
+  agenteSlug: string,
+  skillId: string
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("hub_agente_skills")
+    .update({ ativo: false, atualizado_em: new Date().toISOString() })
+    .eq("tenant_id", tenantId)
+    .eq("agente_slug", agenteSlug)
+    .eq("skill_id", skillId);
+  if (error && !tabelaInexistente(error.message)) return false;
+  return !error;
 }
 
 export function formatarCorpoSkillParaModelo(skill: AgenteSkillRow): string {

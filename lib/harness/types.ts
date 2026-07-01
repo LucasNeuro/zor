@@ -11,7 +11,7 @@ import type { FerramentaExternaParaMistral } from "@/lib/hub/ferramentas-externa
 import type { FerramentaIntegradorDefMistral } from "@/lib/hub/agente-ferramentas-registry";
 
 export const HARNESS_RUNTIME_ID = "waje-mistral-v1" as const;
-export const HARNESS_VERSION = "0.2.0" as const;
+export const HARNESS_VERSION = "0.3.0" as const;
 
 export type HarnessSurface =
   | "copiloto_crm"
@@ -45,6 +45,11 @@ export type ExecutarAgenteInternoParams = {
   telefoneSessao?: string | null;
   usuarioCrmId?: string | null;
   briefCiclo?: string;
+  /** Sessão briefing CRM — liga thread_id na harness session */
+  briefingSessaoId?: string | null;
+  /** Resume após aprovação humana (RFC §9.3) */
+  approvalId?: string | null;
+  approvalDecisao?: "aprovar" | "rejeitar" | null;
 };
 
 export type HarnessHostContext = {
@@ -57,6 +62,7 @@ export type HarnessHostContext = {
   leadId?: string | null;
   sessionId?: string | null;
   modoId?: HarnessModeId;
+  grants?: Record<string, boolean>;
 };
 
 export type HarnessSessionSnapshot = {

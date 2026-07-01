@@ -39,6 +39,8 @@ export type FerramentaHubContexto = {
   usuarioCrmId?: string | null;
   /** Sessão harness (orquestração / aprovações). */
   sessionId?: string | null;
+  harnessModoId?: "conversar" | "analisar" | "operar" | "planear";
+  harnessGrants?: Record<string, boolean>;
   harnessSurface?:
     | "copiloto_crm"
     | "ciclo_programado"
@@ -962,6 +964,38 @@ export async function executarFerramentaHub(
   const tenant = (ctx.tenantId && ctx.tenantId.trim()) || defaultTenantId();
 
   try {
+    if (ctx.agenteInterno) {
+      const { avaliarPoliticaHarnessTool, respostaJsonPoliticaHarness } = await import(
+        "@/lib/harness/tool-policy"
+      );
+      const policy = avaliarPoliticaHarnessTool({
+        toolName,
+        argumentos: args,
+        modoId: ctx.harnessModoId,
+        grants: ctx.harnessGrants,
+        agenteInterno: true,
+      });
+      if (!policy.permitido) {
+        if (policy.motivo === "aprovacao_necessaria" && ctx.sessionId) {
+          const { criarPendingWriteCrm } = await import("@/lib/harness/stores/pending-approvals");
+          const approval = await criarPendingWriteCrm(supabase, {
+            tenantId: tenant,
+            agenteSlug: ctx.agenteSlug,
+            sessionId: ctx.sessionId,
+            toolName,
+            argumentos: args,
+            resumoHumano: policy.resumo_humano ?? `Alteração CRM: ${toolName}`,
+            nivel: policy.nivel ?? "escrita_crm",
+          });
+          return respostaJsonPoliticaHarness(policy, {
+            approval_id: approval?.id,
+            tool_name: toolName,
+          });
+        }
+        return respostaJsonPoliticaHarness(policy);
+      }
+    }
+
     if (toolName.startsWith("harness_")) {
       const { executarHarnessTool } = await import("@/lib/harness/tools/executar-harness-tool");
       return executarHarnessTool(supabase, toolName, args, ctx);

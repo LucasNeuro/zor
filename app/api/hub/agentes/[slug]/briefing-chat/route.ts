@@ -188,6 +188,8 @@ export async function POST(
     mensagem?: string;
     modo?: unknown;
     anexos?: unknown;
+    approval_id?: string;
+    approval_decisao?: string;
   };
   try {
     body = await request.json();
@@ -198,6 +200,15 @@ export async function POST(
   const modo = normalizarModoBriefing(body.modo);
 
   const textoUser = String(body.mensagem ?? "").trim();
+  const approvalId = String(body.approval_id ?? "").trim() || null;
+  const approvalDecisaoRaw = String(body.approval_decisao ?? "").trim();
+  const approvalDecisao =
+    approvalDecisaoRaw === "aprovar"
+      ? "aprovar"
+      : approvalDecisaoRaw === "rejeitar"
+        ? "rejeitar"
+        : null;
+
   let anexosInput: ReturnType<typeof validarAnexosBriefingChat> = [];
   try {
     anexosInput = validarAnexosBriefingChat(body.anexos);
@@ -206,7 +217,10 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  if ((!textoUser && anexosInput.length === 0) || textoUser.length > MAX_MENSAGEM_LEN) {
+  if (
+    !approvalId &&
+    ((!textoUser && anexosInput.length === 0) || textoUser.length > MAX_MENSAGEM_LEN)
+  ) {
     return NextResponse.json({ error: "Mensagem inválida ou muito longa." }, { status: 400 });
   }
 
@@ -299,9 +313,12 @@ export async function POST(
   const { error: uErr } = await supabase.from("hub_crm_agente_briefing_mensagem").insert({
     sessao_id: sessaoId,
     papel: "user",
-    conteudo: conteudoVisivelUser,
+    conteudo: approvalId
+      ? `[Decisão: ${approvalDecisao === "rejeitar" ? "rejeitada" : "aprovada"} alteração CRM]`
+      : conteudoVisivelUser,
     metadata: {
       modo,
+      ...(approvalId ? { harness_approval_id: approvalId, harness_decisao: approvalDecisao } : {}),
       ...(anexosMeta.length
         ? {
             multimodal: true,
@@ -395,6 +412,9 @@ export async function POST(
         supabase,
         tenantId: typeof agente.tenant_id === "string" ? agente.tenant_id : null,
         usuarioCrmId,
+        briefingSessaoId: sessaoId,
+        approvalId,
+        approvalDecisao,
       });
     }
   } catch (e) {
@@ -417,6 +437,10 @@ export async function POST(
       ...(resultado.flow_state ? { flow_state: resultado.flow_state } : {}),
       ...(resultado.urls_publicas?.length
         ? { urls_publicas: resultado.urls_publicas, tipo: "artefato_canvas" }
+        : {}),
+      ...(resultado.harness_version ? { harness_version: resultado.harness_version } : {}),
+      ...(resultado.pending_approvals?.length
+        ? { pending_approvals: resultado.pending_approvals }
         : {}),
     },
   });
@@ -466,6 +490,7 @@ export async function POST(
       tokens_output: resultado.tokens_output,
       custo_brl: resultado.custo_brl,
       urls_publicas: resultado.urls_publicas ?? [],
+      pending_approvals: resultado.pending_approvals ?? [],
     },
   };
   cacheSetBriefingGet(slug, sessaoId, payload);

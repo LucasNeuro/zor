@@ -46,6 +46,7 @@ import { applyCargoTenantFilter } from "@/lib/hub/cargo-catalogo-tenant";
 import { montarPromptBaseInternoDoCargo } from "@/lib/hub/superagente/prompt-interno-cargo";
 import { sanitizarCatalogoInterno } from "@/lib/hub/superagente/cargo-harness-sanitize";
 import { persistirSkillsHarnessWizard } from "@/lib/harness/stores/skills-store";
+import { HARNESS_VERSION } from "@/lib/harness/types";
 import {
   EMAIL_CHANNEL_DISABLED_CODE,
   EMAIL_CHANNEL_DISABLED_MESSAGE,
@@ -612,6 +613,9 @@ export async function POST(request: NextRequest) {
     }
   }
   row.uso_ferramentas_ia = serializarUsoFerramentasParaDb(usoFerramentasMerged);
+  if (modoFinal === "jobs_internos") {
+    row.harness_version = HARNESS_VERSION;
+  }
 
   let modeloForcado = false;
   const { data, error } = await insertHubAgenteIdentidadeCompat(supabase, row, {

@@ -81,6 +81,6 @@ describe("harness verify-tool-result", () => {
 describe("harness runtime metadata", () => {
   it("expõe id e versão estáveis", () => {
     expect(wajeMistralRuntimeId()).toBe(HARNESS_RUNTIME_ID);
-    expect(HARNESS_VERSION).toBe("0.2.0");
+    expect(HARNESS_VERSION).toBe("0.3.0");
   });
 });

@@ -1,4 +1,9 @@
 import { copilotoInternoPreamble } from "@/lib/agente-briefing-chat";
+import {
+  BLOCO_MEMORIA_CONVERSA_HARNESS,
+  formatarBlocoHistoricoCopiloto,
+  type HistoricoCopilotoLinha,
+} from "@/lib/harness/historico-copiloto";
 import { blocoEscopoFuncaoCopilotoInterno } from "@/lib/hub/copiloto-interno-escopo";
 import { HUB_OPERACAO_EMPRESA_ENTIDADES_PROMPT } from "@/lib/hub/hub-operacao-empresa";
 import {
@@ -16,6 +21,13 @@ function trunc(s: string, n: number): string {
   if (t.length <= n) return t;
   return `${t.slice(0, n)}…`;
 }
+
+export const BLOCO_MODOS_HARNESS = `### MODOS DO HARNESS (sessão)
+- **conversar** — explicações; sem gravar CRM nem publicar artefactos.
+- **analisar** — consultas CRM e relatórios; sem escrita.
+- **operar** — CRUD com aprovação humana quando necessário.
+- **planear** — plano em markdown; não executa gravações.
+Se uma tool devolver \`harness_policy\` / \`requer_aprovacao\`, peça ao gestor para mudar de modo ou aprovar na UI.`;
 
 export const BLOCO_SUPERAGENTE = `### SUPERAGENTE (canvas + Mistral)
 - **hub_superagente_artefato** — relatório dashboard (tema claro): KPIs, gráficos Chart.js e tabelas detalhadas. **Cores:** degradé verde Waje (verde #3f9848 → lima #92ff00).
@@ -66,6 +78,7 @@ export type MontarSystemPromptParams = {
   canalInterno: SuperagenteCanalInterno;
   briefCiclo?: string;
   memoriasBloco?: string;
+  historico?: HistoricoCopilotoLinha[];
   snapshot?: string;
   skillsBloco?: string;
 };
@@ -102,8 +115,14 @@ export function montarSystemPromptHarness(params: MontarSystemPromptParams): str
 - Use **harness_skills_list** / **harness_skill_view** antes de fluxos complexos.
 - Nunca invente resposta de outro agente — delegue e use o JSON devolvido.`;
 
+  const historicoBloco = params.historico?.length
+    ? formatarBlocoHistoricoCopiloto(params.historico)
+    : "";
+
   return [
     copilotoInternoPreamble(params.agenteNome, params.cargo, escopoInterno),
+    BLOCO_MEMORIA_CONVERSA_HARNESS,
+    BLOCO_MODOS_HARNESS,
     triggerLinha,
     BLOCO_CANAIS_SUPERAGENTE_EQUIVALENTES,
     BLOCO_FERRAMENTAS_INTERNAS,
@@ -111,6 +130,7 @@ export function montarSystemPromptHarness(params: MontarSystemPromptParams): str
     blocoOrquestracao,
     skillsHarness || null,
     identity,
+    historicoBloco || null,
     params.memoriasBloco?.trim() || null,
     params.snapshot?.trim() || null,
   ]

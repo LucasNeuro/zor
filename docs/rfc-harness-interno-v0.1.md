@@ -85,13 +85,13 @@ Características que o distinguem de um “agente configurado”:
 
 ### 4.1 Objectivos (MUST)
 
-- [ ] Contrato estável `HarnessRuntime.runTurn()` desacoplado do host CRM.
-- [ ] `HarnessSession` persistida por conversa (copiloto) com estado para UI.
-- [ ] Skills em formato **agentskills.io** com progressive disclosure (L0/L1/L2).
-- [ ] Memória curada por `agente_slug` + `tenant_id` com snapshot congelado por sessão.
-- [ ] Aprovação formal antes de tools de **escrita** CRM (`hub_int_crm_ent_*` create/update).
-- [ ] Manter paridade CRM: tabelas `hub_*` via `hub_int_crm_ent_*` (Fix-1/2 já entregues).
-- [ ] Zero alteração na engine de atendimento ao cliente (`lib/ia/engine.ts`, webhooks).
+- [x] Contrato estável `HarnessRuntime.runTurn()` desacoplado do host CRM.
+- [x] `HarnessSession` persistida por conversa (copiloto) com estado para UI.
+- [x] Skills em formato **agentskills.io** com progressive disclosure (L0/L1/L2).
+- [x] Memória curada por `agente_slug` + `tenant_id` com snapshot congelado por sessão.
+- [x] Aprovação formal antes de tools de **escrita** CRM (`hub_int_crm_ent_*` create/update).
+- [x] Manter paridade CRM: tabelas `hub_*` via `hub_int_crm_ent_*` (Fix-1/2 já entregues).
+- [x] Zero alteração na engine de atendimento ao cliente (`lib/ia/engine.ts`, webhooks).
 
 ### 4.2 Não-objectivos (v0.1)
 
@@ -480,55 +480,57 @@ Tools de toolset desactivado **ausentes** do schema Mistral (economia de tokens 
 
 ---
 
-### Fase 2 — Sessão + modos + aprovações (Mastra) — ~1–2 sprints
+### Fase 2 — Sessão + modos + aprovações (Mastra) — ~1–2 sprints ✅
 
 **Entregáveis:**
 
-- Migração SQL `hub_harness_sessions`
-- API `POST /api/hub/agentes/[slug]/harness/session`
-- API `POST .../harness/approve`
-- Modos no `AgenteBriefingChatPanel`
-- Suspensão de loop em writes CRM
+- [x] Migração SQL `hub_harness_sessions`
+- [x] API `POST /api/hub/agentes/[slug]/harness/session`
+- [x] API `POST .../harness/approve`
+- [x] Modos no `AgenteBriefingChatPanel`
+- [x] Suspensão de loop em writes CRM
+- [x] `displayState` / reducer de eventos no copiloto
 
 **Critério de saída:** alterar lead exige clique de aprovação no copiloto; modo `analisar` não grava mesmo se o modelo tentar.
 
 ---
 
-### Fase 3 — Skills vivas (Hermes) — ~2 sprints
+### Fase 3 — Skills vivas (Hermes) — ~2 sprints ✅
 
 **Entregáveis:**
 
-- Migração SQL `hub_agente_skills`
-- Tools `harness_skills_list`, `harness_skill_view`, `harness_skill_manage`
-- Wizard: ferramentas → gerar skills → prompt
-- Progressive disclosure L0 no system prompt
-- Seed skills a partir de `skills-from-cargo.ts`
+- [x] Migração SQL `hub_agente_skills`
+- [x] Tools `harness_skills_list`, `harness_skill_view`, `harness_skill_manage`
+- [x] Wizard: ferramentas → gerar skills → prompt
+- [x] Progressive disclosure L0 no system prompt
+- [x] Seed skills a partir de `skills-from-cargo.ts`
+- [x] Painel gestor: lista skills + métricas (`AgenteHarnessSkillsBlock`)
 
 **Critério de saída:** agente carrega skill `listar-leads-crm` sob demanda; gestor vê lista de skills no painel do agente.
 
 ---
 
-### Fase 4 — Memória + loop de melhoria (Hermes) — ~1–2 sprints
+### Fase 4 — Memória + loop de melhoria (Hermes) — ~1–2 sprints ✅
 
 **Entregáveis:**
 
-- `hub_agente_memory` + tool `harness_memory`
-- Frozen snapshot por sessão
-- Job pós-turno `harness-background-review` (cron ou queue)
-- UI pending writes (memória/skills)
-- Config `write_approval` por tenant
+- [x] `hub_agente_memory` + tool `harness_memory`
+- [x] Frozen snapshot por sessão (`session.state.memory_snapshot`)
+- [x] Job pós-turno `harness-background-review` (cron ou queue)
+- [x] UI pending writes (memória/skills/CRM)
+- [x] Config `write_approval` por tenant (`hub_tenants.settings.harness`)
 
 **Critério de saída:** após 5 conversas sobre preferências, memória reflecte na sessão seguinte; patches auto ficam em staging se approval on.
 
 ---
 
-### Fase 5 — Polish e poder “nível Hermes” — contínuo
+### Fase 5 — Polish e poder “nível Hermes” — contínuo ✅ (v0.3.0)
 
-- Subagentes para relatórios longos (`harness_delegate_task`)
-- FTS de sessões passadas (`harness_session_search`)
-- Compaction inteligente de histórico
-- Métricas: custo por sessão, taxa de aprovação, skills criadas
-- Documentação operacional + runbook
+- [x] Subagentes para relatórios longos (`harness_delegate_to_agent`)
+- [x] FTS de sessões passadas (`harness_session_search` + migração FTS)
+- [x] Compaction inteligente de histórico
+- [x] Métricas: custo por sessão, taxa de aprovação, skills criadas (`/harness/metrics`)
+- [x] Documentação operacional + runbook (este RFC)
 
 **Critério de saída:** agente interno cria skill reutilizável após workflow complexo; equipa mede adopção no dashboard.
 

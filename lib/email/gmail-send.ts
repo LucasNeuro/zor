@@ -17,17 +17,69 @@ export type SendGmailEmailResult =
   | { ok: true; id?: string; threadId?: string }
   | { ok: false; error: string; status?: number };
 
+function foldHeaderValue(value: string): string {
+  return value.replace(/\r?\n/g, " ").trim();
+}
+
+/** Corrige assunto/corpo já corrompidos (UTF-8 interpretado como Latin-1). */
+export function repararMojibakeUtf8(text: string): string {
+  const t = text.trim();
+  if (!t) return t;
+
+  let cur = t;
+  for (let pass = 0; pass < 3; pass++) {
+    if (!/[ÃÂÕÑÒÓÚºª]/.test(cur)) break;
+    try {
+      const next = Buffer.from(cur, "latin1").toString("utf8");
+      if (!next || next === cur || next.includes("\uFFFD")) break;
+      cur = next;
+    } catch {
+      break;
+    }
+  }
+  return cur;
+}
+
+/** RFC 2047 — UTF-8 Base64 para headers MIME (Subject, From name, etc.). */
+export function encodeMimeHeaderValue(value: string): string {
+  const repaired = repararMojibakeUtf8(foldHeaderValue(value));
+  if (!repaired) return repaired;
+  if (/^[\x20-\x7E]*$/.test(repaired)) return repaired;
+
+  const prefix = "=?UTF-8?B?";
+  const suffix = "?=";
+  const maxB64Len = 45;
+  const chars = [...repaired];
+  const words: string[] = [];
+  let i = 0;
+
+  while (i < chars.length) {
+    let slice = "";
+    while (i < chars.length) {
+      const candidate = slice + chars[i]!;
+      const b64 = Buffer.from(candidate, "utf8").toString("base64");
+      if (b64.length > maxB64Len && slice) break;
+      slice = candidate;
+      i++;
+      if (b64.length > maxB64Len) break;
+    }
+    if (!slice) {
+      slice = chars[i - 1] ?? chars[0] ?? "";
+    }
+    words.push(`${prefix}${Buffer.from(slice, "utf8").toString("base64")}${suffix}`);
+  }
+
+  return words.join("\r\n ");
+}
+
 function montarFromLine(from?: string | null, fromName?: string | null): string | null {
   const email = (from || "").trim().replace(/^<|>$/g, "");
   if (!email) return null;
-  const name = (fromName || "").trim();
+  const name = repararMojibakeUtf8((fromName || "").trim());
   if (!name) return email.includes("<") ? email : email;
   if (email.includes("<") && email.includes(">")) return email;
-  return `${name} <${email}>`;
-}
-
-function foldHeaderValue(value: string): string {
-  return value.replace(/\r?\n/g, " ").trim();
+  const encodedName = encodeMimeHeaderValue(name);
+  return `${encodedName} <${email}>`;
 }
 
 function montarCorpoMime(text: string, html?: string | null): { contentType: string; body: string } {
@@ -65,7 +117,7 @@ function montarCorpoMime(text: string, html?: string | null): { contentType: str
 export async function sendGmailEmail(input: SendGmailEmailInput): Promise<SendGmailEmailResult> {
   const token = input.bearerToken.trim();
   const to = input.to.trim();
-  const subject = foldHeaderValue(input.subject || "");
+  const subject = encodeMimeHeaderValue(input.subject || "");
   const text = (input.text || "").trim();
   const html = input.html?.trim() || "";
 

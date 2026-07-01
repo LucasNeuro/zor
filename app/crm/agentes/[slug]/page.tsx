@@ -42,6 +42,7 @@ import {
   type CatalogoFerramentaCustomLite,
   type CatalogoFerramentaExternaLite,
 } from "@/components/crm/AgenteFerramentasIaBlock";
+import { AgenteHarnessSkillsBlock } from "@/components/crm/AgenteHarnessSkillsBlock";
 import {
   buildCatalogoIntegradorFerramentasCompleto,
 } from "@/lib/hub/integrador-catalogo-ui";
@@ -1254,6 +1255,9 @@ export default function AgentePage() {
                   }
                   modoInterno={agente.modo_operacao === "jobs_internos"}
                 />
+                {agente.modo_operacao === "jobs_internos" ? (
+                  <AgenteHarnessSkillsBlock agenteSlug={slug} modoInterno />
+                ) : null}
                 <button
                   type="button"
                   onClick={sincronizarMistralAgora}

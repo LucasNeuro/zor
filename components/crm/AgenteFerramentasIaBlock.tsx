@@ -38,6 +38,11 @@ import {
   chavesFerramentasBancoCrmWaje,
   isCrmEntidadeToolKey,
 } from "@/lib/hub/crm-integrador-constants";
+import {
+  HARNESS_TOOLSETS,
+  patchUsoFerramentasToolset,
+  toolsetsActivos,
+} from "@/lib/harness/toolsets";
 import { MEM0_BUSCAR_KEY, MEM0_SUPER_MEMORIA_KEY } from "@/lib/hub/mem0-constants";
 import { MISTRAL_PERCEPCAO_KEY } from "@/lib/hub/mistral-integracao-constants";
 import type { CatalogoFerramentaIntegradorLite } from "@/lib/hub/integrador-catalogo-ui";
@@ -441,6 +446,7 @@ export function AgenteFerramentasIaBlock({
       ) : null}
 
       {modoInterno ? (
+        <>
         <div
           role="status"
           style={{
@@ -457,8 +463,40 @@ export function AgenteFerramentasIaBlock({
           <strong style={{ color: t.title }}>Funcionário IA (superagente):</strong> active ou desactive cada
           função abaixo — o motor <strong style={{ color: t.title }}>obedece exactamente</strong> aos toggles
           guardados ao salvar. Use <strong style={{ color: t.title }}>Activar todas (base de dados)</strong> para
-          ligar o pacote CRM + financeiro de uma vez.
+          ligar o pacote CRM + financeiro de uma vez. No passo <strong style={{ color: t.title }}>Harness</strong>,
+          as skills são geradas a partir dos toolsets activos (RFC).
         </div>
+        <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {HARNESS_TOOLSETS.map((ts) => {
+            const activo = toolsetsActivos(uso).some((a) => a.id === ts.id);
+            return (
+              <button
+                key={ts.id}
+                type="button"
+                title={ts.descricao}
+                onClick={() => {
+                  const next = patchUsoFerramentasToolset(uso, ts.id, !activo);
+                  for (const [k, v] of Object.entries(next)) {
+                    if (uso[k] !== v) onUsoChange(k, v);
+                  }
+                }}
+                style={{
+                  cursor: "pointer",
+                  borderRadius: 20,
+                  padding: "6px 12px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: `1px solid ${activo ? "rgba(146,255,0,0.45)" : t.rowBorder}`,
+                  background: activo ? "rgba(146,255,0,0.1)" : t.rowBg,
+                  color: activo ? t.title : t.muted,
+                }}
+              >
+                {ts.titulo}
+              </button>
+            );
+          })}
+        </div>
+        </>
       ) : null}
 
       {destacarWhatsApp ? (

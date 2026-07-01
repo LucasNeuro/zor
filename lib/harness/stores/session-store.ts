@@ -7,6 +7,7 @@ export type HarnessSessionRow = {
   modo_id: HarnessModeId;
   grants: Record<string, boolean>;
   pending_approvals: unknown[];
+  token_usage?: Record<string, unknown>;
 };
 
 function tabelaInexistente(msg?: string): boolean {
@@ -31,7 +32,7 @@ export async function getOrCreateHarnessSession(
 
   let query = supabase
     .from("hub_harness_sessions")
-    .select("id, modo_id, grants, pending_approvals")
+    .select("id, modo_id, grants, pending_approvals, token_usage, state")
     .eq("tenant_id", params.tenantId)
     .eq("agente_slug", params.agenteSlug)
     .eq("surface", params.surface);
@@ -50,6 +51,7 @@ export async function getOrCreateHarnessSession(
       modo_id: (existente.modo_id as HarnessModeId) ?? "operar",
       grants: (existente.grants as Record<string, boolean>) ?? {},
       pending_approvals: (existente.pending_approvals as unknown[]) ?? [],
+      token_usage: (existente.token_usage as Record<string, unknown>) ?? {},
     };
   }
 
@@ -61,7 +63,7 @@ export async function getOrCreateHarnessSession(
       surface: params.surface,
       resource_id: resourceId,
       lead_id: leadId,
-      modo_id: params.modoId ?? "operar",
+      modo_id: params.modoId ?? "analisar",
       harness_version: HARNESS_VERSION,
       grants: { crm_leitura: true },
     })
@@ -83,4 +85,37 @@ export function modoBloqueiaEscritaCrm(modoId: HarnessModeId): boolean {
 
 export function grantPermiteEscritaCrm(grants: Record<string, boolean>): boolean {
   return grants.crm_escrita_sessao === true || grants.crm_escrita === true;
+}
+
+export async function updateHarnessSessionModo(
+  supabase: SupabaseClient,
+  sessionId: string,
+  modoId: HarnessModeId
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("hub_harness_sessions")
+    .update({ modo_id: modoId })
+    .eq("id", sessionId);
+  if (error && !tabelaInexistente(error.message)) return false;
+  return !error;
+}
+
+export async function concederGrantEscritaCrmSessao(
+  supabase: SupabaseClient,
+  sessionId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("hub_harness_sessions")
+    .select("grants")
+    .eq("id", sessionId)
+    .maybeSingle();
+  const grants = (data?.grants as Record<string, boolean>) ?? {};
+  const { error } = await supabase
+    .from("hub_harness_sessions")
+    .update({
+      grants: { ...grants, crm_escrita_sessao: true },
+    })
+    .eq("id", sessionId);
+  if (error && !tabelaInexistente(error.message)) return false;
+  return !error;
 }

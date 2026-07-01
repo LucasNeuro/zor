@@ -9,6 +9,7 @@ import { ferramentasMistralListaParaAgente } from "@/lib/hub/agente-ferramentas-
 import { classifyHarnessOutcome } from "@/lib/harness/classify-outcome";
 import { extrairUrlsPublicasDeResultadoFerramenta } from "@/lib/harness/extrair-urls-publicas";
 import { enriquecerObservationComVerify } from "@/lib/harness/loop/verify-tool-result";
+import { truncarResultadoFerramentaParaModelo } from "@/lib/harness/tool-output-truncate";
 import {
   deveReforcarLoopEscrita,
   NUDGE_ESCRITA_HARNESS,
@@ -69,12 +70,15 @@ export async function runWajeMistralHarnessTurn(
         leadId: params.hostCtx.leadId ?? null,
         sessionId: params.hostCtx.sessionId ?? null,
         harnessSurface: params.hostCtx.surface,
+        harnessModoId: params.hostCtx.modoId,
+        harnessGrants: params.hostCtx.grants,
       });
       const enriched = enriquecerObservationComVerify(result, nome);
+      const truncated = truncarResultadoFerramentaParaModelo(enriched, nome);
       if (nome === "hub_superagente_artefato") {
         urlsPublicasColetadas.push(...extrairUrlsPublicasDeResultadoFerramenta(result));
       }
-      return enriched;
+      return truncated;
     };
 
     const runToolsTurn = (mensagens: Array<{ role: "user" | "assistant"; content: string }>) =>

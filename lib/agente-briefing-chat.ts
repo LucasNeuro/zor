@@ -68,10 +68,11 @@ Regras:
 - Converse com um colega humano (gestor, operador ou admin): tom natural, claro e útil.
 - Explique a **função real deste agente** conforme o escopo oficial abaixo — não invente encaminhamentos nem atendimento a cliente final.
 - Use as **memórias deste agente** (só de ${agenteNome}), cargo, playbook e extractos operacionais quando relevante — nunca misture contexto de outro assistente.
+- As **mensagens anteriores** neste chat são o histórico da conversa actual — use-as para resumos e continuidade («o que já falámos»). Memórias curadas cobrem dias/sessões anteriores.
 - Este agente **não atende cliente final no canal comercial**; no copiloto CRM, WhatsApp gestor e ciclos programados usa o **mesmo motor superagente** (dados, artefactos, OCR).
 - Você é **funcionário operacional** do empresário: CRM, financeiro (contas a pagar/receber, mensalidades), pipelines, briefings, KPIs e demais módulos via **hub_int_crm_ent_*** nas tabelas hub_* do tenant.
 - Para qualquer entidade operacional: chame **hub_int_crm_ent_*** (acao=consultar, obter, criar, actualizar). Tem CRUD completo — não diga que só vê views nem que não pode gravar.
-- **Nunca** afirme listas, contagens ou factos sem chamar ferramenta no mesmo turno; use o JSON devolvido.
+- **Nunca** afirme listas, contagens ou **dados operacionais** (CRM, financeiro) sem chamar ferramenta no mesmo turno; use o JSON devolvido. Resumir o diálogo do chat **não** exige ferramenta.
 - Para **criar ou actualizar**: execute a ferramenta no **mesmo turno** — **proibido** «vou criar», «um momento» ou «aguarde» sem tool. Só confirme com ok:true; depois obtenha o registo de novo.
 - Se o utilizador já deu valores exactos e pediu para gravar, **execute imediatamente** sem pedir confirmação extra.
 ${escopoExtra?.trim() ? `\n${escopoExtra.trim()}` : ""}`;
@@ -234,6 +235,14 @@ export type BriefingChatReplyResult = {
   urls_publicas?: string[];
   /** Presente quando o turno passou pelo harness Waje v0.1+ */
   harness_version?: string;
+  /** Fila de aprovações CRM/skills pendentes */
+  pending_approvals?: Array<{
+    id: string;
+    tool_name: string;
+    resumo_humano: string;
+    nivel?: string;
+    criado_em?: string;
+  }>;
 };
 
 export async function executarBriefingReply(params: {
@@ -254,6 +263,9 @@ export async function executarBriefingReply(params: {
   supabase?: SupabaseClient;
   tenantId?: string | null;
   usuarioCrmId?: string | null;
+  briefingSessaoId?: string | null;
+  approvalId?: string | null;
+  approvalDecisao?: "aprovar" | "rejeitar" | null;
 }): Promise<BriefingChatReplyResult> {
   const ehCopilotoInterno = agenteEhCopilotoInterno(
     isModoOperacaoAgente(params.modoOperacao) ? params.modoOperacao : null
@@ -278,6 +290,9 @@ export async function executarBriefingReply(params: {
       trigger: "copiloto",
       canalInterno: "copiloto_crm",
       usuarioCrmId: params.usuarioCrmId,
+      briefingSessaoId: params.briefingSessaoId,
+      approvalId: params.approvalId,
+      approvalDecisao: params.approvalDecisao,
     });
   }
 

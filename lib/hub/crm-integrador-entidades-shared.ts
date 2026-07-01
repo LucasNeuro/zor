@@ -1,33 +1,21 @@
 /**
  * Constantes CRM por entidade — seguras para componentes client.
- * Manter sincronizado com OperacaoEmpresaEntidade em hub-operacao-empresa.ts.
+ * Sincronizado com lib/hub/hub-operacao-entidades-operacionais.ts
  */
+
+import {
+  OPERACAO_ENTIDADE_CATALOGO,
+  OPERACAO_ENTIDADES_TOOL_KEYS,
+  type OperacaoEntidadeSlug,
+} from "@/lib/hub/hub-operacao-entidades-operacionais";
 
 export const HUB_INT_CRM_ENT_PREFIX = "hub_int_crm_ent_" as const;
 
-export const CRM_ENTIDADES_CATALOGO = [
-  { id: "lead", label: "Lead CRM", pode_criar: true, pode_atualizar: true },
-  { id: "negocio", label: "Negócio", pode_criar: true, pode_atualizar: true },
-  { id: "pessoa", label: "Pessoa", pode_criar: true, pode_atualizar: true },
-  { id: "empresa", label: "Empresa", pode_criar: true, pode_atualizar: true },
-  { id: "nota", label: "Nota CRM", pode_criar: true, pode_atualizar: false },
-  { id: "conta_receber", label: "Conta a receber", pode_criar: true, pode_atualizar: true },
-  { id: "conta_pagar", label: "Conta a pagar", pode_criar: true, pode_atualizar: true },
-  { id: "atividade", label: "Atividade / timeline", pode_criar: true, pode_atualizar: false },
-  { id: "aprovacao", label: "Aprovação", pode_criar: false, pode_atualizar: true },
-  { id: "alerta", label: "Alerta operação", pode_criar: false, pode_atualizar: true },
-  { id: "conversa", label: "Conversa", pode_criar: false, pode_atualizar: true },
-  { id: "servico_catalogo", label: "Catálogo de serviços", pode_criar: true, pode_atualizar: true },
-  { id: "parceiro", label: "Parceiro", pode_criar: false, pode_atualizar: true },
-  { id: "servico", label: "Serviço catálogo", pode_criar: true, pode_atualizar: true },
-  { id: "proposta", label: "Proposta", pode_criar: true, pode_atualizar: true },
-  { id: "kpi_meta", label: "Meta KPI", pode_criar: true, pode_atualizar: true },
-  { id: "kpi_resultado", label: "Resultado KPI", pode_criar: true, pode_atualizar: true },
-] as const;
+export const CRM_ENTIDADES_CATALOGO = OPERACAO_ENTIDADE_CATALOGO;
 
 export const CRM_ENTIDADES_SLUGS = CRM_ENTIDADES_CATALOGO.map((e) => e.id);
 
-export type CrmEntidadeSlug = (typeof CRM_ENTIDADES_CATALOGO)[number]["id"];
+export type CrmEntidadeSlug = OperacaoEntidadeSlug;
 
 export function crmEntidadeToolKey(entidade: string): string {
   return `${HUB_INT_CRM_ENT_PREFIX}${entidade}`;
@@ -43,7 +31,7 @@ export function isCrmEntidadeToolKey(key: string): boolean {
   return parseCrmEntidadeToolKey(key) !== null;
 }
 
-export const CRM_ENTIDADES_TOOL_KEYS = CRM_ENTIDADES_SLUGS.map((id) => crmEntidadeToolKey(id));
+export const CRM_ENTIDADES_TOOL_KEYS = OPERACAO_ENTIDADES_TOOL_KEYS;
 
 const SCHEMA_OPERAR_ENTIDADE = {
   type: "object",
@@ -76,7 +64,7 @@ export type CrmIntegradorFerramentaDef = {
   parametros_schema: Record<string, unknown>;
 };
 
-/** Ferramentas CRM por entidade — catálogo estático (sem importar hub-operacao-empresa). */
+/** Ferramentas CRM por entidade — catálogo estático. */
 export function ferramentasCrmPorEntidade(): CrmIntegradorFerramentaDef[] {
   return CRM_ENTIDADES_CATALOGO.map((ent) => {
     const caps: string[] = ["consultar", "obter"];
@@ -87,8 +75,8 @@ export function ferramentasCrmPorEntidade(): CrmIntegradorFerramentaDef[] {
     return {
       ferramenta_key: crmEntidadeToolKey(ent.id),
       titulo: ent.label,
-      descricao_curta: `${caps.join(", ")} · tabela CRM (${ent.id}).`,
-      descricao_modelo: `Opera **${ent.label}** (${ent.id}) na tabela CRM **${ent.id}**. Acções: ${caps.join(", ")}. consultar=lista registos na tabela (filtro_texto opcional); obter/criar/actualizar usam hub_* directamente. Não passe \`entidade\`. Confirme com o utilizador antes de gravar; só afirme sucesso com ok:true.`,
+      descricao_curta: `${caps.join(", ")} · tabela operacional (${ent.id}).`,
+      descricao_modelo: `Opera **${ent.label}** (${ent.id}) na tabela do tenant. Acções: ${caps.join(", ")}. **Obrigatório:** para criar/actualizar chame esta ferramenta no mesmo turno; só confirme sucesso com ok:true no JSON; nunca diga «um momento» sem ter chamado a ferramenta.`,
       politica: ent.pode_criar || ent.pode_atualizar ? "escrita" : "leitura",
       parametros_schema: SCHEMA_OPERAR_ENTIDADE,
     };

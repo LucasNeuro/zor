@@ -35,6 +35,7 @@ import {
   FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR,
   HUB_INT_CRM_ATALHOS_CANAL,
   HUB_INT_CRM_OPERAR,
+  chavesFerramentasBancoCrmWaje,
   isCrmEntidadeToolKey,
 } from "@/lib/hub/crm-integrador-constants";
 import { MEM0_BUSCAR_KEY, MEM0_SUPER_MEMORIA_KEY } from "@/lib/hub/mem0-constants";
@@ -258,6 +259,8 @@ export function AgenteFerramentasIaBlock({
     customActivos.length +
     externaActivos.length +
     integradorActivos.length;
+  const integradorCrmWaje = integradorActivos.filter((tool) => tool.integrador_id === "waje_crm");
+  const integradorOutros = integradorActivos.filter((tool) => tool.integrador_id !== "waje_crm");
   const motorSemTools = motorHabilitado && nAtivas === 0;
 
   function activarPacoteWhatsApp() {
@@ -265,6 +268,124 @@ export function AgenteFerramentasIaBlock({
     for (const t of HUB_AGENTE_FERRAMENTAS_CATALOGO) {
       if (t.recomendadoWhatsApp) onUsoChange(t.id, true);
     }
+  }
+
+  function activarTodasFerramentasBancoCrm() {
+    onMotorChange(true);
+    for (const key of chavesFerramentasBancoCrmWaje(Boolean(modoInterno))) {
+      onUsoChange(key, true);
+    }
+  }
+
+  function desactivarTodasFerramentasBancoCrm() {
+    for (const key of chavesFerramentasBancoCrmWaje(Boolean(modoInterno))) {
+      onUsoChange(key, false);
+    }
+  }
+
+  function renderIntegradorRow(tool: CatalogoFerramentaIntegradorLite) {
+    const ligado = uso[tool.ferramenta_key] === true;
+    const labelId = `tool-label-${tool.ferramenta_key}`;
+    const escrita = tool.politica === "escrita";
+    const toggleDisabled = tool.emBreve === true;
+    return (
+      <div
+        key={tool.ferramenta_key}
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 12,
+          padding: "12px 14px",
+          borderRadius: 12,
+          border: "1px solid",
+          borderColor: ligado ? "rgba(146,255,0,0.35)" : t.rowBorder,
+          background: ligado ? "rgba(146,255,0,0.07)" : t.rowBg,
+          opacity: toggleDisabled ? 0.72 : 1,
+        }}
+      >
+        <div
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 10,
+            background: ligado ? "rgba(146,255,0,0.16)" : t.iconBg,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            marginTop: 2,
+          }}
+        >
+          <IntegradorFerramentaMarcaIcon
+            ferramentaKey={tool.ferramenta_key}
+            integradorId={tool.integrador_id}
+            integradorNome={tool.integrador_nome}
+            size={22}
+            ligado={ligado}
+            mutedColor={t.body}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <span id={labelId} style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
+              {tool.titulo}
+            </span>
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 800,
+                letterSpacing: 0.06,
+                color: tool.emBreve ? "#d4a72c" : tool.requerConexao ? "#c9a24a" : RF_ACCENT,
+                border: `1px solid ${
+                  tool.emBreve
+                    ? "rgba(212,167,44,0.45)"
+                    : tool.requerConexao
+                      ? "rgba(201,162,74,0.45)"
+                      : "rgba(146,255,0,0.35)"
+                }`,
+                borderRadius: 4,
+                padding: "2px 6px",
+              }}
+            >
+              {tool.emBreve
+                ? "EM BREVE"
+                : tool.requerConexao
+                  ? tool.integrador_id === "mem0"
+                    ? "CONFIGURAR MEMÓRIA"
+                    : "REQUER LIGAÇÃO"
+                  : tool.integrador_nome}
+            </span>
+          </div>
+          <span
+            style={{ display: "block", color: t.listItem, fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
+          >
+            {tool.descricao_curta ||
+              (escrita ? "Altera dados na aplicação externa." : "Consulta a aplicação externa.")}
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 4,
+            flexShrink: 0,
+            paddingTop: 4,
+          }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : t.muted }}>
+            {ligado ? "ACTIVO" : "INACTIVO"}
+          </span>
+          <ToggleSwitch
+            checked={ligado}
+            onCheckedChange={(v) => handleUsoChange(tool.ferramenta_key, v)}
+            disabled={toggleDisabled}
+            labelledBy={labelId}
+            offBg={t.toggleOff}
+          />
+        </div>
+      </div>
+    );
   }
 
   function handleUsoChange(id: string, ativo: boolean) {
@@ -334,8 +455,9 @@ export function AgenteFerramentasIaBlock({
           }}
         >
           <strong style={{ color: t.title }}>Funcionário IA (superagente):</strong> active ou desactive cada
-          função abaixo conforme o papel deste agente. O <strong style={{ color: t.title }}>cargo</strong> define
-          persona e limites; as ferramentas são configuráveis.
+          função abaixo — o motor <strong style={{ color: t.title }}>obedece exactamente</strong> aos toggles
+          guardados ao salvar. Use <strong style={{ color: t.title }}>Activar todas (base de dados)</strong> para
+          ligar o pacote CRM + financeiro de uma vez.
         </div>
       ) : null}
 
@@ -811,7 +933,71 @@ export function AgenteFerramentasIaBlock({
             </>
           ) : null}
 
-          {integradorActivos.length > 0 ? (
+          {integradorCrmWaje.length > 0 ? (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  margin: "18px 0 10px",
+                }}
+              >
+                <p
+                  style={{
+                    color: t.heading,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    margin: 0,
+                    letterSpacing: 0.04,
+                  }}
+                >
+                  BASE DE DADOS CRM (SUPABASE)
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={activarTodasFerramentasBancoCrm}
+                    style={{
+                      cursor: "pointer",
+                      borderRadius: 8,
+                      border: "1px solid rgba(146,255,0,0.35)",
+                      background: "rgba(146,255,0,0.12)",
+                      color: theme === "dark" ? RF_ACCENT : "#2d6a3e",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "6px 10px",
+                    }}
+                  >
+                    Activar todas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={desactivarTodasFerramentasBancoCrm}
+                    style={{
+                      cursor: "pointer",
+                      borderRadius: 8,
+                      border: `1px solid ${t.rowBorder}`,
+                      background: t.rowBg,
+                      color: t.body,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "6px 10px",
+                    }}
+                  >
+                    Desactivar todas
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {integradorCrmWaje.map((tool) => renderIntegradorRow(tool))}
+              </div>
+            </>
+          ) : null}
+
+          {integradorOutros.length > 0 ? (
             <>
               <p
                 style={{
@@ -823,122 +1009,15 @@ export function AgenteFerramentasIaBlock({
                 }}
               >
                 {(() => {
-                  const soRequer = integradorActivos.every((tool) => tool.requerConexao);
-                  const algumRequer = integradorActivos.some((tool) => tool.requerConexao);
-                  if (soRequer) {
-                    return modoInterno
-                      ? "INTEGRAÇÕES (LIGAR CONTAS ACIMA)"
-                      : "INTEGRAÇÕES (LIGAR CONTAS ACIMA)";
-                  }
+                  const soRequer = integradorOutros.every((tool) => tool.requerConexao);
+                  const algumRequer = integradorOutros.some((tool) => tool.requerConexao);
+                  if (soRequer) return "INTEGRAÇÕES (LIGAR CONTAS ACIMA)";
                   if (algumRequer) return "INTEGRAÇÕES";
                   return "INTEGRAÇÕES LIGADAS";
                 })()}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {integradorActivos.map((tool) => {
-                  const ligado = uso[tool.ferramenta_key] === true;
-                  const labelId = `tool-label-${tool.ferramenta_key}`;
-                  const escrita = tool.politica === "escrita";
-                  const toggleDisabled = tool.emBreve === true;
-                  return (
-                    <div
-                      key={tool.ferramenta_key}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 12,
-                        padding: "12px 14px",
-                        borderRadius: 12,
-                        border: "1px solid",
-                        borderColor: ligado ? "rgba(146,255,0,0.35)" : t.rowBorder,
-                        background: ligado ? "rgba(146,255,0,0.07)" : t.rowBg,
-                        opacity: toggleDisabled ? 0.72 : 1,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: 10,
-                          background: ligado ? "rgba(146,255,0,0.16)" : t.iconBg,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                          marginTop: 2,
-                        }}
-                      >
-                        <IntegradorFerramentaMarcaIcon
-                          ferramentaKey={tool.ferramenta_key}
-                          integradorId={tool.integrador_id}
-                          integradorNome={tool.integrador_nome}
-                          size={22}
-                          ligado={ligado}
-                          mutedColor={t.body}
-                        />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
-                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                          <span id={labelId} style={{ color: t.title, fontSize: 13, fontWeight: 700 }}>
-                            {tool.titulo}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 800,
-                              letterSpacing: 0.06,
-                              color: tool.emBreve ? "#d4a72c" : tool.requerConexao ? "#c9a24a" : RF_ACCENT,
-                              border: `1px solid ${
-                                tool.emBreve
-                                  ? "rgba(212,167,44,0.45)"
-                                  : tool.requerConexao
-                                    ? "rgba(201,162,74,0.45)"
-                                    : "rgba(146,255,0,0.35)"
-                              }`,
-                              borderRadius: 4,
-                              padding: "2px 6px",
-                            }}
-                          >
-                            {tool.emBreve
-                              ? "EM BREVE"
-                              : tool.requerConexao
-                                ? tool.integrador_id === "mem0"
-                                  ? "CONFIGURAR MEMÓRIA"
-                                  : "REQUER LIGAÇÃO"
-                                : tool.integrador_nome}
-                          </span>
-                        </div>
-                        <span
-                          style={{ display: "block", color: t.listItem, fontSize: 12, lineHeight: 1.45, marginTop: 4 }}
-                        >
-                          {tool.descricao_curta ||
-                            (escrita ? "Altera dados na aplicação externa." : "Consulta a aplicação externa.")}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-end",
-                          gap: 4,
-                          flexShrink: 0,
-                          paddingTop: 4,
-                        }}
-                      >
-                        <span style={{ fontSize: 10, fontWeight: 700, color: ligado ? "#3fb950" : t.muted }}>
-                          {ligado ? "ACTIVO" : "INACTIVO"}
-                        </span>
-                        <ToggleSwitch
-                          checked={ligado}
-                          onCheckedChange={(v) => handleUsoChange(tool.ferramenta_key, v)}
-                          disabled={toggleDisabled}
-                          labelledBy={labelId}
-                          offBg={t.toggleOff}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                {integradorOutros.map((tool) => renderIntegradorRow(tool))}
               </div>
             </>
           ) : null}

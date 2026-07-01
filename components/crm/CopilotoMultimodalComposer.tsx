@@ -39,6 +39,8 @@ type Props = {
   sending?: boolean;
   placeholder?: string;
   multimodalAtivo?: boolean;
+  /** Rodapé com dicas de anexos/áudio (desligado no copiloto interno). */
+  mostrarDicas?: boolean;
 };
 
 async function fileToBase64(file: File): Promise<string> {
@@ -66,6 +68,7 @@ export function CopilotoMultimodalComposer({
   sending = false,
   placeholder = "Escreva sua mensagem…",
   multimodalAtivo = true,
+  mostrarDicas = true,
 }: Props) {
   const [anexos, setAnexos] = useState<AnexoLocal[]>([]);
   const [menuAberto, setMenuAberto] = useState(false);
@@ -474,7 +477,7 @@ export function CopilotoMultimodalComposer({
         </div>
       </div>
 
-      {multimodalAtivo ? (
+      {multimodalAtivo && mostrarDicas ? (
         <p style={{ fontSize: 10, color: "#6e7681", margin: "8px 0 0", textAlign: "center" }}>
           + anexos · microfone grava ou envia áudio · OCR/transcrição via Mistral · até{" "}
           {Math.round(MAX_BRIEFING_ANEXO_BYTES / (1024 * 1024))} MB

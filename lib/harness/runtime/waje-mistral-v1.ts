@@ -9,6 +9,10 @@ import { ferramentasMistralListaParaAgente } from "@/lib/hub/agente-ferramentas-
 import { classifyHarnessOutcome } from "@/lib/harness/classify-outcome";
 import { extrairUrlsPublicasDeResultadoFerramenta } from "@/lib/harness/extrair-urls-publicas";
 import { enriquecerObservationComVerify } from "@/lib/harness/loop/verify-tool-result";
+import {
+  deveReforcarLoopEscrita,
+  NUDGE_ESCRITA_HARNESS,
+} from "@/lib/harness/loop/enforce-write-completion";
 import { mergeHarnessToolsIntoMistral } from "@/lib/harness/tools/harness-tools-defs";
 import type {
   HarnessHostContext,
@@ -54,32 +58,56 @@ export async function runWajeMistralHarnessTurn(
     | null = null;
 
   if (podeToolsMistral) {
-    out = await completarChatComFerramentasMistral({
-      systemPrompt: params.systemPrompt,
-      mensagens: params.mensagens,
-      modeloFromDb: params.modelo,
-      tools: mistralTools,
-      maxTokens: 2048,
-      agentReasoningEnabled: params.agentReasoningEnabled,
-      executarTool: async (nome, argumentosSerializados) => {
-        const result = await executarFerramentaHub(nome, argumentosSerializados, {
-          agenteSlug: params.hostCtx.agenteSlug,
-          tenantId: params.hostCtx.tenantId,
-          modoOperacao: "jobs_internos",
-          agenteInterno: true,
-          telefoneSessao: params.hostCtx.telefoneSessao,
-          usuarioCrmId: params.hostCtx.usuarioCrmId,
-          leadId: params.hostCtx.leadId ?? null,
-          sessionId: params.hostCtx.sessionId ?? null,
-          harnessSurface: params.hostCtx.surface,
-        });
-        const enriched = enriquecerObservationComVerify(result, nome);
-        if (nome === "hub_superagente_artefato" || nome === "hub_relatorio_html_simples") {
-          urlsPublicasColetadas.push(...extrairUrlsPublicasDeResultadoFerramenta(result));
-        }
-        return enriched;
-      },
-    });
+    const executarTool = async (nome: string, argumentosSerializados: string) => {
+      const result = await executarFerramentaHub(nome, argumentosSerializados, {
+        agenteSlug: params.hostCtx.agenteSlug,
+        tenantId: params.hostCtx.tenantId,
+        modoOperacao: "jobs_internos",
+        agenteInterno: true,
+        telefoneSessao: params.hostCtx.telefoneSessao,
+        usuarioCrmId: params.hostCtx.usuarioCrmId,
+        leadId: params.hostCtx.leadId ?? null,
+        sessionId: params.hostCtx.sessionId ?? null,
+        harnessSurface: params.hostCtx.surface,
+      });
+      const enriched = enriquecerObservationComVerify(result, nome);
+      if (nome === "hub_superagente_artefato" || nome === "hub_relatorio_html_simples") {
+        urlsPublicasColetadas.push(...extrairUrlsPublicasDeResultadoFerramenta(result));
+      }
+      return enriched;
+    };
+
+    const runToolsTurn = (mensagens: Array<{ role: "user" | "assistant"; content: string }>) =>
+      completarChatComFerramentasMistral({
+        systemPrompt: params.systemPrompt,
+        mensagens,
+        modeloFromDb: params.modelo,
+        tools: mistralTools,
+        maxTokens: 2048,
+        agentReasoningEnabled: params.agentReasoningEnabled,
+        executarTool,
+      });
+
+    out = await runToolsTurn(params.mensagens);
+
+    if (
+      out?.ok &&
+      "toolCallsExecutadas" in out &&
+      deveReforcarLoopEscrita(out.texto, out.toolCallsExecutadas)
+    ) {
+      const retry = await runToolsTurn([
+        ...params.mensagens,
+        { role: "assistant", content: out.texto },
+        { role: "user", content: NUDGE_ESCRITA_HARNESS },
+      ]);
+      if (retry?.ok) {
+        out = {
+          ...retry,
+          tokensEntrada: out.tokensEntrada + retry.tokensEntrada,
+          tokensSaida: out.tokensSaida + retry.tokensSaida,
+        };
+      }
+    }
   }
 
   if (!out?.ok) {

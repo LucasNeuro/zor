@@ -5,6 +5,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { criarNegocioParaLead } from "@/lib/crm/criar-negocio-from-lead";
 import { buildHubLeadsCrmPatch } from "@/lib/hub/hub-leads-crm-atualizar";
+import {
+  OPERACAO_ENTIDADES_CONFIG,
+  type OperacaoEntidadeSlug,
+} from "@/lib/hub/hub-operacao-entidades-operacionais";
 import { listarEstagiosPipelineParaIa } from "@/lib/crm/pipeline-estagios-ia";
 import { defaultTenantId } from "@/lib/tenant-default";
 import {
@@ -15,215 +19,11 @@ import {
 
 export type OperacaoEmpresaAcao = "consultar" | "obter" | "criar" | "atualizar" | "nota" | "listar_entidades";
 
-export type OperacaoEmpresaEntidade =
-  | "lead"
-  | "negocio"
-  | "pessoa"
-  | "empresa"
-  | "nota"
-  | "conta_receber"
-  | "conta_pagar"
-  | "atividade"
-  | "aprovacao"
-  | "alerta"
-  | "conversa"
-  | "servico_catalogo"
-  | "parceiro"
-  | "servico"
-  | "proposta"
-  | "kpi_meta"
-  | "kpi_resultado";
+export type OperacaoEmpresaEntidade = OperacaoEntidadeSlug;
 
-type EntidadeConfig = {
-  tabela: string;
-  view?: string;
-  label: string;
-  camposLeitura: string[];
-  camposCriar?: string[];
-  camposAtualizar?: string[];
-  statusArquivar?: string;
-};
+type EntidadeConfig = (typeof OPERACAO_ENTIDADES_CONFIG)[OperacaoEntidadeSlug];
 
-const ENTIDADES: Record<OperacaoEmpresaEntidade, EntidadeConfig> = {
-  lead: {
-    tabela: "hub_leads_crm",
-    view: "vw_rel_leads_enriquecidos",
-    label: "Lead CRM",
-    camposLeitura: [
-      "id",
-      "nome",
-      "telefone",
-      "email",
-      "estagio",
-      "estagio_funil",
-      "score",
-      "valor_estimado",
-      "interesse_principal",
-      "agente_responsavel",
-      "humano_responsavel",
-      "origem",
-      "pessoa_id",
-      "criado_em",
-      "atualizado_em",
-    ],
-    camposCriar: ["nome", "telefone", "email", "estagio", "valor_estimado", "interesse_principal", "origem", "tags"],
-    camposAtualizar: [
-      "nome",
-      "telefone",
-      "email",
-      "estagio",
-      "score",
-      "valor_estimado",
-      "interesse_principal",
-      "agente_responsavel",
-      "humano_responsavel",
-      "tags",
-      "metadata",
-    ],
-    statusArquivar: "spam_invalido",
-  },
-  negocio: {
-    tabela: "hub_negocios",
-    view: "vw_rel_negocios_pipeline",
-    label: "Negócio",
-    camposLeitura: [
-      "id",
-      "titulo",
-      "status",
-      "etapa",
-      "valor_estimado",
-      "valor_fechado",
-      "lead_id",
-      "pessoa_id",
-      "criado_em",
-      "atualizado_em",
-    ],
-    camposCriar: ["titulo", "lead_id", "valor_estimado", "descricao", "etapa", "status"],
-    camposAtualizar: ["titulo", "status", "etapa", "valor_estimado", "valor_fechado", "descricao"],
-    statusArquivar: "cancelado",
-  },
-  pessoa: {
-    tabela: "hub_pessoas",
-    view: "vw_rel_pessoas_cadastro",
-    label: "Pessoa",
-    camposLeitura: ["id", "codigo", "nome", "telefone", "email", "origem", "cidade", "estado", "criado_em"],
-    camposCriar: ["nome", "telefone", "email", "origem", "cidade", "estado"],
-    camposAtualizar: ["nome", "telefone", "email", "origem", "cidade", "estado", "tags"],
-  },
-  empresa: {
-    tabela: "hub_empresas",
-    label: "Empresa",
-    camposLeitura: ["id", "codigo", "nome", "cnpj", "email", "telefone", "cidade", "estado", "ativo", "criado_em"],
-    camposCriar: ["nome", "cnpj", "email", "telefone", "cidade", "estado"],
-    camposAtualizar: ["nome", "cnpj", "email", "telefone", "cidade", "estado", "ativo"],
-  },
-  nota: {
-    tabela: "hub_notas",
-    view: "vw_rel_notas_crm",
-    label: "Nota CRM",
-    camposLeitura: ["id", "lead_id", "negocio_id", "conteudo", "criado_por", "criado_em"],
-    camposCriar: ["conteudo", "lead_id", "negocio_id"],
-  },
-  conta_receber: {
-    tabela: "hub_contas_receber",
-    view: "vw_rel_contas_receber",
-    label: "Conta a receber",
-    camposLeitura: ["id", "descricao", "valor", "vencimento", "status", "negocio_id", "criado_em"],
-    camposCriar: ["descricao", "valor", "vencimento", "status", "negocio_id"],
-    camposAtualizar: ["descricao", "valor", "vencimento", "status"],
-    statusArquivar: "cancelado",
-  },
-  conta_pagar: {
-    tabela: "hub_contas_pagar",
-    view: "vw_rel_contas_pagar",
-    label: "Conta a pagar",
-    camposLeitura: ["id", "descricao", "valor", "vencimento", "status", "criado_em"],
-    camposCriar: ["descricao", "valor", "vencimento", "status"],
-    camposAtualizar: ["descricao", "valor", "vencimento", "status"],
-    statusArquivar: "cancelado",
-  },
-  atividade: {
-    tabela: "hub_atividades",
-    view: "vw_rel_atividades_timeline",
-    label: "Atividade / timeline",
-    camposLeitura: ["id", "lead_id", "negocio_id", "tipo", "descricao", "feito_por", "criado_em"],
-    camposCriar: ["lead_id", "negocio_id", "tipo", "descricao"],
-  },
-  aprovacao: {
-    tabela: "hub_aprovacoes",
-    view: "vw_rel_aprovacoes",
-    label: "Aprovação",
-    camposLeitura: ["id", "titulo", "status", "tipo", "criado_em"],
-    camposAtualizar: ["status", "observacao"],
-  },
-  alerta: {
-    tabela: "hub_alertas",
-    view: "vw_rel_alertas_operacao",
-    label: "Alerta operação",
-    camposLeitura: ["id", "titulo", "severidade", "status", "criado_em"],
-    camposAtualizar: ["status"],
-    statusArquivar: "resolvido",
-  },
-  conversa: {
-    tabela: "hub_conversas",
-    label: "Conversa",
-    camposLeitura: [
-      "id",
-      "lead_id",
-      "canal",
-      "status",
-      "ia_ativa",
-      "total_mensagens",
-      "ultima_mensagem_em",
-      "criado_em",
-    ],
-    camposAtualizar: ["status", "ia_ativa", "ia_pausada_motivo"],
-  },
-  servico_catalogo: {
-    tabela: "hub_tenant_servicos_catalogo",
-    label: "Catálogo de serviços",
-    camposLeitura: ["id", "slug", "nome", "descricao", "preco_referencia", "tipo", "ativo", "criado_em"],
-    camposCriar: ["slug", "nome", "descricao", "preco_referencia", "tipo", "ativo"],
-    camposAtualizar: ["nome", "descricao", "preco_referencia", "tipo", "ativo"],
-  },
-  parceiro: {
-    tabela: "hub_parceiros",
-    label: "Parceiro",
-    camposLeitura: ["id", "codigo", "especialidade", "status_homologacao", "disponivel", "criado_em"],
-    camposAtualizar: ["disponivel", "status_homologacao"],
-  },
-  servico: {
-    tabela: "hub_servicos",
-    label: "Serviço catálogo",
-    camposLeitura: ["id", "nome", "descricao", "categoria", "ativo", "criado_em"],
-    camposCriar: ["nome", "descricao", "categoria", "faixa_preco_min", "faixa_preco_max", "ativo"],
-    camposAtualizar: ["nome", "descricao", "categoria", "ativo", "faixa_preco_min", "faixa_preco_max"],
-  },
-  proposta: {
-    tabela: "hub_propostas",
-    label: "Proposta",
-    camposLeitura: ["id", "titulo", "valor", "status", "lead_id", "negocio_id", "criado_em"],
-    camposCriar: ["titulo", "valor", "lead_id", "negocio_id", "servico_id", "escopo", "status"],
-    camposAtualizar: ["titulo", "valor", "status", "escopo"],
-    statusArquivar: "recusada",
-  },
-  kpi_meta: {
-    tabela: "hub_kpis_metas",
-    view: "vw_rel_kpis_metas",
-    label: "Meta KPI",
-    camposLeitura: ["id", "nome", "valor_meta", "periodo", "criado_em"],
-    camposCriar: ["nome", "valor_meta", "periodo"],
-    camposAtualizar: ["nome", "valor_meta", "periodo"],
-  },
-  kpi_resultado: {
-    tabela: "hub_kpis_resultados",
-    view: "vw_rel_kpis_resultados",
-    label: "Resultado KPI",
-    camposLeitura: ["id", "nome", "valor", "periodo", "criado_em"],
-    camposCriar: ["nome", "valor", "periodo"],
-    camposAtualizar: ["nome", "valor", "periodo"],
-  },
-};
+const ENTIDADES = OPERACAO_ENTIDADES_CONFIG;
 
 function pickAllowed(
   dados: Record<string, unknown>,
@@ -466,12 +266,24 @@ export async function executarHubOperacaoEmpresa(
         typeof dadosIn.valor_estimado === "number"
           ? dadosIn.valor_estimado
           : Number(dadosIn.valor_estimado) || 0;
+      const etapa = typeof dadosIn.etapa === "string" ? dadosIn.etapa.trim() : undefined;
+      const servicoNome =
+        typeof dadosIn.servico_nome === "string"
+          ? dadosIn.servico_nome.trim()
+          : typeof dadosIn.produto === "string"
+            ? dadosIn.produto.trim()
+            : undefined;
+      const servicoCatalogoId =
+        typeof dadosIn.servico_catalogo_id === "string" ? dadosIn.servico_catalogo_id.trim() : undefined;
       const result = await criarNegocioParaLead(supabase, {
         leadId,
         titulo,
         valorEstimado: valor,
         tenantId: tenant,
         origem: "agente_interno",
+        etapa: etapa || "novo",
+        servicoNome,
+        servicoCatalogoId,
       });
       if (!result.ok) {
         return JSON.stringify({ erro: result.erro || "criar_negocio_falhou" });
@@ -532,6 +344,13 @@ export async function executarHubOperacaoEmpresa(
 
     payload.tenant_id = tenant;
     if (entidade === "lead" && !payload.estagio) payload.estagio = "novo";
+
+    if (
+      (entidade === "aprovacao" || entidade === "alerta" || entidade === "script_ia") &&
+      !payload.agente_slug
+    ) {
+      payload.agente_slug = ctx.agenteSlug;
+    }
 
     const { data, error } = await supabase.from(cfg.tabela).insert(payload).select("id").single();
     if (error) return JSON.stringify({ erro: "supabase", detalhe: error.message });

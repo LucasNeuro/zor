@@ -644,15 +644,18 @@ export function AgenteBriefingDrawer({
               disabled={enviando}
               sending={enviando}
               multimodalAtivo
+              mostrarDicas={!ehCopilotoInterno}
               placeholder={
                 ehCopilotoInterno
                   ? "Pergunte ao copiloto ou anexe imagem, áudio ou documento para testar multimodal…"
                   : "Escreva sua mensagem ou anexe ficheiros para testar…"
               }
             />
-            <p style={{ fontSize: 10, color: "#484f58", margin: "4px 0 0", textAlign: "center" }}>
-              Enter envia · Shift+Enter nova linha · feche e reabra para conversa nova
-            </p>
+            {!ehCopilotoInterno ? (
+              <p style={{ fontSize: 10, color: "#484f58", margin: "4px 0 0", textAlign: "center" }}>
+                Enter envia · Shift+Enter nova linha · feche e reabra para conversa nova
+              </p>
+            ) : null}
           </div>
         </div>
       </aside>

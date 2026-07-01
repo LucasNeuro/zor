@@ -15,6 +15,7 @@ import {
   HUB_INT_CRM_REGISTAR_NOTA,
   sincronizarUsoCrmIntegrador,
 } from "@/lib/hub/crm-integrador-constants";
+import { OPERACAO_ENTIDADES_TOOL_KEYS } from "@/lib/hub/hub-operacao-entidades-operacionais";
 
 export type HubFerramentaCategoria = "cliente" | "analise" | "registos" | "empresa";
 
@@ -833,20 +834,19 @@ export function mergeUsoFerramentasWhatsappCanal(
 }
 
 /**
- * Agentes internos (jobs_internos): respeita só o que está gravado em uso_ferramentas_ia.
- * Defaults completos ficam no wizard (`pacoteUsoFerramentasSuperagenteInterno`), não aqui.
+ * Superagentes internos (jobs_internos): respeita os toggles guardados em `uso_ferramentas_ia`.
+ * Só entram no Mistral ferramentas com valor explícito `true` (igual à UI).
+ * Pacote inicial completo: `pacoteUsoFerramentasSuperagenteInterno()` no wizard.
  */
 export function mergeUsoFerramentasJobsInternos(
   uso: Partial<Record<string, boolean>>,
   modoOperacao?: string | null
 ): Record<string, boolean> {
   const merged = mergeUsoFerramentasComPadraoPreservandoCustom(uso);
-
   if (modoOperacao !== "jobs_internos") {
     return merged;
   }
-
-  return sincronizarUsoCrmIntegrador(merged);
+  return merged;
 }
 
 /** @deprecated Nenhuma ferramenta é forçada na UI — o gestor activa/desactiva livremente. */
@@ -860,6 +860,11 @@ export function ferramentaObrigatoriaFuncionarioIa(_id: string): boolean {
 export function pacoteUsoFerramentasSuperagenteInterno(): Record<string, boolean> {
   const pack: Record<string, boolean> = {
     [HUB_INT_CRM_CONSULTAR]: true,
+    [HUB_INT_CRM_OPERAR]: true,
+    [HUB_INT_CRM_ATUALIZAR_LEAD]: true,
+    [HUB_INT_CRM_REGISTAR_NOTA]: true,
+    hub_operacao_empresa: true,
+    hub_superagente_dados: true,
     hub_metricas_escritorio: true,
     hub_raciocinio_avancado: true,
     hub_relatorio_html_simples: true,
@@ -868,7 +873,7 @@ export function pacoteUsoFerramentasSuperagenteInterno(): Record<string, boolean
     [MEM0_SUPER_MEMORIA_KEY]: true,
     [MEM0_BUSCAR_KEY]: true,
   };
-  for (const key of CRM_ENTIDADES_TOOL_KEYS) pack[key] = true;
+  for (const key of OPERACAO_ENTIDADES_TOOL_KEYS) pack[key] = true;
   return pack;
 }
 

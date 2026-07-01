@@ -38,6 +38,23 @@ export const HUB_INT_CRM_KEYS = [
   ...CRM_ENTIDADES_TOOL_KEYS,
 ] as const;
 
+/** Ferramentas «Base de dados CRM (Supabase)» visíveis no funcionário IA (copiloto / jobs_internos). */
+export const CHAVES_FERRAMENTAS_BANCO_CRM_WAJE_INTERNO = [
+  HUB_INT_CRM_CONSULTAR,
+  ...CRM_ENTIDADES_TOOL_KEYS,
+] as const;
+
+/** Mesmo bloco + atalhos de canal WhatsApp/e-mail. */
+export const CHAVES_FERRAMENTAS_BANCO_CRM_WAJE_CANAL = [
+  HUB_INT_CRM_CONSULTAR,
+  ...CRM_ENTIDADES_TOOL_KEYS,
+  ...HUB_INT_CRM_ATALHOS_CANAL,
+] as const;
+
+export function chavesFerramentasBancoCrmWaje(modoInterno: boolean): readonly string[] {
+  return modoInterno ? CHAVES_FERRAMENTAS_BANCO_CRM_WAJE_INTERNO : CHAVES_FERRAMENTAS_BANCO_CRM_WAJE_CANAL;
+}
+
 export type HubIntCrmKey = (typeof HUB_INT_CRM_KEYS)[number];
 
 /** Ferramentas builtin que passam a aparecer na secção Integrações (Supabase). */

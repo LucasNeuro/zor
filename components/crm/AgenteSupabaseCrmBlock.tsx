@@ -124,6 +124,7 @@ function CampoTextoComOlho({
   placeholder,
   inputClassName,
   inputStyle,
+  labelColor,
 }: {
   label: string;
   value: string;

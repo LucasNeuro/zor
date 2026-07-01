@@ -52,7 +52,7 @@ export async function runWajeMistralHarnessTurn(
   );
 
   if (params.harnessToolsEnabled !== false) {
-    mistralTools = mergeHarnessToolsIntoMistral(mistralTools);
+    mistralTools = mergeHarnessToolsIntoMistral(mistralTools, params.toolDefs.usoMap);
   }
 
   const podeToolsMistral =

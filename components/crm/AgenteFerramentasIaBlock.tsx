@@ -30,6 +30,7 @@ import {
   HUB_AGENTE_FERRAMENTAS_CATALOGO,
   HUB_FERRAMENTA_SECAO_LABEL,
   mergeUsoFerramentasComPadraoPreservandoCustom,
+  mergeUsoFerramentasPorModoOperacao,
 } from "@/lib/hub/agente-ferramentas-registry";
 import {
   FERRAMENTAS_CRM_MOVED_TO_INTEGRADOR,
@@ -244,7 +245,9 @@ export function AgenteFerramentasIaBlock({
   theme = "light",
 }: AgenteFerramentasIaBlockProps) {
   const t = ferramentasThemeTokens(theme);
-  const uso = mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentas);
+  const uso = modoInterno
+    ? mergeUsoFerramentasPorModoOperacao(usoFerramentas, "jobs_internos")
+    : mergeUsoFerramentasComPadraoPreservandoCustom(usoFerramentas);
   const nAtivas = Object.entries(uso).filter(([, on]) => on === true).length;
   const customActivos = customCatalog.filter((c) => c.ativo);
   const externaActivos = externaCatalog.filter((c) => c.ativo);

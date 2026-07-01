@@ -16,6 +16,8 @@ import {
   sincronizarUsoCrmIntegrador,
 } from "@/lib/hub/crm-integrador-constants";
 import { OPERACAO_ENTIDADES_TOOL_KEYS } from "@/lib/hub/hub-operacao-entidades-operacionais";
+import { HARNESS_TOOL_NAMES } from "@/lib/harness/tools/harness-tools-defs";
+import { ferramentasDoToolset } from "@/lib/harness/toolsets";
 
 export type HubFerramentaCategoria = "cliente" | "analise" | "registos" | "empresa";
 
@@ -672,13 +674,34 @@ export function extrairUsoFerramentasIntIa(raw: unknown): Record<string, boolean
   return out;
 }
 
-/** Mapa estável para builtins + booleans para ferramentas custom/externas/integradores preservadas do `raw`. */
+/** Chaves `harness_*` — skills, memória curada, delegação (toolsets harness). */
+export function extrairUsoFerramentasHarnessIa(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const o = raw as Record<string, unknown>;
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (!k.startsWith("harness_")) continue;
+    if (!(HARNESS_TOOL_NAMES as readonly string[]).includes(k)) continue;
+    const b = coalesceFerramentaBool(v);
+    if (b !== undefined) out[k] = b;
+  }
+  return out;
+}
+
+export function usoTemChavesHarnessGuardadas(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const o = raw as Record<string, unknown>;
+  return HARNESS_TOOL_NAMES.some((n) => Object.prototype.hasOwnProperty.call(o, n));
+}
+
+/** Mapa estável para builtins + booleans para ferramentas custom/externas/integradores/harness preservadas do `raw`. */
 export function mergeUsoFerramentasComPadraoPreservandoCustom(raw: unknown): Record<string, boolean> {
   const base = mergeUsoFerramentasComPadrao(normalizarUsoFerramentasIa(raw));
   const custom = extrairUsoFerramentasCustomIa(raw);
   const ext = extrairUsoFerramentasExtIa(raw);
   const integ = extrairUsoFerramentasIntIa(raw);
-  return sincronizarUsoCrmIntegrador({ ...base, ...custom, ...ext, ...integ });
+  const harness = extrairUsoFerramentasHarnessIa(raw);
+  return sincronizarUsoCrmIntegrador({ ...base, ...custom, ...ext, ...integ, ...harness });
 }
 
 export type FerramentaCustomDefMistral = {
@@ -847,6 +870,15 @@ export function mergeUsoFerramentasJobsInternos(
   if (modoOperacao !== "jobs_internos") {
     return merged;
   }
+  // Legado: agentes sem chaves harness_* no JSON → activar skills + memória harness por defeito.
+  if (!usoTemChavesHarnessGuardadas(uso)) {
+    for (const f of ferramentasDoToolset("skills_harness")) {
+      merged[f] = true;
+    }
+    if (merged.harness_memory !== false) {
+      merged.harness_memory = true;
+    }
+  }
   return merged;
 }
 
@@ -875,6 +907,8 @@ export function pacoteUsoFerramentasSuperagenteInterno(): Record<string, boolean
     [MEM0_BUSCAR_KEY]: true,
   };
   for (const key of OPERACAO_ENTIDADES_TOOL_KEYS) pack[key] = true;
+  for (const f of ferramentasDoToolset("skills_harness")) pack[f] = true;
+  pack.harness_memory = true;
   return pack;
 }
 

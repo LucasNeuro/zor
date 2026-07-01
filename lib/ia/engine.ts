@@ -385,7 +385,8 @@ export async function processarMensagem(ctx: ContextoMensagem): Promise<Resultad
       modoOp
     );
     const mistralTools = mergeHarnessToolsIntoMistral(
-      ferramentasMistralListaParaAgente(usoMap, customDefs, extDefs, intDefs)
+      ferramentasMistralListaParaAgente(usoMap, customDefs, extDefs, intDefs),
+      usoMap
     );
     const harnessSurface =
       ctx.canal === "email" ? "email_lead" : ctx.canal === "whatsapp" ? "whatsapp_lead" : "whatsapp_lead";

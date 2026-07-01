@@ -156,10 +156,14 @@ export function definicoesMistralHarnessTools(): MistralChatToolDefinition[] {
 }
 
 export function mergeHarnessToolsIntoMistral(
-  tools: MistralChatToolDefinition[]
+  tools: MistralChatToolDefinition[],
+  uso?: Record<string, boolean>
 ): MistralChatToolDefinition[] {
   const names = new Set(tools.map((t) => t.function.name));
-  const harness = definicoesMistralHarnessTools();
+  let harness = definicoesMistralHarnessTools();
+  if (uso) {
+    harness = harness.filter((h) => uso[h.function.name] === true);
+  }
   const extra = harness.filter((h) => !names.has(h.function.name));
   return [...tools, ...extra];
 }

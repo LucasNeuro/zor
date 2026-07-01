@@ -308,16 +308,17 @@ export const HUB_AGENTE_FERRAMENTAS_CATALOGO: readonly HubAgenteFerramentaCatalo
     mistralFunction: {
       name: "hub_superagente_artefato",
       description:
-        "Cria relatório canvas com UI Synkron.IA (avatar e nome do agente), tabelas e gráficos Chart.js. Inclua seções tipo grafico; tabelas com valores numéricos ganham gráfico automático. Devolve url_publica em /artefato/{id}.",
+        "Publica UM relatório dashboard Waje (tema claro, verdes marca). Secções: kpi_row (cor: verde|azul|laranja|teal|roxo|rosa), grafico, tabela COM linhas preenchidas (array de arrays ou objetos), texto/insights. Consulte CRM antes. Tabela deve listar os mesmos dados do gráfico. Responda só com url_publica.",
       parameters: {
         type: "object",
         properties: {
           titulo: { type: "string" },
           subtitulo: { type: "string" },
-          tema: { type: "string", enum: ["claro", "escuro"] },
+          tema: { type: "string", enum: ["claro", "escuro"], description: "Prefira claro para dashboards" },
           secoes: {
             type: "array",
-            description: "Secções: {tipo:texto,markdown} | {tipo:grafico,grafico:{tipo,labels,datasets}} | {tipo:tabela,colunas,linhas}",
+            description:
+              "Ordem: kpi_row → grafico → tabela (linhas obrigatórias) → texto insights. Tabela: {tipo,titulo?,colunas,linhas:[[...]] ou linhas:[{Código,Lead,Valor,Status}]}",
             items: { type: "object" },
           },
         },
@@ -867,7 +868,7 @@ export function pacoteUsoFerramentasSuperagenteInterno(): Record<string, boolean
     hub_superagente_dados: true,
     hub_metricas_escritorio: true,
     hub_raciocinio_avancado: true,
-    hub_relatorio_html_simples: true,
+    hub_relatorio_html_simples: false,
     hub_superagente_artefato: true,
     hub_mistral_percepcao: true,
     [MEM0_SUPER_MEMORIA_KEY]: true,

@@ -1,6 +1,5 @@
 import type { GraficoArtefatoSpec, SecaoArtefatoSpec } from "@/lib/hub/superagente/types";
-
-const CORES_GRAFICO = ["#92ff00", "#3f9848", "#5dca68", "#b8e6cf", "#2d6a3e", "#c8f7d0"];
+import { normalizarSecoesArtefatoEntrada } from "@/lib/hub/superagente/artefato-normalizar";
 
 function parseNumeroBr(val: string): number | null {
   const t = val.trim();
@@ -49,35 +48,45 @@ function graficoDeTabela(
   if (labels.length < 2) return null;
 
   return {
-    tipo: labels.length <= 5 && tipo === "bar" ? "doughnut" : tipo,
+    tipo: labels.length <= 6 && tipo === "bar" ? "doughnut" : tipo,
     titulo,
     labels,
     datasets: [
       {
         label: colunas[idxNum] || "Valor",
         data,
-        cor: CORES_GRAFICO[0],
       },
     ],
   };
 }
 
-/** Insere gráficos derivados de tabelas quando o modelo só enviou texto/tabela. */
-export function enriquecerSecoesArtefato(secoes: SecaoArtefatoSpec[]): SecaoArtefatoSpec[] {
-  const temGrafico = secoes.some((s) => s.tipo === "grafico");
-  if (temGrafico) return secoes;
+function ordenSecao(tipo: SecaoArtefatoSpec["tipo"]): number {
+  if (tipo === "kpi_row") return 0;
+  if (tipo === "grafico") return 1;
+  if (tipo === "tabela") return 2;
+  return 3;
+}
 
-  const out: SecaoArtefatoSpec[] = [];
-  for (const sec of secoes) {
-    out.push(sec);
-    if (sec.tipo === "tabela" && sec.linhas.length >= 2) {
-      const g = graficoDeTabela(
-        `Gráfico — ${sec.colunas.join(" / ").slice(0, 60)}`,
-        sec.colunas,
-        sec.linhas
-      );
-      if (g) out.push({ tipo: "grafico", grafico: g });
+/** Normaliza tabelas, preenche linhas vazias e insere gráficos derivados quando faltar. */
+export function enriquecerSecoesArtefato(secoes: SecaoArtefatoSpec[]): SecaoArtefatoSpec[] {
+  const normalizadas = normalizarSecoesArtefatoEntrada(secoes);
+  const temGrafico = normalizadas.some((s) => s.tipo === "grafico");
+
+  let out: SecaoArtefatoSpec[] = temGrafico ? [...normalizadas] : [];
+
+  if (!temGrafico) {
+    for (const sec of normalizadas) {
+      out.push(sec);
+      if (sec.tipo === "tabela" && sec.linhas.length >= 2) {
+        const g = graficoDeTabela(
+          sec.titulo?.trim() || `Distribuição — ${sec.colunas.join(" / ").slice(0, 60)}`,
+          sec.colunas,
+          sec.linhas
+        );
+        if (g) out.push({ tipo: "grafico", grafico: g });
+      }
     }
   }
-  return out;
+
+  return [...out].sort((a, b) => ordenSecao(a.tipo) - ordenSecao(b.tipo));
 }

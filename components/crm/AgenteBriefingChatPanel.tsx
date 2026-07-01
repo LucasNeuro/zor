@@ -474,6 +474,7 @@ export function AgenteBriefingDrawer({
                       m.metadata &&
                       typeof m.metadata === "object" &&
                       (m.metadata.tipo === "artefato_link" ||
+                        m.metadata.tipo === "artefato_canvas" ||
                         (Array.isArray(m.metadata.urls_publicas) &&
                           (m.metadata.urls_publicas as string[]).length > 0)) ? (
                         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>

@@ -25,14 +25,27 @@ export type GraficoArtefatoSpec = {
   }>;
 };
 
+export type KpiCorToken = "verde" | "azul" | "rosa" | "laranja" | "teal" | "roxo";
+
+export type KpiArtefatoItem = {
+  label: string;
+  valor: string;
+  /** Ex.: "+2,15%" ou "-3 contas" */
+  delta?: string;
+  delta_positivo?: boolean;
+  cor?: KpiCorToken;
+};
+
 export type SecaoArtefatoSpec =
   | { tipo: "texto"; markdown?: string; html_seguro?: string }
   | { tipo: "grafico"; grafico: GraficoArtefatoSpec }
-  | { tipo: "tabela"; colunas: string[]; linhas: string[][] };
+  | { tipo: "tabela"; titulo?: string; colunas: string[]; linhas: string[][] }
+  | { tipo: "kpi_row"; titulo?: string; itens: KpiArtefatoItem[] };
 
 export type ArtefatoCanvasSpec = {
   titulo: string;
   subtitulo?: string;
+  /** Tema claro recomendado para dashboards financeiros (fundo cinza-claro). */
   tema?: "claro" | "escuro";
   secoes: SecaoArtefatoSpec[];
 };

@@ -17,7 +17,6 @@ import {
 import { registrarInteracaoPainelAgente } from "@/lib/hub/registrar-interacao-painel";
 import { CRM_ACCESS_COOKIE, fetchAuthUserFromAccessToken } from "@/lib/auth/crm-session";
 import { mensagemErroBriefingChat } from "@/lib/hub/briefing-chat-errors";
-import { formatarLinksArtefactosParaTexto } from "@/lib/hub/superagente/canais-internos";
 import {
   montarMensagemComAnexos,
   processarAnexosBriefingChat,
@@ -413,25 +412,12 @@ export async function POST(
       modo,
       motor: resultado.motor ?? "llm_prompt",
       ...(resultado.flow_state ? { flow_state: resultado.flow_state } : {}),
-      ...(resultado.urls_publicas?.length ? { urls_publicas: resultado.urls_publicas } : {}),
+      ...(resultado.urls_publicas?.length
+        ? { urls_publicas: resultado.urls_publicas, tipo: "artefato_canvas" }
+        : {}),
     },
   });
   if (aErr) return erroBriefingJson(aErr.message, 500);
-
-  if (resultado.urls_publicas?.length) {
-    const linksTexto = formatarLinksArtefactosParaTexto(resultado.urls_publicas);
-    await supabase.from("hub_crm_agente_briefing_mensagem").insert({
-      sessao_id: sessaoId,
-      papel: "assistant",
-      conteudo: linksTexto,
-      metadata: {
-        modo,
-        tipo: "artefato_link",
-        urls: resultado.urls_publicas,
-        motor: resultado.motor ?? "llm_prompt",
-      },
-    });
-  }
 
   try {
     await registrarInteracaoPainelAgente(supabase, {

@@ -8,7 +8,7 @@ import {
   type MistralChatMessagePayload,
   type MistralChatToolDefinition,
 } from "@/lib/ia/mistral-chat-tools";
-import { blocoInstrucoesFerramentasCrmWhatsapp, blocoInstrucoesGoogleWorkspaceAgenda } from "@/lib/ia/bloco-ferramentas-crm-whatsapp";
+import { blocoInstrucoesFerramentasCrmWhatsapp, blocoInstrucoesGoogleWorkspaceAgenda, blocoInstrucoesCopilotoInternoCrm } from "@/lib/ia/bloco-ferramentas-crm-whatsapp";
 
 const MAX_TOOL_ROUNDS = 6;
 
@@ -30,6 +30,8 @@ export async function completarChatComFerramentasMistral(params: {
   playbookIaTurn?: boolean;
   /** Toggle `hub_raciocinio_avancado` no agente. */
   agentReasoningEnabled?: boolean;
+  /** Copiloto interno — instruções CRM por relação (lead_id), não WhatsApp. */
+  modoCopilotoInterno?: boolean;
   executarTool: (nome: string, argumentosSerializados: string) => Promise<string>;
 }): Promise<
   | {
@@ -69,11 +71,13 @@ export async function completarChatComFerramentasMistral(params: {
     nomesFerramentas.has("hub_int_gcal_cancelar_evento") ||
     nomesFerramentas.has("hub_int_gcal_listar_reservas_lead");
 
-  let systemExtra = `\n\n${blocoInstrucoesFerramentasCrmWhatsapp({
-    temMenuWhatsapp: menuWhatsappAtivo,
-    temAtualizarLead: nomesFerramentas.has("hub_atualizar_lead"),
-    playbookUnificado: params.playbookPublicado === true,
-  })}`;
+  let systemExtra = params.modoCopilotoInterno
+    ? `\n\n${blocoInstrucoesCopilotoInternoCrm()}`
+    : `\n\n${blocoInstrucoesFerramentasCrmWhatsapp({
+        temMenuWhatsapp: menuWhatsappAtivo,
+        temAtualizarLead: nomesFerramentas.has("hub_atualizar_lead"),
+        playbookUnificado: params.playbookPublicado === true,
+      })}`;
 
   if (googleAgendaAtivo) {
     systemExtra += `\n\n${blocoInstrucoesGoogleWorkspaceAgenda()}`;

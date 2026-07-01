@@ -21,6 +21,7 @@ import {
   telefonesConversaEquivalentes,
   validarLeadTelefoneSessao,
 } from "@/lib/crm/isolamento-conversa-lead";
+import { normalizarLinhasTabela } from "@/lib/hub/superagente/artefato-normalizar";
 
 export type FerramentaHubContexto = {
   leadId?: string | null;
@@ -380,16 +381,48 @@ async function executarFerramentaHubBuiltin(
       const titulo = typeof args.titulo === "string" ? args.titulo.trim() : "";
       const subtitulo = typeof args.subtitulo === "string" ? args.subtitulo.trim() : undefined;
       const temaRaw = typeof args.tema === "string" ? args.tema.trim().toLowerCase() : "";
-      const tema = temaRaw === "claro" ? "claro" : "escuro";
+      const tema = temaRaw === "escuro" ? "escuro" : "claro";
       const secoesRaw = args.secoes;
       if (!titulo || !Array.isArray(secoesRaw) || secoesRaw.length === 0) {
         return JSON.stringify({ erro: "titulo_e_secoes_obrigatorios" });
       }
 
-      const secoes = secoesRaw.slice(0, 12).map((item) => {
+      const secoes = secoesRaw.slice(0, 16).map((item) => {
         if (!item || typeof item !== "object" || Array.isArray(item)) return null;
         const o = item as Record<string, unknown>;
         const tipo = String(o.tipo || "texto").trim().toLowerCase();
+        if (tipo === "kpi_row" || tipo === "kpi" || tipo === "metricas") {
+          const itensRaw = Array.isArray(o.itens) ? o.itens : Array.isArray(o.kpis) ? o.kpis : [];
+          const itens = itensRaw
+            .map((row) => {
+              if (!row || typeof row !== "object") return null;
+              const k = row as Record<string, unknown>;
+              const label = typeof k.label === "string" ? k.label.trim() : "";
+              const valor = typeof k.valor === "string" ? k.valor.trim() : String(k.valor ?? "");
+              if (!label || !valor) return null;
+              const corRaw = typeof k.cor === "string" ? k.cor.trim().toLowerCase() : "";
+              const cores = new Set(["verde", "azul", "rosa", "laranja", "teal", "roxo"]);
+              return {
+                label,
+                valor,
+                delta: typeof k.delta === "string" ? k.delta : undefined,
+                delta_positivo:
+                  typeof k.delta_positivo === "boolean"
+                    ? k.delta_positivo
+                    : typeof k.delta === "string" && k.delta.trim().startsWith("-")
+                      ? false
+                      : undefined,
+                cor: cores.has(corRaw) ? (corRaw as "verde" | "azul" | "rosa" | "laranja" | "teal" | "roxo") : undefined,
+              };
+            })
+            .filter(Boolean);
+          if (!itens.length) return null;
+          return {
+            tipo: "kpi_row" as const,
+            titulo: typeof o.titulo === "string" ? o.titulo : undefined,
+            itens: itens as import("@/lib/hub/superagente/types").KpiArtefatoItem[],
+          };
+        }
         if (tipo === "grafico" && o.grafico && typeof o.grafico === "object") {
           const g = o.grafico as Record<string, unknown>;
           const labels = Array.isArray(g.labels) ? g.labels.map((l) => String(l)) : [];
@@ -420,12 +453,18 @@ async function executarFerramentaHubBuiltin(
         }
         if (tipo === "tabela") {
           const colunas = Array.isArray(o.colunas) ? o.colunas.map((c) => String(c)) : [];
-          const linhas = Array.isArray(o.linhas)
-            ? o.linhas.map((row) =>
-                Array.isArray(row) ? row.map((c) => String(c ?? "")) : []
-              )
-            : [];
-          return { tipo: "tabela" as const, colunas, linhas };
+          const linhasRaw = Array.isArray(o.linhas)
+            ? o.linhas
+            : Array.isArray(o.rows)
+              ? o.rows
+              : [];
+          const linhas = normalizarLinhasTabela(colunas, linhasRaw);
+          return {
+            tipo: "tabela" as const,
+            titulo: typeof o.titulo === "string" ? o.titulo : undefined,
+            colunas,
+            linhas,
+          };
         }
         return {
           tipo: "texto" as const,

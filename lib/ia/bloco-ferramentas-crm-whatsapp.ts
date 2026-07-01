@@ -57,3 +57,22 @@ export function blocoInstrucoesFerramentasCrmWhatsapp(opcoes?: {
 
   return linhas.join("\n");
 }
+
+/** Instruções CRM para copiloto interno / superagente (não WhatsApp). */
+export function blocoInstrucoesCopilotoInternoCrm(): string {
+  return [
+    "═══ CRM INTERNO (copiloto / superagente) ═══",
+    "Objectivo: responder com dados reais do tenant via hub_int_crm_ent_*.",
+    "",
+    "Fluxo lead → negócios (obrigatório):",
+    "1. **hub_int_crm_ent_lead** — acao=consultar + filtro_texto (nome/telefone) OU acao=obter + id",
+    "2. Guarde o **id** (UUID) do lead devolvido no JSON",
+    "3. **hub_int_crm_ent_negocio** — acao=consultar + **filtro_lead_id** = UUID do passo 2",
+    "4. O mesmo para notas, atividades, conversas, contas: use filtro_lead_id ou filtro_negocio_id",
+    "",
+    "Proibido:",
+    "- Dizer que não há negócios sem chamar hub_int_crm_ent_negocio com filtro_lead_id",
+    "- Usar filtro_texto com nome de pessoa em negócio (títulos são códigos, ex. NEG-2026-0001)",
+    "- Inventar contagens ou listas sem tool call no mesmo turno",
+  ].join("\n");
+}

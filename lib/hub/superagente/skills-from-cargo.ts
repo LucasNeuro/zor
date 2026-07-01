@@ -25,8 +25,8 @@ const PACOTE_BASE: SuperagenteSkill = {
 const PACOTE_RELATORIOS: SuperagenteSkill = {
   id: "artefatos_relatorios",
   titulo: "Relatórios e canvas",
-  descricao: "Gerar páginas HTML com gráficos e partilhar link público (WhatsApp gestor).",
-  ferramentas_sugeridas: ["hub_superagente_artefato", "hub_relatorio_html_simples"],
+  descricao: "Dashboard HTML (KPIs, gráficos multi-cor, tabelas) com link público — um canvas por pedido.",
+  ferramentas_sugeridas: ["hub_superagente_artefato"],
 };
 
 const PACOTE_MULTIMODAL: SuperagenteSkill = {

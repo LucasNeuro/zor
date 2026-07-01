@@ -26,6 +26,7 @@ import { defaultTenantId } from "@/lib/tenant-default";
 import { executarHarnessBackgroundReview } from "@/lib/harness/background-review";
 import { montarSystemPromptHarness } from "@/lib/harness/build-system-prompt";
 import { calcularCustoBrl } from "@/lib/harness/calcular-custo-brl";
+import { normalizarEntregaArtefacto } from "@/lib/hub/superagente/entrega-artefato";
 import { runWajeMistralHarnessTurn } from "@/lib/harness/runtime/waje-mistral-v1";
 import {
   carregarMemorySnapshot,
@@ -229,15 +230,16 @@ export async function runHarnessHost(
   }
 
   const { brl } = calcularCustoBrl(turn.modelo, turn.tokensEntrada, turn.tokensSaida);
+  const entrega = normalizarEntregaArtefacto(turn.texto, turn.urlsPublicas);
 
   return {
-    texto: turn.texto,
+    texto: entrega.texto,
     modelo: turn.modelo,
     tokens_input: turn.tokensEntrada,
     tokens_output: turn.tokensSaida,
     custo_brl: brl,
     motor: "briefing_interno",
-    urls_publicas: turn.urlsPublicas.length ? turn.urlsPublicas : undefined,
+    urls_publicas: entrega.urls_publicas,
     harness_version: HARNESS_VERSION,
   };
 }

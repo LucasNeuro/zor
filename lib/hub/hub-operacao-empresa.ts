@@ -56,6 +56,15 @@ function camposBuscaEntidade(camposLeitura: string[]): string[] {
   return CAMPOS_BUSCA_CONSULTAR.filter((c) => camposLeitura.includes(c));
 }
 
+const FILTROS_RELACAO_CONSULTA: Array<{
+  arg: "filtro_lead_id" | "filtro_negocio_id" | "filtro_pessoa_id";
+  coluna: string;
+}> = [
+  { arg: "filtro_lead_id", coluna: "lead_id" },
+  { arg: "filtro_negocio_id", coluna: "negocio_id" },
+  { arg: "filtro_pessoa_id", coluna: "pessoa_id" },
+];
+
 /** Lista registos na tabela CRM real (hub_*) — paridade com a interface, não só views vw_rel_*. */
 async function consultarEntidadeNaTabela(
   supabase: SupabaseClient,
@@ -79,6 +88,15 @@ async function consultarEntidadeNaTabela(
 
   const filtroTexto = String(args.filtro_texto || "").trim();
   const filtroColuna = String(args.filtro_coluna || "").trim();
+  const filtrosAplicados: string[] = [];
+
+  for (const { arg, coluna } of FILTROS_RELACAO_CONSULTA) {
+    const val = String(args[arg] || "").trim();
+    if (!val) continue;
+    if (!cfg.camposLeitura.includes(coluna)) continue;
+    query = query.eq(coluna, val);
+    filtrosAplicados.push(`${coluna}=${val}`);
+  }
 
   if (filtroTexto) {
     const safe = escaparIlike(filtroTexto);
@@ -121,6 +139,7 @@ async function consultarEntidadeNaTabela(
     tabela: cfg.tabela,
     fonte: "tabela_crm",
     total: linhas.length,
+    filtros_relacao: filtrosAplicados.length ? filtrosAplicados : undefined,
     registos: linhas,
   });
 }
@@ -178,6 +197,12 @@ export type HubOperacaoEmpresaArgs = {
   limite?: number;
   filtro_texto?: string;
   filtro_coluna?: string;
+  /** UUID do lead — use em negócio, nota, atividade, conversa, etc. */
+  filtro_lead_id?: string;
+  /** UUID do negócio — use em nota, atividade, conta_receber, proposta, etc. */
+  filtro_negocio_id?: string;
+  /** UUID da pessoa — quando a entidade tem pessoa_id */
+  filtro_pessoa_id?: string;
   arquivar?: boolean;
 };
 

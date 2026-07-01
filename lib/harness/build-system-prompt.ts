@@ -1,9 +1,6 @@
 import { copilotoInternoPreamble } from "@/lib/agente-briefing-chat";
 import { blocoEscopoFuncaoCopilotoInterno } from "@/lib/hub/copiloto-interno-escopo";
-import { HUB_DADOS_EMPRESA_VIEWS_PROMPT } from "@/lib/hub/hub-dados-empresa";
-import { HUB_OPERACAO_EMPRESA_ENTIDADES_PROMPT } from "@/lib/hub/hub-operacao-empresa";
 import {
-  BLOCO_CANAIS_SUPERAGENTE_EQUIVALENTES,
   linhaCanalSuperagente,
   type SuperagenteCanalInterno,
 } from "@/lib/hub/superagente/canais-internos";
@@ -18,24 +15,41 @@ function trunc(s: string, n: number): string {
   return `${t.slice(0, n)}…`;
 }
 
-export const BLOCO_SUPERAGENTE = `### SUPERAGENTE (canvas + Mistral)
-- **hub_superagente_dados** — catálogo vw_rel_* e consultas em views (complementar às tabelas hub_int_crm_ent_*).
-- **hub_superagente_artefato** — relatório canvas com UI Synkron.IA, avatar e nome do agente, tabelas e gráficos Chart.js (inclua seções tipo grafico; tabelas numéricas geram gráfico automático).
-- **hub_mistral_percepcao** — OCR, transcrição de áudio, visão de imagens (Mistral).
-- Para relatório visual: **sempre** chame hub_superagente_artefato e cite **apenas** a url_publica devolvida pela ferramenta.
-- **Nunca** invente URLs (ex.: artefato.waje.com.br, ficheiros .html fictícios). Sem url_publica da ferramenta, diga que o relatório não foi publicado.
-- **Memória de dias**: use o bloco MEMÓRIAS DO AGENTE e SUPER MEMÓRIA (Mem0) no prompt; grave preferências e decisões importantes para os próximos dias.`;
+export const BLOCO_SUPERAGENTE = `### SUPERAGENTE (canvas Waje)
+- **hub_superagente_artefato** — relatório dashboard tema **claro**, cores **Waje** (verde #3f9848, lima #92ff00).
+- Consulte dados reais (CRM) **antes** de publicar. Responda **só** com \`url_publica\`.
+
+**Estrutura obrigatória (financeiro / CRM):**
+1. \`kpi_row\` — 4–6 KPIs (cor: verde|azul|laranja|teal|roxo|rosa)
+2. \`grafico\` — bar ou doughnut com dados reais
+3. \`tabela\` — **mesmos registos do gráfico**, colunas + **linhas preenchidas** (array de arrays OU objetos por coluna)
+4. \`texto\` — insights em markdown (**negrito** em números críticos)
+
+Exemplo tabela (preferido):
+\`{tipo:"tabela", titulo:"Negócios abertos", colunas:["Código","Lead","Valor","Status"], linhas:[["NEG-2026-0001","Renato","R$ 5.690","aberto"]]}\`
+
+**Proibido:** tabela só com cabeçalho sem linhas; inventar valores; duplicar relatório no chat.`;
+
+export const BLOCO_RELACOES_CRM = `### RELAÇÕES CRM (obrigatório)
+1. Encontrar lead → **hub_int_crm_ent_lead** (filtro_texto ou obter por id) → guarde o **UUID**
+2. Negócios desse lead → **hub_int_crm_ent_negocio** com acao=consultar e **filtro_lead_id** = UUID (não use nome em filtro_texto)
+3. Notas/atividades/conversas/contas → **filtro_lead_id** ou **filtro_negocio_id**
+4. Nunca diga «não tem negócios» sem consultar negócio com filtro_lead_id no mesmo turno`;
+
+const ENTIDADES_CRM_RESUMO =
+  "lead, negocio, pessoa, nota, atividade, conta_receber, conta_pagar, conversa, proposta, aprovacao, alerta, pipeline, briefing (+ demais via acao=listar_entidades em hub_int_crm_consultar)";
 
 export const BLOCO_FERRAMENTAS_INTERNAS = `### FERRAMENTAS INTERNAS (function calling) — superagente operacional
-Você é **funcionário operacional** do empresário: CRM, financeiro, pipelines, briefings, KPIs, configurações e demais módulos via tabelas hub_* do tenant.
+Você é **funcionário operacional** do empresário: CRM, financeiro, pipelines, briefings, KPIs e demais módulos via tabelas hub_* do tenant.
 
-- **hub_int_crm_ent_{entidade}** — **principal** para TODAS as entidades operacionais (consultar, obter, criar, actualizar, nota).
-- **hub_int_crm_consultar** — views vw_rel_* (relatórios agregados).
-- **hub_int_crm_atualizar_lead** — atalho lead (passe lead_id no copiloto).
-- Entidades disponíveis (CRM + financeiro + operações):
-${HUB_OPERACAO_EMPRESA_ENTIDADES_PROMPT}
+- **hub_int_crm_ent_{entidade}** — principal para entidades operacionais (consultar, obter, criar, actualizar, nota).
+- **hub_int_crm_consultar** — views vw_rel_* (relatórios agregados) ou listar_entidades.
+- **hub_int_crm_atualizar_lead** — atalho lead quando já tem lead_id no contexto.
+- Entidades CRM principais: ${ENTIDADES_CRM_RESUMO}
 - **hub_int_supabase_externo_consultar** — Supabase externo opcional (só leitura).
 - **hub_superagente_artefato** / **hub_metricas_escritorio** / integrações activas.
+
+${BLOCO_RELACOES_CRM}
 
 ### REGRAS DE DADOS E GRAVAÇÃO (obrigatório)
 1. **Nunca** afirme listas, contagens ou factos sem chamar ferramenta no **mesmo turno**.
@@ -86,15 +100,13 @@ export function montarSystemPromptHarness(params: MontarSystemPromptParams): str
       gerarSkillsSuperagenteFromCargo(params.cargo, params.area)
     );
 
-  const blocoOrquestracao = `### ORQUESTRAÇÃO MULTI-AGENTE
-- Pode delegar tarefas a outro agente do tenant com **harness_delegate_to_agent** (especialistas internos).
-- Use **harness_skills_list** / **harness_skill_view** antes de fluxos complexos.
-- Nunca invente resposta de outro agente — delegue e use o JSON devolvido.`;
+  const blocoOrquestracao = `### ORQUESTRAÇÃO (só se precisar)
+- Delegar a outro agente: **harness_delegate_to_agent**
+- Fluxos complexos: **harness_skills_list** / **harness_skill_view**`;
 
   return [
     copilotoInternoPreamble(params.agenteNome, params.cargo, escopoInterno),
     triggerLinha,
-    BLOCO_CANAIS_SUPERAGENTE_EQUIVALENTES,
     BLOCO_FERRAMENTAS_INTERNAS,
     BLOCO_SUPERAGENTE,
     blocoOrquestracao,

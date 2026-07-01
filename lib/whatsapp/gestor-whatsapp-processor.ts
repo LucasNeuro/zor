@@ -10,7 +10,6 @@ import {
   montarSnapshotOperacionalReadOnly,
   type BriefingMensagemLinha,
 } from "@/lib/agente-briefing-chat";
-import { formatarLinksArtefactosParaTexto } from "@/lib/hub/superagente/canais-internos";
 import { prepararTextoIaParaWhatsapp } from "@/lib/whatsapp/formatar-texto-whatsapp";
 import { whatsappSendText } from "@/lib/whatsapp/whatsapp-send";
 import {
@@ -383,13 +382,15 @@ export async function processarMensagemGestorWhatsapp(
     textoResposta = resultado.texto.trim() || "Não consegui gerar resposta agora. Tente reformular a pergunta.";
 
     if (resultado.urls_publicas?.length) {
-      const links = formatarLinksArtefactosParaTexto(resultado.urls_publicas);
-      await whatsappSendText(telefone, prepararTextoIaParaWhatsapp(links), waOpts);
-      await gravarMensagemSessao(params.supabase, sessao.id, "assistant", links, {
+      const links = prepararTextoIaParaWhatsapp(resultado.texto.trim());
+      const envioLink = await whatsappSendText(telefone, links, waOpts);
+      await gravarMensagemSessao(params.supabase, sessao.id, "assistant", resultado.texto.trim(), {
         agente_slug: agenteAtivoSlug,
-        tipo: "artefato_link",
+        tipo: "artefato_canvas",
         urls: resultado.urls_publicas,
+        whatsapp_ok: envioLink.ok,
       });
+      return { ok: true, respostaEnviada: envioLink.ok };
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "erro_ia";

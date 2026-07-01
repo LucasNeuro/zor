@@ -71,7 +71,7 @@ export async function runWajeMistralHarnessTurn(
         harnessSurface: params.hostCtx.surface,
       });
       const enriched = enriquecerObservationComVerify(result, nome);
-      if (nome === "hub_superagente_artefato" || nome === "hub_relatorio_html_simples") {
+      if (nome === "hub_superagente_artefato") {
         urlsPublicasColetadas.push(...extrairUrlsPublicasDeResultadoFerramenta(result));
       }
       return enriched;
@@ -83,7 +83,8 @@ export async function runWajeMistralHarnessTurn(
         mensagens,
         modeloFromDb: params.modelo,
         tools: mistralTools,
-        maxTokens: 2048,
+        maxTokens: 4096,
+        modoCopilotoInterno: true,
         agentReasoningEnabled: params.agentReasoningEnabled,
         executarTool,
       });
@@ -115,7 +116,7 @@ export async function runWajeMistralHarnessTurn(
       systemPrompt: params.systemPrompt,
       mensagens: params.mensagens,
       modeloFromDb: params.modelo,
-      maxTokens: 2048,
+      maxTokens: 4096,
       agentReasoningEnabled: params.agentReasoningEnabled,
     });
     if (semTools.ok) out = semTools;

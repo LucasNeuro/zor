@@ -22,7 +22,7 @@ function escapeHtml(s: string): string {
 
 export function cssArtefatoShell(tema: ArtefatoShellTema): string {
   const escuro = tema !== "claro";
-  const bg = escuro ? "#060d08" : "#f8fcf6";
+  const bg = escuro ? "#060d08" : "#eef1f5";
   const panel = escuro ? BRAND_MARK_BG : "#ffffff";
   const card = escuro
     ? "linear-gradient(165deg, rgba(11, 31, 16, 0.97) 0%, rgba(6, 13, 8, 0.99) 100%)"
@@ -110,11 +110,40 @@ export function cssArtefatoShell(tema: ArtefatoShellTema): string {
   }
   main{width:100%;min-width:0}
   main .grid-charts{
-    display:grid;grid-template-columns:1fr;gap:1rem;width:100%
+    display:grid;grid-template-columns:1fr;gap:1rem;width:100%;margin-bottom:1rem
   }
+  main .grid-charts-single{grid-template-columns:1fr}
   @media (min-width:640px){
-    main .grid-charts{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+    main .grid-charts{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+    main .grid-charts-single{grid-template-columns:1fr}
   }
+  .kpi-row-wrap{margin:0 0 1rem;width:100%}
+  .kpi-row-title{
+    margin:0 0 .75rem;font-size:clamp(.88rem,3.5vw,.95rem);font-weight:800;color:var(--heading)
+  }
+  .kpi-row{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;width:100%
+  }
+  @media (min-width:720px){
+    .kpi-row{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  }
+  .kpi-card{
+    border-radius:12px;padding:1rem 1.05rem;min-height:96px;
+    background:var(--kpi-bg,#3f9848);color:var(--kpi-fg,#fff);
+    box-shadow:0 4px 16px rgba(63,152,72,.22);display:flex;flex-direction:column;justify-content:center;gap:.25rem
+  }
+  .kpi-label{font-size:.72rem;font-weight:700;opacity:.92;text-transform:uppercase;letter-spacing:.04em}
+  .kpi-valor{font-size:clamp(1.15rem,4vw,1.45rem);font-weight:800;line-height:1.15;word-break:break-word}
+  .kpi-delta{font-size:.72rem;font-weight:700;margin-top:.15rem;opacity:.95}
+  .badge{
+    display:inline-block;padding:.2rem .5rem;border-radius:999px;font-size:.68rem;font-weight:700;
+    text-transform:capitalize;white-space:nowrap
+  }
+  .badge-ok{background:rgba(46,204,113,.18);color:#1e8449}
+  .badge-warn{background:rgba(243,156,18,.2);color:#b9770e}
+  .badge-info{background:rgba(52,152,219,.18);color:#1f6fa8}
+  .badge-danger{background:rgba(233,30,99,.15);color:#ad1457}
+  .badge-muted{background:rgba(127,140,141,.15);color:#5d6d7e}
   .card{
     background:var(--card);border:1px solid var(--border);border-radius:14px;
     padding:var(--card-pad);margin:0 0 1rem;width:100%;min-width:0;overflow:hidden
@@ -129,6 +158,10 @@ export function cssArtefatoShell(tema: ArtefatoShellTema): string {
   }
   .card.prose h2,.card.prose h3{color:var(--heading)}
   .table-card{padding:0;overflow:hidden}
+  .table-card .table-title{
+    margin:0;padding:var(--card-pad) var(--card-pad) .35rem;
+    font-size:clamp(.88rem,3.5vw,.95rem);font-weight:800;color:var(--heading)
+  }
   .table-card .table-scroll-hint{
     display:block;padding:.45rem var(--card-pad) 0;font-size:.65rem;color:var(--muted);
     text-align:center
@@ -149,6 +182,7 @@ export function cssArtefatoShell(tema: ArtefatoShellTema): string {
     text-transform:uppercase;letter-spacing:.03em;white-space:nowrap
   }
   td{color:var(--fg2);max-width:280px}
+  td.table-empty{text-align:center;color:var(--muted);font-style:italic;padding:1.25rem}
   @media (max-width:639px){td{max-width:200px;font-size:.78rem}}
   tr:nth-child(even) td{background:${escuro ? "rgba(63,152,72,.06)" : "#f6fbf4"}}
   .chart-wrap{

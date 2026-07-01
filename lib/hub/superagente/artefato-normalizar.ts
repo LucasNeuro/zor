@@ -64,15 +64,24 @@ export function preencherTabelaVaziaDeGrafico(
   if (!data.length) return linhas;
 
   const idxCodigo = indiceColuna(colunas, ["codigo", "neg", "titulo", "nome"]);
+  const idxTitulo = indiceColuna(colunas, ["titulo", "nome"]);
   const idxValor = indiceColuna(colunas, ["valor", "r$", "montante"]);
+  const idxLead = indiceColuna(colunas, ["lead", "cliente"]);
   const idxStatus = indiceColuna(colunas, ["status", "estado", "situacao"]);
 
   return grafico.labels.map((label, i) => {
     const row = colunas.map(() => "—");
     if (idxCodigo >= 0) row[idxCodigo] = String(label);
-    if (idxValor >= 0 && typeof data[i] === "number") {
-      row[idxValor] = formatMoedaBr(data[i] as number);
+    const rawVal = data[i];
+    const num =
+      typeof rawVal === "number"
+        ? rawVal
+        : Number(String(rawVal ?? "").replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", "."));
+    if (idxValor >= 0 && Number.isFinite(num) && num > 0) {
+      row[idxValor] = formatMoedaBr(num);
     }
+    if (idxTitulo >= 0 && idxTitulo !== idxCodigo) row[idxTitulo] = String(label);
+    if (idxLead >= 0) row[idxLead] = "—";
     if (idxStatus >= 0) row[idxStatus] = "aberto";
     return row;
   });

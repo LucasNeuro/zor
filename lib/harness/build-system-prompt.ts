@@ -198,12 +198,12 @@ Todo o raciocínio e respostas devem estar no idioma de trabalho.`
   // <harness_modes>
   const harness_modes = bloco(
     "harness_modes",
-    `Modos da sessão activos:
+    `Modos da sessão (escolhidos automaticamente pelo harness a cada mensagem):
 - **conversar** — explicações e respostas em prosa; sem gravar CRM nem publicar artefactos.
 - **analisar** — consultas CRM e relatórios; sem escrita.
 - **operar** — CRUD com aprovação humana quando necessário.
 - **planear** — plano de steps em markdown; não executa gravações.
-Se uma tool devolver \`harness_policy\` / \`requer_aprovacao\`, peça ao gestor para mudar de modo ou aprovar na UI.`
+Não peça ao utilizador para mudar de modo manualmente. Inferir a intenção da mensagem actual e actuar no modo adequado; em operar aguarde aprovação se a tool devolver requer_aprovacao.`
   );
 
   // <tool_use_rules>

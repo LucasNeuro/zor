@@ -243,6 +243,8 @@ export type BriefingChatReplyResult = {
     nivel?: string;
     criado_em?: string;
   }>;
+  /** Modo harness inferido automaticamente neste turno (copiloto/ciclo). */
+  harness_modo_id?: "conversar" | "analisar" | "operar" | "planear";
 };
 
 export async function executarBriefingReply(params: {

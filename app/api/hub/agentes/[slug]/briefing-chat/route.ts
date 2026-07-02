@@ -491,6 +491,7 @@ export async function POST(
       custo_brl: resultado.custo_brl,
       urls_publicas: resultado.urls_publicas ?? [],
       pending_approvals: resultado.pending_approvals ?? [],
+      harness_modo_id: resultado.harness_modo_id ?? null,
     },
   };
   cacheSetBriefingGet(slug, sessaoId, payload);

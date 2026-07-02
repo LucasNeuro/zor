@@ -72,7 +72,7 @@ export function avaliarPoliticaHarnessTool(
         permitido: false,
         motivo: "modo_bloqueia_escrita",
         nivel: "escrita_crm",
-        resumo_humano: `Modo «${modoId}» não permite gravar no CRM. Mude para «operar».`,
+        resumo_humano: `Modo «${modoId}» não permite gravar no CRM. O harness ajusta o modo automaticamente em pedidos de escrita; confirme a aprovação na UI se necessário.`,
       };
     }
     if (!grantPermiteEscritaCrm(grants)) {

@@ -32,6 +32,8 @@ import {
   harnessDisplayReducer,
   pendingToHarnessEvents,
 } from "@/lib/harness/display-state";
+import { HARNESS_MODO_LABEL, inferirHarnessModoDaMensagem } from "@/lib/harness/infer-mode";
+import type { HarnessModeId } from "@/lib/harness/types";
 
 type Msg = {
   id: string;
@@ -58,21 +60,12 @@ function anexosDaMensagem(metadata?: Record<string, unknown>): Array<{
 
 const OPTIMISTIC_USER_PREFIX = "optimistic-user-";
 
-const HARNESS_MODOS = [
-  { id: "conversar" as const, label: "Conversar" },
-  { id: "analisar" as const, label: "Analisar" },
-  { id: "operar" as const, label: "Operar" },
-  { id: "planear" as const, label: "Planear" },
-];
-
 type HarnessPendingApproval = {
   id: string;
   tool_name: string;
   resumo_humano: string;
   nivel?: string;
 };
-
-type HarnessModoId = (typeof HARNESS_MODOS)[number]["id"];
 
 function isOptimisticUserMessage(m: Msg): boolean {
   return m.papel === "user" && m.id.startsWith(OPTIMISTIC_USER_PREFIX);
@@ -107,7 +100,7 @@ export function AgenteBriefingDrawer({
   const [input, setInput] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
-  const [harnessModo, setHarnessModo] = useState<HarnessModoId>("analisar");
+  const [harnessModo, setHarnessModo] = useState<HarnessModeId>("analisar");
   const [escritaPendente, setEscritaPendente] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<HarnessPendingApproval[]>([]);
   const [displayState, dispatchHarness] = useReducer(harnessDisplayReducer, HARNESS_DISPLAY_INITIAL);
@@ -124,11 +117,11 @@ export function AgenteBriefingDrawer({
           { headers: await hubApiHeaders() }
         );
         const data = (await res.json().catch(() => ({}))) as {
-          modo_id?: HarnessModoId;
+          modo_id?: HarnessModeId;
           pending_approvals?: HarnessPendingApproval[];
         };
-        if (data.modo_id && HARNESS_MODOS.some((m) => m.id === data.modo_id)) {
-          setHarnessModo(data.modo_id!);
+        if (data.modo_id) {
+          setHarnessModo(data.modo_id);
         }
         if (Array.isArray(data.pending_approvals)) {
           setPendingApprovals(data.pending_approvals);
@@ -143,20 +136,6 @@ export function AgenteBriefingDrawer({
       }
     })();
   }, [open, agenteSlug, ehCopilotoInterno]);
-
-  async function mudarHarnessModo(modo: HarnessModoId) {
-    setHarnessModo(modo);
-    dispatchHarness({ type: "mode_changed", modoId: modo });
-    try {
-      await fetch(`/api/hub/agentes/${encodeURIComponent(agenteSlug)}/harness/session`, {
-        method: "PATCH",
-        headers: { ...(await hubApiHeaders()), "Content-Type": "application/json" },
-        body: JSON.stringify({ modo_id: modo }),
-      });
-    } catch {
-      /* UI já reflecte modo local */
-    }
-  }
 
   async function aprovarEscritaHarness() {
     try {
@@ -215,6 +194,13 @@ export function AgenteBriefingDrawer({
       const pending = data.ultima_resposta_meta?.pending_approvals ?? [];
       setPendingApprovals(pending);
       setEscritaPendente(pending.length > 0);
+      if (data.ultima_resposta_meta?.harness_modo_id) {
+        setHarnessModo(data.ultima_resposta_meta.harness_modo_id);
+        dispatchHarness({
+          type: "mode_changed",
+          modoId: data.ultima_resposta_meta.harness_modo_id,
+        });
+      }
     } catch {
       setErro("Falha ao processar aprovação.");
     } finally {
@@ -271,7 +257,12 @@ export function AgenteBriefingDrawer({
     ]);
     setEnviando(true);
     setErro("");
-    dispatchHarness({ type: "turn_start", modoId: harnessModo });
+    const modoInferido = ehCopilotoInterno ? inferirHarnessModoDaMensagem(t) : harnessModo;
+    if (ehCopilotoInterno) {
+      setHarnessModo(modoInferido);
+      dispatchHarness({ type: "mode_changed", modoId: modoInferido });
+    }
+    dispatchHarness({ type: "turn_start", modoId: modoInferido });
     setInput("");
     try {
       const res = await fetch(base, {
@@ -292,6 +283,7 @@ export function AgenteBriefingDrawer({
           pending_approvals?: HarnessPendingApproval[];
           tokens_input?: number;
           tokens_output?: number;
+          harness_modo_id?: HarnessModeId;
         };
       };
       if (!res.ok) {
@@ -323,6 +315,10 @@ export function AgenteBriefingDrawer({
           dispatchHarness(ev);
         }
         const meta = data.ultima_resposta_meta;
+        if (meta?.harness_modo_id) {
+          setHarnessModo(meta.harness_modo_id);
+          dispatchHarness({ type: "mode_changed", modoId: meta.harness_modo_id });
+        }
         dispatchHarness({
           type: "turn_end",
           tokensInput: meta?.tokens_input,
@@ -455,40 +451,28 @@ export function AgenteBriefingDrawer({
             ) : null}
             {ehCopilotoInterno ? (
               <div
-                style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}
-                role="group"
-                aria-label="Modo harness"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  marginTop: 10,
+                  padding: "5px 10px",
+                  borderRadius: 8,
+                  border: `1px solid ${RF_BORDER}`,
+                  background: "rgba(6, 13, 8, 0.72)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: RF_ACCENT,
+                }}
+                aria-live="polite"
               >
-                {HARNESS_MODOS.map((m) => {
-                  const at = harnessModo === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      disabled={enviando}
-                      onClick={() => void mudarHarnessModo(m.id)}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: 8,
-                        border: `1px solid ${at ? RF_BORDER_STRONG : RF_BORDER}`,
-                        background: at ? "rgba(146, 255, 0, 0.12)" : "rgba(6, 13, 8, 0.72)",
-                        color: at ? RF_ACCENT : RF_TEXT_MUTED,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: enviando ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {m.label}
-                    </button>
-                  );
-                })}
+                Modo: {HARNESS_MODO_LABEL[harnessModo]} · automático
               </div>
             ) : null}
             <p style={{ fontSize: 10, color: "#6e7681", margin: "8px 0 0", lineHeight: 1.45 }}>
               {ehCopilotoInterno
                 ? ehAnalistaCrm
-                  ? "Analista de CRM: organiza e analisa leads no sistema. Não encaminha a parceiros — pergunte sobre status, ciclos e registos."
-                  : "Converse com o copiloto: função do agente, leads, ciclos e registos. Modos harness governam escrita CRM. Memórias persistem por assistente."
+                  ? "Analista de CRM: organiza e analisa leads no sistema. O harness escolhe o modo (conversar, analisar, operar, planear) conforme cada mensagem."
+                  : "Converse com o copiloto: função do agente, leads, ciclos e registos. O modo é inferido automaticamente; aprovações CRM continuam na UI."
                 : modoChat === "briefing_interno"
                   ? "Consulte o histórico de operação deste assistente. Ações automáticas só funcionam na conversa real com o cliente."
                   : "Espelha o WhatsApp real: conhecimento, RAG e ferramentas — sem criar leads no funil nem enviar mensagens reais."}

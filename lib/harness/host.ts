@@ -49,7 +49,8 @@ import {
   formatarBlocoSkillsL0,
   listarSkillsL0Agente,
 } from "@/lib/harness/stores/skills-store";
-import { getOrCreateHarnessSession } from "@/lib/harness/stores/session-store";
+import { inferirHarnessModoDaMensagem } from "@/lib/harness/infer-mode";
+import { getOrCreateHarnessSession, updateHarnessSessionModo } from "@/lib/harness/stores/session-store";
 import { resolverPlanKnowledge } from "@/lib/harness/loop/inject-plan-knowledge";
 import type {
   BriefingChatReplyResult,
@@ -102,6 +103,17 @@ export async function runHarnessHost(
     resourceId,
     leadId: null,
   });
+
+  const canalUsaModoAutomatico =
+    canalInterno === "copiloto_crm" || canalInterno === "ciclo_programado";
+  let modoIdAtivo = (sessao?.modo_id ?? "analisar") as import("@/lib/harness/types").HarnessModeId;
+  if (canalUsaModoAutomatico && !params.approvalId) {
+    const inferido = inferirHarnessModoDaMensagem(params.mensagemUsuario);
+    modoIdAtivo = inferido;
+    if (sessao?.id && inferido !== sessao.modo_id) {
+      await updateHarnessSessionModo(params.supabase, sessao.id, inferido);
+    }
+  }
 
   await ensureSkillsSeedFromCargo(params.supabase, {
     tenantId: tenantForTools,
@@ -241,11 +253,10 @@ export async function runHarnessHost(
     telefoneSessao: params.telefoneSessao ?? null,
     usuarioCrmId: params.usuarioCrmId ?? null,
     sessionId: sessao?.id ?? null,
-    modoId: sessao?.modo_id ?? "analisar",
+    modoId: modoIdAtivo,
     grants: sessao?.grants ?? {},
   };
 
-  const modoIdAtivo = (sessao?.modo_id ?? "analisar") as import("@/lib/harness/types").HarnessModeId;
   const { planSteps, knowledgeEvents } = await resolverPlanKnowledge(
     params.supabase,
     hostCtx,
@@ -379,6 +390,7 @@ export async function runHarnessHost(
     urls_publicas: entrega.urls_publicas,
     harness_version: HARNESS_VERSION,
     pending_approvals: pendingApprovals,
+    harness_modo_id: modoIdAtivo,
   };
 }
 

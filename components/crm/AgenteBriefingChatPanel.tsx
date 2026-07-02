@@ -179,6 +179,7 @@ export function AgenteBriefingDrawer({
           pending_approvals?: HarnessPendingApproval[];
           tokens_input?: number;
           tokens_output?: number;
+          harness_modo_id?: HarnessModeId;
         };
       };
       if (!res.ok) {

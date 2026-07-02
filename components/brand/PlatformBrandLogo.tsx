@@ -13,8 +13,8 @@ type Props = {
 export function PlatformBrandLogo({ className = "h-9 w-9", size, variant = "logo" }: Props) {
   const { brand } = usePlatformBrand();
 
-  // Marca principal (Waje): selo SVG inline — não depender de PNG em /public.
-  if (brand?.isPrincipal && variant === "logo") {
+  // Marca principal (Waje): mascote circular — igual aos avatares dos agentes.
+  if (brand?.isPrincipal) {
     return <WajeLogoMark className={className} size={size} />;
   }
 

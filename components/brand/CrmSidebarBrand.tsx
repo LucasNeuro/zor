@@ -13,10 +13,6 @@ export function CrmSidebarBrand({ expanded }: Props) {
   const { brand } = usePlatformBrand();
   const isWhiteLabel = Boolean(brand && !brand.isPrincipal);
   const hasCustomLogo = Boolean(brand?.logoUrl || brand?.faviconUrl);
-  const markBg = isWhiteLabel ? brand?.corFundo || "#0b1f10" : "#0b1f10";
-  const borderColor = isWhiteLabel
-    ? `color-mix(in srgb, var(--platform-brand-accent) 35%, transparent)`
-    : "rgba(146,255,0,0.35)";
 
   return (
     <Link
@@ -29,12 +25,7 @@ export function CrmSidebarBrand({ expanded }: Props) {
           <PlatformBrandLogo className="h-8 w-auto max-w-[132px]" />
         </div>
       ) : (
-        <div
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl"
-          style={{ background: markBg, border: `1px solid ${borderColor}` }}
-        >
-          <PlatformBrandLogo size={20} />
-        </div>
+        <PlatformBrandLogo size={expanded ? 44 : 40} variant="logo" />
       )}
       {expanded ? <PlatformBrandWordmark size="sm" tone="brand" /> : null}
     </Link>

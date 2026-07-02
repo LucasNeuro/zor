@@ -77,6 +77,21 @@ export function gerarAvatarAgenteUrl(nome: string, seed?: string): string {
   return `${DICEBEAR_BASE}/${ESTILO_WAJE}/svg?${params.toString()}`;
 }
 
+/** Mascote fixo da marca Waje — Notionists masculino, sem gesto (mãos baixas). */
+export function gerarWajeMascotUrl(): string {
+  const params = new URLSearchParams({
+    seed: "waje-mascot-v2",
+    backgroundColor: WAJE_BACKGROUNDS,
+    backgroundType: "gradientLinear",
+    radius: "50",
+    beardProbability: "0",
+    glassesProbability: "0",
+    gestureProbability: "0",
+    hair: hairVariants(1, 33),
+  });
+  return `${DICEBEAR_BASE}/${ESTILO_WAJE}/svg?${params.toString()}`;
+}
+
 /** @deprecated Use gerarAvatarAgenteUrl — mantido só como fallback offline. */
 export function gerarAvatarAgenteDataUri(seed: string): string {
   const key = seed.trim().toLowerCase() || "agente";

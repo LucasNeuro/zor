@@ -9,8 +9,12 @@ import {
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const h = await headers();
   const brand = toPlatformBrandPublic(await resolvePlatformBrand(hostFromHeaders(h)));
-  const icon192 = brand.faviconUrl || "/favicons/favicon-192x192.png";
-  const icon512 = brand.logoUrl || brand.faviconUrl || "/favicons/favicon-512x512.png";
+  const pngOr = (url: string | null | undefined, fallback: string) => {
+    const t = url?.trim();
+    return t && !t.toLowerCase().endsWith(".svg") ? t : fallback;
+  };
+  const icon192 = pngOr(brand.faviconUrl, "/favicons/favicon-192x192.png");
+  const icon512 = pngOr(brand.logoUrl ?? brand.faviconUrl, "/favicons/favicon-512x512.png");
 
   return {
     name: brand.nome,

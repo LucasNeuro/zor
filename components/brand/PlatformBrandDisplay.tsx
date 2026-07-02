@@ -1,6 +1,5 @@
 "use client";
 
-import { BRAND_MARK_BG } from "@/lib/brand";
 import { usePlatformBrand } from "@/components/brand/PlatformBrandProvider";
 import { PlatformBrandLogo } from "@/components/brand/PlatformBrandLogo";
 import { PlatformBrandWordmark } from "@/components/brand/PlatformBrandWordmark";
@@ -29,7 +28,6 @@ export function PlatformBrandDisplay({
   const isNav = variant === "nav";
   const isWhiteLabel = Boolean(brand && !brand.isPrincipal);
   const hasCustomLogo = Boolean(brand?.logoUrl || brand?.faviconUrl);
-  const markBg = brand?.corFundo && isWhiteLabel ? brand.corFundo : BRAND_MARK_BG;
 
   const logoSlot = hasCustomLogo && isWhiteLabel ? (
     <div
@@ -46,14 +44,11 @@ export function PlatformBrandDisplay({
       />
     </div>
   ) : (
-    <div
-      className={`inline-flex shrink-0 items-center justify-center rounded-2xl border border-[#92ff00]/40 shadow-[0_0_30px_rgba(146,255,0,0.20)] ${
-        isNav ? "h-10 w-10 sm:h-11 sm:w-11" : isHorizontal ? "h-12 w-12" : "mb-3 h-16 w-16"
-      }`}
-      style={{ background: markBg }}
-    >
-      <PlatformBrandLogo className={isNav ? "h-7 w-7 sm:h-8 sm:w-8" : "h-9 w-9"} />
-    </div>
+    <PlatformBrandLogo
+      size={isNav ? 44 : isHorizontal ? 48 : 64}
+      variant="logo"
+      className={isHorizontal ? "" : isNav ? "" : "mb-3"}
+    />
   );
 
   return (

@@ -47,6 +47,7 @@ const WAJE_STATIC: PlatformBrand = {
   nome: APP_NAME_TITLE,
   tagline: "IA para atendimento e CRM",
   dominios: ["waje.com.br", "www.waje.com.br", "localhost:3001", "localhost:3000", "127.0.0.1:3001"],
+  logoUrl: "/favicons/favicon-512x512.png",
   faviconUrl: "/favicons/waje-mark.svg",
   corPrimaria: BRAND_GREEN,
   corAccent: BRAND_GREEN_BRIGHT,
